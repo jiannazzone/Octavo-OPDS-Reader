@@ -15,12 +15,23 @@ ReaderWeb/reader.html ─ bridge.js ─ foliate-js/view.js (pinned 6b11e17, unmo
 ```
 
 - **One origin.** `octavo://app/reader.html`, `octavo://app/foliate-js/*.js` and `octavo://app/book/<file name>` are all served by `ReaderSchemeHandler`, so ES-module imports and the bridge's `fetch` of the book are same-origin. Web files come from the bundled `ReaderWeb/` folder (path-traversal checked). The book is streamed in 1 MB chunks. MIME types for web files are pinned; `.js` must be `text/javascript` or WebKit refuses to run the module.
-- **JS → Swift:** `bridge.js` posts JSON strings `{type, …}`: `ready`, `opened`, `relocate {cfi, fraction, tocLabel, sectionIndex, sectionCount, location}`, `tap`, `error`, `log`. `ReaderMessage` decodes them tolerantly. Unknown types and missing or `null` fields never throw.
+- **JS → Swift:** `bridge.js` posts JSON strings `{type, …}`: `ready`, `opened`, `relocate {cfi, fraction, tocLabel, sectionIndex, sectionCount, location}`, `tap`, `externalLink`, `error`, `log`. `ReaderMessage` decodes them tolerantly. Unknown types and missing or `null` fields never throw.
 - **Swift → JS:** `WebPage.callJavaScript("return await window.octavo.open(options)")`, plus `goTo(cfi)`, `goToFraction(f)`, `next()` and `prev()`.
 - **Opening:** the bridge fetches the book, calls `view.open(File)`, then restores. It tries the CFI first, then the fraction, then the start of the book. Fixed-layout books try the fraction first, as BookOrbit does.
 - **Persistence:** every `relocate` after `opened` is saved to `Library/Application Support/ReadingPositions/<book id>.json` with an atomic write. Relocates that arrive while the book is still being restored are ignored, so a half-finished open can't overwrite the saved position. Book ID for now is the file name.
 - **Paging:** foliate's paginator handles swipes itself. The bridge adds tap zones (outer 30% of the width on each side means previous/next page; the middle posts `tap`). The debug screen also has Previous/Next toolbar buttons.
 - **Relaunch:** the spike library remembers the open book (`@AppStorage("spike.lastOpenBook")`) and pushes it again on launch. That's how "kill and relaunch lands on the same page" is exercised.
+
+## Security: book scripts are blocked
+
+foliate-js renders each section in a same-origin `blob:` iframe that has to allow scripts (WebKit bug 218086), so a book's own JavaScript would otherwise run with full access to the reader page and the native bridge. foliate's README makes blocking scripts the host's job. A scripted test EPUB confirmed the hole in the first commit: both an inline `<script>` and a manifest `.js` file ran and posted to the `octavo` message handler. Four layers now block it, and the same test shows nothing running:
+
+1. **CSP on every `octavo://` response** (`ReaderSchemeHandler.contentSecurityPolicy`): `script-src 'self'`, network loads allowed only from `'self'`, `blob:` and `data:`, and `frame-src blob:`. The blob iframes inherit it. Book images, styles and fonts still load because they are `blob:` URLs. Remote images in a book are blocked, which also stops tracking pixels.
+2. **foliate's `load` transform hook** refuses script items (`detail.allow = false`).
+3. **The message relay** drops anything that isn't from the main frame at `octavo://app`.
+4. **External links** are cancelled in the bridge (foliate would otherwise `window.open` them) and reported to Swift as `externalLink`.
+
+Keep the CSP if the bridge or scheme ever changes. A unit test checks that every response carries it.
 
 ## Getting books onto the simulator
 

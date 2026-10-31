@@ -107,6 +107,8 @@ final class ReaderModel {
             if !isRestoring { save(relocation.position) }
         case .tap:
             break
+        case .externalLink(let href):
+            log.notice("Ignored external link \(href, privacy: .public)")
         case .error(let error):
             lastError = error.message
             log.error("Reader script error (\(error.phase ?? "?", privacy: .public)): \(error.message, privacy: .public)")
@@ -147,11 +149,19 @@ final class ReaderModel {
 
 /// `WKUserContentController` retains its handlers, so this small relay sits
 /// between it and the model to avoid a retain cycle.
+///
+/// Only `bridge.js` in the top-level reader page may talk to the app. Book
+/// content lives in iframes, and anything posted from one is dropped, as a
+/// second line of defense behind the CSP that blocks book scripts.
 private final class ScriptMessageRelay: NSObject, WKScriptMessageHandler {
     static let name = "octavo"
     var onMessage: ((Any) -> Void)?
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        let origin = message.frameInfo.securityOrigin
+        guard message.frameInfo.isMainFrame,
+              origin.protocol == ReaderSchemeHandler.scheme,
+              origin.host == ReaderSchemeHandler.host else { return }
         onMessage?(message.body)
     }
 }

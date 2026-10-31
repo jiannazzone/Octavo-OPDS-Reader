@@ -132,12 +132,22 @@ const open = async ({ url, name, cfi = null, fraction = null }) => {
     view = document.createElement('foliate-view')
     view.addEventListener('relocate', onRelocate)
     view.addEventListener('load', onSectionLoad)
+    // foliate would `window.open` external links; hand them to Swift instead.
+    view.addEventListener('external-link', e => {
+        e.preventDefault()
+        post('externalLink', { href: e.detail.href })
+    })
     document.body.append(view)
 
     const response = await fetch(url)
     if (!response.ok) throw new Error(`Couldn't load the book (${response.status})`)
     const type = response.headers.get('Content-Type') ?? ''
     await view.open(new File([await response.blob()], name, { type }))
+    // Never load a book's own scripts. The CSP blocks them too; see
+    // ReaderSchemeHandler.contentSecurityPolicy and foliate-js's README.
+    view.book.transformTarget?.addEventListener('load', ({ detail }) => {
+        if (detail.isScript) detail.allow = false
+    })
     view.renderer.setAttribute('flow', 'paginated')
 
     const restoredFrom = await restore(cfi, finiteOrNull(fraction))

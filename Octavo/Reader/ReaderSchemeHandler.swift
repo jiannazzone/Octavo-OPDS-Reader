@@ -13,6 +13,25 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
     static let host = "app"
     static let readerURL = URL(string: "\(scheme)://\(host)/reader.html")!
 
+    /// Sent with every response. foliate-js renders book content in
+    /// same-origin `blob:` iframes that must allow scripts (WebKit bug
+    /// 218086), so this policy, which those iframes inherit, is the only thing
+    /// stopping a book's own JavaScript. Only our bundled scripts may run, and
+    /// nothing may load from the network.
+    static let contentSecurityPolicy = [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline' blob: data:",
+        "img-src 'self' blob: data:",
+        "font-src 'self' blob: data:",
+        "media-src 'self' blob: data:",
+        "connect-src 'self' blob:",
+        "frame-src blob:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+    ].joined(separator: "; ")
+
     /// URL the bridge fetches the book from. The last path component is the
     /// file name, which foliate uses to tell CBZ/FB2 apart from EPUB.
     static func bookURL(fileName: String) -> URL {
@@ -105,6 +124,7 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
                 "Content-Type": mimeType,
                 "Content-Length": String(length),
                 "Cache-Control": "no-store",
+                "Content-Security-Policy": contentSecurityPolicy,
             ]
         )!
     }

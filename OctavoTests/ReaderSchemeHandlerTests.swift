@@ -54,6 +54,18 @@ struct ReaderSchemeHandlerTests {
         #expect(data == Data("export const x = 1\n".utf8))
     }
 
+    // foliate-js renders books in same-origin iframes that allow scripts; the
+    // CSP these responses carry is what keeps a book's JavaScript from running.
+    @Test func everyResponseCarriesAScriptBlockingCSP() async throws {
+        for url in ["octavo://app/reader.html", "octavo://app/foliate-js/view.js", "octavo://app/missing.js"] {
+            let (response, _) = try await fetch(url)
+            let policy = try #require(response?.value(forHTTPHeaderField: "Content-Security-Policy"))
+            #expect(policy.contains("script-src 'self';"))
+            #expect(!policy.contains("unsafe-eval"))
+            #expect(!policy.contains("http"))
+        }
+    }
+
     @Test func streamsTheBookInChunks() async throws {
         let (response, data) = try await fetch(ReaderSchemeHandler.bookURL(fileName: "book.epub").absoluteString)
         #expect(response?.statusCode == 200)

@@ -15,6 +15,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     case relocate(Relocation)
     /// The user tapped the middle of the page.
     case tap(zone: String)
+    /// The user followed a link out of the book. The bridge has already
+    /// stopped foliate from opening it.
+    case externalLink(href: String)
     case error(ScriptError)
     /// A `console.error`/`console.warn` line from foliate-js.
     case log(level: String, message: String)
@@ -75,7 +78,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message
+        case type, zone, level, message, href
     }
 
     init(from decoder: any Decoder) throws {
@@ -90,6 +93,8 @@ nonisolated extension ReaderMessage: Decodable {
             self = .relocate(try Relocation(from: decoder))
         case "tap":
             self = .tap(zone: try container.decodeIfPresent(String.self, forKey: .zone) ?? "middle")
+        case "externalLink":
+            self = .externalLink(href: try container.decode(String.self, forKey: .href))
         case "error":
             self = .error(try ScriptError(from: decoder))
         case "log":

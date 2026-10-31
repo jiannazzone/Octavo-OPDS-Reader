@@ -92,6 +92,11 @@ struct ReaderMessageTests {
         #expect(try ReaderMessage.decode(#"{"type":"tap"}"#) == .tap(zone: "middle"))
     }
 
+    @Test func decodesExternalLink() throws {
+        #expect(try ReaderMessage.decode(#"{"type":"externalLink","href":"https://www.gutenberg.org/ebooks/1342"}"#)
+            == .externalLink(href: "https://www.gutenberg.org/ebooks/1342"))
+    }
+
     @Test func unknownTypeIsNotAnError() throws {
         #expect(try ReaderMessage.decode(#"{"type":"selection","text":"Mr. Darcy"}"#) == .unknown(type: "selection"))
     }
