@@ -33,6 +33,7 @@ Scripts/fetch-sample-books.sh
 - Layout: `Octavo/` app target and `OctavoTests/` use folder-synchronized groups (new files need no `project.pbxproj` edit). `Packages/OctavoKit` is a local SwiftPM package for models, sources, sync and API clients. `ReaderWeb/` is a folder reference (paths preserved) holding foliate-js and our bridge.
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
 - **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask.
+- On GitHub, `main` is protected by the ruleset "Protect main": changes land only through a pull request, and force pushes and branch deletion are blocked, with no bypass (owner included).
 - Spike tracker: `docs/SPIKE.md`.
 
 ## Architecture decisions
