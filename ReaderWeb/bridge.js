@@ -8,10 +8,12 @@
 // message handler, shaped `{ type, ...payload }`. Swift decodes it in
 // `ReaderMessage.swift`; keep the two in step.
 //
-// Swift → JS: `window.octavo.open/goTo/goToFraction/next/prev`, called with
-// `WebPage.callJavaScript`. Each returns a promise that Swift awaits.
+// Swift → JS: `window.octavo.open/goTo/goToFraction/next/prev/visibleText`,
+// called with `WebPage.callJavaScript`. Each returns a promise that Swift
+// awaits.
 
 import './foliate-js/view.js'
+import * as CFI from './foliate-js/epubcfi.js'
 
 const HANDLER = 'octavo'
 
@@ -60,9 +62,30 @@ const plainText = value => {
 
 let view = null
 
+// foliate reports the visible page as a range CFI. BookOrbit's web reader
+// stores a collapsed point at the start of the page instead. This is the same
+// point for pages that start in text, which is most of them.
+const startOf = cfi => {
+    try {
+        return cfi ? CFI.collapse(cfi) : null
+    } catch {
+        return null
+    }
+}
+
+// On a page with no visible node (a blank column after a forced break),
+// foliate's paginator falls back to the section's <body>, so the CFI only
+// names the section and reopening it lands on the section's first page.
+const isBlankPage = range => {
+    const container = range?.startContainer
+    return Boolean(container && container === container.ownerDocument?.body)
+}
+
 const onRelocate = ({ detail }) => {
     post('relocate', {
         cfi: detail.cfi ?? null,
+        startCFI: startOf(detail.cfi),
+        blankPage: isBlankPage(detail.range),
         fraction: finiteOrNull(detail.fraction),
         tocLabel: detail.tocItem?.label?.trim() || null,
         sectionIndex: detail.section?.current ?? null,
@@ -193,6 +216,12 @@ window.octavo = Object.freeze({
     prev: reported(async function prev() {
         await requireView().prev()
         return true
+    }),
+    // The text of the visible page, whitespace collapsed, for debugging and
+    // for checking positions against another reader.
+    visibleText: reported(async function visibleText(limit = 300) {
+        const text = requireView().lastLocation?.range?.toString() ?? ''
+        return text.replace(/\s+/g, ' ').trim().slice(0, limit)
     }),
 })
 

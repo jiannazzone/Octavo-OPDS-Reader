@@ -39,6 +39,37 @@ struct ReaderMessageTests {
         ))
     }
 
+    @Test func relocatePicksTheCFIShapeToSync() throws {
+        let json = #"{"type":"relocate","cfi":"epubcfi(/6/4!/4/16/8/2,/2/2/3:0,/4/2/3:14)","startCFI":"epubcfi(/6/4!/4/16/8/2/2/2/3:0)","blankPage":false,"fraction":0.25}"#
+        guard case .relocate(let relocation) = try ReaderMessage.decode(json) else {
+            Issue.record("Expected relocate")
+            return
+        }
+        #expect(relocation.blankPage == false)
+        #expect(relocation.position(.point) == ReadingPosition(cfi: "epubcfi(/6/4!/4/16/8/2/2/2/3:0)", fraction: 0.25))
+        #expect(relocation.position(.range) == ReadingPosition(cfi: "epubcfi(/6/4!/4/16/8/2,/2/2/3:0,/4/2/3:14)", fraction: 0.25))
+    }
+
+    // A bridge from before sync sends no start point; the range stands in.
+    @Test func pointFallsBackToTheRange() throws {
+        guard case .relocate(let relocation) = try ReaderMessage.decode(Self.relocateJSON) else {
+            Issue.record("Expected relocate")
+            return
+        }
+        #expect(relocation.startCFI == nil)
+        #expect(relocation.blankPage == nil)
+        #expect(relocation.position(.point).cfi == relocation.cfi)
+    }
+
+    @Test func decodesABlankPage() throws {
+        let json = #"{"type":"relocate","cfi":"epubcfi(/6/4!/4,/0,/0)","startCFI":"epubcfi(/6/4!/4/0)","blankPage":true,"fraction":0.0135}"#
+        guard case .relocate(let relocation) = try ReaderMessage.decode(json) else {
+            Issue.record("Expected relocate")
+            return
+        }
+        #expect(relocation.blankPage == true)
+    }
+
     // foliate can report NaN (JSON null) while a section is still being measured.
     @Test func relocateToleratesNullsAndMissingFields() throws {
         let json = #"{"type":"relocate","cfi":"epubcfi(/6/2!/4/2,,/2/2)","fraction":null,"location":{"current":null,"total":581}}"#

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
+<!--
+  Keys merged into the app's generated Info.plist (INFOPLIST_FILE with
+  GENERATE_INFOPLIST_FILE = YES). Only keys that INFOPLIST_KEY_* build
+  settings can't express belong here. Kept outside the folder-synchronized
+  Octavo/ group so it isn't copied into the bundle as a resource.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Plain-http servers on localhost, unqualified names and .local
+		     (the local BookOrbit dev server). Remote http servers are an
+		     owner decision; see docs/notes/sync-spike.md. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>
