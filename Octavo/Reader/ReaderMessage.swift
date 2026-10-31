@@ -39,7 +39,14 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
             var total: Int?
         }
 
+        /// The visible page as a range CFI (stock foliate).
         var cfi: String?
+        /// `cfi` collapsed to a point at the start of the page, the shape
+        /// BookOrbit's web reader stores. `nil` from an older bridge.
+        var startCFI: String?
+        /// The page shows no content, so `cfi` names only the section (see
+        /// `bridge.js` `isBlankPage`). Not worth saving or syncing.
+        var blankPage: Bool?
         /// Progress through the whole book. foliate reports 0...1; `nil` if it
         /// couldn't compute one (JSON has no NaN).
         var fraction: Double?
@@ -48,10 +55,26 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var sectionCount: Int?
         var location: Location?
 
-        /// The position to persist and sync.
-        var position: ReadingPosition {
-            ReadingPosition(cfi: cfi, fraction: min(max(fraction ?? 0, 0), 1))
+        /// The position with the page's range CFI.
+        var position: ReadingPosition { position(.range) }
+
+        /// The position to persist and sync, with the CFI in `shape`. A point
+        /// falls back to the range if the bridge didn't send one.
+        func position(_ shape: CFIShape) -> ReadingPosition {
+            let cfi = switch shape {
+            case .range: cfi
+            case .point: startCFI ?? cfi
+            }
+            return ReadingPosition(cfi: cfi, fraction: min(max(fraction ?? 0, 0), 1))
         }
+    }
+
+    /// Which CFI to keep for a page. Both open the same page in foliate.
+    nonisolated enum CFIShape: String, CaseIterable, Sendable {
+        /// The point where the page starts, as BookOrbit's web reader stores it.
+        case point
+        /// The range spanning the page, as stock foliate reports it.
+        case range
     }
 
     nonisolated struct ScriptError: Codable, Equatable, Sendable {

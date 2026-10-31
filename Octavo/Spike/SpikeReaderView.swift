@@ -2,9 +2,16 @@ import OctavoKit
 import SwiftUI
 
 /// SPIKE ONLY (deleted after the spike). The reader with a debug strip showing
-/// the live CFI and fraction, and previous/next buttons.
+/// the live CFI, fraction and sync state, previous/next buttons, and a "go to"
+/// field that takes a fraction or a CFI.
+///
+/// Each move also writes `Documents/spike-state.json` (position, both CFI
+/// shapes, the visible text, sync state) so a script on the host can read
+/// where the reader is.
 struct SpikeReaderView: View {
     let book: ReaderBook
+    let sync: (any ProgressSync)?
+    let cfiShape: ReaderMessage.CFIShape
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
     @State private var model: ReaderModel?
@@ -20,13 +27,22 @@ struct SpikeReaderView: View {
         .navigationTitle(model?.title ?? book.fileName)
         .navigationBarTitleDisplayMode(.inline)
         .task(id: book) {
-            if model?.book != book { model = ReaderModel(book: book) }
+            if model?.book != book { model = ReaderModel(book: book, sync: sync, cfiShape: cfiShape) }
+            #if DEBUG
+            SpikeRemote.reader = model
+            #endif
+        }
+        .onDisappear {
+            guard let model else { return }
+            Task { await model.close() }
         }
     }
 }
 
 private struct SpikeReaderContent: View {
     let model: ReaderModel
+    @State private var isGoingTo = false
+    @State private var target = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,40 +56,113 @@ private struct SpikeReaderContent: View {
                     }
                 }
         }
+        // The keyboard for "Go To" must not resize the page: foliate
+        // re-paginates on every resize.
+        .ignoresSafeArea(.keyboard)
         .toolbar {
             ToolbarItemGroup(placement: .bottomBar) {
                 Button("Previous", systemImage: "chevron.left", action: model.previous)
                 Spacer()
+                Button("Go To") { isGoingTo = true }
+                Spacer()
                 Button("Next", systemImage: "chevron.right", action: model.next)
             }
         }
+        .alert("Go To", isPresented: $isGoingTo) {
+            TextField("0.5 or epubcfi(…)", text: $target)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Go") { goTo(target) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .task(id: model.position) {
+            await SpikeStateFile.write(model)
+        }
     }
 
+    private func goTo(_ target: String) {
+        let trimmed = target.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let fraction = Double(trimmed) {
+            model.goTo(fraction: fraction)
+        } else if !trimmed.isEmpty {
+            model.goTo(cfi: trimmed)
+        }
+    }
+
+    /// Fixed height, one line per row: if the strip grew or shrank with its
+    /// text, the page would resize and foliate would re-paginate (and, on a
+    /// blank page, jump; see docs/notes/reader-spike.md).
     private var debugStrip: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("CFI: \(model.position?.cfi ?? "—")")
-                .lineLimit(3)
-                .textSelection(.enabled)
+                .truncationMode(.middle)
             HStack {
                 Text("fraction: \(model.position.map { String(format: "%.5f", $0.fraction) } ?? "—")")
                 if let location = model.location {
                     Text("loc \(location.current.map(String.init) ?? "?")/\(location.total.map(String.init) ?? "?")")
                 }
-                if let restoredFrom = model.restoredFrom {
-                    Text("from: \(restoredFrom)")
-                }
+                Text("from: \(model.restoredFrom ?? "—")/\(model.openingPosition?.label ?? "—")")
             }
-            if let tocLabel = model.tocLabel {
-                Text(tocLabel).lineLimit(1)
-            }
-            if let error = model.lastError {
-                Text("error: \(error)").foregroundStyle(.red).lineLimit(2)
-            }
+            Text(model.tocLabel ?? " ")
+            Text("sync: \(model.syncStatus ?? "off") [\(model.cfiShape.rawValue)]")
+                .truncationMode(.middle)
+            Text(model.lastError.map { "error: \($0)" } ?? " ")
+                .foregroundStyle(.red)
         }
+        .lineLimit(1)
         .font(.caption2.monospaced())
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 72, maxHeight: 72, alignment: .topLeading)
         .padding(.horizontal)
         .padding(.vertical, 4)
         .background(.bar)
+    }
+}
+
+/// SPIKE ONLY. Where the reader is, for scripts on the host.
+private enum SpikeStateFile {
+    struct State: Encodable {
+        var bookID: String
+        var title: String?
+        var cfi: String?
+        var rangeCFI: String?
+        var startCFI: String?
+        var blankPage: Bool?
+        var fraction: Double?
+        var tocLabel: String?
+        var visibleText: String?
+        var restoredFrom: String?
+        var openedFrom: String?
+        var syncStatus: String?
+        var lastPushedCFI: String?
+        var updatedAt: Date
+    }
+
+    static let url = URL.documentsDirectory.appending(path: "spike-state.json")
+
+    static func write(_ model: ReaderModel) async {
+        guard model.phase == .open else { return }
+        // Let the page settle so the text matches the final relocation.
+        try? await Task.sleep(for: .milliseconds(500))
+        guard !Task.isCancelled else { return }
+        let state = State(
+            bookID: model.book.id,
+            title: model.title,
+            cfi: model.position?.cfi,
+            rangeCFI: model.relocation?.cfi,
+            startCFI: model.relocation?.startCFI,
+            blankPage: model.relocation?.blankPage,
+            fraction: model.position?.fraction,
+            tocLabel: model.tocLabel,
+            visibleText: await model.visibleText(limit: 4000),
+            restoredFrom: model.restoredFrom,
+            openedFrom: model.openingPosition?.label,
+            syncStatus: model.syncStatus,
+            lastPushedCFI: model.lastPushedCFI,
+            updatedAt: .now
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        encoder.dateEncodingStrategy = .iso8601
+        try? encoder.encode(state).write(to: url, options: .atomic)
     }
 }
