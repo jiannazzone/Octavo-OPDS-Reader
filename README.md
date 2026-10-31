@@ -1,5 +1,7 @@
 # Octavo – OPDS Reader
 
+I'm using Claude as part of the development process. Just stating that upfront.
+
 A free, open-source e-reader for iPhone and iPad, built first for **iPhone Duo**.
 
 Octavo reads books from your own library servers. It works with any OPDS catalog (Calibre, COPS, Calibre-Web, Kavita, Komga and others), and it has a full native integration with [BookOrbit](https://github.com/bookorbit/bookorbit).
