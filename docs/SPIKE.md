@@ -132,7 +132,7 @@ Full write-up: `docs/notes/readium-spike.md` on the 1c branch.
 | Project maturity | one maintainer, no releases, unstable API | foundation-backed, releases, migration guides |
 | UI stack | SwiftUI `WebView` | UIKit view controller wrapped for SwiftUI |
 
-**Orchestrator and 1c both recommend foliate-js**, with Readium as the documented fallback (switch cost ~2–3 weeks; the 1c branch shows how). Sync accuracy is a tie, so it doesn't decide anything. foliate wins on parity by construction, formats, script isolation, resize anchoring and the SwiftUI stack. Readium's real advantage is project maturity. Owner decision pending.
+**Orchestrator and 1c both recommend foliate-js**, with Readium as the documented fallback (switch cost ~2–3 weeks; the 1c branch shows how). Sync accuracy is a tie, so it doesn't decide anything. foliate wins on parity by construction, formats, script isolation, resize anchoring and the SwiftUI stack. Readium's real advantage is project maturity. **Owner decided: foliate-js with safeguards** (see Decisions).
 
 **Blank-page bug, vetted** (`docs/notes/foliate-blank-page-upstream.md` on the `foliate-blank-page` branch, `e1946c0`): the bug is real and in upstream foliate-js (`getVisibleRange` falls back to `<body>` on an empty page). Reproduced in Chrome, macOS WebKit and iOS Safari, and not reported upstream. The P&P blank page itself is a WebKit double column break. The loop in Octavo was triggered by the debug strip resizing the `WebView`. A ~50-line patch leaves CFIs byte-identical on 1,546 non-blank pages. Draft issue and PR text are ready for owner review; nothing has been posted.
 
@@ -142,6 +142,9 @@ Full write-up: `docs/notes/readium-spike.md` on the 1c branch.
 - **Minimum iOS:** 27.1. Hinge APIs used without availability guards.
 - **Spike UI:** bare system-default debug screens in `Octavo/Spike/` are fine without per-screen approval; deleted after the spike. Any real UI needs owner approval.
 - **Git flow:** each session commits on its worktree branch and stops. **Nothing is pushed to GitHub (no `git push`, no `gh pr create`) without the owner's explicit OK for that push.** Once approved, the branch goes up as a PR; orchestrator reviews, owner merges. Scaffold (phase 0) lands the same way, before 1a/1b start.
+
+- **Engine (2026-10-31):** foliate-js, with safeguards: (1) we own the pinned copy plus a numbered patch set, starting with the vetted blank-page fix, and never patch `epubcfi.js`; (2) the BookOrbit round trip re-runs on every foliate bump, in CI once CI exists; (3) Readium kept as the escape hatch on local branch `spike/readium-eval` (`144ea99`). Readium's non-UI modules are still candidates for OPDS and metadata. The owner weighed Readium's maturity heavily; MOBI/AZW3/FB2 support and parity by construction decided it.
+- **foliate patches:** allowed under the rules above (this answers the earlier patch-policy question). Upstream issues and PRs need the owner's OK.
 
 ## Log
 

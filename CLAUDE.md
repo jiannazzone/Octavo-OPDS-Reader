@@ -42,11 +42,15 @@ Scripts/fetch-sample-books.sh
   - Why: BookOrbit's web reader and Android app both use foliate-js and store positions as **EPUB CFI**. Using the same engine gives exact position sync across devices.
   - We write our **own** JS bridge between Swift and foliate-js. Do **not** copy BookOrbit's `bridge.js` or its modified foliate files (see Licensing).
   - foliate-js says its API is unstable. Pin the version and update deliberately.
+  - **Confirmed by the spike (2026-10-31).** foliate-js and Readium both synced positions with BookOrbit exactly. foliate-js was kept because it needs no CFI translation, reads MOBI/AZW3/FB2, blocks book scripts and works with SwiftUI. Readium's maturity was the strong counter-argument (see `docs/SPIKE.md`, engine bake-off). Safeguards that come with the choice:
+    1. **We own the pinned copy.** Pinned at upstream `6b11e17`. Local changes are a small, numbered patch set listed in `ReaderWeb/foliate-js/PINNED.md`, never in `epubcfi.js`. Fixes may be offered upstream, but only with the owner's OK.
+    2. **Every foliate-js bump re-runs the BookOrbit position round trip**, automated in CI once CI exists.
+    3. **Escape hatch:** the local branch `spike/readium-eval` keeps a working Readium reader with a CFI bridge (measured 30/30 against BookOrbit). Switching is estimated at 2–3 weeks.
 - **PDF: PDFKit.**
 - **Comics: native SwiftUI** paging for CBZ/CBR, plus OPDS Page Streaming / BookOrbit `cbz/files/{fileId}/pages` for streamed reading.
 
 ### Parsing and OPDS
-- Evaluate **Readium Swift Toolkit (BSD-3)**, specifically the `ReadiumShared`, `ReadiumStreamer` and `ReadiumOPDS` modules (no UI). Do **not** use `ReadiumNavigator` (it's UIKit, and positions would need translating to foliate CFIs).
+- Evaluate **Readium Swift Toolkit (BSD-3)**, specifically the `ReadiumShared`, `ReadiumStreamer` and `ReadiumOPDS` modules (no UI), for OPDS feeds and native metadata/cover extraction. Do **not** use `ReadiumNavigator`. It was evaluated in spike 1c and not chosen; see Rendering above. If Readium is adopted, its non-MIT/BSD/Apache dependencies (CryptoSwift and minizip under zlib-style licenses, SIL OFL fonts) need owner sign-off first.
 - If Readium turns out to be overkill, OPDS 1.2 (Atom) parses fine with `XMLParser`, and OPDS 2.0 (JSON) with `Codable`.
 
 ### Core abstractions
