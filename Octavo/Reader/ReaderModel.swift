@@ -34,6 +34,19 @@ final class ReaderModel {
     private(set) var lastError: String?
     /// The latest relocation, both CFI shapes included.
     private(set) var relocation: ReaderMessage.Relocation?
+    /// Counts relocations, including ones that repeat the same page (a fold
+    /// re-lays out the page without moving the position).
+    private(set) var relocationCount = 0
+
+    // Layout, decided from the fold. See `ReaderLayout`.
+    private(set) var posture: ReaderPosture = .noHinge
+    /// The hinge angle in degrees, as last reported.
+    private(set) var hingeAngle: Double?
+    /// The SwiftUI view's geometry, with the page's own size once known.
+    private(set) var geometry: ReaderGeometry?
+    private(set) var layout: ReaderLayout = .automatic
+    /// The page's size as the page reports it.
+    @ObservationIgnored private var viewport: CGSize?
 
     // Sync state, for the debug overlay.
     /// Where the book opened, decided from the local and pulled positions.
@@ -53,6 +66,8 @@ final class ReaderModel {
     /// a page several times as it settles) aren't the reader moving.
     @ObservationIgnored private var openedCFI: String?
     @ObservationIgnored private var hasMoved = false
+    /// The layout the page has, or is about to get.
+    @ObservationIgnored private var sentLayout: ReaderLayout?
     @ObservationIgnored private let log = Logger(subsystem: "com.ianazzone.ereader", category: "Reader")
 
     static let pullTimeout = Duration.seconds(5)
@@ -107,6 +122,63 @@ final class ReaderModel {
     func goTo(cfi: String) { call("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi]) }
     func goTo(fraction: Double) { call("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": fraction]) }
 
+    /// The hinge changed. `angle` is in degrees. The system repeats
+    /// unchanged values many times a second while the hinge settles.
+    func hingeChanged(_ posture: ReaderPosture, angle: Double?) {
+        if angle != hingeAngle { hingeAngle = angle }
+        guard posture != self.posture else { return }
+        log.debug("posture \(posture.rawValue, privacy: .public)")
+        self.posture = posture
+        relayout()
+    }
+
+    /// The reader view's size or the fold's regions changed.
+    func geometryChanged(_ geometry: ReaderGeometry) {
+        var geometry = geometry
+        if let viewport { geometry.size = viewport }
+        guard geometry != self.geometry else { return }
+        self.geometry = geometry
+        relayout()
+    }
+
+    /// For checking a layout by hand; the next posture or geometry change
+    /// replaces it.
+    func override(_ layout: ReaderLayout) {
+        apply(layout)
+    }
+
+    private func relayout() {
+        apply(ReaderLayout(posture: posture, geometry: geometry))
+    }
+
+    private func apply(_ layout: ReaderLayout) {
+        guard layout != self.layout else { return }
+        self.layout = layout
+        sendLayout()
+    }
+
+    /// While the book is opening, `openBook` passes the layout along instead,
+    /// and `.opened` catches up with any change made in the meantime.
+    private func sendLayout() {
+        guard phase == .open, sentLayout != layout else { return }
+        sentLayout = layout
+        call("return await window.octavo.setLayout(layout)", arguments: ["layout": layout.scriptArguments])
+    }
+
+    /// Where the visible text sits against the fold (see `bridge.js`
+    /// `layoutReport`), for debugging.
+    func layoutReport() async -> [String: Any]? {
+        guard phase == .open else { return nil }
+        return try? await page.callJavaScript("return await window.octavo.layoutReport()") as? [String: Any]
+    }
+
+    /// Whether the visible page contains `cfi`'s start (see `bridge.js`
+    /// `locate`), for debugging.
+    func locate(_ cfi: String) async -> [String: Any]? {
+        guard phase == .open else { return nil }
+        return try? await page.callJavaScript("return await window.octavo.locate(cfi)", arguments: ["cfi": cfi]) as? [String: Any]
+    }
+
     /// The visible page's text, for debugging.
     func visibleText(limit: Int = 300) async -> String? {
         guard phase == .open else { return nil }
@@ -156,15 +228,20 @@ final class ReaderModel {
             openedCFI = position?.cfi
             hasMoved = false
             didOpen()
+            sendLayout()
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             self.relocation = relocation
+            relocationCount += 1
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
             location = relocation.location
             if !isRestoring { moved(to: relocation) }
         case .tap:
             break
+        case .viewport(let width, let height):
+            viewport = CGSize(width: width, height: height)
+            if let geometry { geometryChanged(geometry) }
         case .externalLink(let href):
             log.notice("Ignored external link \(href, privacy: .public)")
         case .error(let error):
@@ -189,7 +266,9 @@ final class ReaderModel {
                 "name": book.fileName,
                 "cfi": saved?.cfi ?? NSNull(),
                 "fraction": saved?.fraction ?? NSNull(),
+                "layout": layout.scriptArguments,
             ]
+            sentLayout = layout
             do {
                 _ = try await page.callJavaScript("return await window.octavo.open(options)", arguments: ["options": options])
             } catch {

@@ -75,9 +75,19 @@ private struct SpikeReaderContent: View {
             Button("Go") { goTo(target) }
             Button("Cancel", role: .cancel) {}
         }
-        .task(id: model.position) {
+        .task(id: StateKey(model)) {
             await SpikeStateFile.write(model)
         }
+        .spikeProbe("reader")
+    }
+
+    private var hingeLine: String {
+        let angle = model.hingeAngle.map { String(format: " %.0f°", $0) } ?? ""
+        let size = model.geometry.map { "\(Int($0.size.width))×\(Int($0.size.height))" } ?? "?"
+        let columns = model.layout.columns.map(String.init) ?? "auto"
+        let gap = model.layout.gapPercent.map { String(format: " gap %.1f%%", $0) } ?? ""
+        let fold = model.layout.fold.map { String(format: " fold %.0f–%.0f", $0.lowerBound, $0.upperBound) } ?? ""
+        return "hinge: \(model.posture.rawValue)\(angle) \(size) cols \(columns)\(gap)\(fold)"
     }
 
     private func goTo(_ target: String) {
@@ -86,6 +96,24 @@ private struct SpikeReaderContent: View {
             model.goTo(fraction: fraction)
         } else if !trimmed.isEmpty {
             model.goTo(cfi: trimmed)
+        }
+    }
+
+    /// Rewrites the state file on every relocation (a fold re-lays out the
+    /// page without moving the position) and every layout change.
+    private struct StateKey: Equatable {
+        var phase: ReaderModel.Phase
+        var relocations: Int
+        var layout: ReaderLayout
+        var posture: ReaderPosture
+        var size: CGSize?
+
+        init(_ model: ReaderModel) {
+            phase = model.phase
+            relocations = model.relocationCount
+            layout = model.layout
+            posture = model.posture
+            size = model.geometry?.size
         }
     }
 
@@ -106,12 +134,13 @@ private struct SpikeReaderContent: View {
             Text(model.tocLabel ?? " ")
             Text("sync: \(model.syncStatus ?? "off") [\(model.cfiShape.rawValue)]")
                 .truncationMode(.middle)
+            Text(hingeLine)
             Text(model.lastError.map { "error: \($0)" } ?? " ")
                 .foregroundStyle(.red)
         }
         .lineLimit(1)
         .font(.caption2.monospaced())
-        .frame(maxWidth: .infinity, minHeight: 72, maxHeight: 72, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 86, maxHeight: 86, alignment: .topLeading)
         .padding(.horizontal)
         .padding(.vertical, 4)
         .background(.bar)
@@ -134,6 +163,13 @@ private enum SpikeStateFile {
         var openedFrom: String?
         var syncStatus: String?
         var lastPushedCFI: String?
+        var relocations: Int
+        var posture: ReaderPosture
+        var hingeAngle: Double?
+        var geometry: ReaderGeometry?
+        var layout: ReaderLayout
+        var layoutReport: SpikeJSON?
+        var watched: SpikeJSON?
         var updatedAt: Date
     }
 
@@ -158,11 +194,49 @@ private enum SpikeStateFile {
             openedFrom: model.openingPosition?.label,
             syncStatus: model.syncStatus,
             lastPushedCFI: model.lastPushedCFI,
+            relocations: model.relocationCount,
+            posture: model.posture,
+            hingeAngle: model.hingeAngle,
+            geometry: model.geometry,
+            layout: model.layout,
+            layoutReport: await model.layoutReport().map(SpikeJSON.init),
+            watched: await watched(model),
             updatedAt: .now
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         try? encoder.encode(state).write(to: url, options: .atomic)
+    }
+
+    private static func watched(_ model: ReaderModel) async -> SpikeJSON? {
+        #if DEBUG
+        guard let cfi = SpikeRemote.watchedCFI else { return nil }
+        var result = await model.locate(cfi) ?? [:]
+        result["cfi"] = cfi
+        return SpikeJSON(result)
+        #else
+        return nil
+        #endif
+    }
+}
+
+/// SPIKE ONLY. Re-encodes a dictionary that came back from JavaScript.
+private struct SpikeJSON: Encodable {
+    let object: Any
+
+    init(_ object: Any) { self.object = object }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch object {
+        case let value as NSNumber where CFGetTypeID(value) == CFBooleanGetTypeID(): try container.encode(value.boolValue)
+        case let value as Int: try container.encode(value)
+        case let value as Double: try container.encode(value)
+        case let value as String: try container.encode(value)
+        case let value as [Any]: try container.encode(value.map(SpikeJSON.init))
+        case let value as [String: Any]: try container.encode(value.mapValues(SpikeJSON.init))
+        default: try container.encodeNil()
+        }
     }
 }

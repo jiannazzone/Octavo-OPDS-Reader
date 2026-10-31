@@ -9,7 +9,11 @@ import Foundation
 /// it, runs it, and writes `{"id": 7, "ok": true}` to `spike-ack.json`.
 /// Commands: `signin`, `open` (`fileID`), `close`, `goto` (`fraction` or
 /// `cfi`), `next`, `prev`, `shape` (`point` or `range`, applies to the next
-/// open). Where the reader is goes to `spike-state.json` (`SpikeStateFile`).
+/// open), `openLocal`/`detail` (`name` of a local book, or `fileID`), `home`,
+/// `layout` (a `ReaderLayout` to try until the next fold), `watch` (`cfi`:
+/// the state file then says whether the visible page contains it).
+/// Where the reader is goes to `spike-state.json` (`SpikeStateFile`).
+/// Hinge, region and scene events go to `spike-events.jsonl` (`SpikeEvents`).
 enum SpikeRemote {
     struct Command: Decodable {
         var id: Int
@@ -18,6 +22,8 @@ enum SpikeRemote {
         var fraction: Double?
         var cfi: String?
         var shape: String?
+        var name: String?
+        var layout: ReaderLayout?
     }
 
     struct Ack: Encodable {
@@ -28,6 +34,8 @@ enum SpikeRemote {
 
     /// The open reader, set by `SpikeReaderView`.
     static weak var reader: ReaderModel?
+    /// A CFI the state file checks the visible page against.
+    static var watchedCFI: String?
 
     static let commandURL = URL.documentsDirectory.appending(path: "spike-command.json")
     static let ackURL = URL.documentsDirectory.appending(path: "spike-ack.json")
@@ -57,6 +65,11 @@ enum SpikeRemote {
             } else {
                 return "goto needs fraction or cfi"
             }
+        case "layout":
+            guard let layout = command.layout else { return "layout needs a layout" }
+            reader.override(layout)
+        case "watch":
+            watchedCFI = command.cfi
         case "next": reader.next()
         case "prev": reader.previous()
         default: return "unknown command \(command.cmd)"
