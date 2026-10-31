@@ -37,9 +37,9 @@ Sample books (Gutenberg EPUB3): Pride and Prejudice (1342), Alice in Wonderland 
 
 | # | Task | Spike step | Runs in | Depends on | Status |
 |---|---|---|---|---|---|
-| 0 | Scaffold: project, package skeleton, `ReaderWeb/` folder ref, fetch script, notices, .gitignore; builds on Duo sim | — | this session | approval | committed on `spike/scaffold`, awaiting push OK |
-| 1a | **Reader spike**: pin + vendor foliate-js, own bridge, `WebView` + scheme handler, open a local EPUB, relocate → `{cfi, fraction}`, `goTo(cfi)`, restore last CFI on relaunch | 3 | session | 0 | pending |
-| 1b | **BookOrbit server + client**: local BookOrbit in Docker seeded with the sample books in a "Spike" collection; `BookOrbitClient` in OctavoKit (login, refresh cookie, collections, collection books, download, GET/POST progress) | 1, 2 | session | 0 | pending |
+| 0 | Scaffold: project, package skeleton, `ReaderWeb/` folder ref, fetch script, notices, .gitignore; builds on Duo sim | — | this session | approval | done, local only on `spike/scaffold` (owner: keep local for now) |
+| 1a | **Reader spike**: pin + vendor foliate-js, own bridge, `WebView` + scheme handler, open a local EPUB, relocate → `{cfi, fraction}`, `goTo(cfi)`, restore last CFI on relaunch | 3 | `reader-spike` | 0 | in progress (branch from `spike/scaffold`) |
+| 1b | **BookOrbit server + client**: local BookOrbit in Docker seeded with the sample books in a "Spike" collection; `BookOrbitClient` in OctavoKit (login, refresh cookie, collections, collection books, download, GET/POST progress) | 1, 2 | `bookorbit-client` | 0 | in progress (branch from `spike/scaffold`) |
 | 2a | **Integration + CFI round trip**: app logs in → collection → download → read; pull progress on open, push on relocate; verify against BookOrbit's web reader both directions, ≥3 books | 4 | session | 1a, 1b | pending |
 | 2b | **Duo spreads**: `onHingeChange` → foliate column count (1 ↔ 2), position kept across fold/unfold | 5 | session | 1a | pending |
 | 3 | Retro: record results/decisions in CLAUDE.md, delete `Spike/`, draft GitHub issues for real work, hand off to UI brainstorming | — | this session | 2a, 2b | pending |
@@ -74,4 +74,5 @@ Read BookOrbit's web reader source (behavior only, no copying) to learn (a) whic
 ## Log
 
 - 2026-10-31 — Plan drafted; owner answered server / min iOS / spike UI / git flow.
+- 2026-10-31 — Started 1a (`reader-spike`) and 1b (`bookorbit-client`) in their own worktrees, cut from local `spike/scaffold`. Neither may push.
 - 2026-10-31 — Scaffold built: `xcodebuild test` passes on the iPhone Duo sim, `swift test` passes for OctavoKit, app launches (folded, outer display). `ReaderWeb/` lands in the bundle as a folder. Shared model `ReadingPosition {cfi?, fraction 0...1, pageNumber?}` lives in OctavoKit so 1a and 1b agree on it. All five sample books fetched (Pride and Prejudice is the illustrated edition, 24 MB: a useful stress case).
