@@ -42,7 +42,7 @@ Sample books (Gutenberg EPUB3): Pride and Prejudice (1342), Alice in Wonderland 
 | 1b | **BookOrbit server + client**: local BookOrbit in Docker seeded with the sample books in a "Spike" collection; `BookOrbitClient` in OctavoKit (login, refresh cookie, collections, collection books, download, GET/POST progress) | 1, 2 | `bookorbit-client` | 0 | **done**, merged locally into `spike/scaffold` |
 | 1c | **Readium bake-off** (owner request): Readium Swift navigator + our CFI translation layer (foliate's `epubcfi.js`), measured against BookOrbit's web reader with the same table as 2a. Own BookOrbit user and own simulator. Evaluation branch, merged only if Readium wins | 4 (Readium) | `readium-spike` | 1b | **done**: 30/30 hits, `144ea99` on `claude/spike-1c-readium-c401b9`, local, evaluation only |
 | 2a | **Integration + CFI round trip**: app logs in → collection → download → read; pull progress on open, push on relocate; verify against BookOrbit's web reader both directions, ≥3 books | 4 | `sync-roundtrip` | 1a, 1b | **done**: 31/31 hits, merged locally into `spike/scaffold` |
-| 2b | **Duo spreads**: `onHingeChange` → column count (1 ↔ 2), position kept across fold/unfold | 5 | `duo-spreads` | engine choice | in progress (branch from `spike/scaffold`): blank-page patch 0001, hinge-driven columns, gap at hinge, half-open, continuity, cover-display handoff; sim 'Octavo Sync Duo' |
+| 2b | **Duo spreads**: `onHingeChange` → column count (1 ↔ 2), position kept across fold/unfold | 5 | `duo-spreads` | engine choice | **done**: folds back to the exact page 21/21, unfolded spread contains it 35/35, except one loss on P&P's blank page; `79022ba` on `claude/spike-2b-duo-spreads-bfd52c`, local, unmerged |
 | 3 | Retro: record results/decisions in CLAUDE.md, delete `Spike/`, draft GitHub issues for real work, hand off to UI brainstorming | — | this session | 2a, 2b | pending |
 
 1a and 1b run in parallel. 2a and 2b may run in parallel if their files don't overlap; decided when 1a lands.
@@ -124,7 +124,7 @@ Full write-up: `docs/notes/readium-spike.md` on the 1c branch.
 | BookOrbit web → positions | 15/15 hit | 15/15 hit, character-exact (text-quote navigation) |
 | CFI translation layer | none: same code as BookOrbit | ours: foliate's `epubcfi.js` injected, quote-based `go(to:)`. ~2–3 weeks to production incl. highlights, plus a CI regression harness |
 | Fold/unfold position | paginator keeps an anchor | Readium drifts backward (to chapter start in one run); our re-anchor fix kept 12/12 |
-| Unfolded two columns | reader area is 951×517 pt (wider than tall), so foliate's portrait single-column rule shouldn't apply (2b to confirm) | needs `columnCount: .two` set from the hinge; `.auto` stays one column |
+| Unfolded two columns | reader area is 951×517 pt (wider than tall), so foliate's portrait single-column rule shouldn't apply (2b confirmed: foliate shows two pages unfolded unaided; we set it from the hinge anyway) | needs `columnCount: .two` set from the hinge; `.auto` stays one column |
 | Formats | EPUB, MOBI, AZW3, FB2, CBZ | EPUB, PDF, CBZ, audiobooks; no MOBI/AZW3/FB2 |
 | Book JavaScript | blocked (CSP, sandboxed book, main-frame-only messages) | runs by default; a CSP meta injected via a `Publication` transform blocks it, but Readium's handlers stay reachable |
 | Licenses | MIT, BSD-3 | also zlib-style (CryptoSwift, minizip) and SIL OFL fonts → owner sign-off needed |
@@ -135,6 +135,18 @@ Full write-up: `docs/notes/readium-spike.md` on the 1c branch.
 **Orchestrator and 1c both recommend foliate-js**, with Readium as the documented fallback (switch cost ~2–3 weeks; the 1c branch shows how). Sync accuracy is a tie, so it doesn't decide anything. foliate wins on parity by construction, formats, script isolation, resize anchoring and the SwiftUI stack. Readium's real advantage is project maturity. **Owner decided: foliate-js with safeguards** (see Decisions).
 
 **Blank-page bug, vetted** (`docs/notes/foliate-blank-page-upstream.md` on the `foliate-blank-page` branch, `e1946c0`): the bug is real and in upstream foliate-js (`getVisibleRange` falls back to `<body>` on an empty page). Reproduced in Chrome, macOS WebKit and iOS Safari, and not reported upstream. The P&P blank page itself is a WebKit double column break. The loop in Octavo was triggered by the debug strip resizing the `WebView`. A ~50-line patch leaves CFIs byte-identical on 1,546 non-blank pages. Draft issue and PR text are ready for owner review; nothing has been posted.
+
+## 2b findings (2026-10-31)
+
+Full write-up: `docs/notes/duo-spreads.md` on the 2b branch (screenshots, runs, tools).
+
+- **Layout:** one page folded, two unfolded and half-open (90° looks the same as flat). The hinge is reported as a 40 pt strip; text stays clear of it (left page ends x ≈ 443, right starts ≈ 509, hinge 455.5–495.5).
+- **foliate patches** (`ReaderWeb/foliate-js/patches/`, listed in `PINNED.md`): 0001 is the vetted blank-page fix, code unchanged. 0002 (two lines) lets our code, not the reader area's shape, pick one or two pages. `epubcfi.js` untouched. Orchestrator check: applying 0001 + 0002 to upstream `6b11e17` reproduces the branch's `paginator.js` byte for byte.
+- **Position across folds:** 8 runs × 8 hinge moves on all five books. Fold back to the exact page 21/21; unfolded spread contains it 35/35 (5 straddles, counted as hits as in 2a). One loss: P&P's blank page after the dedication returns one page early (no text skipped). Bug found and fixed in the bridge: after a jump by fraction, re-anchor to the visible text.
+- **Cover-display handoff:** the same window moves between displays and app state survives. Unfolding on a book's screen opens the reader in about 20 ms, at the local or pulled BookOrbit position; nothing pushed. Caveats: "open" arrives ~200 ms before the resize, the sync pull can delay the reader up to 5 s, and an accidental unfold also navigates.
+- **Open risks:** fold continuity depends on foliate keeping its anchor through 10–13 re-layouts (`PINNED.md` now says to re-run fold tests on every bump). After an unfold, the synced position is the start of the spread, so another device may open up to a page early. Simulator only.
+- **Owner UX calls** (section 7 of the note): half-open "book mode"; unfolded-sideways behaviour; drawing under the camera column and toolbar; outer margins vs gutter; auto-open on unfold vs ask; hiding the fold flicker.
+- **Testing tip:** plain `xcodebuild test` clones the sim and shuts the original down; use `-parallel-testing-enabled NO` while the app is running on it.
 
 ## Decisions
 
@@ -159,3 +171,4 @@ Full write-up: `docs/notes/readium-spike.md` on the 1c branch.
 - 2026-10-31 — Owner chose foliate-js with safeguards. Readium branch kept as `spike/readium-eval`. 2a merged locally; merged tree passes `swift test` (48) and `xcodebuild test` on 'Octavo Sync Duo' (32DEFF1F…). Started 2b (`duo-spreads`).
 - 2026-10-31 — Prep for closing finished sessions: the BookOrbit server's data moved from 1b's worktree to `dev/bookorbit/data/` in the main checkout (gitignored) and the server was restarted from there; data intact. Local branch `spike/blank-page-vetting` keeps the vetting doc and upstream drafts. The sessions' raw reports and screenshots are in the orchestrator's side-session notes folder (~20 MB); copy what matters into the repo at the phase 3 retro.
 - 2026-10-31 — Archived sessions 1a, 1b, 1c, 2a and the blank-page vetting session (taken with 1a). 2b is still running.
+- 2026-10-31 — 2b done and verified: tests re-run on its branch (`xcodebuild test` 47/47 on 'Octavo Sync Duo' (32DEFF1F…), `swift test` 48/48), patches reproduce `paginator.js`, `epubcfi.js` untouched. Branch local, unmerged; awaiting owner OK to merge and start phase 3.
