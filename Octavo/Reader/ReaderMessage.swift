@@ -15,6 +15,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     case relocate(Relocation)
     /// The user tapped the middle of the page.
     case tap(zone: String)
+    /// The page's size in CSS px (= points), sent on load and on resize.
+    case viewport(width: Double, height: Double)
     /// The user followed a link out of the book. The bridge has already
     /// stopped foliate from opening it.
     case externalLink(href: String)
@@ -101,7 +103,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href
+        case type, zone, level, message, href, width, height
     }
 
     init(from decoder: any Decoder) throws {
@@ -116,6 +118,11 @@ nonisolated extension ReaderMessage: Decodable {
             self = .relocate(try Relocation(from: decoder))
         case "tap":
             self = .tap(zone: try container.decodeIfPresent(String.self, forKey: .zone) ?? "middle")
+        case "viewport":
+            self = .viewport(
+                width: try container.decode(Double.self, forKey: .width),
+                height: try container.decode(Double.self, forKey: .height)
+            )
         case "externalLink":
             self = .externalLink(href: try container.decode(String.self, forKey: .href))
         case "error":

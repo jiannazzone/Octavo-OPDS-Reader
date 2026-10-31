@@ -8,9 +8,9 @@
 // message handler, shaped `{ type, ...payload }`. Swift decodes it in
 // `ReaderMessage.swift`; keep the two in step.
 //
-// Swift → JS: `window.octavo.open/goTo/goToFraction/next/prev/visibleText`,
-// called with `WebPage.callJavaScript`. Each returns a promise that Swift
-// awaits.
+// Swift → JS: `window.octavo.open/goTo/goToFraction/next/prev/setLayout/
+// visibleText/...`, called with `WebPage.callJavaScript`. Each returns a
+// promise that Swift awaits.
 
 import './foliate-js/view.js'
 import * as CFI from './foliate-js/epubcfi.js'
@@ -37,6 +37,11 @@ const describe = error => error instanceof Error
 
 const finiteOrNull = x => typeof x === 'number' && Number.isFinite(x) ? x : null
 
+// The page's size, which can be larger than the SwiftUI view's frame (the
+// web view draws under the safe areas). Swift lays out against it.
+const postViewport = () => post('viewport', { width: innerWidth, height: innerHeight })
+window.addEventListener('resize', postViewport)
+
 window.addEventListener('error', e =>
     post('error', { phase: 'script', message: e.message, source: e.filename ?? null, line: e.lineno ?? null }))
 window.addEventListener('unhandledrejection', e =>
@@ -61,6 +66,8 @@ const plainText = value => {
 }
 
 let view = null
+// The page layout Swift asked for (`ReaderLayout`), kept across books.
+let layout = null
 
 // foliate reports the visible page as a range CFI. BookOrbit's web reader
 // stores a collapsed point at the start of the page instead. This is the same
@@ -74,8 +81,10 @@ const startOf = cfi => {
 }
 
 // On a page with no visible node (a blank column after a forced break),
-// foliate's paginator falls back to the section's <body>, so the CFI only
-// names the section and reopening it lands on the section's first page.
+// stock foliate falls back to the section's <body>, so the CFI only names the
+// section and reopening it lands on the section's first page. Our patch 0001
+// (foliate-js/PINNED.md) reports the next content instead, so this only
+// matters if that patch is ever dropped.
 const isBlankPage = range => {
     const container = range?.startContainer
     return Boolean(container && container === container.ownerDocument?.body)
@@ -132,12 +141,119 @@ const onSectionLoad = ({ detail: { doc } }) => {
     })
 }
 
+// Lays pages out the way Swift's `ReaderLayout` says: column count, gap and
+// text width through foliate's own attributes, and the view's left/right
+// insets so foliate's centred gap sits over the fold. `max-column-count-
+// portrait` is our patch 0002; without it a portrait reader area always gets
+// one column. Missing values fall back to foliate's defaults.
+const applyLayout = () => {
+    if (!view?.renderer) return
+    const renderer = view.renderer
+    const set = (name, value) => value === null || value === undefined
+        ? renderer.removeAttribute(name)
+        : renderer.setAttribute(name, String(value))
+    view.style.left = `${layout?.leftInset ?? 0}px`
+    view.style.right = `${layout?.rightInset ?? 0}px`
+    set('max-column-count', layout?.columns)
+    set('max-column-count-portrait', layout?.columns)
+    set('gap', layout?.gapPercent === null || layout?.gapPercent === undefined ? null : `${layout.gapPercent}%`)
+    set('max-inline-size', layout?.maxInlineSize === null || layout?.maxInlineSize === undefined ? null : `${layout.maxInlineSize}px`)
+    // A changed column count doesn't always resize anything, so foliate
+    // wouldn't notice. Re-rendering keeps the paginator's anchor.
+    renderer.render()
+}
+
+// Text boxes of the visible page in the top window's coordinates. Text only:
+// a range's element boxes can include fragments from other pages.
+const visibleTextRects = () => {
+    const range = view?.lastLocation?.range
+    if (!range) return []
+    const doc = range.startContainer.ownerDocument
+    const frameLeft = doc?.defaultView?.frameElement?.getBoundingClientRect().left ?? 0
+    const root = range.commonAncestorContainer
+    const walker = doc.createTreeWalker(root.nodeType === 3 ? root.parentNode : root, NodeFilter.SHOW_TEXT)
+    const rects = []
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!range.intersectsNode(node) || !node.nodeValue.trim()) continue
+        const part = doc.createRange()
+        part.selectNodeContents(node)
+        if (node === range.startContainer) part.setStart(node, range.startOffset)
+        if (node === range.endContainer) part.setEnd(node, range.endOffset)
+        for (const r of part.getClientRects())
+            if (r.width > 0 && r.height > 0) rects.push({ left: r.left + frameLeft, right: r.right + frameLeft })
+    }
+    return rects
+}
+
+// The page's safe-area insets (CSS `env()`), in CSS px.
+const safeAreaInsets = () => {
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position: fixed; visibility: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'
+    document.body.append(probe)
+    const style = getComputedStyle(probe)
+    const insets = ['top', 'right', 'bottom', 'left'].map(side => parseFloat(style[`padding-${side}`]) || 0)
+    probe.remove()
+    return insets
+}
+
+// Where the visible text sits relative to the fold, for checking layouts.
+const layoutReport = () => {
+    const box = requireView().getBoundingClientRect()
+    const rects = visibleTextRects()
+    const fold = layout?.fold ?? null
+    const mid = fold ? (fold[0] + fold[1]) / 2 : innerWidth / 2
+    const left = rects.filter(r => r.right <= mid)
+    const right = rects.filter(r => r.left >= mid)
+    const edge = (list, f, key) => list.length ? f(...list.map(r => r[key])) : null
+    return {
+        innerWidth,
+        innerHeight,
+        scale: visualViewport?.scale ?? null,
+        safeArea: safeAreaInsets(),
+        view: { left: box.left, width: box.width, height: box.height },
+        columns: view.renderer.heads?.length ?? null,
+        textLeft: edge(rects, Math.min, 'left'),
+        textRight: edge(rects, Math.max, 'right'),
+        leftPageRight: edge(left, Math.max, 'right'),
+        rightPageLeft: edge(right, Math.min, 'left'),
+        fold,
+        // Text boxes that touch the fold region (or straddle the middle).
+        crossing: rects.filter(r => fold ? r.left < fold[1] && r.right > fold[0] : r.left < mid && r.right > mid).length,
+        textBoxes: rects.length,
+    }
+}
+
+// Whether the visible page contains `cfi`'s start point: compared with the
+// page's start and end through foliate's own CFI ordering.
+const locate = cfi => {
+    const current = requireView().lastLocation?.cfi
+    if (!current || !cfi) return null
+    const point = CFI.collapse(cfi)
+    const afterStart = CFI.compare(CFI.collapse(current), point) <= 0
+    const beforeEnd = CFI.compare(point, CFI.collapse(current, true)) <= 0
+    return { contains: afterStart && beforeEnd, afterStart, beforeEnd }
+}
+
+// After a jump by fraction, foliate keeps the fraction itself as the page's
+// anchor, so the next re-layout (a fold, a font change) maps that fraction
+// onto the new layout and can land a page or a spread away from the text that
+// was showing. Re-anchoring on the visible page's own range keeps that text
+// in view, the same as after a page turn. A blank page (collapsed range, see
+// patch 0001) keeps its page-fraction anchor.
+const anchorToPage = async () => {
+    const range = view?.lastLocation?.range
+    const cfi = view?.lastLocation?.cfi
+    if (!cfi || !range || range.collapsed || view.isFixedLayout) return
+    await view.renderer.goTo(view.resolveNavigation(cfi))
+}
+
 // Try the CFI first, then the fraction, then the start of the book.
 // Fixed-layout books go by fraction first, like BookOrbit does.
 const restore = async (cfi, fraction) => {
     const byFraction = async () => {
         if (fraction === null || fraction <= 0) return false
         await view.goToFraction(Math.min(fraction, 1))
+        await anchorToPage()
         return true
     }
     if (view.isFixedLayout && await byFraction()) return 'fraction'
@@ -147,7 +263,7 @@ const restore = async (cfi, fraction) => {
     return 'start'
 }
 
-const open = async ({ url, name, cfi = null, fraction = null }) => {
+const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined }) => {
     if (view) {
         view.close()
         view.remove()
@@ -172,6 +288,8 @@ const open = async ({ url, name, cfi = null, fraction = null }) => {
         if (detail.isScript) detail.allow = false
     })
     view.renderer.setAttribute('flow', 'paginated')
+    if (initialLayout !== undefined) layout = initialLayout
+    applyLayout()
 
     const restoredFrom = await restore(cfi, finiteOrNull(fraction))
     const result = {
@@ -207,6 +325,7 @@ window.octavo = Object.freeze({
     }),
     goToFraction: reported(async function goToFraction(fraction) {
         await requireView().goToFraction(Math.max(0, Math.min(1, fraction)))
+        await anchorToPage()
         return true
     }),
     next: reported(async function next() {
@@ -217,6 +336,17 @@ window.octavo = Object.freeze({
         await requireView().prev()
         return true
     }),
+    setLayout: reported(async function setLayout(newLayout) {
+        layout = newLayout
+        applyLayout()
+        return true
+    }),
+    layoutReport: reported(async function layoutReport_() {
+        return layoutReport()
+    }),
+    locate: reported(async function locate_(cfi) {
+        return locate(cfi)
+    }),
     // The text of the visible page, whitespace collapsed, for debugging and
     // for checking positions against another reader.
     visibleText: reported(async function visibleText(limit = 300) {
@@ -226,3 +356,4 @@ window.octavo = Object.freeze({
 })
 
 post('ready')
+postViewport()

@@ -14,6 +14,10 @@ struct ReaderMessageTests {
         #expect(try ReaderMessage.decode(#"{"type":"ready"}"#) == .ready)
     }
 
+    @Test func decodesViewport() throws {
+        #expect(try ReaderMessage.decode(#"{"type":"viewport","width":951,"height":493}"#) == .viewport(width: 951, height: 493))
+    }
+
     @Test func decodesRelocate() throws {
         let message = try ReaderMessage.decode(Self.relocateJSON)
         guard case .relocate(let relocation) = message else {

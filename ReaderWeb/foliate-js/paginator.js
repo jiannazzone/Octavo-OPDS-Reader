@@ -124,9 +124,12 @@ const getVisibleRange = (doc, start, end, mapRect) => {
     for (let node = walker.nextNode(); node; node = walker.nextNode())
         nodes.push(node)
 
+    // nothing is visible, e.g. on a blank page left by column breaks
+    if (!nodes.length) return null
+
     // we're only interested in the first and last visible nodes
-    const from = nodes[0] ?? doc.body
-    const to = nodes[nodes.length - 1] ?? from
+    const from = nodes[0]
+    const to = nodes[nodes.length - 1]
 
     // find the offset at which visibility changes
     const startOffset = from.nodeType === 1 ? 0
@@ -147,6 +150,35 @@ const getVisibleRange = (doc, start, end, mapRect) => {
     const range = doc.createRange()
     range.setStart(from, startOffset)
     range.setEnd(to, endOffset)
+    return range
+}
+
+// for blank pages: a collapsed range at the start of the first node after
+// `end`, or at the end of the last element if there is nothing after it
+const getRangeAfter = (doc, end, mapRect) => {
+    const acceptNode = node => {
+        const name = node.localName?.toLowerCase()
+        if (name === 'script' || name === 'style') return FILTER_REJECT
+        if (node.nodeType === 1) {
+            const { left, right } = mapRect(node.getBoundingClientRect())
+            if (right <= end) return FILTER_REJECT
+            if (left >= end) return FILTER_ACCEPT
+        } else if (node.nodeValue?.trim()) {
+            const range = doc.createRange()
+            range.selectNodeContents(node)
+            if (mapRect(range.getBoundingClientRect()).left >= end) return FILTER_ACCEPT
+        }
+        return FILTER_SKIP
+    }
+    const node = doc.createTreeWalker(doc.body, filter, { acceptNode }).nextNode()
+    const range = doc.createRange()
+    if (node) {
+        range.setStart(node, 0)
+        range.collapse(true)
+    } else {
+        range.selectNodeContents(doc.body.lastElementChild ?? doc.body)
+        range.collapse()
+    }
     return range
 }
 
@@ -425,6 +457,7 @@ export class Paginator extends HTMLElement {
     static observedAttributes = [
         'flow', 'gap', 'margin',
         'max-inline-size', 'max-block-size', 'max-column-count',
+        'max-column-count-portrait',
     ]
     #root = this.attachShadow({ mode: 'closed' })
     #observer = new ResizeObserver(() => this.render())
@@ -634,6 +667,7 @@ export class Paginator extends HTMLElement {
             case 'margin':
             case 'max-block-size':
             case 'max-column-count':
+            case 'max-column-count-portrait':
                 this.#top.style.setProperty('--_' + name, value)
                 break
             case 'max-inline-size':
@@ -943,18 +977,28 @@ export class Paginator extends HTMLElement {
         await this.#scrollToPage(newPage + 1, reason)
     }
     #getVisibleRange() {
-        if (this.scrolled) return getVisibleRange(this.#view.document,
-            this.start + this.#margin, this.end - this.#margin, this.#getRectMapper())
+        const doc = this.#view.document
+        const mapRect = this.#getRectMapper()
         const size = this.#rtl ? -this.size : this.size
-        return getVisibleRange(this.#view.document,
-            this.start - size, this.end - size, this.#getRectMapper())
+        const [start, end] = this.scrolled
+            ? [this.start + this.#margin, this.end - this.#margin]
+            : [this.start - size, this.end - size]
+        const range = getVisibleRange(doc, start, end, mapRect)
+        return range ? { range } : { range: getRangeAfter(doc, end, mapRect), blank: true }
+    }
+    // the inverse of what `#scrollToAnchor()` does with a fraction
+    #getPageFraction() {
+        if (this.scrolled) return this.start / this.viewSize
+        const textPages = this.pages - 2
+        return textPages > 1 ? (this.page - 1) / (textPages - 1) : 0
     }
     #afterScroll(reason) {
-        const range = this.#getVisibleRange()
+        const { range, blank } = this.#getVisibleRange()
         this.#lastVisibleRange = range
         // don't set new anchor if relocation was to scroll to anchor
         if (reason !== 'selection' && reason !== 'navigation' && reason !== 'anchor')
-            this.#anchor = range
+            // a blank page has no content to anchor to, so anchor to the page
+            this.#anchor = blank ? this.#getPageFraction() : range
         else this.#justAnchored = true
 
         const index = this.#index

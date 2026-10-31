@@ -4,7 +4,20 @@
 - **Commit:** `6b11e1744346f60504b727984f7d42f0fef3ab54` (`6b11e17`)
 - **Commit date:** 2025-11-29, "Properly handle empty fragments for MOBI (#107)"
 - **Vendored:** 2026-10-31, task 1a of the first spike
-- **Modified:** no. Every `.js` file here is byte-identical to upstream at this commit.
+- **Modified:** only `paginator.js`, by the numbered patches below. Every other `.js` file here is byte-identical to upstream at this commit. `epubcfi.js` is never patched: CFIs must stay identical to BookOrbit's.
+
+## Local patches
+
+Applied in order on top of upstream `6b11e17`. Each file in `patches/` has a header saying what it fixes and how it was checked. Applying them all to upstream's `paginator.js` must reproduce ours byte for byte:
+
+```bash
+git apply --directory=ReaderWeb/foliate-js ReaderWeb/foliate-js/patches/*.patch   # onto a clean upstream copy
+```
+
+| # | File | Fixes | Vetting | Upstream |
+|---|---|---|---|---|
+| 0001 | `patches/0001-blank-page-position.patch` | On a page with no visible node (a blank column left by forced breaks, a tall block, a `100vh` title), `getVisibleRange()` fell back to the section's `<body>`. The CFI then named only the section, and any re-layout (resize, fold, font load) or a restore jumped to the section's first page. The patch reports the next content's start as the location and anchors the page by fraction. CFIs on pages with content are unchanged (1,546 of 1,546 byte-identical). | `docs/notes/foliate-blank-page-upstream.md`, section "5. The fix", on local branch `claude/foliate-blank-page-vetting-1aa980` (`e1946c0`) | Not reported. Draft issue and PR text are in the vetting doc, for the owner to send. |
+| 0002 | `patches/0002-portrait-column-count.patch` | A portrait reader area always got one column: `--_max-column-count-portrait` had no attribute. Adds a `max-column-count-portrait` attribute so the host decides the column count (Octavo decides it from the hinge, not the aspect ratio). No effect unless the attribute is set. | `docs/notes/duo-spreads.md` (spike 2b): a 400×493 view asked for two columns gets one without the patch, two with it. | Not reported. |
 
 ## Why this commit
 
@@ -27,5 +40,5 @@ Left out:
 foliate-js says its API is unstable. Update deliberately:
 
 1. Diff `epubcfi.js`, `paginator.js` (`getVisibleRange`, `#getVisibleRange`) and `view.js` (`#onRelocate`, `getCFI`, `resolveCFI`) against this commit, and against whatever BookOrbit uses at that point.
-2. Copy the new files in unmodified and update this file.
-3. Re-run the CFI round-trip check from spike step 4 before merging.
+2. Copy the new files in unmodified, re-apply each patch in `patches/` (drop any that upstream has absorbed), and update this file.
+3. Re-run the CFI round-trip check from spike step 4 and the fold-continuity check from spike 2b (`docs/notes/duo-spreads.md`) before merging.

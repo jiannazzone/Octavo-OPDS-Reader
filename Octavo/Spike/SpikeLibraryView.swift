@@ -3,7 +3,8 @@ import SwiftUI
 
 /// SPIKE ONLY (deleted after the spike). Lists the books in the app's
 /// Documents folder and reopens the last open one on launch, plus a way into
-/// a BookOrbit server's "Spike" collection.
+/// a BookOrbit server's "Spike" collection. A book opens on a detail screen
+/// first, which jumps into the reader when the device unfolds.
 /// See docs/notes/reader-spike.md for getting books onto the simulator.
 struct SpikeLibraryView: View {
     @State private var books: [ReaderBook] = []
@@ -22,7 +23,7 @@ struct SpikeLibraryView: View {
                 }
                 Section("On This Device") {
                     ForEach(books) { book in
-                        NavigationLink(value: SpikeRoute.local(book)) {
+                        NavigationLink(value: SpikeRoute.detail(book, fileID: nil)) {
                             VStack(alignment: .leading) {
                                 Text(book.fileName)
                                 if let position = store.position(forBook: book.id) {
@@ -40,6 +41,7 @@ struct SpikeLibraryView: View {
                 }
             }
             .navigationTitle("Spike Library")
+            .spikeProbe("library")
             .toolbar {
                 Button("Reload", systemImage: "arrow.clockwise", action: reload)
             }
@@ -49,7 +51,11 @@ struct SpikeLibraryView: View {
                     SpikeReaderView(book: book, sync: nil, cfiShape: cfiShape)
                 case .bookOrbit:
                     SpikeBookOrbitView(session: bookOrbit) { book, fileID in
-                        path.append(.bookOrbitBook(book, fileID: fileID))
+                        path.append(.detail(book, fileID: fileID))
+                    }
+                case .detail(let book, let fileID):
+                    SpikeBookDetailView(book: book, fileID: fileID) {
+                        path.append(fileID.map { .bookOrbitBook(book, fileID: $0) } ?? .local(book))
                     }
                 case .bookOrbitBook(let book, let fileID):
                     SpikeReaderView(book: book, sync: bookOrbit.sync(fileID: fileID), cfiShape: cfiShape)
@@ -94,6 +100,25 @@ struct SpikeLibraryView: View {
         case "close":
             path = [.bookOrbit]
             return nil
+        case "openLocal", "detail":
+            if let fileID = command.fileID {
+                guard let book = bookOrbit.books.first(where: { $0.primaryFile?.id == fileID }),
+                      let readerBook = await bookOrbit.readerBook(for: book) else { return "no such file in the collection" }
+                path = command.cmd == "detail"
+                    ? [.bookOrbit, .detail(readerBook, fileID: fileID)]
+                    : [.bookOrbit, .bookOrbitBook(readerBook, fileID: fileID)]
+                return nil
+            }
+            reload()
+            guard let book = books.first(where: { $0.fileName == command.name }) else { return "no local book named \(command.name ?? "nil")" }
+            path = command.cmd == "detail" ? [.detail(book, fileID: nil)] : [.local(book)]
+            return nil
+        case "home":
+            path = []
+            return nil
+        case "js":
+            guard let script = command.script else { return "js needs script" }
+            return await SpikeRemote.runScript(script)
         case "shape":
             guard let shape = command.shape.flatMap(ReaderMessage.CFIShape.init(rawValue:)) else { return "shape is point or range" }
             cfiShape = shape
@@ -115,6 +140,7 @@ struct SpikeLibraryView: View {
 
 enum SpikeRoute: Hashable {
     case local(ReaderBook)
+    case detail(ReaderBook, fileID: Int?)
     case bookOrbit
     case bookOrbitBook(ReaderBook, fileID: Int)
 }
