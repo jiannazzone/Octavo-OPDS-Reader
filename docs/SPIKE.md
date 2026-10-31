@@ -41,7 +41,7 @@ Sample books (Gutenberg EPUB3): Pride and Prejudice (1342), Alice in Wonderland 
 | 1a | **Reader spike**: pin + vendor foliate-js, own bridge, `WebView` + scheme handler, open a local EPUB, relocate → `{cfi, fraction}`, `goTo(cfi)`, restore last CFI on relaunch | 3 | `reader-spike` | 0 | **done**, merged locally into `spike/scaffold` (incl. later CSP/script-blocking commits `dd70c7b`, `9c86e0f`) |
 | 1b | **BookOrbit server + client**: local BookOrbit in Docker seeded with the sample books in a "Spike" collection; `BookOrbitClient` in OctavoKit (login, refresh cookie, collections, collection books, download, GET/POST progress) | 1, 2 | `bookorbit-client` | 0 | **done**, merged locally into `spike/scaffold` |
 | 1c | **Readium bake-off** (owner request): Readium Swift navigator + our CFI translation layer (foliate's `epubcfi.js`), measured against BookOrbit's web reader with the same table as 2a. Own BookOrbit user and own simulator. Evaluation branch, merged only if Readium wins | 4 (Readium) | `readium-spike` | 1b | in progress (branch from `claude/spike-1b-bookorbit-327f97`) |
-| 2a | **Integration + CFI round trip**: app logs in → collection → download → read; pull progress on open, push on relocate; verify against BookOrbit's web reader both directions, ≥3 books | 4 | `sync-roundtrip` | 1a, 1b | in progress (branch from `spike/scaffold`), `octavo` user, `iPhone Duo` sim |
+| 2a | **Integration + CFI round trip**: app logs in → collection → download → read; pull progress on open, push on relocate; verify against BookOrbit's web reader both directions, ≥3 books | 4 | `sync-roundtrip` | 1a, 1b | **done**: 31/31 hits, `c1870b2` on `claude/spike-2a-sync-db0bbc`, local, not merged |
 | 2b | **Duo spreads**: `onHingeChange` → column count (1 ↔ 2), position kept across fold/unfold | 5 | session | engine choice | on hold until 1c vs 2a picks the engine |
 | 3 | Retro: record results/decisions in CLAUDE.md, delete `Spike/`, draft GitHub issues for real work, hand off to UI brainstorming | — | this session | 2a, 2b | pending |
 
@@ -96,6 +96,24 @@ Read BookOrbit's web reader source (behavior only, no copying) to learn (a) whic
 
 Orchestrator check: file sets of the two branches don't overlap (clean merge). `swift test` re-run on 1b: 33 pass. `xcodebuild test` re-run on 1a (iPhone Duo): passes.
 
+## Phase 2 findings (2026-10-31)
+
+**2a foliate-js ↔ BookOrbit** (details and screenshots: `docs/notes/sync-spike.md` on the 2a branch). **Main spike risk retired for foliate-js.**
+
+| Direction | Hit | Near | Miss | Failed |
+|---|---|---|---|---|
+| App → web | 16 | 0 | 0 | 0 |
+| Web → app | 15 | 0 | 0 | 0 |
+
+- Five books at ~12%, 50% and 88–94%, plus one extra P&P row; 28 of 31 mid-chapter. Two web → app hits straddle a page end (the first words start on the last line); they're counted as hits but listed separately.
+- **Push the collapsed point CFI** at the start of the visible page, which is what BookOrbit's web reader stores. Range CFIs also hit 5/5, so the shape doesn't change where a book opens. The string can differ slightly at block starts (`/102[id]` vs `/102[id]/1:0`), but both open the same page.
+- **Rule when device and server disagree:** server CFI with nothing unsent locally → server wins. Both moved → later timestamp wins, ties go to the server. Server has no CFI, or the pull fails → local position. Opening a book never pushes (that would creep the position backward); pushes are debounced 2 s and flushed on close.
+- New in OctavoKit: a minimal `ProgressSync` protocol, `BookOrbitProgressSync`, `DebouncedProgressPusher`. `BookOrbitClient` unchanged. ATS via `Config/Octavo-Info.plist` (`NSAllowsLocalNetworking`).
+- The BookOrbit v3.6.0 web reader writes through `PUT /api/v1/reading-progress` (it also sends Kobo location fields); we use `books/files/{id}/progress`. Same record, but the Kobo fields are untested.
+- **Blank-page bug:** with the debug strip at a fixed height, P&P no longer loops past the dedication. That supports the vetting session's theory that our overlay's height change triggered it, not foliate alone. A blank end-of-chapter page in Moby-Dick slipped past the blank-page check (an empty element counted as visible), but it still landed correctly.
+- **Process problem:** the built-in browser's cookies are shared across sessions. One 2a action landed on 1c's `octavo-readium` account (Alice set to 13.49% at 19:30:51Z; 1c was told). 2a's counted results all use `octavo` on a separate host (`sync2a.localhost:3300`).
+- Simulator: 'Octavo Sync Duo' (32DEFF1F-1885-4884-8DAF-2FC92AE08FC2). Orchestrator re-ran `swift test` (48 pass) and `xcodebuild test` (pass) on it. foliate-js is unchanged on the branch.
+
 ## Decisions
 
 - **Server:** local BookOrbit in Docker, seeded with the sample books.
@@ -111,3 +129,4 @@ Orchestrator check: file sets of the two branches don't overlap (clean merge). `
 - 2026-10-31 — 1a and 1b done and verified (tests re-run, foliate-js byte-identical to upstream). Both branches local and unmerged; awaiting owner OK to merge locally and start phase 2.
 - 2026-10-31 — Owner asked whether another engine could replace foliate-js. Started 1c (`readium-spike`): Readium bake-off against BookOrbit, same table as 2a. 2b on hold until the engine is chosen; foliate patch policy deferred with it.
 - 2026-10-31 — Owner OK'd local merge: 1a and 1b merged into `spike/scaffold` (no push). Merged tree passes `xcodebuild test` (iPhone Duo) and `swift test` (33). Started 2a (`sync-roundtrip`) alongside 1c. Asked 1c to also report whether Readium runs book JavaScript and if it can be disabled (foliate side blocks it via CSP since `dd70c7b`).
+- 2026-10-31 — 2a done: 31/31 hits, both directions; verified (tests re-run). Branch local, unmerged. 1c still measuring.
