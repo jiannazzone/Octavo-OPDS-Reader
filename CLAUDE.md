@@ -14,6 +14,7 @@ A free, open-source (MPL-2.0) OPDS e-reader for iOS, built first for **iPhone Du
 - Swift / SwiftUI first. Use UIKit only where there's no SwiftUI equivalent.
 - Keep external dependencies to a minimum. Well-established engines are fine (see below). Don't add convenience libraries for things Foundation or SwiftUI already does.
 - Present a summary and plan before writing significant code. Be direct about trade-offs.
+- **All UX/UI decisions need the owner's approval.** Park ideas in `docs/UI-IDEAS.md`.
 
 ## Build, test, run
 
@@ -25,14 +26,19 @@ xcodebuild test -project Octavo.xcodeproj -scheme Octavo \
 cd Packages/OctavoKit && swift test
 # Public-domain sample EPUBs → SampleBooks/ (gitignored)
 Scripts/fetch-sample-books.sh
+# Local BookOrbit v3.6.0 at http://localhost:3300 (Docker; seeding and test accounts in dev/bookorbit/README.md)
+cd dev/bookorbit && docker compose up -d && ./seed.sh
 ```
 
 - Use the simulator named exactly `iPhone Duo`. The `CalcuSplit …` simulators belong to another project.
+- Plain `xcodebuild test` clones the simulator for parallel testing and shuts the original down. Add `-parallel-testing-enabled NO` while the app is running on it.
 - **Whenever you boot, create, erase or install to a simulator, name it in your message: exact name plus UDID.** Sessions running in parallel each get their own named simulator, because installs of the same bundle ID overwrite each other.
 - Drive the fold with **Hinge** (`hinge open|close|half|<deg>`, `sweep`, `posture`, `screenshot <path>`; also the `hinge` skill).
 - Layout: `Octavo/` app target and `OctavoTests/` use folder-synchronized groups (new files need no `project.pbxproj` edit). `Packages/OctavoKit` is a local SwiftPM package for models, sources, sync and API clients. `ReaderWeb/` is a folder reference (paths preserved) holding foliate-js and our bridge.
+  - `Octavo/Reader/` is the reader core (`WebView`, `octavo://` scheme handler, hinge → layout). `Octavo/Spike/` holds the spike's throwaway debug screens, the only place for those; delete them when real screens replace them.
+  - `Config/Octavo-Info.plist` (ATS: `NSAllowsLocalNetworking`), `dev/bookorbit/` (local server), `docs/notes/` (engineering notes, indexed in its README).
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
-- **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask.
+- **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask. Show the owner every GitHub issue as a draft before creating it.
 - On GitHub, `main` is protected by the ruleset "Protect main": changes land only through a pull request, and force pushes and branch deletion are blocked, with no bypass (owner included).
 - Spike tracker: `docs/SPIKE.md`.
 
@@ -44,9 +50,10 @@ Scripts/fetch-sample-books.sh
   - We write our **own** JS bridge between Swift and foliate-js. Do **not** copy BookOrbit's `bridge.js` or its modified foliate files (see Licensing).
   - foliate-js says its API is unstable. Pin the version and update deliberately.
   - **Confirmed by the spike (2026-10-31).** foliate-js and Readium both synced positions with BookOrbit exactly. foliate-js was kept because it needs no CFI translation, reads MOBI/AZW3/FB2, blocks book scripts and works with SwiftUI. Readium's maturity was the strong counter-argument (see `docs/SPIKE.md`, engine bake-off). Safeguards that come with the choice:
-    1. **We own the pinned copy.** Pinned at upstream `6b11e17`. Local changes are a small, numbered patch set listed in `ReaderWeb/foliate-js/PINNED.md`, never in `epubcfi.js`. Fixes may be offered upstream, but only with the owner's OK.
-    2. **Every foliate-js bump re-runs the BookOrbit position round trip**, automated in CI once CI exists.
+    1. **We own the pinned copy.** Pinned at upstream `6b11e17`. Local changes are a small, numbered patch set listed in `ReaderWeb/foliate-js/PINNED.md`, never in `epubcfi.js`. Today: 0001 keeps the position on blank pages, 0002 lets the host set the column count. Fixes may be offered upstream, but only with the owner's OK.
+    2. **Every foliate-js bump re-runs the BookOrbit position round trip** (`docs/notes/sync-spike/`), the fold-continuity check (`docs/notes/duo-spreads/`) and patch 0001's page-by-page comparison (`docs/notes/foliate-blank-page/`), automated in CI once CI exists.
     3. **Escape hatch:** the local branch `spike/readium-eval` keeps a working Readium reader with a CFI bridge (measured 30/30 against BookOrbit). Switching is estimated at 2–3 weeks.
+- **Book scripts never run.** Every `octavo://` response carries a CSP that allows scripts only from `bridge.js` and `foliate-js/`; the book file is sandboxed and `nosniff`; foliate's load hook refuses script items; the bridge accepts messages only from the main `octavo://app` frame; external links are cancelled. Keep every layer when changing the bridge or the scheme handler (`docs/notes/reader-spike.md`).
 - **PDF: PDFKit.**
 - **Comics: native SwiftUI** paging for CBZ/CBR, plus OPDS Page Streaming / BookOrbit `cbz/files/{fileId}/pages` for streamed reading.
 
@@ -68,22 +75,26 @@ protocol ProgressSync { /* pull/push position, annotations, sessions */ }
 - Users can combine them freely (e.g. Calibre OPDS + kosync, or BookOrbit for both).
 - **Internal position model: CFI + percentage (+ page number for fixed layout).** Percentage-only backends such as kosync sync from the percentage.
 - Note: OPDS itself has **no** progress sync. Sync always comes from a `ProgressSync` backend.
+- **Opening rule** (OctavoKit `Sync/`, `docs/notes/sync-spike.md`): if the server has a CFI and the device has nothing unsent, the server wins. If both moved, the later timestamp wins and the server wins ties. With no server CFI, or if the pull fails, the local position is used. Opening a book never pushes. Pushes wait until the reader has been still for 2 s, and closing the reader flushes them.
+- **Position format:** push the collapsed start point of the visible page, which is what BookOrbit's web reader stores. Compare positions by resolving them, never as strings.
 
 ## BookOrbit integration notes
 
 Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-android`. Use these to understand behavior only; don't copy code from them.
 
-- REST API at `/api/v1`. **Swagger** is at `/api/docs`, with JSON at `/api/docs-json`. Treat a live server's schema as the source of truth.
-- Auth: `POST auth/login` returns `{accessToken, user}`. Refresh uses a cookie via `POST auth/refresh`. OIDC is available (`auth/oidc/{slug}/state`, `auth/oidc/callback`).
+- Measured against v3.6.0 in the spike: details in `docs/notes/bookorbit-api.md`.
+- REST API at `/api/v1`. **Swagger** is at `/api/docs` (JSON at `/api/docs-json`) but is off by default (`SWAGGER_ENABLED`), and v3.6.0's published schemas are empty. Live responses are the source of truth.
+- The server **rejects unknown request fields** (400). Send only documented fields.
+- Auth: `POST auth/login` with `clientKind: "native"` (v3.0+) returns access and refresh tokens in the body, with no cookies; refresh with `POST auth/refresh {refreshToken}`. **Refresh tokens rotate on every refresh.** Web mode and pre-3.0 servers use a refresh cookie instead. Login is limited to 5 per minute per IP. OIDC is available (`auth/oidc/{slug}/state`, `auth/oidc/callback`).
 - Useful endpoints:
   - Library: `books/query`, `books/search`, `books/{id}`, `libraries`, `collections`, `collections/{id}/books`, `smart-scopes`, `smart-scopes/{id}/books`, `authors`, `series`
   - Files: `books/files/{fileId}/serve`, `books/{id}/cover`
-  - Progress: `GET/POST books/files/{fileId}/progress` with body `{cfi, percentage, pageNumber}`
+  - Progress: `GET/POST books/files/{fileId}/progress` with body `{cfi, percentage, pageNumber}`. `percentage` is **0–100**, and a POST without `cfi` clears the stored CFI. BookOrbit's web reader writes the same row through `PUT reading-progress`.
   - Sessions: `POST books/files/{fileId}/sessions` with fields `sessionId, startedAt, endedAt, durationSeconds, progressDelta, endProgress, sessionType, source`
   - Annotations/bookmarks: `books/{bookId}/annotations`, `books/{bookId}/bookmarks` (keyed by CFI)
   - Status: `PATCH books/{id}/status`; rating via `books/bulk-set-rating`
 - The API shapes change. The Android client mirrors them by hand. Expect breakage between server versions and handle missing fields tolerantly.
-- **Known risk:** BookOrbit uses a custom document loader around foliate-js. Stock foliate-js *may* produce different CFIs for some books. The first spike must confirm that CFIs round-trip with the BookOrbit web reader.
+- **CFI compatibility, confirmed by the spike:** BookOrbit v3.6.0's web reader runs foliate-js at the commit we pin, with an identical `epubcfi.js`. Positions matched 31/31 in both directions across four books. Fixed-layout books restore by fraction, not CFI.
 
 ## iPhone Duo
 
@@ -91,6 +102,13 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
 - Planned behavior: two-page spread when unfolded, a "book" layout when half-folded, and keeping the exact reading position when folding or unfolding.
 - **Limitation:** apps can't draw on the outer display while the Duo is open. On iOS 27.1, scene accessories only work through `CameraCaptureAccessory`, which needs an active camera session. The "book cover on the outer screen" idea is parked. Don't fake it with a dummy camera session. Feedback has been filed asking for a non-camera scene accessory; revisit when the SDK changes.
 - Closest workaround available today: a Live Activity or Lock Screen widget showing the current cover and progress.
+- **Measured in spike 2b** (simulator only; `docs/notes/duo-spreads.md`):
+  - The hinge is a 40 pt `division` reserved region at the inner display's centre: inactive when flat, active when half open. The camera is an `occlusion` region at the top right.
+  - `onHingeChange` fires once on appear, then repeats unchanged values for about half a second after each move, so compare before acting. `.fullyOpen` arrives about 200 ms before the scene resizes.
+  - Folding moves the same window between displays and app state survives, so the cover-display flow in `docs/UI-IDEAS.md` is feasible.
+  - The page count comes from the hinge (`ReaderLayout`, foliate patch 0002): one page folded, two open or half open, with no text on the hinge.
+  - A fold fires 10–13 re-layouts. The position holds because foliate keeps its anchor through them, which a foliate update could break.
+  - `WebView` draws under the camera column and the bottom toolbar, so the page reports its own size to Swift. Whether to keep that is an open UX question.
 
 ## Licensing rules (important)
 
@@ -99,12 +117,8 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
 - Allowed dependencies need MPL-compatible licenses (MIT, BSD, Apache-2.0, MPL). List each one in `THIRD-PARTY-NOTICES.md`.
 - No GPL/AGPL dependencies (they conflict with App Store distribution).
 
-## First spike (proves the main risk)
+## First spike: done (2026-10-31)
 
-1. Log in to a BookOrbit server from Swift (access token + refresh cookie).
-2. List a collection and download an EPUB.
-3. Render it with upstream foliate-js in a SwiftUI `WebView`.
-4. `POST` a CFI position, open the same book in BookOrbit's web reader and confirm it lands on the same spot. Then test the reverse direction.
-5. On the Duo simulator, switch between single-page and two-page spreads as the hinge angle changes.
+All five steps passed in the simulator. BookOrbit sign-in, collection and download work; foliate-js renders in a SwiftUI `WebView`; positions match BookOrbit's web reader 31/31 in both directions; the Duo switches between one and two pages and keeps the position across folds. The tracker, results and decisions are in `docs/SPIKE.md`, and the engineering notes are indexed in `docs/notes/README.md`.
 
-If step 4 works, the main technical risk is retired.
+Not covered yet: generic OPDS browsing, PDF, comics, annotations and bookmarks, kosync and iCloud sync, and real devices.

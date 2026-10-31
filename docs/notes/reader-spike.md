@@ -64,6 +64,8 @@ Then tap **Reload** in the Spike Library, or relaunch. Reinstalling the app (Xco
 
 ## Bug found: blank pages lose the reading position (upstream foliate behavior)
 
+> **Fixed by foliate-js patch 0001 (spike 2b)**, vetted in `foliate-blank-page-upstream.md`, which also has draft upstream text. Corrections to what's below: P&P's blank column comes from WebKit making two breaks out of `page-break-after` followed by `page-break-before`, not from a margin overflow. The loop needs a re-layout after the page turn, which upstream doesn't do on its own. In the spike, the likely trigger was the debug strip changing height with the CFI's length.
+
 **Symptom:** in Pride and Prejudice, paging forward from the dedication (about 1.35%) jumps back to the start of that section (about 0.19%). Paging forward again loops. In practice you can't page past the front matter of our main test book. `goTo(cfi)` and restoring still work.
 
 **Cause:**
