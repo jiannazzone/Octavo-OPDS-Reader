@@ -9,7 +9,7 @@ if [[ "$1" != "state" ]]; then
   ID=$(( $(date +%s) * 1000 + RANDOM % 1000 ))
   before=$(jq -r .updatedAt "$D/spike-state.json" 2>/dev/null)
   rm -f "$D/spike-ack.json"
-  echo "{\"id\": $ID, $1}" > "$D/spike-command.json.tmp" && mv "$D/spike-command.json.tmp" "$D/spike-command.json"
+  print -r -- "{\"id\": $ID, $1}" > "$D/spike-command.json.tmp" && mv "$D/spike-command.json.tmp" "$D/spike-command.json"
   for i in {1..300}; do
     if [[ -f "$D/spike-ack.json" ]] && grep -q "$ID" "$D/spike-ack.json"; then grep -q '"ok":true' "$D/spike-ack.json" || cat "$D/spike-ack.json" >&2; break; fi
     sleep 0.2

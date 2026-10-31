@@ -116,6 +116,9 @@ struct SpikeLibraryView: View {
         case "home":
             path = []
             return nil
+        case "js":
+            guard let script = command.script else { return "js needs script" }
+            return await SpikeRemote.runScript(script)
         case "shape":
             guard let shape = command.shape.flatMap(ReaderMessage.CFIShape.init(rawValue:)) else { return "shape is point or range" }
             cfiShape = shape

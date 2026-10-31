@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import WebKit
 
 /// SPIKE ONLY, DEBUG ONLY (deleted after the spike). Lets a script on the host
 /// drive the spike screens, so position checks don't depend on taps.
@@ -11,7 +12,9 @@ import Foundation
 /// `cfi`), `next`, `prev`, `shape` (`point` or `range`, applies to the next
 /// open), `openLocal`/`detail` (`name` of a local book, or `fileID`), `home`,
 /// `layout` (a `ReaderLayout` to try until the next fold), `watch` (`cfi`:
-/// the state file then says whether the visible page contains it).
+/// the state file then says whether the visible page contains it), `js`
+/// (`script`: a function body run in the reader page; its result goes to
+/// `spike-js.json`, for debugging foliate on the simulator).
 /// Where the reader is goes to `spike-state.json` (`SpikeStateFile`).
 /// Hinge, region and scene events go to `spike-events.jsonl` (`SpikeEvents`).
 enum SpikeRemote {
@@ -24,6 +27,7 @@ enum SpikeRemote {
         var shape: String?
         var name: String?
         var layout: ReaderLayout?
+        var script: String?
     }
 
     struct Ack: Encodable {
@@ -51,6 +55,23 @@ enum SpikeRemote {
             let ack = Ack(id: command.id, ok: failure == nil, message: failure)
             try? JSONEncoder().encode(ack).write(to: ackURL, options: .atomic)
         }
+    }
+
+    static let scriptResultURL = URL.documentsDirectory.appending(path: "spike-js.json")
+
+    /// Runs `script` in the reader page and writes what it returns.
+    static func runScript(_ script: String) async -> String? {
+        guard let reader else { return "no open reader" }
+        let output: Any
+        do {
+            output = ["result": try await reader.page.callJavaScript(script) ?? NSNull()]
+        } catch {
+            output = ["error": String(describing: error)]
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: output, options: [.prettyPrinted, .sortedKeys, .fragmentsAllowed]))
+            ?? Data(String(describing: output).utf8)
+        try? data.write(to: scriptResultURL, options: .atomic)
+        return nil
     }
 
     /// Reader commands. Returns an error message, or `nil` on success.

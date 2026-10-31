@@ -234,12 +234,26 @@ const locate = cfi => {
     return { contains: afterStart && beforeEnd, afterStart, beforeEnd }
 }
 
+// After a jump by fraction, foliate keeps the fraction itself as the page's
+// anchor, so the next re-layout (a fold, a font change) maps that fraction
+// onto the new layout and can land a page or a spread away from the text that
+// was showing. Re-anchoring on the visible page's own range keeps that text
+// in view, the same as after a page turn. A blank page (collapsed range, see
+// patch 0001) keeps its page-fraction anchor.
+const anchorToPage = async () => {
+    const range = view?.lastLocation?.range
+    const cfi = view?.lastLocation?.cfi
+    if (!cfi || !range || range.collapsed || view.isFixedLayout) return
+    await view.renderer.goTo(view.resolveNavigation(cfi))
+}
+
 // Try the CFI first, then the fraction, then the start of the book.
 // Fixed-layout books go by fraction first, like BookOrbit does.
 const restore = async (cfi, fraction) => {
     const byFraction = async () => {
         if (fraction === null || fraction <= 0) return false
         await view.goToFraction(Math.min(fraction, 1))
+        await anchorToPage()
         return true
     }
     if (view.isFixedLayout && await byFraction()) return 'fraction'
@@ -311,6 +325,7 @@ window.octavo = Object.freeze({
     }),
     goToFraction: reported(async function goToFraction(fraction) {
         await requireView().goToFraction(Math.max(0, Math.min(1, fraction)))
+        await anchorToPage()
         return true
     }),
     next: reported(async function next() {
