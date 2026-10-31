@@ -1,0 +1,18 @@
+.DS_Store
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcresult
+*.xcuserstate
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# Local test data (public-domain books, fetched by Scripts/fetch-sample-books.sh)
+SampleBooks/
+
+# Local BookOrbit server state and any API schema snapshots (BookOrbit is AGPL: keep its material out of the repo)
+dev/bookorbit/data/
+dev/bookorbit/*.local.*

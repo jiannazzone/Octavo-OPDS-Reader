@@ -15,6 +15,25 @@ A free, open-source (MPL-2.0) OPDS e-reader for iOS, built first for **iPhone Du
 - Keep external dependencies to a minimum. Well-established engines are fine (see below). Don't add convenience libraries for things Foundation or SwiftUI already does.
 - Present a summary and plan before writing significant code. Be direct about trade-offs.
 
+## Build, test, run
+
+```bash
+# App + unit tests (Swift Testing) on the iPhone Duo simulator (iOS 27.1)
+xcodebuild test -project Octavo.xcodeproj -scheme Octavo \
+  -destination 'platform=iOS Simulator,name=iPhone Duo,OS=27.1' -collect-test-diagnostics never
+# OctavoKit (non-UI logic) on macOS, no simulator
+cd Packages/OctavoKit && swift test
+# Public-domain sample EPUBs → SampleBooks/ (gitignored)
+Scripts/fetch-sample-books.sh
+```
+
+- Use the simulator named exactly `iPhone Duo`. The `CalcuSplit …` simulators belong to another project.
+- Drive the fold with **Hinge** (`hinge open|close|half|<deg>`, `sweep`, `posture`, `screenshot <path>`; also the `hinge` skill).
+- Layout: `Octavo/` app target and `OctavoTests/` use folder-synchronized groups (new files need no `project.pbxproj` edit). `Packages/OctavoKit` is a local SwiftPM package for models, sources, sync and API clients. `ReaderWeb/` is a folder reference (paths preserved) holding foliate-js and our bridge.
+- Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
+- **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask.
+- Spike tracker: `docs/SPIKE.md`.
+
 ## Architecture decisions
 
 ### Rendering

@@ -25,7 +25,9 @@ Octavo reads books from your own library servers. It works with any OPDS catalog
 
 ## Building
 
-Requires Xcode 27.1+ and the iOS 27.1 SDK (for the iPhone Duo APIs). Build instructions will follow once the project is scaffolded.
+Requires Xcode 27.1+ and the iOS 27.1 SDK (for the iPhone Duo APIs). Open `Octavo.xcodeproj` and run the `Octavo` scheme. There are no package dependencies to install.
+
+For test books, `Scripts/fetch-sample-books.sh` downloads a few public-domain EPUBs from Project Gutenberg into `SampleBooks/`.
 
 ## License
 
