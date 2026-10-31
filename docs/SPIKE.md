@@ -40,8 +40,9 @@ Sample books (Gutenberg EPUB3): Pride and Prejudice (1342), Alice in Wonderland 
 | 0 | Scaffold: project, package skeleton, `ReaderWeb/` folder ref, fetch script, notices, .gitignore; builds on Duo sim | — | this session | approval | done, local only on `spike/scaffold` (owner: keep local for now) |
 | 1a | **Reader spike**: pin + vendor foliate-js, own bridge, `WebView` + scheme handler, open a local EPUB, relocate → `{cfi, fraction}`, `goTo(cfi)`, restore last CFI on relaunch | 3 | `reader-spike` | 0 | **done** — `2b43656` on `claude/spike-1a-reader-59a1f3`, local, not merged |
 | 1b | **BookOrbit server + client**: local BookOrbit in Docker seeded with the sample books in a "Spike" collection; `BookOrbitClient` in OctavoKit (login, refresh cookie, collections, collection books, download, GET/POST progress) | 1, 2 | `bookorbit-client` | 0 | **done** — `6260249` on `claude/spike-1b-bookorbit-327f97`, local, not merged |
+| 1c | **Readium bake-off** (owner request): Readium Swift navigator + our CFI translation layer (foliate's `epubcfi.js`), measured against BookOrbit's web reader with the same table as 2a. Own BookOrbit user and own simulator. Evaluation branch, merged only if Readium wins | 4 (Readium) | `readium-spike` | 1b | in progress (branch from `claude/spike-1b-bookorbit-327f97`) |
 | 2a | **Integration + CFI round trip**: app logs in → collection → download → read; pull progress on open, push on relocate; verify against BookOrbit's web reader both directions, ≥3 books | 4 | session | 1a, 1b | pending |
-| 2b | **Duo spreads**: `onHingeChange` → foliate column count (1 ↔ 2), position kept across fold/unfold | 5 | session | 1a | pending |
+| 2b | **Duo spreads**: `onHingeChange` → column count (1 ↔ 2), position kept across fold/unfold | 5 | session | engine choice | on hold until 1c vs 2a picks the engine |
 | 3 | Retro: record results/decisions in CLAUDE.md, delete `Spike/`, draft GitHub issues for real work, hand off to UI brainstorming | — | this session | 2a, 2b | pending |
 
 1a and 1b run in parallel. 2a and 2b may run in parallel if their files don't overlap; decided when 1a lands.
@@ -52,6 +53,15 @@ Sample books (Gutenberg EPUB3): Pride and Prejudice (1342), Alice in Wonderland 
 - **1b:** `swift test` passes (stubbed `URLProtocol` tests). An opt-in live test (env var) against the local server logs in, lists "Spike", downloads an EPUB, posts progress and reads it back. `dev/bookorbit/README.md` says how to start/seed/reset the server.
 - **2a:** results table per book: app → web and web → app, same spot or documented drift with cause.
 - **2b:** fold/unfold via the `hinge` skill switches 1 ↔ 2 columns without losing position; screenshots in the PR. Also confirm (for the cover-display idea in `docs/UI-IDEAS.md`) that app state survives the outer → inner display move, and that an unfold seen on a non-reader screen can trigger navigation into the reader.
+
+### Position-match protocol (2a and 1c)
+
+Five books × ≥3 positions (early, middle, late; ≥2 mid-chapter), both directions (app → BookOrbit web reader, web reader → app). Compare by visible text, not CFI strings, since the two sides paginate differently. Browser at a phone-sized viewport.
+
+| Book | Position | Direction | Source first visible words (~8) | Target page contains them? | Verdict | Notes |
+|---|---|---|---|---|---|---|
+
+Verdict: **hit** (target page contains the source's first visible words), **near** (within one page), **miss**, **failed**.
 
 ## Research folded into 1a
 
@@ -99,3 +109,4 @@ Orchestrator check: file sets of the two branches don't overlap (clean merge). `
 - 2026-10-31 — Started 1a (`reader-spike`) and 1b (`bookorbit-client`) in their own worktrees, cut from local `spike/scaffold`. Neither may push.
 - 2026-10-31 — Scaffold built: `xcodebuild test` passes on the iPhone Duo sim, `swift test` passes for OctavoKit, app launches (folded, outer display). `ReaderWeb/` lands in the bundle as a folder. Shared model `ReadingPosition {cfi?, fraction 0...1, pageNumber?}` lives in OctavoKit so 1a and 1b agree on it. All five sample books fetched (Pride and Prejudice is the illustrated edition, 24 MB: a useful stress case).
 - 2026-10-31 — 1a and 1b done and verified (tests re-run, foliate-js byte-identical to upstream). Both branches local and unmerged; awaiting owner OK to merge locally and start phase 2.
+- 2026-10-31 — Owner asked whether another engine could replace foliate-js. Started 1c (`readium-spike`): Readium bake-off against BookOrbit, same table as 2a. 2b on hold until the engine is chosen; foliate patch policy deferred with it.
