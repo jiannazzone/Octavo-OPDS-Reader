@@ -40,6 +40,7 @@ cd dev/bookorbit && docker compose up -d && ./seed.sh
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
 - **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask. Show the owner every GitHub issue as a draft before creating it.
 - On GitHub, `main` is protected by the ruleset "Protect main": changes land only through a pull request, and force pushes and branch deletion are blocked, with no bypass (owner included).
+- **Branching: GitHub flow.** One short-lived branch per task, cut from `main` and merged back by pull request with a merge commit. The spike's integration branch `spike/scaffold` is retired.
 - Spike tracker: `docs/SPIKE.md`.
 
 ## Architecture decisions
