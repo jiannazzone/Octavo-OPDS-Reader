@@ -15,7 +15,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ### Structure and library (approved 2026-10-31)
 
 1. **One library server in v1.** You connect one server (BookOrbit, or one OPDS server) when you set up the app, and the app is built around it. Most people run one server; designing for several (a merged catalog index, deduplication, per-server switches, catalogs vs libraries) was explored and dropped as too complicated for v1. A second server comes later, as a menu in the Library title; servers are never merged (parked in `docs/UI-IDEAS.md`).
-2. **Four tabs in the trailing column:** Home, Library, Search, and Settings at the bottom of the column. The trailing column is the Duo's standard place for tab items, so nothing sits along the bottom of the screen.
+2. **Four tabs in the trailing column:** Home, Library and Settings in one group, with Search in its own button at the very bottom (Apple's "Search Role" tab bar, the standard layout). The trailing column is the Duo's standard place for tab items, so nothing sits along the bottom of the screen.
    - **Home:** "Continue reading" (positions from sync and from the phone), plus what's new on your server.
    - **Library:** your server's books as a grid of covers, with chips across the top. For BookOrbit the chips come from its API (All, Collections, Series, Authors); for an OPDS server they are the feed's own top-level entries (for example Recent, Authors, Series, Shelves on Calibre-Web). An "On iPhone" chip shows downloaded and imported books.
    - **Search:** your server's search (BookOrbit search, or OPDS OpenSearch when the feed offers it) plus the books on the phone.
@@ -28,6 +28,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
    - Over the cover: a bottom strip with the chapter and percentage, a progress bar, when it last synced, and an **Open** button.
    - Swipe up for details: description, series, collections, download, status, rating, file info.
    - **Unfolding on the cover opens the book at your place immediately**, with no prompt (answers part of duo-spreads §7 question 5).
+   - The cover runs under the camera column, which covers its top-right corner; accepted. The tab column stays visible over the cover.
 5. **Unfolded: grid | cover page.** The grid sits left of the hinge; the selected book's cover page (same strip and Open button as folded) fills the right half. Nothing sits on the hinge.
 
 ### Connecting (approved 2026-10-31)
@@ -51,7 +52,7 @@ Local components in the file: `Book Cover / …` (one per sample book), `Row / C
 
 What the kit showed:
 - Apple's Duo layout puts toolbar buttons (including back) in a glass group under the vertical status bar, and the tab bar at the bottom of the same column.
-- The kit's `Tab Bar - iPhone Duo` has a "Search Role" type that puts Search in its own glass button at the very bottom of the column.
+- The kit's `Tab Bar - iPhone Duo` has a "Search Role" type that puts Search in its own glass button at the very bottom of the column; adopted (decision 2) and used in the frames.
 - The kit's Large Title toolbar renders its title mirrored in Figma, so the frames draw the large title as content instead.
 
 ## Open questions
@@ -60,9 +61,6 @@ What the kit showed:
 - **Default sync choice for an OPDS server.** Proposed (not approved): preselect iCloud once iCloud sync exists, "Don't sync" until then. A BookOrbit server preselects itself.
 - **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
 - **OPDS feeds with no search.** Search then covers only the books on the phone; how the Search tab says so is undecided.
-- **The camera column covers the top-right of a full-screen cover**, where many covers put their title (frame 03). Accept it, or fit the cover to the 382 pt content area?
-- **Tab column over the cover.** Frame 03 keeps the tabs visible over the artwork. Keep them, or hide them while the cover shows?
-- **Search's place in the column.** Decision 2 puts Settings at the bottom; Apple's "Search Role" tab bar puts Search at the bottom in its own button. Which?
 
 ## Needs engineering
 
