@@ -28,6 +28,7 @@ Scripts/fetch-sample-books.sh
 ```
 
 - Use the simulator named exactly `iPhone Duo`. The `CalcuSplit …` simulators belong to another project.
+- **Whenever you boot, create, erase or install to a simulator, name it in your message: exact name plus UDID.** Sessions running in parallel each get their own named simulator, because installs of the same bundle ID overwrite each other.
 - Drive the fold with **Hinge** (`hinge open|close|half|<deg>`, `sweep`, `posture`, `screenshot <path>`; also the `hinge` skill).
 - Layout: `Octavo/` app target and `OctavoTests/` use folder-synchronized groups (new files need no `project.pbxproj` edit). `Packages/OctavoKit` is a local SwiftPM package for models, sources, sync and API clients. `ReaderWeb/` is a folder reference (paths preserved) holding foliate-js and our bridge.
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
