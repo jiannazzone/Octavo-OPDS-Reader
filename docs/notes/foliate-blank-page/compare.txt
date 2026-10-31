@@ -1,0 +1,78 @@
+c      alice-in-wonderland          pages= 127 same-cfi= 127 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+c      blank-page-test              pages=  33 same-cfi=  29 blank=  4 cfi-differs=0 layout-differs=0 missing=0
+      blank s1 p2/9: main epubcfi(/6/4!/4) -> patched epubcfi(/6/4!/4/10[after-spacer])
+      blank s1 p3/9: main epubcfi(/6/4!/4) -> patched epubcfi(/6/4!/4/10[after-spacer])
+      blank s1 p4/9: main epubcfi(/6/4!/4) -> patched epubcfi(/6/4!/4/10[after-spacer])
+      blank s3 p2/7: main epubcfi(/6/8!/4) -> patched epubcfi(/6/8!/4/4[after-title])
+c      frankenstein2                pages= 260 same-cfi= 260 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+c      moby-dick                    pages= 121 same-cfi= 121 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+c      pp-s1-deep2                  pages=  40 same-cfi=  40 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+c      pride-and-prejudice          pages=  81 same-cfi=  81 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+c      sherlock-holmes              pages= 135 same-cfi= 135 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+wk     alice-in-wonderland          pages= 131 same-cfi= 119 blank= 12 cfi-differs=0 layout-differs=0 missing=0
+      blank s2 p1/11: main epubcfi(/6/6!/4) -> patched epubcfi(/6/6!/4/2[pgepubid00003])
+      blank s3 p1/11: main epubcfi(/6/8!/4) -> patched epubcfi(/6/8!/4/2[pgepubid00004])
+      blank s4 p1/11: main epubcfi(/6/10!/4) -> patched epubcfi(/6/10!/4/2[pgepubid00005])
+      blank s5 p1/13: main epubcfi(/6/12!/4) -> patched epubcfi(/6/12!/4/2[pgepubid00006])
+      blank s6 p1/13: main epubcfi(/6/14!/4) -> patched epubcfi(/6/14!/4/2[pgepubid00007])
+      blank s7 p1/14: main epubcfi(/6/16!/4) -> patched epubcfi(/6/16!/4/2[pgepubid00008])
+      blank s8 p1/13: main epubcfi(/6/18!/4) -> patched epubcfi(/6/18!/4/2[pgepubid00009])
+      blank s9 p1/13: main epubcfi(/6/20!/4) -> patched epubcfi(/6/20!/4/2[pgepubid00010])
+      blank s10 p1/13: main epubcfi(/6/22!/4) -> patched epubcfi(/6/22!/4/2[pgepubid00011])
+      blank s11 p1/13: main epubcfi(/6/24!/4) -> patched epubcfi(/6/24!/4/2[pgepubid00012])
+      blank s12 p1/11: main epubcfi(/6/26!/4) -> patched epubcfi(/6/26!/4/2[pgepubid00013])
+      blank s13 p1/12: main epubcfi(/6/28!/4) -> patched epubcfi(/6/28!/4/2[pgepubid00014])
+wk     blank-page-test              pages=  34 same-cfi=  29 blank=  5 cfi-differs=0 layout-differs=0 missing=0
+      blank s1 p2/9: main epubcfi(/6/4!/4) -> patched epubcfi(/6/4!/4/10[after-spacer])
+      blank s1 p3/9: main epubcfi(/6/4!/4) -> patched epubcfi(/6/4!/4/10[after-spacer])
+      blank s1 p4/9: main epubcfi(/6/4!/4) -> patched epubcfi(/6/4!/4/10[after-spacer])
+      blank s2 p3/8: main epubcfi(/6/6!/4) -> patched epubcfi(/6/6!/4/8[next-heading])
+      blank s3 p2/7: main epubcfi(/6/8!/4) -> patched epubcfi(/6/8!/4/4[after-title])
+wk     frankenstein                 pages= 270 same-cfi= 241 blank= 29 cfi-differs=0 layout-differs=0 missing=0
+      blank s2 p1/4: main epubcfi(/6/6!/4) -> patched epubcfi(/6/6!/4/2[pgepubid00002])
+      blank s3 p1/8: main epubcfi(/6/8!/4) -> patched epubcfi(/6/8!/4/2[pgepubid00003])
+      blank s4 p1/8: main epubcfi(/6/10!/4) -> patched epubcfi(/6/10!/4/2[pgepubid00004])
+      blank s5 p1/5: main epubcfi(/6/12!/4) -> patched epubcfi(/6/12!/4/2[pgepubid00005])
+      blank s6 p1/14: main epubcfi(/6/14!/4) -> patched epubcfi(/6/14!/4/2[pgepubid00006])
+      blank s7 p1/10: main epubcfi(/6/16!/4) -> patched epubcfi(/6/16!/4/2[pgepubid00007])
+      blank s8 p1/11: main epubcfi(/6/18!/4) -> patched epubcfi(/6/18!/4/2[pgepubid00008])
+      blank s9 p1/13: main epubcfi(/6/20!/4) -> patched epubcfi(/6/20!/4/2[pgepubid00009])
+      blank s10 p1/13: main epubcfi(/6/22!/4) -> patched epubcfi(/6/22!/4/2[pgepubid00010])
+      blank s11 p1/12: main epubcfi(/6/24!/4) -> patched epubcfi(/6/24!/4/2[pgepubid00011])
+      blank s12 p1/13: main epubcfi(/6/26!/4) -> patched epubcfi(/6/26!/4/2[pgepubid00012])
+      blank s13 p1/17: main epubcfi(/6/28!/4) -> patched epubcfi(/6/28!/4/2[pgepubid00013])
+      blank s14 p1/15: main epubcfi(/6/30!/4) -> patched epubcfi(/6/30!/4/2[pgepubid00014])
+      blank s15 p1/11: main epubcfi(/6/32!/4) -> patched epubcfi(/6/32!/4/2[pgepubid00015])
+      blank s16 p1/12: main epubcfi(/6/34!/4) -> patched epubcfi(/6/34!/4/2[pgepubid00016])
+      blank s17 p1/13: main epubcfi(/6/36!/4) -> patched epubcfi(/6/36!/4/2[pgepubid00017])
+      blank s18 p1/11: main epubcfi(/6/38!/4) -> patched epubcfi(/6/38!/4/2[pgepubid00018])
+      blank s19 p1/11: main epubcfi(/6/40!/4) -> patched epubcfi(/6/40!/4/2[pgepubid00019])
+      blank s20 p1/10: main epubcfi(/6/42!/4) -> patched epubcfi(/6/42!/4/2[pgepubid00020])
+      blank s21 p1/15: main epubcfi(/6/44!/4) -> patched epubcfi(/6/44!/4/2[pgepubid00021])
+      blank s22 p1/15: main epubcfi(/6/46!/4) -> patched epubcfi(/6/46!/4/2[pgepubid00022])
+      blank s23 p1/10: main epubcfi(/6/48!/4) -> patched epubcfi(/6/48!/4/2[pgepubid00023])
+      blank s24 p1/14: main epubcfi(/6/50!/4) -> patched epubcfi(/6/50!/4/2[pgepubid00024])
+      blank s25 p1/13: main epubcfi(/6/52!/4) -> patched epubcfi(/6/52!/4/2[pgepubid00025])
+      blank s26 p1/16: main epubcfi(/6/54!/4) -> patched epubcfi(/6/54!/4/2[pgepubid00026])
+      blank s27 p1/17: main epubcfi(/6/56!/4) -> patched epubcfi(/6/56!/4/2[pgepubid00027])
+      blank s28 p1/16: main epubcfi(/6/58!/4) -> patched epubcfi(/6/58!/4/2[pgepubid00028])
+      blank s29 p1/13: main epubcfi(/6/60!/4) -> patched epubcfi(/6/60!/4/2[pgepubid00029])
+      blank s30 p1/33: main epubcfi(/6/62!/4) -> patched epubcfi(/6/62!/4/2[pgepubid00030])
+wk     moby-dick                    pages= 121 same-cfi= 121 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+wk     pp-s1-deep                   pages=  40 same-cfi=  39 blank=  1 cfi-differs=0 layout-differs=0 missing=0
+      blank s1 p11/113: main epubcfi(/6/4!/4) -> patched epubcfi(/6/4!/4/22)
+wk     pride-and-prejudice          pages=  81 same-cfi=  81 blank=  0 cfi-differs=0 layout-differs=0 missing=0
+wk     sherlock-holmes              pages= 135 same-cfi= 123 blank= 12 cfi-differs=0 layout-differs=0 missing=0
+      blank s2 p1/37: main epubcfi(/6/6!/4) -> patched epubcfi(/6/6!/4/2[pgepubid00002])
+      blank s3 p1/38: main epubcfi(/6/8!/4) -> patched epubcfi(/6/8!/4/2[pgepubid00006])
+      blank s4 p1/29: main epubcfi(/6/10!/4) -> patched epubcfi(/6/10!/4/2[pgepubid00007])
+      blank s5 p1/39: main epubcfi(/6/12!/4) -> patched epubcfi(/6/12!/4/2[pgepubid00008])
+      blank s6 p1/31: main epubcfi(/6/14!/4) -> patched epubcfi(/6/14!/4/2[pgepubid00009])
+      blank s7 p1/38: main epubcfi(/6/16!/4) -> patched epubcfi(/6/16!/4/2[pgepubid00010])
+      blank s8 p1/33: main epubcfi(/6/18!/4) -> patched epubcfi(/6/18!/4/2[pgepubid00011])
+      blank s9 p1/41: main epubcfi(/6/20!/4) -> patched epubcfi(/6/20!/4/2[pgepubid00012])
+      blank s10 p1/34: main epubcfi(/6/22!/4) -> patched epubcfi(/6/22!/4/2[pgepubid00013])
+      blank s11 p1/35: main epubcfi(/6/24!/4) -> patched epubcfi(/6/24!/4/2[pgepubid00014])
+      blank s12 p1/39: main epubcfi(/6/26!/4) -> patched epubcfi(/6/26!/4/2[pgepubid00015])
+      blank s13 p1/40: main epubcfi(/6/28!/4) -> patched epubcfi(/6/28!/4/2[pgepubid00016])
+TOTAL {'pages': 1609, 'same': 1546, 'blank': 63, 'differ': 0}

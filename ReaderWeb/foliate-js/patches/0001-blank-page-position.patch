@@ -1,0 +1,112 @@
+From: Octavo (local foliate-js patch set)
+Subject: [PATCH 0001] paginator: keep the position on blank pages
+
+On a page with no visible node (a blank column left by forced breaks, a
+block spanning whole columns, a 100vh title), getVisibleRange() fell back
+to the section's <body>. The relocate CFI then named only the section, and
+the paginator's anchor did too, so any re-layout (resize, fold, font load,
+setStyles) or a restore of the saved CFI jumped to the section's first page.
+
+- Location: report a collapsed range at the first node after the page
+  (where reading resumes), or the end of the last element.
+- Anchor: anchor a blank page to its page fraction, the inverse of what
+  #scrollToAnchor() does with a number.
+
+Pages with any visible node take the same path as before; CFIs on 1,546 of
+1,546 non-blank pages were byte-identical with and without the patch.
+Vetted in docs/notes/foliate-blank-page-upstream.md (branch
+claude/foliate-blank-page-vetting-1aa980, e1946c0). Not sent upstream.
+
+Apply from the repo root:
+  git apply --directory=ReaderWeb/foliate-js ReaderWeb/foliate-js/patches/0001-blank-page-position.patch
+---
+diff --git a/paginator.js b/paginator.js
+index 7980c20..309560d 100644
+--- a/paginator.js
++++ b/paginator.js
+@@ -124,9 +124,12 @@ const getVisibleRange = (doc, start, end, mapRect) => {
+     for (let node = walker.nextNode(); node; node = walker.nextNode())
+         nodes.push(node)
+ 
++    // nothing is visible, e.g. on a blank page left by column breaks
++    if (!nodes.length) return null
++
+     // we're only interested in the first and last visible nodes
+-    const from = nodes[0] ?? doc.body
+-    const to = nodes[nodes.length - 1] ?? from
++    const from = nodes[0]
++    const to = nodes[nodes.length - 1]
+ 
+     // find the offset at which visibility changes
+     const startOffset = from.nodeType === 1 ? 0
+@@ -150,6 +153,35 @@ const getVisibleRange = (doc, start, end, mapRect) => {
+     return range
+ }
+ 
++// for blank pages: a collapsed range at the start of the first node after
++// `end`, or at the end of the last element if there is nothing after it
++const getRangeAfter = (doc, end, mapRect) => {
++    const acceptNode = node => {
++        const name = node.localName?.toLowerCase()
++        if (name === 'script' || name === 'style') return FILTER_REJECT
++        if (node.nodeType === 1) {
++            const { left, right } = mapRect(node.getBoundingClientRect())
++            if (right <= end) return FILTER_REJECT
++            if (left >= end) return FILTER_ACCEPT
++        } else if (node.nodeValue?.trim()) {
++            const range = doc.createRange()
++            range.selectNodeContents(node)
++            if (mapRect(range.getBoundingClientRect()).left >= end) return FILTER_ACCEPT
++        }
++        return FILTER_SKIP
++    }
++    const node = doc.createTreeWalker(doc.body, filter, { acceptNode }).nextNode()
++    const range = doc.createRange()
++    if (node) {
++        range.setStart(node, 0)
++        range.collapse(true)
++    } else {
++        range.selectNodeContents(doc.body.lastElementChild ?? doc.body)
++        range.collapse()
++    }
++    return range
++}
++
+ const selectionIsBackward = sel => {
+     const range = document.createRange()
+     range.setStart(sel.anchorNode, sel.anchorOffset)
+@@ -943,18 +975,28 @@ export class Paginator extends HTMLElement {
+         await this.#scrollToPage(newPage + 1, reason)
+     }
+     #getVisibleRange() {
+-        if (this.scrolled) return getVisibleRange(this.#view.document,
+-            this.start + this.#margin, this.end - this.#margin, this.#getRectMapper())
++        const doc = this.#view.document
++        const mapRect = this.#getRectMapper()
+         const size = this.#rtl ? -this.size : this.size
+-        return getVisibleRange(this.#view.document,
+-            this.start - size, this.end - size, this.#getRectMapper())
++        const [start, end] = this.scrolled
++            ? [this.start + this.#margin, this.end - this.#margin]
++            : [this.start - size, this.end - size]
++        const range = getVisibleRange(doc, start, end, mapRect)
++        return range ? { range } : { range: getRangeAfter(doc, end, mapRect), blank: true }
++    }
++    // the inverse of what `#scrollToAnchor()` does with a fraction
++    #getPageFraction() {
++        if (this.scrolled) return this.start / this.viewSize
++        const textPages = this.pages - 2
++        return textPages > 1 ? (this.page - 1) / (textPages - 1) : 0
+     }
+     #afterScroll(reason) {
+-        const range = this.#getVisibleRange()
++        const { range, blank } = this.#getVisibleRange()
+         this.#lastVisibleRange = range
+         // don't set new anchor if relocation was to scroll to anchor
+         if (reason !== 'selection' && reason !== 'navigation' && reason !== 'anchor')
+-            this.#anchor = range
++            // a blank page has no content to anchor to, so anchor to the page
++            this.#anchor = blank ? this.#getPageFraction() : range
+         else this.#justAnchored = true
+ 
+         const index = this.#index

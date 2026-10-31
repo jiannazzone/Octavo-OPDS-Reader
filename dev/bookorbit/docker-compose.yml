@@ -1,0 +1,49 @@
+# Local BookOrbit for Octavo development. Dev only: the secrets below are
+# throwaway values for a server bound to 127.0.0.1. See README.md.
+#
+# Uses BookOrbit's published image (AGPL-3.0); nothing from it is vendored here.
+
+name: octavo-bookorbit
+
+services:
+  bookorbit:
+    image: ghcr.io/bookorbit/bookorbit:${BOOKORBIT_TAG:-3.6.0}
+    init: true
+    ports:
+      - "127.0.0.1:${BOOKORBIT_PORT:-3300}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      POSTGRES_HOST: db
+      POSTGRES_USER: bookorbit
+      POSTGRES_PASSWORD: octavo-dev-db
+      POSTGRES_DB: bookorbit
+      JWT_SECRET: octavo-dev-jwt-secret-not-for-production
+      PODCAST_ENCRYPTION_KEY: octavo-dev-podcast-key-not-for-production
+      SETUP_BOOTSTRAP_TOKEN: octavo-dev-setup-token
+      APP_URL: http://localhost:${BOOKORBIT_PORT:-3300}
+      LIBRARY_BROWSE_ROOT: /books
+      # Serves /api/docs and /api/docs-json (off by default upstream).
+      SWAGGER_ENABLED: "true"
+      TZ: UTC
+    volumes:
+      - ./data/books:/books
+      - ./data/app:/data
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: bookorbit
+      POSTGRES_PASSWORD: octavo-dev-db
+      POSTGRES_DB: bookorbit
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookorbit -d bookorbit"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
