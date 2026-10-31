@@ -34,16 +34,39 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 
 6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync). "Import from Files" sits on the same first screen.
 
+## Mockups
+
+Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX?node-id=0-1), built 2026-10-31 on Apple's iOS and iPadOS 27 kit (`iPhone Duo/Standard/Outer - Portrait` and `Inner - Landscape`, `Tab Bar - iPhone Duo`, Liquid Glass buttons, rows, text fields, kit text styles and colour variables). Covers are the public-domain sample books.
+
+| Frame | Shows |
+|---|---|
+| 01 Home · folded | Continue reading, new on BookOrbit |
+| 02 Library · folded | Chips, cover grid, filter button in the side column |
+| 03 Book cover · folded | Full-screen cover, glass progress strip with Open |
+| 04 Library · unfolded | Grid left of the hinge, cover page right of it (hinge marked) |
+| 05 Add your books · folded | Pick BookOrbit or OPDS, or import from Files |
+| 06 Sign in to BookOrbit · folded | Address, account, Sign in, SSO (only if offered) |
+
+Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected).
+
+What the kit showed:
+- Apple's Duo layout puts toolbar buttons (including back) in a glass group under the vertical status bar, and the tab bar at the bottom of the same column.
+- The kit's `Tab Bar - iPhone Duo` has a "Search Role" type that puts Search in its own glass button at the very bottom of the column.
+- The kit's Large Title toolbar renders its title mirrored in Figma, so the frames draw the large title as content instead.
+
 ## Open questions
 
 - **Settings contents.** Too early to pin down. Working list from the brainstorm (not approved): Server (edit, sign out, replace, progress sync), Sync accounts (iCloud, KOReader sync), Reading defaults, iPhone Duo, Downloads and storage, About.
 - **Default sync choice for an OPDS server.** Proposed (not approved): preselect iCloud once iCloud sync exists, "Don't sync" until then. A BookOrbit server preselects itself.
 - **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
 - **OPDS feeds with no search.** Search then covers only the books on the phone; how the Search tab says so is undecided.
+- **The camera column covers the top-right of a full-screen cover**, where many covers put their title (frame 03). Accept it, or fit the cover to the 382 pt content area?
+- **Tab column over the cover.** Frame 03 keeps the tabs visible over the artwork. Keep them, or hide them while the cover shows?
+- **Search's place in the column.** Decision 2 puts Settings at the bottom; Apple's "Search Role" tab bar puts Search at the bottom in its own button. Which?
 
 ## Needs engineering
 
-- **Tabs in the trailing column.** Check how SwiftUI's `TabView` renders on the Duo folded and unfolded, and whether the trailing-column placement comes from the system or needs a custom tab column.
+- **Tabs in the trailing column.** Apple's iOS 27 kit has a Duo tab bar at the bottom of the trailing column, so the placement is the system's design. Still check that SwiftUI's `TabView` renders it that way on the Duo, folded and unfolded.
 - **Library chips from an OPDS feed.** Map the root feed's navigation entries and facets to chips, and decide what happens when a feed has many entries or none.
 - **Pull the synced position while the cover shows.** Start the `ProgressSync` pull when the cover page appears, so unfolding opens the reader at once instead of waiting up to the 5 s pull timeout (duo-spreads §6).
 - **Full-screen cover.** The cover runs under the trailing system column and the camera; the tab column and back button sit over the artwork, so they need a material that reads on any cover.
