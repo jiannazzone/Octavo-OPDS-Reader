@@ -13,14 +13,15 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
     static let host = "app"
     static let readerURL = URL(string: "\(scheme)://\(host)/reader.html")!
 
-    /// Sent with every response. foliate-js renders book content in
+    /// Sent with every reader response. foliate-js renders book content in
     /// same-origin `blob:` iframes that must allow scripts (WebKit bug
     /// 218086), so this policy, which those iframes inherit, is the only thing
-    /// stopping a book's own JavaScript. Only our bundled scripts may run, and
-    /// nothing may load from the network.
+    /// stopping a book's own JavaScript. Only our bundled scripts may run (by
+    /// path, so the book at `/book/` is never a script source, even though it
+    /// is same-origin), and nothing may load from the network.
     static let contentSecurityPolicy = [
         "default-src 'self'",
-        "script-src 'self'",
+        "script-src \(scheme)://\(host)/bridge.js \(scheme)://\(host)/foliate-js/",
         "style-src 'self' 'unsafe-inline' blob: data:",
         "img-src 'self' blob: data:",
         "font-src 'self' blob: data:",
@@ -31,6 +32,10 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
         "base-uri 'none'",
         "form-action 'none'",
     ].joined(separator: "; ")
+
+    /// The book is only ever fetched as bytes. If anything tries to use it as
+    /// a document, it gets nothing.
+    static let bookContentSecurityPolicy = "default-src 'none'; sandbox"
 
     /// URL the bridge fetches the book from. The last path component is the
     /// file name, which foliate uses to tell CBZ/FB2 apart from EPUB.
@@ -101,7 +106,8 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
                     let length = try handle.seekToEnd()
                     try handle.seek(toOffset: 0)
                     let mimeType = Self.mimeType(forPathExtension: file.pathExtension)
-                    continuation.yield(.response(Self.response(url: url, status: 200, mimeType: mimeType, length: length)))
+                    let policy = file == bookFile ? Self.bookContentSecurityPolicy : Self.contentSecurityPolicy
+                    continuation.yield(.response(Self.response(url: url, status: 200, mimeType: mimeType, length: length, policy: policy)))
                     // Stream in chunks so a large book isn't held twice in memory.
                     while !Task.isCancelled, let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
                         continuation.yield(.data(chunk))
@@ -115,7 +121,10 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
         }
     }
 
-    private static func response(url: URL, status: Int, mimeType: String, length: UInt64) -> URLResponse {
+    /// `nosniff` makes WebKit refuse to run anything as a script or stylesheet
+    /// unless its MIME type says it is one, so a book file crafted to also
+    /// parse as JavaScript can't be executed.
+    private static func response(url: URL, status: Int, mimeType: String, length: UInt64, policy: String = contentSecurityPolicy) -> URLResponse {
         HTTPURLResponse(
             url: url,
             statusCode: status,
@@ -124,7 +133,8 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
                 "Content-Type": mimeType,
                 "Content-Length": String(length),
                 "Cache-Control": "no-store",
-                "Content-Security-Policy": contentSecurityPolicy,
+                "Content-Security-Policy": policy,
+                "X-Content-Type-Options": "nosniff",
             ]
         )!
     }

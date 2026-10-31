@@ -60,10 +60,20 @@ struct ReaderSchemeHandlerTests {
         for url in ["octavo://app/reader.html", "octavo://app/foliate-js/view.js", "octavo://app/missing.js"] {
             let (response, _) = try await fetch(url)
             let policy = try #require(response?.value(forHTTPHeaderField: "Content-Security-Policy"))
-            #expect(policy.contains("script-src 'self';"))
+            let scriptSources = try #require(policy.split(separator: ";").first { $0.contains("script-src") })
+            #expect(scriptSources.trimmingCharacters(in: .whitespaces)
+                == "script-src octavo://app/bridge.js octavo://app/foliate-js/")
             #expect(!policy.contains("unsafe-eval"))
             #expect(!policy.contains("http"))
+            #expect(response?.value(forHTTPHeaderField: "X-Content-Type-Options") == "nosniff")
         }
+    }
+
+    // The book is same-origin, so it must never be usable as a script or a document.
+    @Test func theBookIsServedLockedDown() async throws {
+        let (response, _) = try await fetch(ReaderSchemeHandler.bookURL(fileName: "book.epub").absoluteString)
+        #expect(response?.value(forHTTPHeaderField: "Content-Security-Policy") == "default-src 'none'; sandbox")
+        #expect(response?.value(forHTTPHeaderField: "X-Content-Type-Options") == "nosniff")
     }
 
     @Test func streamsTheBookInChunks() async throws {
