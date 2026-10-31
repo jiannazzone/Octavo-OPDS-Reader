@@ -40,7 +40,7 @@ Sample books (Gutenberg EPUB3): Pride and Prejudice (1342), Alice in Wonderland 
 | 0 | Scaffold: project, package skeleton, `ReaderWeb/` folder ref, fetch script, notices, .gitignore; builds on Duo sim | — | this session | approval | done, local only on `spike/scaffold` (owner: keep local for now) |
 | 1a | **Reader spike**: pin + vendor foliate-js, own bridge, `WebView` + scheme handler, open a local EPUB, relocate → `{cfi, fraction}`, `goTo(cfi)`, restore last CFI on relaunch | 3 | `reader-spike` | 0 | **done**, merged locally into `spike/scaffold` (incl. later CSP/script-blocking commits `dd70c7b`, `9c86e0f`) |
 | 1b | **BookOrbit server + client**: local BookOrbit in Docker seeded with the sample books in a "Spike" collection; `BookOrbitClient` in OctavoKit (login, refresh cookie, collections, collection books, download, GET/POST progress) | 1, 2 | `bookorbit-client` | 0 | **done**, merged locally into `spike/scaffold` |
-| 1c | **Readium bake-off** (owner request): Readium Swift navigator + our CFI translation layer (foliate's `epubcfi.js`), measured against BookOrbit's web reader with the same table as 2a. Own BookOrbit user and own simulator. Evaluation branch, merged only if Readium wins | 4 (Readium) | `readium-spike` | 1b | in progress (branch from `claude/spike-1b-bookorbit-327f97`) |
+| 1c | **Readium bake-off** (owner request): Readium Swift navigator + our CFI translation layer (foliate's `epubcfi.js`), measured against BookOrbit's web reader with the same table as 2a. Own BookOrbit user and own simulator. Evaluation branch, merged only if Readium wins | 4 (Readium) | `readium-spike` | 1b | **done**: 30/30 hits, `144ea99` on `claude/spike-1c-readium-c401b9`, local, evaluation only |
 | 2a | **Integration + CFI round trip**: app logs in → collection → download → read; pull progress on open, push on relocate; verify against BookOrbit's web reader both directions, ≥3 books | 4 | `sync-roundtrip` | 1a, 1b | **done**: 31/31 hits, `c1870b2` on `claude/spike-2a-sync-db0bbc`, local, not merged |
 | 2b | **Duo spreads**: `onHingeChange` → column count (1 ↔ 2), position kept across fold/unfold | 5 | session | engine choice | on hold until 1c vs 2a picks the engine |
 | 3 | Retro: record results/decisions in CLAUDE.md, delete `Spike/`, draft GitHub issues for real work, hand off to UI brainstorming | — | this session | 2a, 2b | pending |
@@ -114,6 +114,28 @@ Orchestrator check: file sets of the two branches don't overlap (clean merge). `
 - **Process problem:** the built-in browser's cookies are shared across sessions. One 2a action landed on 1c's `octavo-readium` account (Alice set to 13.49% at 19:30:51Z; 1c was told). 2a's counted results all use `octavo` on a separate host (`sync2a.localhost:3300`).
 - Simulator: 'Octavo Sync Duo' (32DEFF1F-1885-4884-8DAF-2FC92AE08FC2). Orchestrator re-ran `swift test` (48 pass) and `xcodebuild test` (pass) on it. foliate-js is unchanged on the branch.
 
+### Engine bake-off: 1c Readium vs 2a foliate-js
+
+Full write-up: `docs/notes/readium-spike.md` on the 1c branch.
+
+| | foliate-js (2a) | Readium 3.11.1 (1c) |
+|---|---|---|
+| Positions → BookOrbit web | 16/16 hit | 15/15 hit, character-exact |
+| BookOrbit web → positions | 15/15 hit | 15/15 hit, character-exact (text-quote navigation) |
+| CFI translation layer | none: same code as BookOrbit | ours: foliate's `epubcfi.js` injected, quote-based `go(to:)`. ~2–3 weeks to production incl. highlights, plus a CI regression harness |
+| Fold/unfold position | paginator keeps an anchor | Readium drifts backward (to chapter start in one run); our re-anchor fix kept 12/12 |
+| Unfolded two columns | reader area is 951×517 pt (wider than tall), so foliate's portrait single-column rule shouldn't apply (2b to confirm) | needs `columnCount: .two` set from the hinge; `.auto` stays one column |
+| Formats | EPUB, MOBI, AZW3, FB2, CBZ | EPUB, PDF, CBZ, audiobooks; no MOBI/AZW3/FB2 |
+| Book JavaScript | blocked (CSP, sandboxed book, main-frame-only messages) | runs by default; a CSP meta injected via a `Publication` transform blocks it, but Readium's handlers stay reachable |
+| Licenses | MIT, BSD-3 | also zlib-style (CryptoSwift, minizip) and SIL OFL fonts → owner sign-off needed |
+| Dev loop | fast | Debug builds ~10× slower to open a book |
+| Project maturity | one maintainer, no releases, unstable API | foundation-backed, releases, migration guides |
+| UI stack | SwiftUI `WebView` | UIKit view controller wrapped for SwiftUI |
+
+**Orchestrator and 1c both recommend foliate-js**, with Readium as the documented fallback (switch cost ~2–3 weeks; the 1c branch shows how). Sync accuracy is a tie, so it doesn't decide anything. foliate wins on parity by construction, formats, script isolation, resize anchoring and the SwiftUI stack. Readium's real advantage is project maturity. Owner decision pending.
+
+**Blank-page bug, vetted** (`docs/notes/foliate-blank-page-upstream.md` on the `foliate-blank-page` branch, `e1946c0`): the bug is real and in upstream foliate-js (`getVisibleRange` falls back to `<body>` on an empty page). Reproduced in Chrome, macOS WebKit and iOS Safari, and not reported upstream. The P&P blank page itself is a WebKit double column break. The loop in Octavo was triggered by the debug strip resizing the `WebView`. A ~50-line patch leaves CFIs byte-identical on 1,546 non-blank pages. Draft issue and PR text are ready for owner review; nothing has been posted.
+
 ## Decisions
 
 - **Server:** local BookOrbit in Docker, seeded with the sample books.
@@ -130,3 +152,4 @@ Orchestrator check: file sets of the two branches don't overlap (clean merge). `
 - 2026-10-31 — Owner asked whether another engine could replace foliate-js. Started 1c (`readium-spike`): Readium bake-off against BookOrbit, same table as 2a. 2b on hold until the engine is chosen; foliate patch policy deferred with it.
 - 2026-10-31 — Owner OK'd local merge: 1a and 1b merged into `spike/scaffold` (no push). Merged tree passes `xcodebuild test` (iPhone Duo) and `swift test` (33). Started 2a (`sync-roundtrip`) alongside 1c. Asked 1c to also report whether Readium runs book JavaScript and if it can be disabled (foliate side blocks it via CSP since `dd70c7b`).
 - 2026-10-31 — 2a done: 31/31 hits, both directions; verified (tests re-run). Branch local, unmerged. 1c still measuring.
+- 2026-10-31 — 1c done: Readium 30/30, character-exact. Both engines sync exactly, so the bake-off comes down to everything else. Recommendation: foliate-js, with Readium as fallback. Blank-page vetting done; patch and upstream drafts await owner review. Not re-run by orchestrator: 1c's tests (evaluation branch, not for merge).
