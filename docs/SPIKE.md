@@ -51,7 +51,7 @@ Sample books (Gutenberg EPUB3): Pride and Prejudice (1342), Alice in Wonderland 
 - **1a:** on the Duo sim, open Pride and Prejudice, page forward, kill the app, relaunch → same page. Bridge message decoding has unit tests. PR notes the pinned commit and why.
 - **1b:** `swift test` passes (stubbed `URLProtocol` tests). An opt-in live test (env var) against the local server logs in, lists "Spike", downloads an EPUB, posts progress and reads it back. `dev/bookorbit/README.md` says how to start/seed/reset the server.
 - **2a:** results table per book: app → web and web → app, same spot or documented drift with cause.
-- **2b:** fold/unfold via the `hinge` skill switches 1 ↔ 2 columns without losing position; screenshots in the PR.
+- **2b:** fold/unfold via the `hinge` skill switches 1 ↔ 2 columns without losing position; screenshots in the PR. Also confirm (for the cover-display idea in `docs/UI-IDEAS.md`) that app state survives the outer → inner display move, and that an unfold seen on a non-reader screen can trigger navigation into the reader.
 
 ## Research folded into 1a
 
