@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OctavoKit
 
 /// The shell's state: the selected tab, each tab's open screens and the
 /// shared states. It lives with the scene, which folding or unfolding moves
@@ -17,7 +18,26 @@ final class ShellModel {
     /// Shown as a banner at the top of the tabs (decision 22).
     var connectionProblem: ConnectionProblem?
     /// The book open in the reader, which covers the tabs (frames 07–09).
-    var reading: PlaceholderBook?
+    var reading: OpenedBook? {
+        didSet {
+            if let closed = oldValue, closed != reading { pages.existingPage(for: closed.book.id)?.readerClosed() }
+        }
+    }
+    /// Downloads books and opens them in `reading` (#14).
+    let opener: BookOpener
+    /// The cover pages' state, kept across folds.
+    let pages = BookPages()
+    /// Where books come from. A stand-in until #13 provides the current
+    /// source.
+    var librarySource: any LibrarySource = SampleLibrarySource() {
+        didSet {
+            pages.removeAll()
+            sourceGeneration += 1
+        }
+    }
+    /// Changes with `librarySource`, so the screens showing its books load
+    /// again.
+    private(set) var sourceGeneration = 0
 
     /// Stand-in states until the real sources exist: an empty Home
     /// (frame 25) and a problem on the cover's strip (frames 23, 24, 42).
@@ -31,7 +51,9 @@ final class ShellModel {
     var showsSpike = false
     #endif
 
-    init() {
+    init(opener: BookOpener = BookOpener()) {
+        self.opener = opener
+        opener.onOpen = { [weak self] in self?.reading = $0 }
         #if DEBUG
         applyLaunchArguments()
         #endif
@@ -66,8 +88,10 @@ final class ShellModel {
         }
     }
 
-    func openBook(_ book: PlaceholderBook) {
-        reading = book
+    /// Opens `book` in the reader, downloading it first if it isn't on the
+    /// iPhone yet (decision 3); the cover's strip shows the progress.
+    func openBook(_ book: LibraryBook) {
+        opener.open(book, from: librarySource)
     }
 
     /// Unfolding on a book's cover opens the book at once (decision 4);
@@ -78,7 +102,7 @@ final class ShellModel {
         guard transition == .unfold, reading == nil, !isCoveredBySpike,
               let book = self[path: tab].routes.last?.bookOpenedOnUnfold
         else { return }
-        openBook(book)
+        openBook(book.libraryBook)
     }
 
     /// The spike's screens hide the tabs and do their own unfold handoff.
@@ -99,7 +123,8 @@ final class ShellModel {
     /// Launch arguments that set up a state to look at:
     /// `-shellTab library`, `-shellConnection unreachable|signedOut`,
     /// `-shellEmptyHome 1`, `-shellCoverStrip failed|offline|downloading`,
-    /// `-shellOpen collection|deep|cover|settings`, `-shellReading 1`.
+    /// `-shellOpen collection|deep|cover|settings`, `-shellReading 1`,
+    /// `-shellSource bookorbit` (the local dev server, `dev/bookorbit/`).
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
@@ -125,8 +150,10 @@ final class ShellModel {
         case "settings": self[path: .settings].routes = [.settingsPage("BookOrbit")]
         default: break
         }
-        if defaults.bool(forKey: "shellReading") {
-            reading = book
+        if defaults.string(forKey: "shellSource") == "bookorbit" {
+            ShellDebugSource.connect(self, openingBook: defaults.bool(forKey: "shellReading") ? book.libraryBook : nil)
+        } else if defaults.bool(forKey: "shellReading") {
+            openBook(book.libraryBook)
         }
     }
     #endif

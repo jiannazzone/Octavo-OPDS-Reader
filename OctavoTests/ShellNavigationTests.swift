@@ -1,4 +1,5 @@
 import CoreGraphics
+import OctavoKit
 import Testing
 @testable import Octavo
 
@@ -129,12 +130,16 @@ struct HingeTransitionTests {
 struct ShellModelTests {
     static let book = PlaceholderBook.samples[1]
 
-    @Test func unfoldingOnACoverOpensTheBook() {
-        let model = ShellModel()
+    // The book isn't on the iPhone yet: it downloads, then opens (#14).
+    @Test func unfoldingOnACoverOpensTheBook() async throws {
+        let files = try TemporaryBookFiles()
+        let model = ShellModel(opener: BookOpener(files: files.store))
+        model.librarySource = StubLibrarySource()
         model.tab = .library
         model[path: .library].routes = [.collections, .cover(Self.book)]
         model.hingeChanged(.unfold)
-        #expect(model.reading == Self.book)
+        #expect(await eventually { model.reading != nil })
+        #expect(model.reading?.book.id == Self.book.libraryBook.id)
     }
 
     @Test func unfoldingElsewhereKeepsTheScreen() {

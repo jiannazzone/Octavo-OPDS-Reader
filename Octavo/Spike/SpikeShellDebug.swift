@@ -1,4 +1,5 @@
 #if DEBUG
+import OctavoKit
 import SwiftUI
 
 /// SPIKE ONLY (deleted with the spike). Debug-only controls the app shell
@@ -31,6 +32,32 @@ struct SpikeLibrarySection: View {
             Button("Spike library", systemImage: "hammer") { shell.showsSpike = true }
         } footer: {
             Text("Debug builds only: the spike’s screens, for opening books until the real Library exists.")
+        }
+    }
+}
+
+/// `-shellSource bookorbit`: the local dev BookOrbit (`dev/bookorbit/`,
+/// test account) as the shell's source, until #13 adds a server. Signs in
+/// once per launch; BookOrbit allows five sign-ins a minute.
+/// `-shellCoverBook 0…4` picks which placeholder book `-shellOpen cover`
+/// shows.
+enum ShellDebugSource {
+    static func connect(_ shell: ShellModel, openingBook book: LibraryBook?) {
+        let index = UserDefaults.standard.integer(forKey: "shellCoverBook")
+        if index > 0, index < PlaceholderBook.samples.count, shell[path: .library].routes.count == 1 {
+            shell[path: .library].routes = [.cover(PlaceholderBook.samples[index])]
+        }
+        Task {
+            let spike = SpikeBookOrbitSession()
+            guard let url = URL(string: spike.serverURL) else { return }
+            let client = BookOrbitClient(baseURL: url, deviceLabel: "Octavo shell")
+            do {
+                _ = try await client.login(username: spike.username, password: spike.password)
+                shell.librarySource = BookOrbitSource(client: client)
+                if let book { shell.openBook(book) }
+            } catch {
+                print("ShellDebugSource: sign-in failed: \(error)")
+            }
         }
     }
 }

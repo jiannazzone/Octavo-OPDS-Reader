@@ -1,3 +1,4 @@
+import OctavoKit
 import SwiftUI
 
 // Stand-in screens for the shell, replaced by #13 (Home, Library), #14 (the
@@ -189,45 +190,15 @@ struct BookLink: View {
     }
 }
 
-/// A book's cover page: the cover filling the screen, under the camera
-/// column (decision 4), and the strip at the bottom. Folded, unfolding here
-/// opens the book (`ShellModel.hingeChanged`).
+/// The cover page (#14) for a placeholder book, from the stand-in source.
+/// #13 maps `.cover` to `BookCoverPage` directly and deletes this.
 struct CoverPlaceholder: View {
     let book: PlaceholderBook
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        StandInCover(book: book)
-            .ignoresSafeArea()
-            .overlay(alignment: .bottom) {
-                strip
-                    .padding()
-                    .glassEffect(in: .rect(cornerRadius: 24))
-                    .padding(8)
-            }
-    }
-
-    @ViewBuilder
-    private var strip: some View {
-        if let message = shell.coverStrip {
-            CoverStripStatus(message: message) { shell.coverStrip = nil }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(book.place)
-                            .font(.headline)
-                        Text("Stand-in strip until #14")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 8)
-                    Button("Open") { shell.openBook(book) }
-                        .buttonStyle(.glassProminent)
-                }
-                ProgressView(value: book.progress)
-            }
-        }
+        BookCoverPage(book: book.libraryBook, source: shell.librarySource)
+            .id(shell.sourceGeneration)
     }
 }
 
@@ -256,16 +227,19 @@ struct StandInCover: View {
     }
 }
 
-/// The reader, over the tabs. #17 replaces it.
+/// The reader, over the tabs: the spike's reader until #17 replaces it.
+/// Positions stay on the iPhone; syncing them is #11.
 struct ReaderPlaceholder: View {
-    let book: PlaceholderBook
+    let book: OpenedBook
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(book.title, systemImage: "book.pages", description: Text("Opened from the shell. The reader comes with #17."))
+            SpikeReaderView(book: book.reader, sync: nil, cfiShape: .point)
                 .toolbar {
-                    Button("Close", systemImage: "xmark") { shell.reading = nil }
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Close", systemImage: "xmark") { shell.reading = nil }
+                    }
                 }
         }
         .background(Color(.systemBackground))
