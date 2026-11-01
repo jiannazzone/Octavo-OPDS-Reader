@@ -170,6 +170,7 @@ private enum SpikeStateFile {
         var layout: ReaderLayout
         var layoutReport: SpikeJSON?
         var watched: SpikeJSON?
+        var lastFold: ReaderModel.FoldReport?
         var updatedAt: Date
     }
 
@@ -201,6 +202,7 @@ private enum SpikeStateFile {
             layout: model.layout,
             layoutReport: await model.layoutReport().map(SpikeJSON.init),
             watched: await watched(model),
+            lastFold: model.lastFold,
             updatedAt: .now
         )
         let encoder = JSONEncoder()

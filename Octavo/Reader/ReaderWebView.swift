@@ -28,6 +28,11 @@ struct ReaderWebView: View {
             } action: { geometry in
                 model.geometryChanged(geometry)
             }
+            .overlay(alignment: .topLeading) {
+                if let cover = model.foldCover {
+                    ReaderFoldCoverView(cover: cover, pageSize: model.geometry?.size)
+                }
+            }
     }
 }
 

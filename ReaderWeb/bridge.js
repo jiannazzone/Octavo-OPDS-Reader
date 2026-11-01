@@ -90,8 +90,13 @@ const isBlankPage = range => {
     return Boolean(container && container === container.ownerDocument?.body)
 }
 
+// While a fold is held (see `hold`), relocations are kept back and only the
+// last one is posted once the new layout has settled.
+let held = null
+
 const onRelocate = ({ detail }) => {
-    post('relocate', {
+    relocations++
+    const message = {
         cfi: detail.cfi ?? null,
         startCFI: startOf(detail.cfi),
         blankPage: isBlankPage(detail.range),
@@ -102,8 +107,13 @@ const onRelocate = ({ detail }) => {
         location: detail.location
             ? { current: finiteOrNull(detail.location.current), total: finiteOrNull(detail.location.total) }
             : null,
-    })
+    }
+    if (held) held.relocation = message
+    else post('relocate', message)
 }
+// Counts relocations, so `settle` can tell when the paginator has stopped
+// moving.
+let relocations = 0
 
 // A tap is a short press that barely moves. Anything longer or further is a
 // swipe (foliate's paginator handles those) or a text selection.
@@ -146,21 +156,100 @@ const onSectionLoad = ({ detail: { doc } }) => {
 // insets so foliate's centred gap sits over the fold. `max-column-count-
 // portrait` is our patch 0002; without it a portrait reader area always gets
 // one column. Missing values fall back to foliate's defaults.
-const applyLayout = () => {
-    if (!view?.renderer) return
+//
+// Also ends a hold: the view gets its normal size back (inset from the
+// window's edges) in the same step.
+const applyAttributes = () => {
     const renderer = view.renderer
     const set = (name, value) => value === null || value === undefined
         ? renderer.removeAttribute(name)
         : renderer.setAttribute(name, String(value))
-    view.style.left = `${layout?.leftInset ?? 0}px`
-    view.style.right = `${layout?.rightInset ?? 0}px`
+    Object.assign(view.style, {
+        left: `${layout?.leftInset ?? 0}px`,
+        right: `${layout?.rightInset ?? 0}px`,
+        width: '', height: '', bottom: '',
+    })
     set('max-column-count', layout?.columns)
     set('max-column-count-portrait', layout?.columns)
     set('gap', layout?.gapPercent === null || layout?.gapPercent === undefined ? null : `${layout.gapPercent}%`)
     set('max-inline-size', layout?.maxInlineSize === null || layout?.maxInlineSize === undefined ? null : `${layout.maxInlineSize}px`)
-    // A changed column count doesn't always resize anything, so foliate
-    // wouldn't notice. Re-rendering keeps the paginator's anchor.
-    renderer.render()
+}
+
+// The paginator's attributes and size, to tell whether anything changed.
+const layoutState = () => {
+    const renderer = view.renderer
+    const { width, height } = renderer.getBoundingClientRect()
+    const attributes = ['max-column-count', 'max-column-count-portrait', 'gap', 'max-inline-size']
+        .map(name => renderer.getAttribute(name))
+    return JSON.stringify([width, height, attributes])
+}
+
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)))
+
+// Waits until the paginator has stopped relocating for a few frames: after a
+// render it re-scrolls to its anchor, and again once the section's body has
+// been measured.
+const settle = async () => {
+    const start = performance.now()
+    let seen = relocations
+    for (let quiet = 0; quiet < 3 && performance.now() - start < 1000;) {
+        await nextFrame()
+        if (relocations === seen) quiet++
+        else [seen, quiet] = [relocations, 0]
+    }
+}
+
+// Applies `layout` with a single re-render. foliate re-renders on its own
+// whenever `max-inline-size` changes and whenever its size changes (a
+// ResizeObserver, one frame later); with our explicit render that's up to
+// three re-layouts, each re-scrolling to the anchor. Those are skipped here:
+// `render` is shadowed by a no-op on the instance until the ResizeObserver
+// has fired, then foliate renders once. This relies on foliate calling
+// `this.render()` from both places (paginator.js at the pinned commit).
+const applyLayout = async () => {
+    if (!view?.renderer) return false
+    const renderer = view.renderer
+    const before = layoutState()
+    renderer.render = () => {}
+    try {
+        applyAttributes()
+        if (layoutState() !== before) await nextFrame()
+    } finally {
+        delete renderer.render
+    }
+    const changed = layoutState() !== before
+    // A changed column count doesn't always resize anything, so the render
+    // is explicit. Re-rendering keeps the paginator's anchor.
+    if (changed) renderer.render()
+    return changed
+}
+
+// The hinge moved, and a fold's inputs (the hinge, the page's resize, the
+// fold region) are about to arrive one by one. Until the next `setLayout`,
+// the view keeps its current size, so the page's resize doesn't re-paginate,
+// and relocations are kept back.
+const hold = () => {
+    if (!view?.renderer) return false
+    const { width, height } = view.getBoundingClientRect()
+    Object.assign(view.style, { width: `${width}px`, height: `${height}px`, right: 'auto', bottom: 'auto' })
+    // A new object, so a `setLayout` still settling knows not to end it.
+    held = { relocation: held?.relocation ?? null }
+    return true
+}
+
+// Applies the layout, ends any hold, and posts the last relocation once the
+// page has settled.
+const setLayout = async newLayout => {
+    layout = newLayout
+    const ending = held
+    const rendered = await applyLayout()
+    if (rendered) await settle()
+    // Held again meanwhile (folded back): the next `setLayout` ends it.
+    if (held !== ending) return rendered
+    const pending = held?.relocation
+    held = null
+    if (pending) post('relocate', pending)
+    return rendered
 }
 
 // Text boxes of the visible page in the top window's coordinates. Text only:
@@ -289,7 +378,9 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     })
     view.renderer.setAttribute('flow', 'paginated')
     if (initialLayout !== undefined) layout = initialLayout
-    applyLayout()
+    held = null
+    // Nothing is rendered yet, so the attributes are all it takes.
+    applyAttributes()
 
     const restoredFrom = await restore(cfi, finiteOrNull(fraction))
     const result = {
@@ -336,10 +427,12 @@ window.octavo = Object.freeze({
         await requireView().prev()
         return true
     }),
-    setLayout: reported(async function setLayout(newLayout) {
-        layout = newLayout
-        applyLayout()
-        return true
+    // Resolves to whether the page was re-rendered.
+    setLayout: reported(async function setLayout_(newLayout) {
+        return setLayout(newLayout)
+    }),
+    hold: reported(async function hold_() {
+        return hold()
     }),
     layoutReport: reported(async function layoutReport_() {
         return layoutReport()

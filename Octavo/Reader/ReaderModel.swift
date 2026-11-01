@@ -1,6 +1,7 @@
 import Foundation
 import OctavoKit
 import Observation
+import UIKit
 import WebKit
 import os
 
@@ -47,6 +48,19 @@ final class ReaderModel {
     private(set) var layout: ReaderLayout = .automatic
     /// The page's size as the page reports it.
     @ObservationIgnored private var viewport: CGSize?
+
+    // Folding: one re-layout per fold, under a cross-fade. See `FoldBatch`.
+    /// Shown over the page while a fold settles (`ReaderFoldCoverView`).
+    private(set) var foldCover: ReaderFoldCover?
+    /// The last fold's timings, for the debug overlay.
+    private(set) var lastFold: FoldReport?
+    @ObservationIgnored var foldTiming = FoldBatch.Timing()
+    @ObservationIgnored private var foldBatch: FoldBatch?
+    @ObservationIgnored private var foldTask: Task<Void, Never>?
+    @ObservationIgnored private var coverTask: Task<Void, Never>?
+    @ObservationIgnored private var coverCount = 0
+    /// Snapshots up to this one arrived too late to be shown.
+    @ObservationIgnored private var lastClosedCover = 0
 
     // Sync state, for the debug overlay.
     /// Where the book opened, decided from the local and pulled positions.
@@ -128,7 +142,10 @@ final class ReaderModel {
         if angle != hingeAngle { hingeAngle = angle }
         guard posture != self.posture else { return }
         log.debug("posture \(posture.rawValue, privacy: .public)")
+        let old = self.posture
         self.posture = posture
+        // `.noHinge` is only the first report, before the hinge is known.
+        if old != .noHinge, old.isFolded != posture.isFolded { beginFold() }
         relayout()
     }
 
@@ -148,7 +165,113 @@ final class ReaderModel {
     }
 
     private func relayout() {
+        if foldBatch != nil {
+            foldBatch?.input(at: .now)
+            scheduleFoldEnd()
+            return
+        }
         apply(ReaderLayout(posture: posture, geometry: geometry))
+    }
+
+    // MARK: Folding
+
+    /// The timings of one fold in milliseconds from the hinge, for the
+    /// debug overlay.
+    struct FoldReport: Equatable, Encodable {
+        /// When the page resized, if it did.
+        var resized: Int?
+        /// When the new layout was sent.
+        var laidOut: Int?
+        /// When the snapshot was ready.
+        var snapshot: Int?
+        /// Whether the new layout re-rendered the page.
+        var rendered: Bool?
+
+        static func milliseconds(since start: ContinuousClock.Instant) -> Int {
+            let elapsed = (ContinuousClock.now - start).components
+            return Int(elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000)
+        }
+    }
+
+    /// The hinge moved between folded and unfolded: hold the page as it is,
+    /// cover it with a snapshot, and lay out once the fold's inputs settle.
+    private func beginFold() {
+        guard phase == .open else { return }
+        let now = ContinuousClock.now
+        if foldBatch != nil {
+            foldBatch?.restart(at: now)
+            scheduleFoldEnd()
+            return
+        }
+        foldBatch = FoldBatch(startedAt: now)
+        lastFold = FoldReport()
+        call("return await window.octavo.hold()")
+        captureCover(startedAt: now)
+        scheduleFoldEnd()
+    }
+
+    /// (Re)starts the wait for the batch's deadline, which each input moves.
+    private func scheduleFoldEnd() {
+        guard let deadline = foldBatch?.deadline(foldTiming) else { return }
+        foldTask?.cancel()
+        foldTask = Task { [weak self] in
+            do {
+                try await Task.sleep(until: deadline, clock: .continuous)
+            } catch {
+                return
+            }
+            await self?.endFold()
+        }
+    }
+
+    private func captureCover(startedAt: ContinuousClock.Instant) {
+        coverCount += 1
+        let id = coverCount
+        let size = geometry?.size ?? .zero
+        coverTask = Task { [page] in
+            guard let data = try? await page.exported(as: .image(afterScreenUpdates: false)),
+                  let image = UIImage(data: data) else { return }
+            // The fold may have been laid out already.
+            guard id > self.lastClosedCover else { return }
+            self.lastFold?.snapshot = FoldReport.milliseconds(since: startedAt)
+            self.foldCover = ReaderFoldCover(id: id, image: image, size: size)
+        }
+    }
+
+    private func endFold() async {
+        guard let startedAt = foldBatch?.startedAt else { return }
+        // Nothing can move the deadline from here on.
+        foldBatch = nil
+        foldTask = nil
+        let cover = coverCount
+        // The snapshot normally arrived long ago; don't wait long for a slow one.
+        if let coverTask {
+            _ = try? await Self.withTimeout(.milliseconds(300)) { await coverTask.value }
+        }
+        lastClosedCover = max(lastClosedCover, cover)
+        let layout = ReaderLayout(posture: posture, geometry: geometry)
+        self.layout = layout
+        sentLayout = layout
+        lastFold?.laidOut = FoldReport.milliseconds(since: startedAt)
+        do {
+            let rendered = try await page.callJavaScript(
+                "return await window.octavo.setLayout(layout)", arguments: ["layout": layout.scriptArguments])
+            lastFold?.rendered = rendered as? Bool
+        } catch {
+            log.error("Fold layout failed: \(error)")
+        }
+        // Folded back meanwhile: that fold fades the cover.
+        guard foldBatch == nil else { return }
+        fadeCover()
+    }
+
+    private func fadeCover() {
+        guard let id = foldCover?.id else { return }
+        foldCover?.isFading = true
+        Task {
+            try? await Task.sleep(for: .seconds(ReaderFoldCover.fadeDuration + 0.05))
+            if foldCover?.id == id { foldCover = nil }
+        }
     }
 
     private func apply(_ layout: ReaderLayout) {
@@ -241,6 +364,13 @@ final class ReaderModel {
             break
         case .viewport(let width, let height):
             viewport = CGSize(width: width, height: height)
+            if foldBatch != nil {
+                foldBatch?.pageResized(at: .now)
+                if lastFold?.resized == nil, let startedAt = foldBatch?.startedAt {
+                    lastFold?.resized = FoldReport.milliseconds(since: startedAt)
+                }
+                scheduleFoldEnd()
+            }
             if let geometry { geometryChanged(geometry) }
         case .externalLink(let href):
             log.notice("Ignored external link \(href, privacy: .public)")
