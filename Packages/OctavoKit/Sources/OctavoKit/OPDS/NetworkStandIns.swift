@@ -1,9 +1,9 @@
 import Foundation
 
 // Stand-ins for #9's types (OctavoKit `Network/ServerTransport.swift` and
-// `Keychain/ServerCredentials.swift`, branch claude/issue-9-network-trust-68248d),
-// with the same shapes so OPDS code against them unchanged. Whichever of #8
-// and #9 merges second deletes this file and keeps #9's.
+// `Keychain/ServerCredentials.swift`, branch claude/issue-9-network-trust-68248d
+// at 2257410), with the same shapes so OPDS code against them unchanged.
+// Whichever of #8 and #9 merges second deletes this file and keeps #9's.
 //
 // There's deliberately no `URLSession` conformance: in the app every request
 // goes through #9's `ServerTransport` and its trust rules.
@@ -29,6 +29,14 @@ public struct PasswordCredentials: Codable, Hashable, Sendable, CustomStringConv
     /// Never prints the password.
     public var description: String { "PasswordCredentials(username: \(username), password: •••)" }
     public var debugDescription: String { description }
+}
+
+/// How a server asked for its password when it was added. Recorded with the
+/// server, so a later challenge in a weaker scheme (an impostor at a home
+/// http address asking for Basic) gets nothing.
+public enum HTTPAuthScheme: String, Codable, Hashable, Sendable {
+    case basic
+    case digest
 }
 
 /// Where an OPDS server's password is kept. One store per server.

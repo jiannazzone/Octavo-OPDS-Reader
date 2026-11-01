@@ -70,20 +70,21 @@ side; Adam is the design owner and leaves these calls to us.
   with the Authentication Document's title and field labels (Komga sends it
   with the 401; a `Link: rel="http://opds-spec.org/auth/document"` header is
   followed too, only on the catalog's own origin) and the **scheme** to
-  record with the server (`OPDSAuthScheme`). The 401's `WWW-Authenticate`
+  record with the server (`HTTPAuthScheme`). The 401's `WWW-Authenticate`
   decides the scheme when there is one, read by scheme name (not
   `Bearer realm="basic"`), and Digest wins over Basic when both are
   offered; no challenge means Basic; only unsupported methods (OAuth,
   Bearer) mean `scheme: nil`. A server already recorded as Digest stays
   Digest whatever a later 401 says. This is what #12's form calls.
-- **The scheme is pinned.** #12 stores it with the server and passes it as
-  `OPDSSource(authScheme:)`. Only `.basic` sends the password up front, and
-  only to the catalog's own origin (scheme, host, port), never to a cover or
-  file on another host. `.digest` or `nil`: nothing up front; #9's transport
-  answers the server's own challenge. So a server, or someone answering at
-  its home-network address, can't ask a Digest server's client for Basic and
-  get the password in clear. The transport must also refuse a Basic
-  challenge for a Digest server; that's #9's side (told them).
+- **The scheme is pinned.** #12 stores it with the server and passes the
+  same value to `OPDSSource(authScheme:)` and to #9's
+  `ServerTransport(authScheme:)` (both `HTTPAuthScheme`). Only `.basic`
+  sends the password up front, and only to the catalog's own origin
+  (scheme, host, port), never to a cover or file on another host.
+  `.digest` or `nil`: nothing up front; the transport answers the server's
+  own challenge, and only in the recorded scheme (#9, 2257410). So a
+  server, or someone answering at its home-network address, can't ask a
+  Digest server's client for Basic and get the password in clear.
 - The password is read from the store once, not per request (the Keychain
   would be hit per cover), and read again after any 401.
 - **Kavita's API key never leaves the source.** Kavita's address is
@@ -123,14 +124,13 @@ stripped from errors, the key redacted in entry IDs, proxy-prefixed Kavita
 addresses, ASCII-only encoding in redaction, unsafe filenames, a sign-in
 document on another host.
 
+**Fixed in #9's transport (2257410, not merged yet):** it answers only the
+recorded scheme's challenge, and `maximumDataSize` (64 MB) caps every
+`data(for:)` response, so an endless body fails with
+`URLError(.dataLengthExceedsMaximum)` instead of getting the app killed.
+Downloads go to a file and aren't capped.
+
 **Still open, outside #8:**
-- **High, #9's transport:** `ServerTransport` answers a Basic challenge
-  even for a server recorded as Digest, so someone answering a home-http
-  server's address can still get the password in clear. Fix: give the
-  transport the recorded scheme and answer only that one (asked of #9).
-- **#9's transport:** no limit on response size; an endless body from a
-  hostile catalog can make iOS kill the app, on every launch if it's on
-  Home. A cap belongs in the transport.
 - **#12:** save `redact(catalogURL)`, never the live address; keep the
   Kavita key in the Keychain; record `checkAccess`'s scheme instead of
   assuming Basic. The DEBUG connect code (`DebugSessionTransport`, the

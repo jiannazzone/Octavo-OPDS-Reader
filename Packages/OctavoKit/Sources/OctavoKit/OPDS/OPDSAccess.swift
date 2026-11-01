@@ -17,17 +17,14 @@ public enum OPDSAccess: Hashable, Sendable {
     case signInRequired(OPDSSignInRequest)
 }
 
-/// How a server wants the password sent. Recorded when the server is added
-/// (#12) and passed to `OPDSSource` from then on, so a later answer can't
-/// talk Octavo down to a weaker scheme: over home http, anyone answering at
-/// the server's address could ask for Basic to get the password in clear.
-public enum OPDSAuthScheme: String, Codable, Hashable, Sendable {
-    /// The password goes with every request, up front.
-    case basic
-    /// Never sent up front; the transport answers the server's own Digest
-    /// challenge, which never carries the password itself.
-    case digest
-
+/// How the password is sent (#9's `HTTPAuthScheme`). Recorded when the
+/// server is added (#12) and passed to `OPDSSource` and #9's transport from
+/// then on, so a later answer can't talk Octavo down to a weaker scheme:
+/// over home http, anyone answering at the server's address could ask for
+/// Basic to get the password in clear. `.basic`: the password goes with
+/// every request, up front. `.digest`: never up front; the transport answers
+/// the server's own Digest challenge, which never carries the password.
+extension HTTPAuthScheme {
     /// From a 401's `WWW-Authenticate`: Digest when the server offers it,
     /// even alongside Basic. `nil` if it offers neither. Only scheme names
     /// count, not words in parameters (`Bearer realm="basic"` is neither).
@@ -67,9 +64,9 @@ public struct OPDSSignInRequest: Hashable, Sendable {
     /// The scheme to record with the server. `nil` if the server offers
     /// only methods Octavo can't do (OAuth, SAML…): show that it isn't
     /// supported rather than the fields.
-    public var scheme: OPDSAuthScheme?
+    public var scheme: HTTPAuthScheme?
 
-    public init(title: String? = nil, description: String? = nil, usernameLabel: String? = nil, passwordLabel: String? = nil, scheme: OPDSAuthScheme? = .basic) {
+    public init(title: String? = nil, description: String? = nil, usernameLabel: String? = nil, passwordLabel: String? = nil, scheme: HTTPAuthScheme? = .basic) {
         self.title = title
         self.description = description
         self.usernameLabel = usernameLabel

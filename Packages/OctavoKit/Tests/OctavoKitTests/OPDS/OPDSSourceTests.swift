@@ -25,7 +25,7 @@ private extension StubServer.Response {
 
 private func source(
     _ server: StubServer, path: String = "/catalog", credentials: (any PasswordStore)? = nil,
-    scheme: OPDSAuthScheme? = .basic, secret: OPDSURLSecret? = nil
+    scheme: HTTPAuthScheme? = .basic, secret: OPDSURLSecret? = nil
 ) -> OPDSSource {
     OPDSSource(
         catalogURL: server.baseURL.appending(path: path),
@@ -592,11 +592,11 @@ struct OPDSSourceTests {
     // MARK: Security audit
 
     @Test func readsSchemeNamesNotWordsInParameters() {
-        #expect(OPDSAuthScheme(challenge: #"Bearer realm="basic""#) == nil)
-        #expect(OPDSAuthScheme(challenge: #"Bearer realm="digest", error="invalid""#) == nil)
-        #expect(OPDSAuthScheme(challenge: #"Basic realm="Authentication Required""#) == .basic)
-        #expect(OPDSAuthScheme(challenge: #"Digest realm="x", nonce="a,b", qop="auth", Basic realm="x""#) == .digest)
-        #expect(OPDSAuthScheme(challenge: "basic") == .basic)
+        #expect(HTTPAuthScheme(challenge: #"Bearer realm="basic""#) == nil)
+        #expect(HTTPAuthScheme(challenge: #"Bearer realm="digest", error="invalid""#) == nil)
+        #expect(HTTPAuthScheme(challenge: #"Basic realm="Authentication Required""#) == .basic)
+        #expect(HTTPAuthScheme(challenge: #"Digest realm="x", nonce="a,b", qop="auth", Basic realm="x""#) == .digest)
+        #expect(HTTPAuthScheme(challenge: "basic") == .basic)
     }
 
     @Test func aDigestServerCanNotBeTalkedDownToBasic() async throws {

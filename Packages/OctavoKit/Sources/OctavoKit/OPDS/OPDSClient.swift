@@ -14,11 +14,11 @@ struct OPDSClient: Sendable {
     let catalogURL: URL
     let transport: any HTTPTransport
     let credentials: any PasswordStore
-    let authScheme: OPDSAuthScheme?
+    let authScheme: HTTPAuthScheme?
     /// The password, read once rather than from the Keychain per request.
     private let cache = CredentialCache()
 
-    init(catalogURL: URL, transport: any HTTPTransport, credentials: any PasswordStore, authScheme: OPDSAuthScheme?) {
+    init(catalogURL: URL, transport: any HTTPTransport, credentials: any PasswordStore, authScheme: HTTPAuthScheme?) {
         self.catalogURL = catalogURL
         self.transport = transport
         self.credentials = credentials
@@ -87,7 +87,7 @@ struct OPDSClient: Sendable {
         }
         await cache.clear()
         let challenge = http.value(forHTTPHeaderField: "WWW-Authenticate")
-        let offered = challenge.flatMap(OPDSAuthScheme.init(challenge:))
+        let offered = challenge.flatMap(HTTPAuthScheme.init(challenge:))
         // OPDS 2 servers answer with the Authentication Document, or link it.
         var document: OPDSSignInRequest?
         if http.mimeType?.lowercased().contains("json") == true {

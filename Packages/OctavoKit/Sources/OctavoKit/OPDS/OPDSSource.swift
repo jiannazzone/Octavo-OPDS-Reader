@@ -31,7 +31,7 @@ public struct OPDSSource: LibrarySource {
         catalogURL: URL,
         transport: any HTTPTransport,
         credentials: any PasswordStore = InMemoryPasswordStore(),
-        authScheme: OPDSAuthScheme? = nil,
+        authScheme: HTTPAuthScheme? = nil,
         secret: OPDSURLSecret? = nil
     ) {
         self.catalogURL = catalogURL
