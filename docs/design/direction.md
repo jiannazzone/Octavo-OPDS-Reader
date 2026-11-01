@@ -33,9 +33,9 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 
 ### Book details (approved 2026-10-31)
 
-20. **A glass sheet over the cover.** Swiping up on the cover slides up a Liquid Glass sheet; the cover stays behind it. Drag it down or tap the cover to dismiss; unfolding still opens the book. Unfolded, the same sheet slides up inside the right-hand cover pane. Contents:
-    - Title; author (tap: their books); where you are (chapter, percentage).
-    - Actions: **Open**, **Mark as finished**, **Download / Remove download**.
+20. **The cover's strip expands into the details.** The progress strip and the details are one Liquid Glass sheet with two heights. Swiping up keeps the strip's top (chapter and percentage, progress bar, last sync, **Open**) and adds the details below; the cover stays behind it. Drag it down or tap the cover to return to the strip; unfolding still opens the book. Unfolded, the same sheet expands inside the right-hand cover pane. Below the strip:
+    - Title; author (tap: their books).
+    - Actions: **Mark as finished**, **Download / Remove download**.
     - Description (three lines, then More).
     - Series, Collections, File (format, size), From (server), Added.
     - Mark as finished goes to BookOrbit for BookOrbit books and stays on the iPhone for OPDS and imported books (OPDS can't store it). Ratings and editing collections come later.
@@ -127,7 +127,7 @@ Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/O
 | 12 Contents · folded | Contents \| Bookmarks switch, current chapter highlighted |
 | 13 Search in book · folded | Match highlighted, step bar |
 | 14 Book mode · half-open | Spine shadow, no controls, tap zones annotated |
-| 15 Book details · folded | Glass details sheet over the cover |
+| 15 Book details · folded | The strip expanded into the details sheet, over the cover |
 | 16 Book details · unfolded | The same sheet inside the right-hand cover pane |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
