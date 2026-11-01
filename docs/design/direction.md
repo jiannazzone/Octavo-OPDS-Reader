@@ -19,7 +19,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
    - **Home:** "Continue reading" (positions from sync and from the phone), plus what's new on your server.
    - **Library:** your server's books as a grid of covers, with chips across the top. For BookOrbit the chips come from its API (All, Collections, Series, Authors); for an OPDS server they are the feed's own top-level entries (for example Recent, Authors, Series, Shelves on Calibre-Web). An "On iPhone" chip shows downloaded and imported books.
    - **Search:** your server's search (BookOrbit search, or OPDS OpenSearch when the feed offers it) plus the books on the phone.
-   - **Settings:** a tab; its contents are not decided yet (see Open questions).
+   - **Settings:** a tab (decision 24).
 3. **Books download on first open.** Opening a server book for the first time downloads its file to the device, where it stays. Offline reading needs nothing more.
 
 ### Picking a book (approved 2026-10-31)
@@ -80,14 +80,15 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 
 7. **Controls are hidden while you read.** A tap in the middle shows them: Back, Contents, Text and theme, Search in book and Bookmark in the side column, plus a glass progress bar with the chapter and page. Taps on the left and right sides turn pages. A setting, **Always show controls**, keeps them visible; it is off by default.
 8. **The page never goes under the side column** (§7 Q3, Q4). Folded, the page stays in the 382 pt content area. Unfolded, the spread stays centred on the hinge and the left edge gives up the same 84 pt, so the margins match. The margin setting runs from wide down to text reaching the column's edge; the gutter on the hinge never drops below the hinge's 40 pt. No foliate patch is needed: the margin setting scales foliate's gap and outer margins together.
-9. **Half-open is book mode** (§7 Q1): controls stay hidden, a shadow at the spine, a tap on the left page goes back and on the right page goes forward. The spine shadow, and any page-warp effect, is optional: a switch turns it off.
+9. **Half-open is book mode** (§7 Q1): controls stay hidden, a shadow at the spine, a tap on the left page goes back and on the right page goes forward. The spine shadow, and any page-warp effect, is optional: **Book-mode shadow** in the Customize panel, on by default.
+   - **Half-open, every screen splits 50/50 at the hinge** (Apple's guidance for the Duo). The unfolded layouts already divide at the hinge (grid | cover, list | page, the reader's two pages); nothing may span it when half-open.
 10. **Unfolding anywhere but a cover keeps the same screen** (§7 Q5): it takes its unfolded layout. Only a book's cover turns an unfold into "open".
 11. **Folds cross-fade** (§7 Q6): a snapshot of the old page fades into the settled layout (about 0.3 s), hiding the intermediate re-layouts.
 12. **Unfolded and turned sideways, one column runs straight across the fold** (§7 Q2), as the spike does today. Half-opened that way (laptop-style), the text bends over the fold; accepted.
 
 ### Text and theme (approved 2026-10-31)
 
-13. **A compact panel, Customize one step in.** The "Aa" button opens a Liquid Glass sheet (where available) so the page shows through while you adjust. Front: the four themes and A−/A+. Customize: font, line spacing, margins, justify, Match Dark Mode, Always show controls. Unfolded, the panel covers the right page and the left page shows each change live.
+13. **A compact panel, Customize one step in.** The "Aa" button opens a Liquid Glass sheet (where available) so the page shows through while you adjust. Front: the four themes and A−/A+. Customize: font, line spacing, margins, justify, Match Dark Mode, Book-mode shadow, Always show controls. These reading choices live only here, not in Settings. Unfolded, the panel covers the right page and the left page shows each change live.
 14. **Settings apply to every book**, not per book.
 15. **Themes: Original, Paper, Sepia, Night.** Night follows the iPhone's Dark Mode; "Match Dark Mode" in Customize turns that off.
 16. **Fonts:** the book's own font (default), New York, Georgia, Iowan Old Style, Palatino, Charter, SF Pro (all shipped with iOS), plus **Atkinson Hyperlegible and OpenDyslexic**, bundled. Adam signed off on their SIL Open Font License (2026-10-31); list them in `THIRD-PARTY-NOTICES.md` when they're added.
@@ -100,6 +101,16 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 ### Search in book (approved 2026-10-31)
 
 19. **Results by chapter, then step through.** The Search button opens a glass sheet: the search field, the match count and results grouped by chapter with their surrounding words. Tapping a result shows the page with the match highlighted and a small bar: ‹ 3 of 128 ›; tapping the count returns to the list, ✕ ends the search. foliate's built-in search supplies the matches, their excerpts and CFIs.
+
+### Settings (approved 2026-10-31)
+
+24. **A lean Settings tab:**
+    - **Server:** the server (address, account), reading-progress status; its page has Sign out and Remove server.
+    - **Storage:** Books on iPhone (count and size), where downloads can be removed.
+    - **About:** version, source code and licences.
+    - Reading choices are not repeated here; they live in the reader's Customize panel (decision 13).
+    - **Removing the server asks what to do with its downloaded books:** "Remove BookOrbit? Its 12 downloaded books use 48 MB." · Keep books on iPhone · Remove books too · Cancel. Imported books and the sample book are never affected.
+    - **Unfolded:** the list left of the hinge, the chosen page right of it (panes shift as in the Library).
 
 ## v1 scope (approved 2026-10-31)
 
@@ -132,7 +143,7 @@ The goal for v1: read your server's books well on the Duo.
 | Contents and bookmarks | Contents designed (frame 12); Bookmarks tab sketched |
 | Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Designed (frames 10, 11) |
 | Search in book | Stepping bar designed (frame 13); results list sketched |
-| Settings tab | Contents open |
+| Settings tab | Designed (frames 34–37) |
 | Empty and error states (no server yet, server unreachable, signed out, sign-in failed, download failed, offline) | Designed (frames 21–26; sample-book row on frame 05); the downloading-in-progress state is sketched |
 
 Import from Files uses the system document picker; no screen of our own.
@@ -141,7 +152,7 @@ Import from Files uses the system document picker; no screen of our own.
 
 Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX), built 2026-10-31 on Apple's iOS and iPadOS 27 kit (`iPhone Duo/Standard/Outer - Portrait` and `Inner - Landscape`, `Tab Bar - iPhone Duo`, Liquid Glass buttons, rows, text fields, kit text styles and colour variables). Covers are the public-domain sample books.
 
-- **Pages by area:** Cover, 1 · Setup, 2 · Home and Library, 3 · Book, 4 · Reader, 5 · Search, 6 · Settings and states (states done, Settings to do), Components, Parked. Sections inside each page group the frames (Folded / Unfolded, or Reading / Panels).
+- **Pages by area:** Cover, 1 · Setup, 2 · Home and Library, 3 · Book, 4 · Reader, 5 · Search, 6 · Settings and states, Components, Parked. Sections inside each page group the frames (Folded / Unfolded, or Reading / Panels).
 - **Frame names:** `Area / NN Screen · posture`, for example `Reader / 07 Reading · folded`. The numbers below stay stable.
 - **Prototype links** work within a page (Figma can't link across pages): Setup (BookOrbit row ↔ sign-in; OPDS row → address → sign-in), Home and Library (Home ↔ Library tabs), Book (cover strip ↔ details, tap or drag), Reader (page ↔ controls, controls → Text and theme / Contents / Search in book and back), Search (field → results, clear → empty). Each page has a flow starting point; links are invisible hotspots named `Hotspot → …`.
 
@@ -180,6 +191,10 @@ Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX
 | 31 Authors · folded | A–Z with an index strip |
 | 32 Series · Sherlock Holmes · folded | Reading order, numbered (books 2–3 are stand-in covers) |
 | 33 Collections · unfolded | List left of the hinge, the collection's books right |
+| 34 Settings · folded | Server, Storage, About |
+| 35 Server · folded | Address, account, sync status, Sign out, Remove server |
+| 36 Remove server · folded | Keep books on iPhone / Remove books too / Cancel |
+| 37 Settings · unfolded | List left of the hinge, server page right |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
@@ -192,11 +207,9 @@ What the kit showed:
 
 ## Open questions
 
-- **Settings contents.** Too early to pin down. Working list from the brainstorm (not approved): Server (edit, sign out, replace, progress sync), Sync accounts (iCloud, KOReader sync), Reading defaults, iPhone Duo, Downloads and storage, About.
 - **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
 - **Reaching the controls in book mode.** Taps on the pages turn them, so controls need another way in. Proposed (not approved): tap the side column, which sits outside both pages.
 - **Book mode's angle range.** Roughly 60–150°; tune on a real device.
-- **The book-mode shadow switch.** Its default (on or off), and whether it lives in Customize or in Settings → iPhone Duo.
 
 ## Needs engineering
 
