@@ -155,7 +155,7 @@ enum LiveOPDS {
             let catalog = try await catalogURL()
             return OPDSSource(
                 catalogURL: catalog,
-                transport: SessionTransport(),
+                transport: ServerTransport(server: catalog),
                 credentials: InMemoryPasswordStore(signedIn ? credentials : nil),
                 authScheme: credentials == nil ? nil : .basic,
                 secret: OPDSURLSecret.detect(in: catalog)

@@ -29,7 +29,7 @@ private func source(
 ) -> OPDSSource {
     OPDSSource(
         catalogURL: server.baseURL.appending(path: path),
-        transport: SessionTransport(server.configuration),
+        transport: ServerTransport(server: server.baseURL, configuration: server.configuration),
         credentials: credentials ?? InMemoryPasswordStore(),
         authScheme: scheme,
         secret: secret
@@ -532,7 +532,7 @@ struct OPDSSourceTests {
         </feed>
         """
         let base = URL(string: "https://catalog.test/catalog")!
-        let source = OPDSSource(catalogURL: base, transport: SessionTransport())
+        let source = OPDSSource(catalogURL: base, transport: ServerTransport(server: base))
         let books = source.mapFeed(try OPDSAtomParser.parse(Data(feed.utf8), url: base), at: base).feed.books
         #expect(Set(books.map(\.id)).count == 2)
     }
@@ -649,7 +649,7 @@ struct OPDSSourceTests {
         let key = "9fK2abcdXYZ0123456789qrstuvwx"
         #expect(OPDSURLSecret.detect(in: URL(string: "https://home.test/opds/api/opds/\(key)")!)?.value == key)
         let base = URL(string: "https://home.test/api/opds/\(key)")!
-        let source = OPDSSource(catalogURL: base, transport: SessionTransport(), secret: OPDSURLSecret(key))
+        let source = OPDSSource(catalogURL: base, transport: ServerTransport(server: base), secret: OPDSURLSecret(key))
         let feed = """
         <feed xmlns="http://www.w3.org/2005/Atom"><title>x</title><entry><title>Alice</title><id>urn:\(key):1</id>
           <link rel="http://opds-spec.org/acquisition" href="/a.epub" type="application/epub+zip"/></entry></feed>
