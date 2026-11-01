@@ -14,6 +14,16 @@ All three need the same v1 guard that no format has today: **refuse DRM-protecte
 
 Not covered: real devices, fixed-layout KF8 (comics/manga), right-to-left and vertical books, HUFF/CDIC-compressed MOBI, KF8 embedded fonts, KFX. See "Gaps".
 
+## Decisions (Adam, 2026-11-01)
+
+- **Bridge work:** the per-section cleaning layer (`harden.js`), the AZW3 restore guard and FB2 external links are adopted, in a new issue after #5 merges, with a security review.
+- **FB2 covers:** read natively in Swift. The CSP stays unchanged.
+- **FB2 percentages:** approximate in v1. No `fb2.js` patch, so our numbers stay the same as BookOrbit's.
+- **Upstream fixes** (`fb2.js` section sizes, `fb2.js` `isExternal`, the `mobi.js` Blob type): later, through a separate session that vets them first. Nothing is posted without Adam's OK.
+- **Other work:** the DRM check, rejecting KFX, Topaz and PalmDOC, and mapping OPDS types to formats go to #10 and #8. Plain-text descriptions go to #14.
+
+"What v1 needs" below lists the options as they stood before these decisions.
+
 ## Samples
 
 `Scripts/fetch-sample-books.sh` now fetches them into `SampleBooks/` (gitignored, never committed; treat as untrusted).
