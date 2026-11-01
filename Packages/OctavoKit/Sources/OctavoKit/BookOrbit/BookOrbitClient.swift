@@ -271,6 +271,15 @@ public actor BookOrbitClient {
         ])
     }
 
+    /// `GET dashboard/scrollers/continue-reading`: the books BookOrbit's own
+    /// home lists under Continue reading, most recently read first, up to
+    /// `limit`.
+    public func continueReading(limit: Int = 20) async throws -> [BookOrbitBook] {
+        struct Scroller: Decodable { var books: LossyArray<BookOrbitBook> }
+        return try await get("dashboard/scrollers/continue-reading", query: [URLQueryItem(name: "limit", value: String(limit))],
+                             as: Scroller.self).books.elements
+    }
+
     /// `GET books/{id}`.
     public func book(id: Int) async throws -> BookOrbitBook {
         try await get("books/\(id)")

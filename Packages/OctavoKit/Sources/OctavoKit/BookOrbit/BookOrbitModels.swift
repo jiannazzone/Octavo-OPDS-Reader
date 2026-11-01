@@ -214,6 +214,9 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     public var coverVersion: String?
     /// Progress through the book, 0...1. Lists only; BookOrbit sends 0–100.
     public var readingFraction: Double?
+    /// When the read status last changed (`readStatus.updatedAt`); reading
+    /// moves it. Lists only.
+    public var readStatusUpdatedAt: Date?
 
     /// The file BookOrbit marks primary, else the first one.
     public var primaryFile: BookOrbitFile? {
@@ -223,7 +226,11 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case id, libraryId, title, subtitle, authors, files, seriesId, seriesName, seriesIndex, seriesMemberships
         case collections, language, publisher, publishedDate, publishedYear, description, addedAt
-        case hasCover, coverVersion, readingProgress
+        case hasCover, coverVersion, readingProgress, readStatus
+    }
+
+    private struct ReadStatus: Decodable {
+        var updatedAt: Date?
     }
 
     public init(from decoder: any Decoder) throws {
@@ -250,6 +257,7 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
         hasCover = c.lenient(Bool.self, .hasCover)
         coverVersion = c.lenient(String.self, .coverVersion)
         readingFraction = c.lenient(Double.self, .readingProgress).map(BookOrbitProgress.fraction(fromPercentage:))
+        readStatusUpdatedAt = c.lenient(ReadStatus.self, .readStatus)?.updatedAt
     }
 }
 
