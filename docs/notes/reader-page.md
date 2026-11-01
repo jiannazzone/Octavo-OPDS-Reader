@@ -104,6 +104,8 @@ All on 'Octavo Reader Duo' with this build (margins Medium), 2026-11-01.
 
 **Unit tests:** app 163/163 (`xcodebuild test`, `-parallel-testing-enabled NO`), OctavoKit 98/98 (`swift test`).
 
+**Again after syncing with `main`** (`17ffad9`: #8 OPDS, #9 network trust, the icon) and the keyboard fix (section 1), same simulator: fold continuity 72 moves, exact 27/27, contains 45/45 (35 by words), lost 0, no text in the fold region (`reader-page/runs/continuity-main/`); patch 0001's comparison byte-identical again; BookOrbit round trip 10 of 10 (the same app positions, web positions at 70% + 2 pages; `reader-page/runs/roundtrip-main/`); app tests 171/171, OctavoKit 195/195.
+
 ## 8. Check tools after the spike
 
 `Octavo/Debug/ReaderRemote.swift` (DEBUG only) replaces `SpikeRemote` with the same files (`Documents/spike-command.json`, `spike-ack.json`, `spike-state.json`, `spike-js.json`, `spike-events.jsonl`) and commands, so the tools in `duo-spreads/`, `duo-fold/`, `sync-spike/` and `formats-spike/` run unchanged except that no `-spike 1` launch argument is needed.
@@ -117,7 +119,19 @@ All on 'Octavo Reader Duo' with this build (margins Medium), 2026-11-01.
 - `DebugEvents` (was `SpikeEvents`) logs hinge, region, safe-area and scene events for the shell and the reader.
 - The Settings stand-in has a DEBUG "Reader" section (Always show controls, Margins, Book-mode shadow) until the Customize panel (#18); same keys.
 
-## 9. Open risks
+## 9. What the reader needs from the shell
+
+Written for the custom shell that replaces `PaneStack` after #17 (Adam, 2026-11-01). The reader asks for one optional book and a way to close it; it handles its hinge, book mode, layout, controls and insets itself.
+
+1. **A layer over everything** for `ShellModel.reading`, in the same view hierarchy: never a modal presentation (an unfold leaves one on its side, `duo-tabbar.md` §6), `.id(book.reader)`, and no fade-out on close (section 6).
+2. **The whole window, side column included, while reading.** The reader's controls live in the column and its page takes taps there (book mode). No shell view may draw over it, take taps over it or claim the column; a custom tab column or toolbar goes under the reading layer or hides.
+3. **Its own column controls.** They are the system toolbar of the reader's `NavigationStack`. If the shell's buttons go custom, either leave the reader's as they are or give it the same component (vertical glass group under the clock, show/hide, disabled states, VoiceOver, a sideways placement).
+4. **The window's frame and safe area**, untouched: the reader measures the safe area and the hinge's regions itself, so no padding, `safeAreaInset`, offset or transform around the layer, and the column must stay a trailing safe area (or its width must reach the reader another way).
+5. **The unfold hook:** `.onHingeChange` → `ShellModel.hingeChanged` → the selected tab's deepest route's book → `openBook` → `reading`. The hinge reports about 200 ms before the scene moves, so the folded screen's book must still be known then.
+6. **Little work under the reader on a fold**, and the screen beneath unchanged, so the reader's single re-layout per fold holds and Back after a fold lands where the book opened.
+7. **The DEBUG hook's API:** `reading`, `openBook(_:)`, `tab`, `[path:].routes`, and `ReaderRemote.run(shell:)` started by the shell.
+
+## 10. Open risks
 
 - **The column's width comes from the safe area.** If a later iOS stops reporting the side column as a trailing safe area on the Duo, the text would run under it. Checked only on the iOS 27.1 simulator.
 - **foliate internals:** `textColumns` mirrors foliate's grid and padding arithmetic for the footer; a foliate update that changes it misplaces the footer (not the text). Add it to `PINNED.md`'s update checks if it moves.
