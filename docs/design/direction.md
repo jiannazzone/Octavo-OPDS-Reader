@@ -117,7 +117,11 @@ Import from Files uses the system document picker; no screen of our own.
 
 ## Mockups
 
-Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX?node-id=0-1), built 2026-10-31 on Apple's iOS and iPadOS 27 kit (`iPhone Duo/Standard/Outer - Portrait` and `Inner - Landscape`, `Tab Bar - iPhone Duo`, Liquid Glass buttons, rows, text fields, kit text styles and colour variables). Covers are the public-domain sample books.
+Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX), built 2026-10-31 on Apple's iOS and iPadOS 27 kit (`iPhone Duo/Standard/Outer - Portrait` and `Inner - Landscape`, `Tab Bar - iPhone Duo`, Liquid Glass buttons, rows, text fields, kit text styles and colour variables). Covers are the public-domain sample books.
+
+- **Pages by area:** Cover, 1 · Setup, 2 · Home and Library, 3 · Book, 4 · Reader, 5 · Search, 6 · Settings and states (to do), Components, Parked. Sections inside each page group the frames (Folded / Unfolded, or Reading / Panels).
+- **Frame names:** `Area / NN Screen · posture`, for example `Reader / 07 Reading · folded`. The numbers below stay stable.
+- **Prototype links** work within a page (Figma can't link across pages): Setup (BookOrbit row ↔ sign-in), Home and Library (Home ↔ Library tabs), Book (cover strip ↔ details, tap or drag), Reader (page ↔ controls, controls → Text and theme / Contents / Search in book and back), Search (field → results, clear → empty). Each page has a flow starting point; links are invisible hotspots named `Hotspot → …`.
 
 | Frame | Shows |
 |---|---|
@@ -144,7 +148,7 @@ Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/O
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
-Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected), `Reader controls (column)` (Back, Contents, Text and theme, Search in book, Bookmark) and `Reader progress bar`.
+Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected), `Reader controls (column)` (Back, Contents, Text and theme, Search in book, Bookmark), `Reader progress bar`, and `Book sheet` (State = Compact / Expanded, with Place and Synced text properties) used by frames 03, 04, 15, 16 and 20.
 
 What the kit showed:
 - Apple's Duo layout puts toolbar buttons (including back) in a glass group under the vertical status bar, and the tab bar at the bottom of the same column.
