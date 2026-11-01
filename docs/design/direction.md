@@ -46,6 +46,22 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 11. **Folds cross-fade** (§7 Q6): a snapshot of the old page fades into the settled layout (about 0.3 s), hiding the intermediate re-layouts.
 12. **Unfolded and turned sideways, one column runs straight across the fold** (§7 Q2), as the spike does today. Half-opened that way (laptop-style), the text bends over the fold; accepted.
 
+### Text and theme (approved 2026-10-31)
+
+13. **A compact panel, Customize one step in.** The "Aa" button opens a Liquid Glass sheet (where available) so the page shows through while you adjust. Front: the four themes and A−/A+. Customize: font, line spacing, margins, justify, Match Dark Mode, Always show controls. Unfolded, the panel covers the right page and the left page shows each change live.
+14. **Settings apply to every book**, not per book.
+15. **Themes: Original, Paper, Sepia, Night.** Night follows the iPhone's Dark Mode; "Match Dark Mode" in Customize turns that off.
+16. **Fonts:** the book's own font (default), New York, Georgia, Iowan Old Style, Palatino, Charter, SF Pro (all shipped with iOS), plus **Atkinson Hyperlegible and OpenDyslexic**, bundled. Adam signed off on their SIL Open Font License (2026-10-31); list them in `THIRD-PARTY-NOTICES.md` when they're added.
+
+### Contents and bookmarks (approved 2026-10-31)
+
+17. **One panel, two tabs.** The Contents button opens a glass panel with a Contents | Bookmarks switch. Contents opens scrolled to the current chapter, which is highlighted, with page numbers for the current layout. Bookmarks list the chapter, page and the page's first words; swipe to delete. Unfolded, the panel covers the right page like the text panel. The column's bookmark button toggles a ribbon at the top corner of the current page.
+18. **Bookmarks on BookOrbit books sync with BookOrbit** (its bookmarks, keyed by CFI like positions), so they appear in its web reader and on other devices. Books from an OPDS server or imported from Files keep bookmarks on the iPhone.
+
+### Search in book (approved 2026-10-31)
+
+19. **Results by chapter, then step through.** The Search button opens a glass sheet: the search field, the match count and results grouped by chapter with their surrounding words. Tapping a result shows the page with the match highlighted and a small bar: ‹ 3 of 128 ›; tapping the count returns to the list, ✕ ends the search. foliate's built-in search supplies the matches, their excerpts and CFIs.
+
 ## v1 scope (approved 2026-10-31)
 
 The goal for v1: read your server's books well on the Duo.
@@ -73,10 +89,10 @@ The goal for v1: read your server's books well on the Duo.
 | Book cover page, folded and unfolded | Designed (frames 03, 04) |
 | Book details (swipe up from the cover; Mark as finished, download) | Not designed |
 | Search tab and results | Not designed |
-| Reader: one page folded, spread unfolded, book mode, controls shown | Sketched in the brainstorm |
-| Contents and bookmarks | Not designed |
-| Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Not designed |
-| Search in book | Not designed |
+| Reader: one page folded, spread unfolded, book mode, controls shown | Designed (frames 07, 08, 09, 14) |
+| Contents and bookmarks | Contents designed (frame 12); Bookmarks tab sketched |
+| Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Designed (frames 10, 11) |
+| Search in book | Stepping bar designed (frame 13); results list sketched |
 | Settings tab | Contents open |
 | Empty and error states (no server yet, server unreachable, sign-in failed, download failed) | Not designed |
 
@@ -94,8 +110,18 @@ Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/O
 | 04 Library · unfolded | Grid left of the hinge, cover page right of it (hinge marked) |
 | 05 Add your books · folded | Pick BookOrbit or OPDS, or import from Files |
 | 06 Sign in to BookOrbit · folded | Address, account, Sign in, SSO (only if offered) |
+| 07 Reader · folded | The page alone, controls hidden |
+| 08 Reader · folded, controls shown | Column controls and the glass progress bar |
+| 09 Reader · unfolded, controls shown | Spread centred on the hinge, clear of the column |
+| 10 Text and theme · folded | Compact glass sheet over a Sepia page |
+| 11 Text and theme · unfolded | Customize panel over the right page; left page previews |
+| 12 Contents · folded | Contents \| Bookmarks switch, current chapter highlighted |
+| 13 Search in book · folded | Match highlighted, step bar |
+| 14 Book mode · half-open | Spine shadow, no controls, tap zones annotated |
 
-Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected).
+The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
+
+Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected), `Reader controls (column)` (Back, Contents, Text and theme, Search in book, Bookmark) and `Reader progress bar`.
 
 What the kit showed:
 - Apple's Duo layout puts toolbar buttons (including back) in a glass group under the vertical status bar, and the tab bar at the bottom of the same column.
