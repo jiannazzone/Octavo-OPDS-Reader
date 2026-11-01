@@ -43,6 +43,8 @@ private struct SpikeReaderContent: View {
     let model: ReaderModel
     @State private var isGoingTo = false
     @State private var target = ""
+    /// The last tap that asked for the controls (#17 shows them).
+    @State private var controlsTap: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -78,6 +80,12 @@ private struct SpikeReaderContent: View {
         .task(id: StateKey(model)) {
             await SpikeStateFile.write(model)
         }
+        .task {
+            model.onControlsTap = { zone in
+                controlsTap = "\(zone) \(Date.now.formatted(date: .omitted, time: .standard))"
+                SpikeEvents.log("controlsTap", ["zone": zone])
+            }
+        }
         .spikeProbe("reader")
     }
 
@@ -87,7 +95,9 @@ private struct SpikeReaderContent: View {
         let columns = model.layout.columns.map(String.init) ?? "auto"
         let gap = model.layout.gapPercent.map { String(format: " gap %.1f%%", $0) } ?? ""
         let fold = model.layout.fold.map { String(format: " fold %.0f–%.0f", $0.lowerBound, $0.upperBound) } ?? ""
-        return "hinge: \(model.posture.rawValue)\(angle) \(size) cols \(columns)\(gap)\(fold)"
+        let book = model.isBookMode ? " BOOK" : ""
+        let tap = controlsTap.map { " controls: \($0)" } ?? ""
+        return "hinge: \(model.posture.rawValue)\(angle)\(book) \(size) cols \(columns)\(gap)\(fold)\(tap)"
     }
 
     private func goTo(_ target: String) {
@@ -106,6 +116,8 @@ private struct SpikeReaderContent: View {
         var relocations: Int
         var layout: ReaderLayout
         var posture: ReaderPosture
+        var hingeAngle: Double?
+        var isBookMode: Bool
         var size: CGSize?
 
         init(_ model: ReaderModel) {
@@ -113,6 +125,8 @@ private struct SpikeReaderContent: View {
             relocations = model.relocationCount
             layout = model.layout
             posture = model.posture
+            hingeAngle = model.hingeAngle
+            isBookMode = model.isBookMode
             size = model.geometry?.size
         }
     }
@@ -166,6 +180,8 @@ private enum SpikeStateFile {
         var relocations: Int
         var posture: ReaderPosture
         var hingeAngle: Double?
+        var isBookMode: Bool
+        var tapColumnStart: Double?
         var geometry: ReaderGeometry?
         var layout: ReaderLayout
         var layoutReport: SpikeJSON?
@@ -198,6 +214,8 @@ private enum SpikeStateFile {
             relocations: model.relocationCount,
             posture: model.posture,
             hingeAngle: model.hingeAngle,
+            isBookMode: model.isBookMode,
+            tapColumnStart: model.tapMode.columnStart,
             geometry: model.geometry,
             layout: model.layout,
             layoutReport: await model.layoutReport().map(SpikeJSON.init),

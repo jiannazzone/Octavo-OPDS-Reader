@@ -21,6 +21,11 @@ const HANDLER = 'octavo'
 // on each side. Taps in the middle are reported to Swift instead.
 const TAP_ZONE = 0.3
 
+// How taps behave (Swift's `ReaderTapMode`). In book mode (decision 9) each
+// half of the spread turns its way, and a tap in the side column, where the
+// page runs under it, is reported to Swift for the controls.
+let tapMode = { book: false, columnStart: null }
+
 const post = (type, payload = {}) => {
     const handler = window.webkit?.messageHandlers?.[HANDLER]
     if (!handler) return
@@ -39,8 +44,20 @@ const finiteOrNull = x => typeof x === 'number' && Number.isFinite(x) ? x : null
 
 // The page's size, which can be larger than the SwiftUI view's frame (the
 // web view draws under the safe areas). Swift lays out against it.
-const postViewport = () => post('viewport', { width: innerWidth, height: innerHeight })
-window.addEventListener('resize', postViewport)
+//
+// It's the root element's size, which `foliate-view` (fixed to the viewport)
+// fills. After a cold launch WebKit lays the page out at its full size while
+// `innerWidth` still reports the SwiftUI frame's, then corrects `innerWidth`
+// with only a `visualViewport` resize; reading `innerWidth` on `resize` left
+// Swift laying out for the smaller size until the next fold.
+let lastViewport = null
+const postViewport = () => {
+    const { clientWidth: width, clientHeight: height } = document.documentElement
+    if (`${width}x${height}` === lastViewport) return
+    lastViewport = `${width}x${height}`
+    post('viewport', { width, height })
+}
+new ResizeObserver(postViewport).observe(document.documentElement)
 
 window.addEventListener('error', e =>
     post('error', { phase: 'script', message: e.message, source: e.filename ?? null, line: e.lineno ?? null }))
@@ -93,6 +110,9 @@ const isBlankPage = range => {
 // While a fold is held (see `hold`), relocations are kept back and only the
 // last one is posted once the new layout has settled.
 let held = null
+// Counts relocations, so `settle` can tell when the paginator has stopped
+// moving.
+let relocations = 0
 
 const onRelocate = ({ detail }) => {
     relocations++
@@ -111,9 +131,6 @@ const onRelocate = ({ detail }) => {
     if (held) held.relocation = message
     else post('relocate', message)
 }
-// Counts relocations, so `settle` can tell when the paginator has stopped
-// moving.
-let relocations = 0
 
 // A tap is a short press that barely moves. Anything longer or further is a
 // swipe (foliate's paginator handles those) or a text selection.
@@ -122,12 +139,9 @@ const TAP_MAX_MS = 500
 
 // Taps are detected from pointer events: iOS WebKit doesn't dispatch `click`
 // to a document-level listener when the tapped element isn't itself
-// clickable, which is most of a book.
-//
-// Section documents live in iframes that are wider than the screen (one
-// column per page) and scrolled by the paginator, so the tap is converted to
-// the top window's coordinates before deciding which side it was on.
-const onSectionLoad = ({ detail: { doc } }) => {
+// clickable, which is most of a book. `onTap` gets the tap's x in the top
+// window's coordinates.
+const detectTaps = (doc, onTap) => {
     let down = null
     doc.addEventListener('pointerdown', e => {
         down = e.isPrimary ? { id: e.pointerId, x: e.screenX, y: e.screenY, time: e.timeStamp } : null
@@ -141,15 +155,40 @@ const onSectionLoad = ({ detail: { doc } }) => {
         if (e.timeStamp - start.time > TAP_MAX_MS) return
         if (e.target?.closest?.('a[href]')) return
         if (!(doc.getSelection()?.isCollapsed ?? true)) return
-        const frame = doc.defaultView?.frameElement
-        if (!frame) return
-        const x = frame.getBoundingClientRect().left + e.clientX
-        const width = window.innerWidth
-        if (x < width * TAP_ZONE) view?.goLeft()
-        else if (x > width * (1 - TAP_ZONE)) view?.goRight()
-        else post('tap', { zone: 'middle' })
+        onTap(e)
     })
 }
+
+// Left and right turn pages the way the book reads (foliate's goLeft and
+// goRight), so in a right-to-left book the left half goes forward.
+const tap = x => {
+    if (tapMode.book) {
+        if (tapMode.columnStart !== null && x >= tapMode.columnStart) return post('tap', { zone: 'column' })
+        // foliate centres the gap between the pages in its view.
+        const box = view?.getBoundingClientRect()
+        const spine = box ? box.left + box.width / 2 : innerWidth / 2
+        if (x < spine) view?.goLeft()
+        else view?.goRight()
+        return
+    }
+    if (x < innerWidth * TAP_ZONE) view?.goLeft()
+    else if (x > innerWidth * (1 - TAP_ZONE)) view?.goRight()
+    else post('tap', { zone: 'middle' })
+}
+
+// Section documents live in iframes that are wider than the screen (one
+// column per page) and scrolled by the paginator, so the tap is converted to
+// the top window's coordinates before deciding which side it was on.
+const onSectionLoad = ({ detail: { doc } }) => {
+    detectTaps(doc, e => {
+        const frame = doc.defaultView?.frameElement
+        if (frame) tap(frame.getBoundingClientRect().left + e.clientX)
+    })
+}
+
+// Taps outside the section's frame: the page's margins, and the side column
+// where the page runs under it.
+detectTaps(document, e => tap(e.clientX))
 
 // Lays pages out the way Swift's `ReaderLayout` says: column count, gap and
 // text width through foliate's own attributes, and the view's left/right
@@ -433,6 +472,10 @@ window.octavo = Object.freeze({
     }),
     hold: reported(async function hold_() {
         return hold()
+    }),
+    setTapMode: reported(async function setTapMode(mode) {
+        tapMode = { book: Boolean(mode?.book), columnStart: finiteOrNull(mode?.columnStart) }
+        return true
     }),
     layoutReport: reported(async function layoutReport_() {
         return layoutReport()

@@ -125,6 +125,7 @@ struct ReaderMessageTests {
             == .log(level: "warn", message: "Failed to load section 3"))
         #expect(try ReaderMessage.decode(#"{"type":"tap","zone":"middle"}"#) == .tap(zone: "middle"))
         #expect(try ReaderMessage.decode(#"{"type":"tap"}"#) == .tap(zone: "middle"))
+        #expect(try ReaderMessage.decode(#"{"type":"tap","zone":"column"}"#) == .tap(zone: "column"))
     }
 
     @Test func decodesExternalLink() throws {

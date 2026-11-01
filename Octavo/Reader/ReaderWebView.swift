@@ -12,21 +12,33 @@ import WebKit
 /// folded Duo) but shares its top-left corner. Region frames from the
 /// geometry below are in the page's coordinates as they are; the page's size
 /// comes from the page itself (`ReaderMessage.viewport`).
+///
+/// On top of the page: the snapshot that covers a fold while it settles,
+/// and in book mode the spine shadow (a setting, on by default).
 struct ReaderWebView: View {
     let model: ReaderModel
+    @AppStorage(ReaderSettings.bookModeShadowKey) private var showsSpineShadow = ReaderSettings.bookModeShadowDefault
 
     var body: some View {
         WebView(model.page)
             .webViewBackForwardNavigationGestures(.disabled)
             .webViewMagnificationGestures(.disabled)
             .webViewLinkPreviews(.disabled)
-            .onHingeChange { _, context in
-                model.hingeChanged(ReaderPosture(context), angle: context.hinge?.angle.degrees)
+            .onHingeChange { old, new in
+                // Repeats while the hinge settles; the model compares too.
+                guard new != old else { return }
+                model.hingeChanged(ReaderPosture(new), angle: new.hinge?.angle.degrees)
             }
             .onGeometryChange(for: ReaderGeometry.self) { proxy in
                 ReaderGeometry(proxy)
             } action: { geometry in
                 model.geometryChanged(geometry)
+            }
+            .overlay(alignment: .topLeading) {
+                if showsSpineShadow, model.isBookMode, let page = model.geometry?.size,
+                   let gap = model.layout.gap(inReaderWidth: Double(page.width)) {
+                    ReaderSpineShadow(gap: gap, height: Double(page.height))
+                }
             }
             .overlay(alignment: .topLeading) {
                 if let cover = model.foldCover {

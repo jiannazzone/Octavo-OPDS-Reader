@@ -113,7 +113,7 @@ Five books, eight origins: mid-chapter (Moby-Dick 30%, P&P 50%, Frankenstein 50%
 
 **Bug found and fixed: jumps by fraction.** The first round (`duo-spreads/runs/before-reanchor/`) had 25 unfolds that didn't contain the origin. In 4 of 8 runs, every unfold showed the spread *after* the origin's start. Cause: after `goToFraction`, foliate keeps the fraction itself as the paginator's anchor (`view.js` passes a number, and `'navigation'` scrolls don't replace it). A fold then maps the fraction onto the new layout and can land a spread away. Moby-Dick passed by luck, and the P&P PREFACE run passed because a page turn re-anchors on the text. `bridge.js` now re-anchors on the visible page's own range after any fraction jump (`anchorToPage`), as a page turn would. This also covers a slider jump or a restore by fraction in real use. Folds back were exact even before the fix (same fraction, same layout), which hid it.
 
-**Cost of a fold:** every fold or unfold fires 10–13 relocations (the hinge, the page's resize, the new layout and the fold region arrive separately, and each re-render re-scrolls 2–3 times). The page always ends where it should, but it's visible work (section 7, question 6). Only the final position is saved, and only if it changed.
+**Cost of a fold:** every fold or unfold fires 10–13 relocations (the hinge, the page's resize, the new layout and the fold region arrive separately, and each re-render re-scrolls 2–3 times). The page always ends where it should, but it's visible work (section 7, question 6). Only the final position is saved, and only if it changed. *(Since #5: one re-layout per fold under a cross-fade; see `duo-fold.md`.)*
 
 | Run | Book | Move → posture | Cols | Start CFI | First words | Verdict | Fold gap (x, pt) |
 |---|---|---|---|---|---|---|---|
@@ -234,7 +234,7 @@ UI and product calls the spike stopped at. Nothing here is built beyond the spik
 3. **Where the reader may draw.** `WebView` currently lets the page run under the camera column and under the floating bottom toolbar (text sits under the spike's toolbar buttons). That keeps the page centred on the hinge. Keeping the reader inside the safe area instead puts the page 42pt off-centre, so either the left side gives up 84pt to stay symmetric or the outer margins become unequal (another foliate patch).
 4. **Gap and margins.** foliate ties the outer margins to the centre gap (66pt each on the Duo). A narrower outer margin with a wider spine gutter needs a foliate patch. Worth it?
 5. **Cover-display handoff.** Open the reader automatically on unfold (what the spike does), or ask first? Only from a book's screen, or also from the library with the last book? Should it be a setting?
-6. **The re-layout on fold.** A fold or unfold fires 10–13 relocations as the hinge, the page's resize, the new layout and the fold region arrive separately. The page ends in the right place, but the intermediate layouts can show as a flicker. A cross-fade or a snapshot over the transition is a visual choice; batching the inputs into one re-layout is an engineering follow-up.
+6. **The re-layout on fold.** A fold or unfold fires 10–13 relocations as the hinge, the page's resize, the new layout and the fold region arrive separately. The page ends in the right place, but the intermediate layouts can show as a flicker. A cross-fade or a snapshot over the transition is a visual choice; batching the inputs into one re-layout is an engineering follow-up. *(Decided and built in #5: `duo-fold.md`.)*
 
 ## 8. Open risks
 

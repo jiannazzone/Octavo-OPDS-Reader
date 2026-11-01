@@ -5,22 +5,22 @@ import Testing
 /// When a fold's batched inputs get laid out.
 struct FoldBatchTests {
     let start = ContinuousClock.now
-    let timing = FoldBatch.Timing(quiet: .milliseconds(120), maxWait: .milliseconds(2000))
+    let timing = FoldBatch.Timing(quiet: .milliseconds(120), maxWait: .milliseconds(5000))
 
     func at(_ milliseconds: Int) -> ContinuousClock.Instant {
         start.advanced(by: .milliseconds(milliseconds))
     }
 
     @Test func waitsForThePageToResize() {
-        var batch = FoldBatch(startedAt: start)
+        var batch = FoldBatch(folded: false, at: start)
         // The hinge, the reader's size and the fold region, but no resize yet.
         batch.input(at: at(10))
         batch.input(at: at(150))
-        #expect(batch.deadline(timing) == at(2000))
+        #expect(batch.deadline(timing) == at(5000))
     }
 
     @Test func laysOutOnceQuietAfterTheResize() {
-        var batch = FoldBatch(startedAt: start)
+        var batch = FoldBatch(folded: false, at: start)
         batch.input(at: at(150))
         batch.pageResized(at: at(210))
         #expect(batch.deadline(timing) == at(330))
@@ -30,26 +30,40 @@ struct FoldBatchTests {
     }
 
     @Test func neverWaitsLongerThanMaxWait() {
-        var batch = FoldBatch(startedAt: start)
-        batch.pageResized(at: at(1950))
-        #expect(batch.deadline(timing) == at(2000))
+        var batch = FoldBatch(folded: false, at: start)
+        batch.pageResized(at: at(4950))
+        #expect(batch.deadline(timing) == at(5000))
     }
 
     @Test func anInputFromBeforeTheLatestDoesntMoveTheDeadlineBack() {
-        var batch = FoldBatch(startedAt: start)
+        var batch = FoldBatch(folded: false, at: start)
         batch.pageResized(at: at(300))
         batch.input(at: at(100))
         #expect(batch.deadline(timing) == at(420))
     }
 
-    @Test func foldingBackWaitsForTheNextResize() {
-        var batch = FoldBatch(startedAt: start)
+    @Test func foldingBackAfterTheResizeWaitsForTheNextOne() {
+        var batch = FoldBatch(folded: false, at: start)
         batch.pageResized(at: at(200))
-        batch.restart(at: at(250))
+        batch.hingeMoved(folded: true, at: at(250))
         #expect(!batch.pageResized)
-        #expect(batch.deadline(timing) == at(2250))
+        #expect(batch.deadline(timing) == at(5250))
         batch.pageResized(at: at(500))
         #expect(batch.deadline(timing) == at(620))
+    }
+
+    @Test func foldingBackBeforeTheResizeEndsAtOnce() {
+        var batch = FoldBatch(folded: false, at: start)
+        batch.input(at: at(50))
+        batch.hingeMoved(folded: true, at: at(150))
+        #expect(batch.deadline(timing) == at(150))
+    }
+
+    @Test func movingAcrossAgainAfterMovingBackWaits() {
+        var batch = FoldBatch(folded: true, at: start)
+        batch.hingeMoved(folded: false, at: at(100))
+        batch.hingeMoved(folded: true, at: at(200))
+        #expect(batch.deadline(timing) == at(5200))
     }
 
     @Test(arguments: [
