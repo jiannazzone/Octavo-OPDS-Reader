@@ -51,6 +51,18 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ### Connecting (approved 2026-10-31)
 
 6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync; v1 offers only BookOrbit, see v1 scope). "Import from Files" sits on the same first screen.
+   - **No skip on first launch:** the first screen stays until a server is added or a file imported.
+   - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
+
+### Empty and error states (approved 2026-10-31)
+
+22. **One pattern:**
+    - **Connection problems** show a banner at the top of the tab: server unreachable ("Can't reach BookOrbit. Showing books on your iPhone." · Retry; the Library switches to On iPhone) and signed out ("BookOrbit signed you out. Reading still works; sync is paused." · Sign in).
+    - **Problems with one book** show on the cover's strip, where Open would be: "Couldn't download · Try again"; offline and not downloaded: "Needs a connection to download." (no queueing).
+    - **Empty screens** are an invitation with one action ("Nothing in progress · Open Library"; the same for an empty server).
+    - **Sign-in errors** appear under the fields ("That username or password didn't work.").
+    - **No pop-up alerts**, except to confirm deleting or removing something.
+    - A position that didn't sync shows "Not synced yet, will retry" on the strip's sync line.
 
 ### Reader and the Duo (approved 2026-10-31)
 
@@ -111,7 +123,7 @@ The goal for v1: read your server's books well on the Duo.
 | Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Designed (frames 10, 11) |
 | Search in book | Stepping bar designed (frame 13); results list sketched |
 | Settings tab | Contents open |
-| Empty and error states (no server yet, server unreachable, sign-in failed, download failed) | Not designed |
+| Empty and error states (no server yet, server unreachable, signed out, sign-in failed, download failed, offline) | Designed (frames 21–26; sample-book row on frame 05); the downloading-in-progress state is sketched |
 
 Import from Files uses the system document picker; no screen of our own.
 
@@ -145,10 +157,16 @@ Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX
 | 18 Search results · folded | Books, then Series |
 | 19 Search · OPDS server without search | The note, results from the iPhone, the feed's lists |
 | 20 Search results · unfolded | Results left of the hinge, cover page right of it |
+| 21 Server unreachable · folded | Warning banner; Library on On iPhone |
+| 22 Signed out · folded | Info banner on Home |
+| 23 Download failed · folded | Cover strip: Couldn't download · Try again |
+| 24 Offline, not downloaded · folded | Cover strip: Needs a connection to download |
+| 25 Nothing in progress · folded | Empty Home: invitation to the Library |
+| 26 Sign-in failed · folded | Error under the fields |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
-Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected), `Reader controls (column)` (Back, Contents, Text and theme, Search in book, Bookmark), `Reader progress bar`, and `Book sheet` (State = Compact / Expanded, with Place and Synced text properties) used by frames 03, 04, 15, 16 and 20.
+Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected), `Reader controls (column)` (Back, Contents, Text and theme, Search in book, Bookmark), `Reader progress bar`, `Book sheet` (State = Compact / Expanded, with Place and Synced text properties) used by frames 03, 04, 15, 16, 20, 23 and 24, and `Banner` (Kind = Warning / Info, with Message and Action).
 
 What the kit showed:
 - Apple's Duo layout puts toolbar buttons (including back) in a glass group under the vertical status bar, and the tab bar at the bottom of the same column.
@@ -174,5 +192,6 @@ Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (d
 - **Full-screen cover.** The cover runs under the trailing system column and the camera; the tab column and back button sit over the artwork, so they need a material that reads on any cover.
 - **Page area (decision 8).** Lay out the `foliate-view` with the bridge's left/right insets so the page never reaches the column, map the margin setting onto foliate's gap, and keep the hinge gutter at least the reserved region's width.
 - **Fold cross-fade (decision 11).** Show a `WebView` snapshot over the transition and fade it out once the layout settles; also batch the hinge, resize, layout and fold-region inputs into one re-layout (duo-spreads §5 counts 10–13 today).
+- **Sample book.** Bundle the Standard Ebooks Pride and Prejudice and re-run the blank-page and fold checks on it (the spike's Gutenberg edition had the blank page after the dedication).
 - **Book mode (decision 9).** Detect the half-open range from `onHingeChange`, swap the tap zones, and draw the spine shadow as an overlay outside the book's content.
 - **Unfold on the cover → reader.** The spike's handoff already does this from its book screen (about 20 ms). It must compare old and new hinge status, not react to repeated or on-appear callbacks.
