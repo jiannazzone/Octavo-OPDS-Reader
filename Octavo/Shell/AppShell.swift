@@ -22,29 +22,32 @@ struct AppShell: View {
             tabs
                 .accessibilityHidden(isCovered)
             if let book = model.reading {
-                ReaderPlaceholder(book: book)
-                    .transition(.opacity)
+                ReaderView(book: book) { model.reading = nil }
+                    // Another book is another reader: its own model, hooks
+                    // and controls, and the old one closes (flushing its
+                    // position).
+                    .id(book.reader)
+                    // Fades in, but leaves at once: a reader still fading
+                    // out keeps its web page attached, and an unfold
+                    // meanwhile has SwiftUI rebuild that web view, which
+                    // WebKit traps on (open, close, open again, unfold).
+                    .transition(.asymmetric(insertion: .opacity, removal: .identity))
             }
-            #if DEBUG
-            if model.showsSpike {
-                SpikeLibraryOverlay()
-            }
-            #endif
         }
-        .animation(.default, value: model.reading)
         .onHingeChange { old, new in
             model.hingeChanged(HingeTransition(from: old, to: new))
         }
+        .animation(.default, value: model.reading)
         .environment(model)
         .environment(model.library)
+        #if DEBUG
+        .task { await ReaderRemote.run(shell: model) }
+        .debugProbe("shell")
+        #endif
     }
 
     private var isCovered: Bool {
-        #if DEBUG
-        model.reading != nil || model.showsSpike
-        #else
         model.reading != nil
-        #endif
     }
 
     private var tabs: some View {

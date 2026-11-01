@@ -1,0 +1,14 @@
+chrome c-main-dump-alice-in-wonderland ver=main&book=alice-in-wonderland.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-patched-dump-alice-in-wonderland ver=patched&book=alice-in-wonderland.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-main-dump-blank-page-test ver=main&book=blank-page-test.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-patched-dump-blank-page-test ver=patched&book=blank-page-test.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-main-dump-frankenstein2 ver=main&book=frankenstein.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-patched-dump-frankenstein2 ver=patched&book=frankenstein.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-main-dump-moby-dick ver=main&book=moby-dick.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-patched-dump-moby-dick ver=patched&book=moby-dick.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-main-dump-pride-and-prejudice ver=main&book=pride-and-prejudice.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-patched-dump-pride-and-prejudice ver=patched&book=pride-and-prejudice.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-main-dump-sherlock-holmes ver=main&book=sherlock-holmes.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-patched-dump-sherlock-holmes ver=patched&book=sherlock-holmes.epub&mode=dump&per=10&interval=150&w=390&h=844
+chrome c-main-dump-pp-s1-deep2 ver=main&book=pride-and-prejudice.epub&mode=dump&from=1&to=2&per=40&interval=150&w=390&h=844
+chrome c-patched-dump-pp-s1-deep2 ver=patched&book=pride-and-prejudice.epub&mode=dump&from=1&to=2&per=40&interval=150&w=390&h=844

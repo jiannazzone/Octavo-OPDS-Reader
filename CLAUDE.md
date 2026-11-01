@@ -35,7 +35,7 @@ cd dev/bookorbit && docker compose up -d && ./seed.sh
 - **Whenever you boot, create, erase or install to a simulator, name it in your message: exact name plus UDID.** Sessions running in parallel each get their own named simulator, because installs of the same bundle ID overwrite each other.
 - Drive the fold with **Hinge** (`hinge open|close|half|<deg>`, `sweep`, `posture`, `screenshot <path>`; also the `hinge` skill).
 - Layout: `Octavo/` app target and `OctavoTests/` use folder-synchronized groups (new files need no `project.pbxproj` edit). `Packages/OctavoKit` is a local SwiftPM package for models, sources, sync and API clients. `ReaderWeb/` is a folder reference (paths preserved) holding foliate-js and our bridge.
-  - `Octavo/Reader/` is the reader core (`WebView`, `octavo://` scheme handler, hinge → layout). `Octavo/Spike/` holds the spike's throwaway debug screens, the only place for those; delete them when real screens replace them.
+  - `Octavo/Reader/` is the reader (`ReaderView` with its controls, footer and progress bar; `WebView`, `octavo://` scheme handler, hinge → layout). `Octavo/Debug/` holds DEBUG-only tooling: `ReaderRemote` lets the check scripts in `docs/notes/` drive the reader through `Documents/spike-command.json` (the spike's file names and commands, kept so the tools run unchanged), plus debug switches for the Settings stand-in. The spike's screens (`Octavo/Spike/`) were deleted in #17.
   - `Config/Octavo-Info.plist` (ATS: `NSAllowsLocalNetworking`), `dev/bookorbit/` (local server), `docs/notes/` (engineering notes, indexed in its README).
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
 - **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask. Show the owner every GitHub issue as a draft before creating it.
@@ -109,7 +109,7 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
   - Folding moves the same window between displays and app state survives, so the cover-display flow in `docs/UI-IDEAS.md` is feasible.
   - The page count comes from the hinge (`ReaderLayout`, foliate patch 0002): one page folded, two open or half open, with no text on the hinge.
   - A fold does one re-layout (#5; it was 10–13 relocations): the page holds its size under a snapshot of itself until the page has resized and the inputs have gone quiet (`FoldBatch`), then `bridge.js` renders once and the snapshot fades out in 0.3 s. The position holds because foliate keeps its anchor through the render, which a foliate update could break (`PINNED.md`, step 4).
-  - `WebView` draws under the camera column and the bottom toolbar, so the page reports its own size to Swift. Whether to keep that is an open UX question.
+  - **The page runs edge to edge** (decision 8, #17; `docs/notes/reader-page.md`): `ReaderView` lays the `WebView` out under the side column, camera and home indicator, and `ReaderLayout` insets the `foliate-view` by the safe area (measured outside the reader's own toolbar, so the controls never re-paginate) and the margin setting. Folded the text runs 27–355 pt, unfolded 139–448 | 503–812 pt, as in frames 07–09.
 
 ## Licensing rules (important)
 

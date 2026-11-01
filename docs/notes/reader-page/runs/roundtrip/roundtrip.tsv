@@ -1,0 +1,11 @@
+direction	book	file	source first words	app CFI / pulled CFI	verdict
+A→W	book-6b86b273ff34fce19d6b804eff5a3f57	1	bottom of a well?” The Dormouse again took	epubcfi(/6/18!/4/2[pgepubid00009]/164/1:189)	hit (web page holds them)
+A→W	book-d4735e3a265e16eee03f59718b9b5d03	2	Chapter 14 “Some time elapsed before I learned	epubcfi(/6/42!/4/2[pgepubid00020]/2)	hit (web page holds them)
+A→W	book-4e07408562bedb8b60ce05c1decfe3ad	3	CHAPTER 60. The Line. With reference to the	epubcfi(/6/14!/4/116[pgepubid00064])	hit (web page holds them)
+A→W	book-4b227777d4dd1fc61c6f884f48641d02	4	who, though with some peculiarities, has abilities which	epubcfi(/6/10!/4/96/1:246)	hit (web page holds them)
+A→W	book-ef2d127de37b942baad06145e54b0c61	5	since, to a poor man, the loss was	epubcfi(/6/18!/4/2[pgepubid00011]/134/1:49)	hit (web page holds them)
+W→A	-	1	“Then you may sit down,” the King replied. Here the othe	pulled epubcfi(/6/26!/4/2[pgepubid00013]/116/1:0) → server	HIT at char 921/1018: '"Then you may sit down," the King replied.'
+W→A	-	2	her to hers or my father’s happiness, my adversary’s des	pulled epubcfi(/6/58!/4/2[pgepubid00028]/42/3:297) → server	HIT at char 32/1287: "her to hers or my father's happiness, my"
+W→A	-	3	good, so wise, so mild; I sailed with thee along the Peruvia	pulled epubcfi(/6/18!/4/460/1:112) → server	HIT at char 754/910: 'good, so wise, so mild; I sailed with'
+W→A	-	4	Her father lifted up his eyes, Jane was distressed, Elizabet	pulled epubcfi(/6/12!/4/514/1:0) → server	HIT at char 679/1207: 'Her father lifted up his eyes, Jane was'
+W→A	-	5	“I took the precious case into my hands and looked in some	pulled epubcfi(/6/26!/4/2[pgepubid00015]/60/1:0) → server	HIT at char 730/1104: '"I took the precious case into my hands'

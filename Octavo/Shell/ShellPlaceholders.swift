@@ -2,8 +2,8 @@ import OctavoKit
 import SwiftUI
 
 // The route-to-screen map and the stand-in screens, replaced by #15
-// (Search), #16 (Settings) and #17 (the reader). The stand-ins show the
-// shell's layout and shared states; nothing in them is a design.
+// (Search) and #16 (Settings). The stand-ins show the shell's layout and
+// shared states; nothing in them is a design.
 
 /// The view for a route.
 struct ShellScreen: View {
@@ -53,6 +53,7 @@ struct SettingsPlaceholder: View {
             #if DEBUG
             DebugServerSection()
             ShellStatesSection()
+            ReaderSettingsSection()
             #endif
         }
     }
@@ -100,25 +101,6 @@ struct CoverScreen: View {
         } else {
             LibraryNotConnected()
         }
-    }
-}
-
-/// The reader, over the tabs: the spike's reader until #17 replaces it.
-/// Positions stay on the iPhone; syncing them is #11.
-struct ReaderPlaceholder: View {
-    let book: OpenedBook
-    @Environment(ShellModel.self) private var shell
-
-    var body: some View {
-        NavigationStack {
-            SpikeReaderView(book: book.reader, sync: nil, cfiShape: .point)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Close", systemImage: "xmark") { shell.reading = nil }
-                    }
-                }
-        }
-        .background(Color(.systemBackground))
     }
 }
 

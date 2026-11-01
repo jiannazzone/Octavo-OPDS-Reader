@@ -14,7 +14,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The visible page changed.
     case relocate(Relocation)
     /// The user tapped where the controls show: the `"middle"` of the page,
-    /// or in book mode the side `"column"`.
+    /// or in book mode the side `"column"`; or anywhere while the controls
+    /// cover the page (`"dismiss"`). See `ReaderTapMode`.
     case tap(zone: String)
     /// The page's size in CSS px (= points), sent on load and whenever it
     /// changes.
@@ -33,13 +34,25 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var title: String?
         var sectionCount: Int
         var isFixedLayout: Bool
+        /// The table of contents, flattened in reading order, each entry with
+        /// where its section starts in the book. `nil` from an older bridge.
+        var toc: [TOCEntry]?
+    }
+
+    nonisolated struct TOCEntry: Codable, Equatable, Sendable {
+        var label: String
+        /// Where the entry's section starts, 0...1 of the book.
+        var fraction: Double?
     }
 
     nonisolated struct Relocation: Codable, Equatable, Sendable {
         /// foliate's synthetic "location" counter. Either side can be `nil`
         /// while a section is still being measured.
         nonisolated struct Location: Codable, Equatable, Sendable {
+            /// The location the page starts in, from 0.
             var current: Int?
+            /// The location the page ends in.
+            var next: Int?
             var total: Int?
         }
 

@@ -38,12 +38,6 @@ final class ShellModel {
     /// at its states without a failing download.
     var coverStrip: CoverStripMessage?
 
-    #if DEBUG
-    /// The spike's screens, kept reachable from the Library until the
-    /// reader (#17) opens books.
-    var showsSpike = false
-    #endif
-
     init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener()) {
         self.library = library
         self.opener = opener
@@ -112,19 +106,10 @@ final class ShellModel {
     /// (decision 10). The hinge reports the unfold before the scene moves to
     /// the inner display, so the folded screen is still the deepest route.
     func hingeChanged(_ transition: HingeTransition) {
-        guard transition == .unfold, reading == nil, !isCoveredBySpike,
+        guard transition == .unfold, reading == nil,
               let book = self[path: tab].routes.last?.bookOpenedOnUnfold
         else { return }
         openBook(book)
-    }
-
-    /// The spike's screens hide the tabs and do their own unfold handoff.
-    private var isCoveredBySpike: Bool {
-        #if DEBUG
-        showsSpike
-        #else
-        false
-        #endif
     }
 
     #if DEBUG

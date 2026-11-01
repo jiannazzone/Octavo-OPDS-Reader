@@ -15,6 +15,14 @@ struct ReadingPositionStoreTests {
         #expect(store.position(forBook: "moby-dick.epub") == nil)
     }
 
+    // The cover strip and Home's place line read it without opening the book.
+    @Test func keepsTheChapterWithThePosition() throws {
+        try store.save(ReadingPositionFixture.prideAndPrejudice, forBook: "pp.epub", chapter: "Chapter 3")
+        #expect(store.chapter(forBook: "pp.epub") == "Chapter 3")
+        try store.save(ReadingPositionFixture.prideAndPrejudice, forBook: "pp.epub")
+        #expect(store.chapter(forBook: "pp.epub") == nil)
+    }
+
     @Test func keepsIDsWithPathCharactersInsideTheDirectory() throws {
         try store.save(ReadingPositionFixture.prideAndPrejudice, forBook: "../books/42")
         #expect(store.fileURL(forBook: "../books/42").deletingLastPathComponent() == store.directory)

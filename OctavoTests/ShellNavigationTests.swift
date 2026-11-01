@@ -211,18 +211,6 @@ struct ShellModelTests {
         #expect(model.reading == nil)
     }
 
-    #if DEBUG
-    // The spike's screens cover the tabs and do their own handoff.
-    @Test func unfoldingUnderTheSpikeLibraryDoesNothing() {
-        let model = makeShell()
-        model.tab = .library
-        model[path: .library].routes = [.cover(Self.book)]
-        model.showsSpike = true
-        model.hingeChanged(.unfold)
-        #expect(model.reading == nil)
-    }
-    #endif
-
     @Test func foldingDoesNothing() {
         let model = makeShell()
         model.tab = .library

@@ -7,16 +7,18 @@ import WebKit
 /// Reports the hinge and where the fold runs through the page to the model,
 /// which turns them into a `ReaderLayout`.
 ///
-/// `WebView` draws the page under the trailing and bottom safe areas, so the
-/// page is bigger than this view's frame (466×502 against 382×420 on the
-/// folded Duo) but shares its top-left corner. Region frames from the
-/// geometry below are in the page's coordinates as they are; the page's size
-/// comes from the page itself (`ReaderMessage.viewport`).
+/// `ReaderView` lays it out edge to edge (decision 8), so this view's frame
+/// is the page: region frames from the geometry below are in the page's
+/// coordinates as they are. The page's size comes from the page itself
+/// (`ReaderMessage.viewport`), which stays right after a cold launch.
 ///
-/// On top of the page: the snapshot that covers a fold while it settles,
-/// and in book mode the spine shadow (a setting, on by default).
+/// On top of the page: each page's footer, in book mode the spine shadow (a
+/// setting, on by default), and the snapshot that covers a fold while it
+/// settles.
 struct ReaderWebView: View {
     let model: ReaderModel
+    /// The progress bar covers the footer's place while it shows.
+    var showsFooter = true
     @AppStorage(ReaderSettings.bookModeShadowKey) private var showsSpineShadow = ReaderSettings.bookModeShadowDefault
 
     var body: some View {
@@ -33,6 +35,11 @@ struct ReaderWebView: View {
                 ReaderGeometry(proxy)
             } action: { geometry in
                 model.geometryChanged(geometry)
+            }
+            .overlay(alignment: .topLeading) {
+                if showsFooter {
+                    ReaderFooter(model: model)
+                }
             }
             .overlay(alignment: .topLeading) {
                 if showsSpineShadow, model.isBookMode, let page = model.geometry?.size,

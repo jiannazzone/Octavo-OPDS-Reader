@@ -26,8 +26,14 @@ nonisolated struct ReadingPositionStore: Sendable {
         return LocalReadingProgress(position: position, modifiedAt: .distantPast, needsPush: false)
     }
 
-    func save(_ position: ReadingPosition, forBook bookID: String, needsPush: Bool = false) throws {
-        try save(LocalReadingProgress(position: position, modifiedAt: .now, needsPush: needsPush), forBook: bookID)
+    /// The chapter of the saved position (`LocalReadingProgress.chapter`),
+    /// for a book's place line.
+    func chapter(forBook bookID: String) -> String? {
+        progress(forBook: bookID)?.chapter
+    }
+
+    func save(_ position: ReadingPosition, forBook bookID: String, needsPush: Bool = false, chapter: String? = nil) throws {
+        try save(LocalReadingProgress(position: position, modifiedAt: .now, needsPush: needsPush, chapter: chapter), forBook: bookID)
     }
 
     func save(_ progress: LocalReadingProgress, forBook bookID: String) throws {

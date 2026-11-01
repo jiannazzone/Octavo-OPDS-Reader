@@ -15,5 +15,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `duo-tabbar.md` (+ `duo-tabbar/`) | #6 | SwiftUI `TabView` on the Duo: the tab bar in the side column, Search in one capsule, over a cover, next to column controls, how to split screens at the hinge, and presenting during an unfold |
 | `duo-fold.md` (+ `duo-fold/`) | #5 | One re-layout per fold under a cross-fade, book mode (angles, taps, spine shadow), the cold-launch page-size fix, measuring tools and videos |
 | `home-library.md` (+ `home-library/`) | #13 | Home and Library: app-wide library state, a book's source, Continue reading, list layouts, the pane-title offset, debug connections, a simulator cover-decoding trap |
+| `reader-page.md` (+ `reader-page/`) | #17 | The real reader: the page edge to edge with the text kept out of the side column, margins and the hinge gutter, controls and taps, the per-page footer and the scrubber, sideways, the debug remote that replaced the spike's screens for the check tools |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

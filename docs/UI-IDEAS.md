@@ -37,3 +37,12 @@ On the cover page (#14) the side column has no backing of its own: the system's 
 ## The Library's filter button (parked 2026-11-01)
 
 Frame 02 puts a filter button in the side column over the Library, but no decision says what it offers, so #13 leaves it out. Candidates: sort the All grid (Title, Author, Recently added; BookOrbit supports all three, while OPDS feeds keep their own order, so the button would hide there), and later filters such as Unread, In progress and Finished (needs BookOrbit's read status in OctavoKit). Design it before building.
+
+## Reader progress: what's left after #17 (parked 2026-11-01)
+
+#17 built each page's footer (chapter, page, percentage) and the glass bar as a scrubber (decision 7, amended). Not designed yet:
+
+- **Back to where you were.** After a scrub, Apple Books offers "Back to page N" for a while. Today a scrub just moves.
+- **The scrubber's look.** It's the system slider (round knob); frame 08 draws a thin line with no knob.
+- **Real page numbers.** The numbers are foliate's 1,500-character locations, so a page turn doesn't always change them. Counting real pages for the current layout means paginating the whole book after every fold and text change; the Contents panel (#18, "page numbers for the current layout") meets the same question.
+- **Footer on or off**, as a Customize setting, if anyone wants the page bare.

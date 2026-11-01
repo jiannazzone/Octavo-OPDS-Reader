@@ -5,7 +5,7 @@ How the foliate-js reader is wired, how to get books onto the simulator, and wha
 ## How it fits together
 
 ```
-SpikeLibraryView ──▶ SpikeReaderView ──▶ ReaderModel (@Observable)
+SpikeLibraryView ──▶ SpikeReaderView ──▶ ReaderModel (@Observable)     (spike screens; since #17: AppShell ──▶ ReaderView, docs/notes/reader-page.md)
  (Octavo/Spike/)       debug strip,        ├─ WebPage + ReaderWebView (SwiftUI WebView)
                        prev/next           ├─ ReaderSchemeHandler  octavo://app/…   (ReaderWeb/ + the book)
                                            ├─ "octavo" script message handler → ReaderMessage (JSON)

@@ -27,8 +27,15 @@ final class ReaderModel {
     private(set) var phase: Phase = .loading
     private(set) var title: String?
     private(set) var position: ReadingPosition?
+    /// The current chapter, as the book's contents name it. Saved with the
+    /// position (`ReadingPositionStore.chapter`) for the cover strip and
+    /// Home's place line.
     private(set) var tocLabel: String?
+    var chapter: String? { tocLabel }
     private(set) var location: ReaderMessage.Relocation.Location?
+    /// The contents with where each entry starts, for naming the chapter at
+    /// any point of the progress bar.
+    private(set) var toc: [ReaderMessage.TOCEntry] = []
     /// Where the opening position came from (`cfi`, `fraction`, `start`).
     private(set) var restoredFrom: String?
     /// The last script error, for the debug overlay.
@@ -45,19 +52,33 @@ final class ReaderModel {
     var posture: ReaderPosture { hinge.posture }
     /// The hinge angle in degrees, as last reported.
     var hingeAngle: Double? { hinge.angle }
-    var isBookMode: Bool { hinge.isBookMode }
-    /// The SwiftUI view's geometry, with the page's own size once known.
+    /// Half open like a book with two pages (decision 9). Half open sideways,
+    /// with one column across the fold, reads like flat.
+    var isBookMode: Bool { hinge.isBookMode && layout.columns == 2 }
+    /// The reader's geometry, with the page's own size once known and the
+    /// safe area the text stays out of.
     private(set) var geometry: ReaderGeometry?
     private(set) var layout: ReaderLayout = .automatic
+    /// The margins setting (decision 8).
+    var margins = ReaderMargins.standard {
+        didSet { if margins != oldValue { relayout() } }
+    }
+    /// The controls cover the page, so a tap anywhere hides them.
+    var coversPage = false {
+        didSet { if coversPage != oldValue { sendTapMode() } }
+    }
     /// The page's size as the page reports it.
     @ObservationIgnored private var viewport: CGSize?
-    /// The SwiftUI view's own size. The page runs past it, under the side
-    /// column.
-    @ObservationIgnored private var viewSize: CGSize?
+    /// The system's areas (the side column, or a band along the top when
+    /// turned sideways), measured outside the reader's own toolbar so
+    /// showing the controls never moves the text.
+    @ObservationIgnored private var safeArea = ReaderInsets.zero
+    @ObservationIgnored private var lastGeometry: ReaderGeometry?
     @ObservationIgnored private var sentTapMode: ReaderTapMode?
 
-    /// A tap where the controls show: `"middle"` of the page, or the side
-    /// `"column"` in book mode. The controls themselves are #17.
+    /// A tap where the controls show: `"middle"` of the page, the side
+    /// `"column"` in book mode, or `"dismiss"` anywhere while they cover the
+    /// page (`coversPage`).
     @ObservationIgnored var onControlsTap: ((_ zone: String) -> Void)?
 
     // Folding: one re-layout per fold, under a cross-fade. See `FoldBatch`.
@@ -153,10 +174,7 @@ final class ReaderModel {
     func hingeChanged(_ posture: ReaderPosture, angle: Double?) {
         let old = hinge.posture
         let change = hinge.update(posture: posture, angle: angle)
-        if change.contains(.bookMode) {
-            log.debug("book mode \(self.isBookMode)")
-            sendTapMode()
-        }
+        if change.contains(.bookMode) { bookModeMayHaveChanged() }
         guard change.contains(.posture) else { return }
         log.debug("posture \(posture.rawValue, privacy: .public)")
         // `.noHinge` is only the first report, before the hinge is known.
@@ -164,28 +182,53 @@ final class ReaderModel {
         relayout()
     }
 
+    /// Called when book mode starts or ends, so the controls can hide.
+    @ObservationIgnored var onBookModeChange: ((Bool) -> Void)?
+    @ObservationIgnored private var reportedBookMode = false
+
+    /// Book mode follows the hinge's angle and the layout's two pages,
+    /// which change at different moments.
+    private func bookModeMayHaveChanged() {
+        guard isBookMode != reportedBookMode else { return }
+        reportedBookMode = isBookMode
+        log.debug("book mode \(self.isBookMode)")
+        sendTapMode()
+        onBookModeChange?(isBookMode)
+    }
+
     /// The reader view's size or the fold's regions changed.
     func geometryChanged(_ geometry: ReaderGeometry) {
-        viewSize = geometry.size
+        lastGeometry = geometry
         updateGeometry(geometry)
     }
 
-    /// `geometry` with the page's own size, once the page has reported it.
+    /// The system's areas changed (`ReaderInsets`, in the page's physical
+    /// directions).
+    func safeAreaChanged(_ insets: ReaderInsets) {
+        guard insets != safeArea else { return }
+        safeArea = insets
+        if let lastGeometry { updateGeometry(lastGeometry) }
+    }
+
+    /// `geometry` with the page's own size, once the page has reported it,
+    /// and the safe area.
     private func updateGeometry(_ geometry: ReaderGeometry) {
         var geometry = geometry
         if let viewport { geometry.size = viewport }
+        geometry.safeArea = safeArea
         guard geometry != self.geometry else { return }
         self.geometry = geometry
         relayout()
         sendTapMode()
     }
 
-    /// Book mode, and where the side column starts when the page runs
-    /// under it.
+    /// Book mode, where the side column starts, and the page outside the
+    /// system's areas.
     var tapMode: ReaderTapMode {
-        var mode = ReaderTapMode(isBook: isBookMode)
-        if let viewSize, let viewport, viewport.width > viewSize.width {
-            mode.columnStart = Double(viewSize.width)
+        var mode = ReaderTapMode(isBook: isBookMode, dismisses: coversPage)
+        if let width = geometry.map({ Double($0.size.width) }), width > 0 {
+            if safeArea.right > 0 { mode.columnStart = width - safeArea.right }
+            mode.content = safeArea.left...max(safeArea.left, width - safeArea.right)
         }
         return mode
     }
@@ -210,7 +253,7 @@ final class ReaderModel {
             scheduleFoldEnd()
             return
         }
-        apply(ReaderLayout(posture: posture, geometry: geometry))
+        apply(ReaderLayout(posture: posture, geometry: geometry, margins: margins))
     }
 
     // MARK: Folding
@@ -289,9 +332,11 @@ final class ReaderModel {
             _ = try? await Self.withTimeout(.milliseconds(300)) { await coverTask.value }
         }
         lastClosedCover = max(lastClosedCover, cover)
-        let layout = ReaderLayout(posture: posture, geometry: geometry)
+        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: margins)
         self.layout = layout
         sentLayout = layout
+        bookModeMayHaveChanged()
+        sendTapMode()
         lastFold?.laidOut = FoldReport.milliseconds(since: startedAt)
         do {
             let rendered = try await page.callJavaScript(
@@ -318,6 +363,7 @@ final class ReaderModel {
         guard layout != self.layout else { return }
         self.layout = layout
         sendLayout()
+        bookModeMayHaveChanged()
     }
 
     /// While the book is opening, `openBook` passes the layout along instead,
@@ -385,6 +431,7 @@ final class ReaderModel {
         case .opened(let opened):
             log.debug("opened, restored from \(opened.restoredFrom, privacy: .public)")
             title = opened.title
+            toc = opened.toc ?? []
             restoredFrom = opened.restoredFrom
             isRestoring = false
             phase = .open
@@ -500,7 +547,7 @@ final class ReaderModel {
 
     private func save(_ position: ReadingPosition, needsPush: Bool) {
         do {
-            try store.save(position, forBook: book.id, needsPush: needsPush)
+            try store.save(position, forBook: book.id, needsPush: needsPush, chapter: tocLabel)
         } catch {
             log.error("Couldn't save reading position: \(error)")
         }
