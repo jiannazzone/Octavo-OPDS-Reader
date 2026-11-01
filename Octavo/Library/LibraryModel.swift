@@ -324,17 +324,24 @@ final class LibraryModel {
 
     func connectLocalOPDS(_ server: DebugOPDSServer) async {
         debugConnection = .connecting
+        let catalog: URL
         do {
-            let source = OPDSSource(
-                catalogURL: try await server.catalogURL(),
-                credentials: InMemoryPasswordStore(server.credentials)
-            )
-            _ = try await source.root()
-            debugConnection = .idle
-            await connect(LibraryServer(id: server.sourceID, name: server.name, detail: server.detail, source: source))
+            catalog = try await server.catalogURL()
         } catch {
             debugConnection = .failed(String(describing: error))
+            return
         }
+        let secret = OPDSURLSecret.detect(in: catalog)
+        let source = OPDSSource(
+            catalogURL: catalog,
+            transport: DebugSessionTransport(),
+            credentials: InMemoryPasswordStore(server.credentials),
+            // All four local servers ask for Basic (dev/opds/README.md).
+            authScheme: server.credentials == nil ? nil : .basic,
+            secret: secret
+        )
+        await connect(LibraryServer(id: server.sourceID, name: server.name, detail: server.detail, source: source))
+        debugConnection = root == nil ? .failed("\(server.name) didn’t send its catalog.") : .idle
     }
 
     /// Made-up books, no network: for screenshots and previews.
@@ -346,6 +353,23 @@ final class LibraryModel {
     }
     #endif
 }
+
+#if DEBUG
+/// Sends the debug OPDS servers' requests until #9's `ServerTransport` is
+/// wired in (whichever of #8 and #9 merges second swaps it). It has none of
+/// #9's trust rules; the debug servers are on this Mac.
+private struct DebugSessionTransport: HTTPTransport {
+    private let session = URLSession(configuration: .ephemeral)
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        try await session.data(for: request, delegate: nil)
+    }
+
+    func download(for request: URLRequest, delegate: (any URLSessionTaskDelegate)?) async throws -> (URL, URLResponse) {
+        try await session.download(for: request, delegate: delegate)
+    }
+}
+#endif
 
 private struct FeedKey: Hashable {
     var source: LibrarySourceID

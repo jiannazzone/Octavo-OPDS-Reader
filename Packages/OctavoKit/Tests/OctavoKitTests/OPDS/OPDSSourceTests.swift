@@ -23,12 +23,47 @@ private extension StubServer.Response {
     static let notFound = Self(status: 404, headers: [:], body: Data())
 }
 
-private func source(_ server: StubServer, path: String = "/catalog", credentials: PasswordCredentials? = nil) -> OPDSSource {
+private func source(
+    _ server: StubServer, path: String = "/catalog", credentials: (any PasswordStore)? = nil,
+    scheme: OPDSAuthScheme? = .basic, secret: OPDSURLSecret? = nil
+) -> OPDSSource {
     OPDSSource(
         catalogURL: server.baseURL.appending(path: path),
-        transport: URLSession(configuration: server.configuration),
-        credentials: InMemoryPasswordStore(credentials)
+        transport: SessionTransport(server.configuration),
+        credentials: credentials ?? InMemoryPasswordStore(),
+        authScheme: scheme,
+        secret: secret
     )
+}
+
+/// Fails every request the way an offline phone does, with the URL attached.
+private struct FailingTransport: HTTPTransport {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        throw URLError(.timedOut, userInfo: [NSURLErrorFailingURLErrorKey: request.url as Any, NSURLErrorFailingURLStringErrorKey: request.url?.absoluteString as Any])
+    }
+
+    func download(for request: URLRequest, delegate: (any URLSessionTaskDelegate)?) async throws -> (URL, URLResponse) {
+        throw URLError(.timedOut, userInfo: [NSURLErrorFailingURLErrorKey: request.url as Any])
+    }
+}
+
+/// Counts reads, to check the source doesn't read the Keychain per request.
+private actor CountingPasswordStore: PasswordStore {
+    var credentials: PasswordCredentials?
+    private(set) var loads = 0
+
+    init(_ credentials: PasswordCredentials?) {
+        self.credentials = credentials
+    }
+
+    func load() -> PasswordCredentials? {
+        loads += 1
+        return credentials
+    }
+
+    func save(_ credentials: PasswordCredentials?) {
+        self.credentials = credentials
+    }
 }
 
 /// Serves `routes` by path; anything else is a 404.
@@ -156,9 +191,10 @@ struct OPDSSearchTemplateTests {
         #expect(simple.url(for: "tide")?.absoluteString == "https://catalog.test/v2/search/tide")
     }
 
-    @Test func picksTheFeedURLFromAnOpenSearchDescription() {
-        let template = OpenSearchDescriptionParser.template(in: Data(OPDSFixtures.openSearchDescription.utf8), url: base)
+    @Test func picksTheFeedURLFromAnOpenSearchDescription() throws {
+        let template = try OpenSearchDescriptionParser.template(in: Data(OPDSFixtures.openSearchDescription.utf8), url: base)
         #expect(template?.template == "/catalog/search?q={searchTerms}&page={startPage?}")
+        #expect(throws: LibraryError.invalidResponse) { try OpenSearchDescriptionParser.template(in: Data("<html/>".utf8), url: base) }
     }
 }
 
@@ -348,7 +384,7 @@ struct OPDSSourceTests {
             default: return .notFound
             }
         }
-        let source = source(catalog, credentials: credentials)
+        let source = source(catalog, credentials: InMemoryPasswordStore(credentials))
         let book = try #require(try await source.feed(LibraryLink(rawValue: url(catalog, "/catalog/all"))).books.first)
         _ = try await source.cover(try #require(book.cover), size: .full)
         #expect(images.requests.count == 1)
@@ -383,11 +419,243 @@ struct OPDSSourceTests {
             if request.path == "/auth" { return .opds2(OPDSFixtures.oauthOnlyDocument) }
             return StubServer.Response(status: 401, headers: ["Link": "</auth>; rel=\"http://opds-spec.org/auth/document\"; type=\"application/opds-authentication+json\""], body: Data())
         }
-        #expect(try await source(linked).checkAccess() == .signInRequired(OPDSSignInRequest(title: "Harbour", supportsBasic: false)))
+        #expect(try await source(linked).checkAccess() == .signInRequired(OPDSSignInRequest(title: "Harbour", scheme: nil)))
 
         // Calibre-Web: only the Basic challenge.
         let basic = StubServer { _ in StubServer.Response(status: 401, headers: ["WWW-Authenticate": "Basic realm=\"Authentication Required\""], body: Data("Unauthorized Access".utf8)) }
         #expect(try await source(basic).checkAccess() == .signInRequired(OPDSSignInRequest()))
+    }
+
+    @Test func passwordGoesUpFrontOnlyForBasicServers() async throws {
+        let credentials = PasswordCredentials(username: "keeper", password: "lamp-oil")
+        let server = server(["/catalog": .atom(OPDSFixtures.atomRoot)])
+        _ = try await source(server, credentials: InMemoryPasswordStore(credentials), scheme: .digest).root()
+        _ = try await source(server, credentials: InMemoryPasswordStore(credentials), scheme: nil).root()
+        #expect(server.requests.allSatisfy { $0.headers["authorization"] == nil }, "Digest and unknown: the transport answers the challenge")
+        _ = try await source(server, credentials: InMemoryPasswordStore(credentials), scheme: .basic).root()
+        #expect(server.requests.last?.headers["authorization"]?.hasPrefix("Basic ") == true)
+    }
+
+    @Test func readsThePasswordOnceUntilItIsRefused() async throws {
+        let store = CountingPasswordStore(PasswordCredentials(username: "keeper", password: "lamp-oil"))
+        let refused = Mutex(false)
+        let server = StubServer { request in
+            if refused.withLock({ $0 }) { return .atom("", status: 401) }
+            return request.path == "/catalog/all" ? .atom(OPDSFixtures.atomBooks) : .atom(OPDSFixtures.atomRoot)
+        }
+        let source = source(server, credentials: store)
+        _ = try await source.root()
+        _ = try await source.feed(LibraryLink(rawValue: url(server, "/catalog/all")))
+        _ = try await source.feed(LibraryLink(rawValue: url(server, "/catalog/all")))
+        #expect(await store.loads == 1)
+        refused.withLock { $0 = true }
+        await #expect(throws: LibraryError.signedOut) { try await source.root() }
+        refused.withLock { $0 = false }
+        _ = try await source.root()
+        #expect(await store.loads == 2, "a 401 makes the next request read the store again")
+    }
+
+    @Test func aDigestChallengeIsRecordedAsDigest() async throws {
+        // Even when the Authentication Document only knows Basic.
+        let digest = StubServer { _ in
+            StubServer.Response(status: 401, headers: [
+                "Content-Type": "application/opds-authentication+json",
+                "WWW-Authenticate": "Digest realm=\"Harbour\", nonce=\"abc\", Basic realm=\"Harbour\"",
+            ], body: Data(OPDSFixtures.authenticationDocument.utf8))
+        }
+        guard case .signInRequired(let request) = try await source(digest).checkAccess() else { Issue.record("expected a sign-in"); return }
+        #expect(request.scheme == .digest)
+        #expect(request.usernameLabel == "Email")
+
+        let bearer = StubServer { _ in StubServer.Response(status: 401, headers: ["WWW-Authenticate": "Bearer"], body: Data()) }
+        #expect(try await source(bearer).checkAccess() == .signInRequired(OPDSSignInRequest(scheme: nil)))
+    }
+
+    @Test func anEmptyOPDS2FeedHasNoBooks() async throws {
+        let empty = #"{"metadata":{"title":"Search results"},"links":[{"rel":"self","href":"/v2/search?query=zzz","type":"application/opds+json"}]}"#
+        let server = server(["/v2/search": .opds2(empty)])
+        let feed = try await source(server, path: "/v2/home").feed(LibraryLink(rawValue: url(server, "/v2/search?query=zzz")))
+        #expect(feed.title == "Search results")
+        #expect(feed.books.isEmpty && feed.entries.isEmpty)
+        // A lone publication is still read as one.
+        let single = #"{"metadata":{"title":"Fog Signals"},"links":[{"rel":"http://opds-spec.org/acquisition","href":"/f.epub","type":"application/epub+zip"}]}"#
+        let one = try OPDSJSONParser.parse(Data(single.utf8), url: server.baseURL)
+        #expect(one.publications.map(\.title) == ["Fog Signals"])
+    }
+
+    @Test func aLaterPageWithoutATotalDoesNotCountItself() async throws {
+        let lastPage = """
+        <feed xmlns="http://www.w3.org/2005/Atom"><title>Everything</title>
+          <link rel="previous" href="/catalog/all?page=1" type="application/atom+xml;profile=opds-catalog"/>
+          <entry><title>Salt Roads</title><id>2</id><link rel="http://opds-spec.org/acquisition" href="/get/2.epub" type="application/epub+zip"/></entry>
+        </feed>
+        """
+        let server = server(["/catalog/all": .atom(lastPage), "/catalog": .atom(OPDSFixtures.atomBooksOnlyRoot)])
+        let feed = try await source(server).feed(LibraryLink(rawValue: url(server, "/catalog/all?page=2")))
+        #expect(feed.books.count == 1)
+        #expect(feed.total == nil)
+        // A feed with no other pages still counts itself.
+        #expect(try await source(server).feed(LibraryLink(rawValue: url(server, "/catalog"))).total == 1)
+    }
+
+    @Test func anUnreadableSearchDescriptionIsTriedAgain() async throws {
+        let broken = Mutex(true)
+        let server = StubServer { request in
+            switch request.path {
+            case "/catalog": return .atom(OPDSFixtures.atomRoot)
+            case "/catalog/opensearch.xml":
+                return broken.withLock { $0 } ? .bytes("<html>Bad gateway</html>", type: "text/html") : .xml(OPDSFixtures.openSearchDescription)
+            case "/catalog/search": return .atom(OPDSFixtures.atomBooksOnlyRoot)
+            default: return .notFound
+            }
+        }
+        let source = source(server)
+        #expect(try await source.root().search == .books, "a failed lookup doesn't take search away")
+        await #expect(throws: LibraryError.invalidResponse) { try await source.search("salt") }
+        broken.withLock { $0 = false }
+        #expect(try await source.search("salt").books.books.map(\.title) == ["Salt Roads"])
+    }
+
+    @Test func aDescriptionWithOnlyAWebPageMeansNoSearch() async throws {
+        let htmlOnly = #"<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><Url type="text/html" template="/web?q={searchTerms}"/></OpenSearchDescription>"#
+        let server = server(["/catalog": .atom(OPDSFixtures.atomRoot), "/catalog/opensearch.xml": .xml(htmlOnly)])
+        let source = source(server)
+        #expect(try await source.root().search == .unavailable)
+        #expect(try await source.search("salt") == LibrarySearchResults(query: "salt"))
+    }
+
+    @Test func booksWithoutIDsGetDistinctOnes() throws {
+        let feed = """
+        <feed xmlns="http://www.w3.org/2005/Atom"><title>Untitled</title>
+          <entry><title>Untitled</title><link rel="http://opds-spec.org/image" href="/covers/a.jpg" type="image/jpeg"/></entry>
+          <entry><title>Untitled</title><link rel="http://opds-spec.org/image" href="/covers/b.jpg" type="image/jpeg"/></entry>
+        </feed>
+        """
+        let base = URL(string: "https://catalog.test/catalog")!
+        let source = OPDSSource(catalogURL: base, transport: SessionTransport())
+        let books = source.mapFeed(try OPDSAtomParser.parse(Data(feed.utf8), url: base), at: base).feed.books
+        #expect(Set(books.map(\.id)).count == 2)
+    }
+
+    // MARK: Kavita's key
+
+    @Test func findsKavitasKeyInItsAddress() {
+        #expect(OPDSURLSecret.detect(in: URL(string: "http://nas:5000/api/opds/9fK2abcdXYZ0123456789qrstuvwx")!)?.value == "9fK2abcdXYZ0123456789qrstuvwx")
+        #expect(OPDSURLSecret.detect(in: URL(string: "http://nas/kavita/api/opds/9fK2abcdXYZ01234")!)?.value == "9fK2abcdXYZ01234")
+        #expect(OPDSURLSecret.detect(in: URL(string: "http://nas:3310/opds")!) == nil)
+        #expect(OPDSURLSecret.detect(in: URL(string: "http://nas/api/opds/")!) == nil)
+        #expect(OPDSURLSecret("short") == nil)
+    }
+
+    @Test func keepsKavitasKeyOutOfEverythingItHandsOut() async throws {
+        let key = "9fK2abcdXYZ0123456789qrstuvwx"
+        let series = """
+        <feed xmlns="http://www.w3.org/2005/Atom"><title>Alice</title>
+          <link rel="next" href="/api/opds/\(key)/series/1?pageNumber=2" type="application/atom+xml;profile=opds-catalog"/>
+          <entry><title>⭘ Alice - Alice</title><id>1</id>
+            <link rel="http://opds-spec.org/image" type="image/jpeg" href="/api/image/chapter-cover?chapterId=1&amp;apiKey=\(key)"/>
+            <link rel="http://opds-spec.org/acquisition/open-access" type="application/epub+zip" href="/api/opds/\(key)/series/1/volume/1/chapter/1/download/alice.epub"/>
+          </entry>
+          <entry><title>Elsewhere</title><id>2</id>
+            <link rel="http://opds-spec.org/acquisition" type="application/epub+zip" href="https://cdn.example/\(key)/b.epub"/>
+          </entry>
+        </feed>
+        """
+        let server = StubServer { request in
+            guard request.path.contains(key) || request.query["apiKey"] == key else { return .notFound }
+            if request.path.hasSuffix("/series/1") { return .atom(series) }
+            if request.path.hasSuffix(".epub") { return .bytes("PK-alice") }
+            return .bytes("jpeg", type: "image/jpeg")
+        }
+        let source = source(server, path: "/api/opds/\(key)", scheme: nil, secret: OPDSURLSecret(key))
+        let feed = try await source.feed(LibraryLink(rawValue: url(server, "/api/opds/{key}/series/1")))
+        let alice = try #require(feed.books.first)
+        let handedOut = [feed.next?.rawValue, alice.id.rawValue, alice.cover?.rawValue] + alice.files.map(\.id.rawValue)
+        #expect(handedOut.allSatisfy { $0?.contains(key) != true })
+        #expect(alice.files.first?.id.rawValue == url(server, "/api/opds/{key}/series/1/volume/1/chapter/1/download/alice.epub"))
+        #expect(alice.title == "Alice")
+
+        // Requests get the key back.
+        #expect(try await source.cover(try #require(alice.cover), size: .full) == Data("jpeg".utf8))
+        let destination = FileManager.default.temporaryDirectory.appending(path: "octavo-opds-\(UUID().uuidString)/alice.epub")
+        defer { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
+        try await source.download(try #require(alice.primaryFile), to: destination)
+        #expect(try Data(contentsOf: destination) == Data("PK-alice".utf8))
+
+        // A link to another host never gets the key back. (A catalog that
+        // writes `{key}` itself makes a template, not a link.)
+        let elsewhere = try #require(feed.books.last?.primaryFile)
+        #expect(elsewhere.id.rawValue == "https://cdn.example/{key}/b.epub")
+        await #expect(throws: LibraryError.invalidLink) { try await source.download(elsewhere, to: destination) }
+    }
+
+    // MARK: Security audit
+
+    @Test func readsSchemeNamesNotWordsInParameters() {
+        #expect(OPDSAuthScheme(challenge: #"Bearer realm="basic""#) == nil)
+        #expect(OPDSAuthScheme(challenge: #"Bearer realm="digest", error="invalid""#) == nil)
+        #expect(OPDSAuthScheme(challenge: #"Basic realm="Authentication Required""#) == .basic)
+        #expect(OPDSAuthScheme(challenge: #"Digest realm="x", nonce="a,b", qop="auth", Basic realm="x""#) == .digest)
+        #expect(OPDSAuthScheme(challenge: "basic") == .basic)
+    }
+
+    @Test func aDigestServerCanNotBeTalkedDownToBasic() async throws {
+        // Someone answering at the server's home address offers only Basic,
+        // or no challenge at all.
+        for headers in [["WWW-Authenticate": "Basic realm=\"x\""], [:]] {
+            let impostor = StubServer { _ in StubServer.Response(status: 401, headers: headers, body: Data()) }
+            guard case .signInRequired(let request) = try await source(impostor, scheme: .digest).checkAccess() else {
+                Issue.record("expected a sign-in"); return
+            }
+            #expect(request.scheme == .digest)
+            #expect(impostor.requests.allSatisfy { $0.headers["authorization"] == nil })
+        }
+    }
+
+    @Test func ignoresASignInDocumentOnAnotherHost() async throws {
+        let elsewhere = StubServer { _ in .opds2(OPDSFixtures.authenticationDocument) }
+        let catalog = StubServer { _ in
+            StubServer.Response(status: 401, headers: [
+                "Link": "<\(elsewhere.baseURL.absoluteString)/auth>; rel=\"http://opds-spec.org/auth/document\"",
+                "WWW-Authenticate": "Basic realm=\"x\"",
+            ], body: Data())
+        }
+        #expect(try await source(catalog).checkAccess() == .signInRequired(OPDSSignInRequest()))
+        #expect(elsewhere.requests.isEmpty)
+    }
+
+    @Test func networkErrorsDropTheFailingURL() async throws {
+        let key = "9fK2abcdXYZ0123456789qrstuvwx"
+        let base = URL(string: "http://nas.invalid/api/opds/\(key)")!
+        let source = OPDSSource(catalogURL: base, transport: FailingTransport(), secret: OPDSURLSecret(key))
+        do {
+            _ = try await source.root()
+            Issue.record("expected a URLError")
+        } catch let error as URLError {
+            #expect(error.code == .timedOut)
+            #expect(error.failingURL == nil)
+            #expect(!String(describing: error).contains(key))
+        }
+    }
+
+    @Test func refusesUnsafeFilenames() {
+        #expect(OPDSSource.filename(URL(string: "https://c.test/get/alice.epub")!) == "alice.epub")
+        #expect(OPDSSource.filename(URL(string: "https://c.test/get/..%2F..%2Fx.epub")!) == nil)
+        #expect(OPDSSource.filename(URL(string: "https://c.test/get/.hidden.epub")!) == nil)
+        #expect(OPDSSource.filename(URL(string: "https://c.test/download/6/azw3/")!) == nil)
+    }
+
+    @Test func redactsTheKeyInEntryIDsAndBehindAProxyPrefix() throws {
+        let key = "9fK2abcdXYZ0123456789qrstuvwx"
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://home.test/opds/api/opds/\(key)")!)?.value == key)
+        let base = URL(string: "https://home.test/api/opds/\(key)")!
+        let source = OPDSSource(catalogURL: base, transport: SessionTransport(), secret: OPDSURLSecret(key))
+        let feed = """
+        <feed xmlns="http://www.w3.org/2005/Atom"><title>x</title><entry><title>Alice</title><id>urn:\(key):1</id>
+          <link rel="http://opds-spec.org/acquisition" href="/a.epub" type="application/epub+zip"/></entry></feed>
+        """
+        let book = try #require(source.mapFeed(try OPDSAtomParser.parse(Data(feed.utf8), url: base), at: base).feed.books.first)
+        #expect(book.id.rawValue == "urn:{key}:1")
     }
 
     @Test(arguments: ["collections/1?page=2", "file:///etc/passwd", "javascript:alert(1)", "https:///nohost", ""])

@@ -61,36 +61,84 @@ versions) and Kavita, run locally from `dev/opds/`. Screenshots in
   titles, and "Alice - Alice" becomes "Alice". Its Recently Added lists
   series, so Home's row stays empty there.
 
-## Sign-in
+## Sign-in and secrets
+
+Decided by Claude (technical, no UI effect), after #9's audit of the OPDS
+side; Adam is the design owner and leaves these calls to us.
 
 - `checkAccess()` loads the root: `.open(title:)`, or `.signInRequired`
   with the Authentication Document's title and field labels (Komga sends it
   with the 401; a `Link: rel="http://opds-spec.org/auth/document"` header is
-  followed too), or a plain request when there's only `WWW-Authenticate:
-  Basic` (Calibre-Web). A document that offers no Basic method says
-  `supportsBasic: false`. This is what #12's form calls.
-- The Basic header goes **only to the catalog's origin** (scheme, host, port),
-  never to a cover or file on another host. A 401 is `signedOut`.
-- **Networking goes through #9's shapes**, mirrored in `OPDS/NetworkStandIns.swift`
-  until #9 merges (whichever merges second deletes that file and keeps #9's):
-  `OPDSSource(catalogURL:transport:credentials:)` takes `any HTTPTransport`
-  (#9's `ServerTransport` per server; a plain `URLSession` in tests and debug
-  builds) and `any PasswordStore` (`PasswordCredentials`; Keychain from #9,
-  `InMemoryPasswordStore` for now). The transport checks the address before
-  every request, pins certificates, refuses https → http and strips
-  `Authorization` on redirects that change scheme, host or port, so the OPDS
-  code doesn't. Its `NetworkTrustError`s pass through like `URLError`.
+  followed too, only on the catalog's own origin) and the **scheme** to
+  record with the server (`OPDSAuthScheme`). The 401's `WWW-Authenticate`
+  decides the scheme when there is one, read by scheme name (not
+  `Bearer realm="basic"`), and Digest wins over Basic when both are
+  offered; no challenge means Basic; only unsupported methods (OAuth,
+  Bearer) mean `scheme: nil`. A server already recorded as Digest stays
+  Digest whatever a later 401 says. This is what #12's form calls.
+- **The scheme is pinned.** #12 stores it with the server and passes it as
+  `OPDSSource(authScheme:)`. Only `.basic` sends the password up front, and
+  only to the catalog's own origin (scheme, host, port), never to a cover or
+  file on another host. `.digest` or `nil`: nothing up front; #9's transport
+  answers the server's own challenge. So a server, or someone answering at
+  its home-network address, can't ask a Digest server's client for Basic and
+  get the password in clear. The transport must also refuse a Basic
+  challenge for a Digest server; that's #9's side (told them).
+- The password is read from the store once, not per request (the Keychain
+  would be hit per cover), and read again after any 401.
+- **Kavita's API key never leaves the source.** Kavita's address is
+  `…/api/opds/<key>` and every link it sends repeats the key.
+  `OPDSURLSecret.detect(in:)` finds it in the pasted address (#12 keeps it in
+  the Keychain, next to the password); `OPDSSource(secret:)` writes `{key}`
+  in its place in every link, book ID, file ID and cover value it hands out,
+  and `resolve` puts it back only for a URL on the catalog's own origin. A
+  link to another host keeps `{key}` and is refused. Checked on the
+  simulator: after opening a Kavita book, the key appears nowhere in the
+  app's data; `RecentBooks.json` holds `{key}`.
+- **Networking goes through #9's types**, mirrored in
+  `OPDS/NetworkStandIns.swift` until #9 merges (whichever merges second
+  deletes that file and keeps #9's). `transport` is required, with no
+  `URLSession` shortcut in OctavoKit: in the app it's #9's
+  `ServerTransport` for that server, one per source. Tests use a test-only
+  `SessionTransport`, and the debug rows a DEBUG-only
+  `DebugSessionTransport`, both to be swapped for `ServerTransport` (tests:
+  with the stub protocol in `configuration.protocolClasses` and
+  `HomeNetworkPolicy.testing`). The transport checks every address,
+  pins certificates, refuses https → http and `user:pass@` URLs, and strips
+  `Authorization` on redirects that change origin, so the OPDS code doesn't.
+  Its `NetworkTrustError`s pass through like `URLError`; a `URLError` loses
+  its failing URL on the way out, since that URL has the real key in it.
+- Filenames from URLs are dropped when they hold a decoded `/` or start
+  with a dot.
 
-### For the security review (#9)
+### Adversarial audit (2026-11-01)
 
-- Whether Basic may go over plain http is the transport's call (decision 25).
-- Until #9 is wired in, debug builds use a plain `URLSession`, which has no
-  redirect hygiene of its own.
-- **Kavita's API key is in every URL** (`/api/opds/{key}/…`, covers'
-  `apiKey=`). Those URLs become `LibraryLink`s, file IDs and cover values, and
-  `RecentBooks` writes `SourcedBook`s to Application Support, so the key ends
-  up on disk in plain JSON. Options: keep it (it's what Kavita hands out),
-  or have the source store links without the key and add it back per request.
+An independent reviewer attacked this code. What held: the key is never
+restored for another origin (`//host`, userinfo tricks, `\@`, case, ports,
+IPv6), a literal `{key}` in a feed is a template, not a link, the Basic
+password never goes to another origin, the XML parser refuses
+billion-laughs and external entities, and JSON nesting is bounded. Fixed
+here: scheme parsing by name, Digest not talked down, failing URLs
+stripped from errors, the key redacted in entry IDs, proxy-prefixed Kavita
+addresses, ASCII-only encoding in redaction, unsafe filenames, a sign-in
+document on another host.
+
+**Still open, outside #8:**
+- **High, #9's transport:** `ServerTransport` answers a Basic challenge
+  even for a server recorded as Digest, so someone answering a home-http
+  server's address can still get the password in clear. Fix: give the
+  transport the recorded scheme and answer only that one (asked of #9).
+- **#9's transport:** no limit on response size; an endless body from a
+  hostile catalog can make iOS kill the app, on every launch if it's on
+  Home. A cap belongs in the transport.
+- **#12:** save `redact(catalogURL)`, never the live address; keep the
+  Kavita key in the Keychain; record `checkAccess`'s scheme instead of
+  assuming Basic. The DEBUG connect code (`DebugSessionTransport`, the
+  bare-session Kavita login, hard-coded `.basic`) must not be copied into
+  release code.
+- The OpenSearch description and its template may sit on another host;
+  search queries then go there. Left as is: some catalogs host search
+  separately.
 
 ## Pitfalls
 

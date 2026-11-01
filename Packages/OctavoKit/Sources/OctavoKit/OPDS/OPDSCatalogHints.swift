@@ -41,8 +41,9 @@ struct OPDSCatalogHints {
     ]
 
     /// The chip to open first, or `nil` for the first one.
-    func startChip(among chips: [LibraryEntry]) -> LibraryLink? {
-        let items = feed.navigation.compactMap { item in item.link.url.map { (item, OPDSSource.link($0)) } }
+    /// - Parameter link: how the source writes a URL as a link.
+    func startChip(among chips: [LibraryEntry], link: (URL) -> LibraryLink) -> LibraryLink? {
+        let items = feed.navigation.compactMap { item in item.link.url.map { (item, link($0)) } }
         for level in Self.wholeLibrary {
             for chip in chips {
                 let item = items.first { $0.1 == chip.link }?.0

@@ -3,34 +3,45 @@ import Foundation
 /// An OPDS 1.2 (Atom) or 2.0 (JSON) catalog as a `LibrarySource`.
 ///
 /// Links, book and file IDs are the catalog's absolute URLs, so `feed`
-/// follows whatever the server links. The chips are the root feed's own
-/// entries, all of them, in the server's order (Adam, 2026-11-01). OPDS has
-/// no reading progress, so `continueReading` is `nil`; the reader's
-/// position stays on the iPhone.
+/// follows whatever the server links; a secret in them (Kavita's API key)
+/// is swapped for `OPDSURLSecret.placeholder` before they leave the source.
+/// The chips are the root feed's own entries, all of them, in the server's
+/// order (Adam, 2026-11-01). OPDS has no reading progress, so
+/// `continueReading` is `nil`; the reader's position stays on the iPhone.
 public struct OPDSSource: LibrarySource {
-    public let catalogURL: URL
+    let catalogURL: URL
     let client: OPDSClient
+    let secret: OPDSURLSecret?
     private let state = State()
 
     /// - Parameters:
     ///   - catalogURL: the root feed, e.g. `…/opds` (Calibre-Web),
     ///     `…/feed` (COPS), `…/opds/v1.2/catalog` (Komga) or the link from
-    ///     Kavita's settings.
-    ///   - transport: #9's `ServerTransport` for this server; a plain
-    ///     `URLSession` in tests.
-    ///   - credentials: the HTTP Basic sign-in, if the catalog asked for one.
+    ///     Kavita's settings, with any secret in it written out.
+    ///   - transport: #9's `ServerTransport` for this server, and no other
+    ///     server's.
+    ///   - credentials: the password, if the catalog asked for one.
+    ///   - authScheme: how the server asked for it when it was added
+    ///     (`OPDSSignInRequest.scheme`). Only `.basic` sends the password up
+    ///     front; otherwise the transport answers the server's challenge.
+    ///   - secret: a secret the catalog puts in its URLs
+    ///     (`OPDSURLSecret.detect(in:)`), kept out of every value this
+    ///     source hands out.
     public init(
         catalogURL: URL,
-        transport: any HTTPTransport = URLSession(configuration: .ephemeral),
-        credentials: any PasswordStore = InMemoryPasswordStore()
+        transport: any HTTPTransport,
+        credentials: any PasswordStore = InMemoryPasswordStore(),
+        authScheme: OPDSAuthScheme? = nil,
+        secret: OPDSURLSecret? = nil
     ) {
         self.catalogURL = catalogURL
-        client = OPDSClient(catalogURL: catalogURL, transport: transport, credentials: credentials)
+        self.secret = secret
+        client = OPDSClient(catalogURL: catalogURL, transport: transport, credentials: credentials, authScheme: authScheme)
     }
 
     /// Whether the catalog needs a sign-in, trying the stored one if any.
     /// For the add-server form (#12): show the account fields only for
-    /// `.signInRequired`.
+    /// `.signInRequired`, and record its `scheme` with the server.
     public func checkAccess() async throws -> OPDSAccess {
         try await client.checkAccess()
     }
@@ -46,20 +57,20 @@ public struct OPDSSource: LibrarySource {
         // A root that lists books itself gets a chip of its own (one with
         // nothing else gets only that).
         if !mapped.feed.books.isEmpty || chips.isEmpty {
-            chips.append(LibraryEntry(kind: .feed, title: feed.title ?? "All books", link: Self.link(catalogURL)))
+            chips.append(LibraryEntry(kind: .feed, title: feed.title ?? "All books", link: link(catalogURL)))
         }
         let hints = OPDSCatalogHints(feed: feed)
         return LibraryRoot(
             title: feed.title,
             chips: chips,
-            search: Self.searchLink(in: feed) != nil ? .books : .unavailable,
-            recentlyAdded: hints.recentlyAdded.map(Self.link),
-            startChip: hints.startChip(among: chips)
+            search: await searchSupport(feed),
+            recentlyAdded: hints.recentlyAdded.map(link),
+            startChip: hints.startChip(among: chips, link: link)
         )
     }
 
     public func feed(_ link: LibraryLink) async throws -> LibraryFeed {
-        let url = try Self.url(link)
+        let url = try resolve(link.rawValue)
         let feed = try await client.feed(at: url)
         let mapped = mapFeed(feed, at: url)
         await state.remember(mapped.publications)
@@ -71,7 +82,7 @@ public struct OPDSSource: LibrarySource {
         guard !query.isEmpty, let url = try await searchTemplate()?.url(for: query) else {
             return LibrarySearchResults(query: query)
         }
-        return LibrarySearchResults(query: query, books: try await feed(Self.link(url)))
+        return LibrarySearchResults(query: query, books: try await feed(link(url)))
     }
 
     public func details(for book: LibraryBook) async throws -> LibraryBookDetails {
@@ -90,8 +101,8 @@ public struct OPDSSource: LibrarySource {
         summary.progress = book.progress
         let template = try? await searchTemplate()
         let authors = publication.authors.compactMap { author -> LibraryEntry? in
-            guard let link = authorLink(author) ?? template?.url(for: author.name) else { return nil }
-            return LibraryEntry(kind: .author, title: author.name, sortName: author.sortAs, link: Self.link(link))
+            guard let url = authorLink(author) ?? template?.url(for: author.name) else { return nil }
+            return LibraryEntry(kind: .author, title: author.name, sortName: author.sortAs, link: link(url))
         }
         return LibraryBookDetails(
             book: summary,
@@ -107,38 +118,66 @@ public struct OPDSSource: LibrarySource {
 
     public func cover(_ cover: LibraryCover, size: LibraryCoverSize) async throws -> Data {
         guard let images = CoverImages(cover) else { throw LibraryError.invalidLink }
-        let url = size == .thumbnail ? images.thumbnail ?? images.full : images.full ?? images.thumbnail
-        guard let url, let resolved = URL(string: url) else { throw LibraryError.invalidLink }
-        return try await client.data(at: resolved, accept: "image/*").0
+        guard let raw = size == .thumbnail ? images.thumbnail ?? images.full : images.full ?? images.thumbnail else {
+            throw LibraryError.invalidLink
+        }
+        return try await client.data(at: try resolve(raw), accept: "image/*").0
     }
 
     @discardableResult
     public func download(_ file: LibraryFile, to destination: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
-        guard let url = URL(string: file.id.rawValue) else { throw LibraryError.invalidLink }
-        return try await client.download(url, to: destination, progress: progress)
+        try await client.download(try resolve(file.id.rawValue), to: destination, progress: progress)
     }
 
     // MARK: - Links
 
-    static func link(_ url: URL) -> LibraryLink {
-        LibraryLink(rawValue: url.absoluteString)
+    /// What the app may keep: the URL with the secret written as the placeholder.
+    func string(_ url: URL) -> String {
+        redact(url.absoluteString)
     }
 
-    /// Only absolute http(s) URLs: anything else wasn't made here.
-    static func url(_ link: LibraryLink) throws -> URL {
-        guard let url = URL(string: link.rawValue), let scheme = url.scheme?.lowercased(),
+    func redact(_ value: String) -> String {
+        secret?.redact(value) ?? value
+    }
+
+    func link(_ url: URL) -> LibraryLink {
+        LibraryLink(rawValue: string(url))
+    }
+
+    /// A value this source handed out, back to a URL. Only absolute
+    /// http(s) URLs: anything else wasn't made here. The secret goes back in
+    /// only for the catalog's own origin, so a link a catalog wrote with a
+    /// literal placeholder can't carry it to another host.
+    func resolve(_ raw: String) throws -> URL {
+        var value = raw
+        if let secret, raw.contains(OPDSURLSecret.placeholder) {
+            value = secret.restore(raw)
+            guard let url = URL(string: value), OPDSClient.origin(of: url) == OPDSClient.origin(of: catalogURL) else {
+                throw LibraryError.invalidLink
+            }
+        }
+        guard let url = URL(string: value), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https", url.host() != nil else {
             throw LibraryError.invalidLink
         }
         return url
     }
 
-    private static func searchLink(in feed: OPDSFeed) -> OPDSLink? {
-        feed.links.first { $0.has(rel: "search") }
+    /// `.books` once a usable template is found. A lookup that failed (the
+    /// server didn't answer, or answered nonsense) counts as `.books`, and
+    /// `search` tries again.
+    private func searchSupport(_ root: OPDSFeed) async -> LibrarySearchSupport {
+        guard root.links.contains(where: { $0.has(rel: "search") }) else { return .unavailable }
+        do {
+            return try await searchTemplate() != nil ? .books : .unavailable
+        } catch {
+            return .books
+        }
     }
 
     /// Prefers a template linked straight from the root (Calibre-Web, OPDS
-    /// 2) to fetching the OpenSearch description. Kept once found.
+    /// 2) to fetching the OpenSearch description. Kept once settled; a
+    /// failed fetch or an unreadable description isn't kept.
     private func searchTemplate() async throws -> OPDSSearchTemplate? {
         if let cached = await state.searchTemplate { return cached }
         let root: OPDSFeed
@@ -154,7 +193,7 @@ public struct OPDSSource: LibrarySource {
             template = OPDSSearchTemplate(template: direct.href, base: direct.base)
         } else if let description = links.first(where: { !$0.isTemplate })?.url {
             let (data, response) = try await client.data(at: description, accept: "application/opensearchdescription+xml, application/xml;q=0.9, */*;q=0.5")
-            template = OpenSearchDescriptionParser.template(in: data, url: response.url ?? description)
+            template = try OpenSearchDescriptionParser.template(in: data, url: response.url ?? description)
         }
         await state.setSearchTemplate(template)
         return template
@@ -212,8 +251,8 @@ public struct OPDSSource: LibrarySource {
                     kind: .feed,
                     title: group.title,
                     count: group.numberOfItems,
-                    previewCovers: group.publications.prefix(3).compactMap(Self.cover),
-                    link: Self.link(list)
+                    previewCovers: group.publications.prefix(3).compactMap(cover),
+                    link: link(list)
                 ))
             } else {
                 add(group.navigation)
@@ -221,13 +260,16 @@ public struct OPDSSource: LibrarySource {
             }
         }
         let books = publications.map(mapBook)
-        let next = feed.link(rel: "next")?.url.map(Self.link)
+        let next = feed.link(rel: "next")?.url.map(link)
+        // Without a server total, only a feed with no other pages can count
+        // itself: the last of several pages would report just its own items.
+        let isOnlyPage = next == nil && feed.link(rel: "previous") == nil && feed.link(rel: "prev") == nil
         return MappedFeed(
             feed: LibraryFeed(
                 title: feed.title,
                 entries: entries,
                 books: books,
-                total: feed.totalResults ?? (next == nil ? entries.count + books.count : nil),
+                total: feed.totalResults ?? (isOnlyPage ? entries.count + books.count : nil),
                 next: next
             ),
             publications: zip(books.map(\.id), publications).map { ($0, $1) }
@@ -246,22 +288,23 @@ public struct OPDSSource: LibrarySource {
             // Only real cover art: COPS gives its list entries an icon as
             // a thumbnail, which isn't a book's cover.
             previewCovers: item.images.contains { $0.has(rel: OPDSRel.image) || $0.has(rel: OPDSRel.stanzaImage) }
-                ? Self.cover(images: item.images).map { [$0] } ?? [] : [],
-            link: Self.link(url)
+                ? cover(images: item.images).map { [$0] } ?? [] : [],
+            link: link(url)
         )
     }
 
     func mapBook(_ publication: OPDSPublication) -> LibraryBook {
-        let files = Self.files(of: publication)
-        let id = publication.identifier
-            ?? publication.links.first { $0.has(rel: "self") || $0.has(rel: "alternate") }?.url?.absoluteString
-            ?? files.first?.id.rawValue
-            ?? publication.title
+        let files = self.files(of: publication)
+        let cover = self.cover(publication)
+        // The entry's own ID, else a URL that names it, else what it shows.
+        let named: URL? = publication.links.first { $0.has(rel: "self") || $0.has(rel: "alternate") }?.url
+        let shown: String = ([publication.title] + publication.authors.map(\.name)).joined(separator: "\n")
+        let id: String = publication.identifier.map(redact) ?? named.map(string) ?? files.first?.id.rawValue ?? cover?.rawValue ?? shown
         let series = publication.series.first.map { series in
             LibrarySeriesPosition(
                 name: series.name,
                 position: series.position,
-                link: series.link.flatMap { $0.isCatalog || $0.type == nil ? $0.url : nil }.map(Self.link)
+                link: series.link.flatMap { $0.isCatalog || $0.type == nil ? $0.url : nil }.map(link)
             )
         }
         return LibraryBook(
@@ -269,7 +312,7 @@ public struct OPDSSource: LibrarySource {
             title: Self.title(publication.title),
             authors: publication.authors.map(\.name),
             series: series,
-            cover: Self.cover(publication),
+            cover: cover,
             files: files
         )
     }
@@ -290,32 +333,39 @@ public struct OPDSSource: LibrarySource {
     /// Direct downloads only, most wanted format first and marked primary.
     /// Purchases, loans, samples and anything behind a DRM licence or a web
     /// page (indirect acquisition) are left out.
-    static func files(of publication: OPDSPublication) -> [LibraryFile] {
+    func files(of publication: OPDSPublication) -> [LibraryFile] {
         var seen = Set<String>()
-        let links = publication.acquisitions.filter { link in
+        let links = publication.acquisitions.compactMap { link -> (OPDSLink, URL, String?)? in
             guard link.rels.contains(where: { $0 == OPDSRel.acquisition || $0 == OPDSRel.openAccess }),
-                  link.indirectTypes.isEmpty, let url = link.url else { return false }
-            return seen.insert(url.absoluteString).inserted
+                  link.indirectTypes.isEmpty, let url = link.url, seen.insert(url.absoluteString).inserted else { return nil }
+            return (link, url, OPDSFormats.format(of: link))
         }
-        return OPDSFormats.sorted(links, format: OPDSFormats.format(of:)).enumerated().map { index, link in
-            let url = link.url!
-            let name = url.lastPathComponent
+        return OPDSFormats.sorted(links) { $0.2 }.enumerated().map { index, item in
+            let (link, url, format) = item
             return LibraryFile(
-                id: LibraryFileID(rawValue: url.absoluteString),
-                format: OPDSFormats.format(of: link),
+                id: LibraryFileID(rawValue: string(url)),
+                format: format,
                 sizeBytes: link.length,
-                filename: name.contains(".") ? name : nil,
+                filename: Self.filename(url),
                 isPrimary: index == 0
             )
         }
     }
 
-    static func cover(_ publication: OPDSPublication) -> LibraryCover? {
+    /// The file's name from its URL, if it has one that's safe to show or
+    /// use: a decoded `%2F` or a leading dot is refused, not cleaned.
+    static func filename(_ url: URL) -> String? {
+        let name = url.lastPathComponent
+        guard name.contains("."), !name.hasPrefix("."), !name.contains("/"), !name.contains("\\") else { return nil }
+        return name
+    }
+
+    func cover(_ publication: OPDSPublication) -> LibraryCover? {
         cover(images: publication.images + publication.links)
     }
 
     /// Both sizes in one opaque value: the full image and the thumbnail.
-    static func cover(images links: [OPDSLink]) -> LibraryCover? {
+    func cover(images links: [OPDSLink]) -> LibraryCover? {
         func first(_ rels: String...) -> OPDSLink? {
             links.first { link in rels.contains { link.has(rel: $0) } && link.url != nil }
         }
@@ -327,7 +377,7 @@ public struct OPDSSource: LibrarySource {
         if full == nil { full = sized.last?.url }
         if thumbnail == nil { thumbnail = sized.first?.url }
         guard full != nil || thumbnail != nil else { return nil }
-        return CoverImages(full: full?.absoluteString, thumbnail: thumbnail?.absoluteString).cover
+        return CoverImages(full: full.map(string), thumbnail: thumbnail.map(string)).cover
     }
 
     private static func normalized(_ url: URL) -> String {

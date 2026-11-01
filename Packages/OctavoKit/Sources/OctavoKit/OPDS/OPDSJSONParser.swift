@@ -44,7 +44,7 @@ enum OPDSJSONParser {
         var singlePublication: Publication?
         var isFeed: Bool
 
-        enum CodingKeys: String, CodingKey { case metadata, links, navigation, publications, groups }
+        enum CodingKeys: String, CodingKey { case metadata, links, navigation, publications, groups, facets }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -52,8 +52,17 @@ enum OPDSJSONParser {
             navigation = c.lenient(LossyArray<Link>.self, .navigation)?.elements ?? []
             publications = c.lenient(LossyArray<Publication>.self, .publications)?.elements ?? []
             groups = c.lenient(LossyArray<Group>.self, .groups)?.elements ?? []
-            isFeed = c.contains(.navigation) || c.contains(.publications) || c.contains(.groups)
-            if !isFeed, let publication = try? Publication(from: decoder), !publication.metadata.title.isEmpty {
+            // A publication document has something to read or show; a feed
+            // can be empty (an empty shelf or search), with only metadata
+            // and links.
+            let publication = try? Publication(from: decoder)
+            let isPublication = publication.map { publication in
+                !publication.metadata.title.isEmpty
+                    && (publication.links.contains { $0.rels.contains { $0.hasPrefix(OPDSRel.acquisition) } } || !publication.images.isEmpty)
+            } ?? false
+            isFeed = c.contains(.navigation) || c.contains(.publications) || c.contains(.groups) || c.contains(.facets)
+                || (!isPublication && c.contains(.metadata))
+            if !isFeed, let publication {
                 singlePublication = publication
                 metadata = nil
             } else {

@@ -54,13 +54,15 @@ struct OPDSSearchTemplate: Hashable, Sendable {
 /// Reads an OpenSearch description document for its search template,
 /// preferring the URL that returns an OPDS feed.
 enum OpenSearchDescriptionParser {
-    static func template(in data: Data, url: URL) -> OPDSSearchTemplate? {
+    /// `nil` if the description offers no feed URL (only a web page);
+    /// throws `invalidResponse` if it isn't a description at all.
+    static func template(in data: Data, url: URL) throws -> OPDSSearchTemplate? {
         let handler = Handler()
         let parser = XMLParser(data: data)
         parser.shouldProcessNamespaces = true
         parser.shouldResolveExternalEntities = false
         parser.delegate = handler
-        guard parser.parse() else { return nil }
+        guard parser.parse(), handler.sawDescription else { throw LibraryError.invalidResponse }
         let ranked = handler.urls.sorted { rank($0.type) < rank($1.type) }
         return ranked.first.map { OPDSSearchTemplate(template: $0.template, base: url) }
     }
@@ -74,8 +76,10 @@ enum OpenSearchDescriptionParser {
 
     private final class Handler: NSObject, XMLParserDelegate {
         var urls: [(template: String, type: String?)] = []
+        var sawDescription = false
 
         func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
+            if name == "OpenSearchDescription" { sawDescription = true }
             guard name == "Url", let template = attributes["template"], !template.isEmpty else { return }
             let type = attributes["type"]
             // HTML results aren't a feed we can read.

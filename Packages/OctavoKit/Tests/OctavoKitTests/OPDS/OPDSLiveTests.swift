@@ -54,7 +54,7 @@ struct OPDSLiveTests {
         case (false, .open):
             break
         case (true, .signInRequired(let request)):
-            #expect(request.supportsBasic)
+            #expect(request.scheme == .basic)
             if server == .komga || server == .komga2 {
                 // From Komga's OPDS Authentication Document.
                 #expect(request.usernameLabel == "Email")
@@ -152,9 +152,13 @@ enum LiveOPDS {
         }
 
         func source(signedIn: Bool = true) async throws -> OPDSSource {
-            OPDSSource(
-                catalogURL: try await catalogURL(),
-                credentials: InMemoryPasswordStore(signedIn ? credentials : nil)
+            let catalog = try await catalogURL()
+            return OPDSSource(
+                catalogURL: catalog,
+                transport: SessionTransport(),
+                credentials: InMemoryPasswordStore(signedIn ? credentials : nil),
+                authScheme: credentials == nil ? nil : .basic,
+                secret: OPDSURLSecret.detect(in: catalog)
             )
         }
     }
