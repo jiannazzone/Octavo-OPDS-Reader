@@ -1,6 +1,6 @@
 # Network trust and credentials (#9, D25)
 
-Plain http only for home and VPN addresses, "Trust this server" for self-signed certificates, and credentials in the Keychain. Built and measured on the simulator **Octavo Trust Duo** (iOS 27.1), 2026-11-01. **Security-critical: Adam signs off the review below before this merges.**
+Plain http only for home and VPN addresses, "Trust this server" for self-signed certificates, and credentials in the Keychain. Built and measured on the simulator **Octavo Trust Duo** (iOS 27.1), 2026-11-01. **Security-critical: Adam signed off the review below on 2026-11-01** (through commit `2257410`); later changes here need a new review.
 
 Code: `Packages/OctavoKit/Sources/OctavoKit/Network/` (`IPAddress`, `HomeNetworkPolicy`, `ServerTransport`, `NetworkTrust`, `ExpiringActivity`), `…/Keychain/` (`KeychainItem`, `ServerCredentials` and the stores), `BookOrbitClient.swift` (transport, ordered saves), `Config/Octavo-Info.plist` (ATS), `Octavo/Trust/` (the proposed prompt and a DEBUG hook). Test servers: `dev/trust/` (self-signed HTTPS).
 
@@ -123,7 +123,7 @@ URLSession has no hook before an http request is sent, so the per-request check 
 - **Basic and Digest** challenges are answered from the `PasswordStore`, only for the server's own host, port and scheme, and only once.
 - **For #8:** take `any HTTPTransport` and a `PasswordStore`. In tests, use `ServerTransport(server:policy:configuration:)` with a stub `URLProtocol` and a fake resolver (`HomeNetworkPolicyTests.swift` has `HomeNetworkPolicy.testing`). There's deliberately no `URLSession: HTTPTransport` conformance, so nothing can skip the rules.
 
-### 6. The "Trust this server" prompt: proposed, needs Adam's approval
+### 6. The "Trust this server" prompt: approved by Adam (2026-11-01)
 `Octavo/Trust/TrustServerView.swift`. Its real homes are first run (#12) and Settings (#16). For now a DEBUG section in the Settings stand-in ("Debug trust") drives it against `dev/trust/`.
 - **First time:** a shield icon and "Trust this server?", a one-line explanation, then:
   - the certificate: server, issued to, issued by ("Itself (self-signed)"), expiry;
@@ -180,17 +180,17 @@ The folded "changed" shot predates the red tint on the second button. Unfolding 
   - **Size cap:** `data(for:)` stops past `maximumDataSize` (default 64 MB), from `expectedContentLength` and while streaming, with `URLError(.dataLengthExceedsMaximum)`. Downloads go to a file, uncapped.
   - **Regression fixed:** the "internet server can't reach home" rule also hit the server's own address, so a split-DNS https server (real certificate, resolving to 192.168.x at home) refused its own requests. The rule now covers only *other* hosts it links to, and those are resolved before the request (names that resolve home are refused). That also closes the proxy gap the automated review raised.
 
-## Review checklist (for sign-off)
+## Review checklist (signed off by Adam, 2026-11-01)
 
-- [ ] Plain http can't reach a public address: IP literal, name, mixed DNS answer, redirect, proxy, odd spelling (`HomeNetworkPolicyTests`, `ServerTransportTests`; live `decimalAddressesAreStoppedBeforeATS`).
-- [ ] The address is checked before every request and redirect, not only when a server is added (`rechecksTheAddressBeforeEveryRequest`).
-- [ ] ATS config matches `HomeNetworkPolicy.localSuffixes`, with no `NSAllowsArbitraryLoads`.
-- [ ] A self-signed certificate is accepted only with a matching pin, only for the server's own host and port; a change and a system-trusted replacement both ask (`ServerTrustLiveTests`, app `selfSignedCertificateOnTheLAN`).
-- [ ] Credentials never ride a cross-origin redirect, a downgrade or a cookie jar; passwords answer only the server's own challenges, once.
-- [ ] Tokens: saved before use, in order, survive a failed save, a crash inside the grace window and a sign-out racing a refresh (`BookOrbitTokenRotationTests`).
-- [ ] Keychain: this device only, updated in place, cleared by Remove server and by a reinstall (`KeychainTests`).
-- [ ] Nothing logs or prints secrets (`PasswordCredentials` redacts; `BookOrbitCredentials` is never logged).
-- [ ] Residual risks above are acceptable.
+- [x] Plain http can't reach a public address: IP literal, name, mixed DNS answer, redirect, proxy, odd spelling (`HomeNetworkPolicyTests`, `ServerTransportTests`; live `decimalAddressesAreStoppedBeforeATS`).
+- [x] The address is checked before every request and redirect, not only when a server is added (`rechecksTheAddressBeforeEveryRequest`).
+- [x] ATS config matches `HomeNetworkPolicy.localSuffixes`, with no `NSAllowsArbitraryLoads`.
+- [x] A self-signed certificate is accepted only with a matching pin, only for the server's own host and port; a change and a system-trusted replacement both ask (`ServerTrustLiveTests`, app `selfSignedCertificateOnTheLAN`).
+- [x] Credentials never ride a cross-origin redirect, a downgrade or a cookie jar; passwords answer only the server's own challenges, once.
+- [x] Tokens: saved before use, in order, survive a failed save, a crash inside the grace window and a sign-out racing a refresh (`BookOrbitTokenRotationTests`).
+- [x] Keychain: this device only, updated in place, cleared by Remove server and by a reinstall (`KeychainTests`).
+- [x] Nothing logs or prints secrets (`PasswordCredentials` redacts; `BookOrbitCredentials` is never logged).
+- [x] Residual risks above are acceptable.
 
 ## Tests and how to run them
 
