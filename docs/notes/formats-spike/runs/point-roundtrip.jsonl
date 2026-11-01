@@ -1,0 +1,21 @@
+{"book":"alice-in-wonderland.azw3","pages":19,"pointSame":19,"rangeSame":19,"misses":[]}
+{"book":"alice-in-wonderland.epub","pages":15,"pointSame":15,"rangeSame":15,"misses":[]}
+{"book":"alice-in-wonderland.fb2","pages":15,"pointSame":15,"rangeSame":15,"misses":[]}
+{"book":"alice-in-wonderland.mobi","pages":20,"pointSame":20,"rangeSame":20,"misses":[]}
+{"book":"frankenstein.azw3","pages":34,"pointSame":34,"rangeSame":34,"misses":[]}
+{"book":"frankenstein.epub","pages":32,"pointSame":29,"rangeSame":29,"misses":[{"section":0,"original":"","byPoint":"CONTENTS Letter 1 Letter 2 Letter"},{"section":2,"original":"","byPoint":"Letter 1 To Mrs. Saville, England."},{"section":5,"original":"","byPoint":"Letter 4 To Mrs. Saville, England."}]}
+{"book":"frankenstein.fb2","pages":32,"pointSame":32,"rangeSame":32,"misses":[]}
+{"book":"frankenstein.mobi","pages":35,"pointSame":35,"rangeSame":35,"misses":[]}
+{"book":"pride-and-prejudice.azw3","pages":38,"pointSame":37,"rangeSame":37,"misses":[{"section":64,"original":"FEW days after this visit, Mr.","byPoint":"“Lizzy, my dear, I want to"}]}
+{"book":"pride-and-prejudice.epub","pages":5,"pointSame":5,"rangeSame":5,"misses":[]}
+{"book":"sherlock-holmes.azw3","pages":19,"pointSame":19,"rangeSame":19,"misses":[]}
+{"book":"sherlock-holmes.epub","pages":15,"pointSame":15,"rangeSame":15,"misses":[]}
+{"book":"sherlock-holmes.fb2","pages":15,"pointSame":15,"rangeSame":15,"misses":[]}
+{"book":"sherlock-holmes.mobi","pages":20,"pointSame":20,"rangeSame":20,"misses":[]}
+{"book":"the-time-machine.azw3","pages":23,"pointSame":23,"rangeSame":23,"misses":[]}
+{"book":"the-time-machine.fb2","pages":20,"pointSame":20,"rangeSame":20,"misses":[]}
+{"book":"the-time-machine.mobi","pages":24,"pointSame":24,"rangeSame":24,"misses":[]}
+{"book":"pride-and-prejudice.azw3","pages":76,"elementStarts":72,"pointSame":76,"rangeSame":76,"textSame":74}
+{"book":"pride-and-prejudice.fb2","pages":9,"elementStarts":9,"pointSame":9,"rangeSame":9,"textSame":8}
+{"book":"pride-and-prejudice.mobi","pages":85,"elementStarts":85,"pointSame":85,"rangeSame":85,"textSame":81}
+{"book":"treasure-island.azw3","pages":90,"elementStarts":90,"pointSame":90,"rangeSame":90,"textSame":89}

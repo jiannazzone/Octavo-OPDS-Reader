@@ -83,6 +83,9 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
         case "epub": "application/epub+zip"
         case "cbz": "application/vnd.comicbook+zip"
         case "fb2": "application/x-fictionbook+xml"
+        // foliate tells a zipped FB2 from an EPUB by this type or by the name.
+        case "fbz": "application/x-zip-compressed-fb2"
+        // foliate detects MOBI/KF8 by its header, not by type.
         case "mobi", "azw", "azw3": "application/x-mobipocket-ebook"
         default: UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream"
         }
