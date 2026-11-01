@@ -25,8 +25,8 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ### Picking a book (approved 2026-10-31)
 
 4. **Folded: full-screen cover.** Tapping a book shows its cover filling the outer display.
-   - Over the cover: a bottom strip with the chapter and percentage, a progress bar, when it last synced, and an **Open** button.
-   - Swipe up for details: description, series, collections, download, Mark as finished, file info (ratings come later).
+   - Over the cover: a bottom strip (a glass sheet at its compact height, with a grabber) showing the chapter and percentage, when it last synced, an **Open** button and a progress bar.
+   - Swipe up on it for details: the same sheet expands (decision 20).
    - **Unfolding on the cover opens the book at your place immediately**, with no prompt (answers part of duo-spreads §7 question 5).
    - The cover runs under the camera column, which covers its top-right corner; accepted. The tab column stays visible over the cover.
 5. **Unfolded: grid | cover page.** The grid sits left of the hinge; the selected book's cover page (same strip and Open button as folded) fills the right half. Nothing sits on the hinge.
@@ -115,8 +115,8 @@ Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/O
 |---|---|
 | 01 Home · folded | Continue reading, new on BookOrbit |
 | 02 Library · folded | Chips, cover grid, filter button in the side column |
-| 03 Book cover · folded | Full-screen cover, glass progress strip with Open |
-| 04 Library · unfolded | Grid left of the hinge, cover page right of it (hinge marked) |
+| 03 Book cover · folded | Full-screen cover, the book sheet at its compact height |
+| 04 Library · unfolded | Grid left of the hinge, cover page with the compact book sheet right of it (hinge marked) |
 | 05 Add your books · folded | Pick BookOrbit or OPDS, or import from Files |
 | 06 Sign in to BookOrbit · folded | Address, account, Sign in, SSO (only if offered) |
 | 07 Reader · folded | The page alone, controls hidden |
