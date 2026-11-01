@@ -9,7 +9,8 @@ vendored here (BookOrbit is AGPL-3.0, see `CLAUDE.md`).
   upstream tag `v3.6.0` = commit `a96ff0c85a4c25e9126dfa4c71ea87537a3baf7a`.
   Override with `BOOKORBIT_TAG=…`.
 - **URL:** <http://localhost:3300> (bound to 127.0.0.1; override with `BOOKORBIT_PORT`).
-  The iOS Simulator reaches it at the same address.
+  The iOS Simulator reaches it at the same address. A real iPhone needs
+  `BOOKORBIT_BIND`; see "From a real iPhone".
 - **Login:** `octavo` / `OctavoDev1`. Local test account only, created by `seed.sh`.
   All secrets in `docker-compose.yml` are dev-only placeholders.
 - **State:** `data/` (gitignored): `data/postgres`, `data/app`, and `data/books`
@@ -24,6 +25,22 @@ docker compose up -d
 
 First start takes ~20 s while BookOrbit migrates the database. Check with
 `curl http://localhost:3300/api/v1/auth/setup-status`.
+
+## From a real iPhone
+
+The server listens only on this Mac unless you ask otherwise:
+
+```bash
+cd dev/bookorbit
+BOOKORBIT_BIND=0.0.0.0 docker compose up -d
+```
+
+On the phone, sign in at `http://<LocalHostName>.local:3300`, where
+`<LocalHostName>` is what `scutil --get LocalHostName` prints. The app's
+`NSAllowsLocalNetworking` covers `.local` names, and the first connection asks
+for Local Network access. While it's bound to `0.0.0.0`, anyone on the same
+network can reach this server and its test accounts. Plain `docker compose up -d`
+makes it local-only again.
 
 ## Seed
 
