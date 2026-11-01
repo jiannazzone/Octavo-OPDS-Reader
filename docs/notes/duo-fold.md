@@ -62,7 +62,7 @@ Timings from the hinge report: on a quiet simulator the page resizes after 100�
 - **Taps** (`bridge.js` `setTapMode`, sent by Swift as `ReaderTapMode`): in book mode a tap left of the spine goes back and right of it goes forward (foliate's `goLeft`/`goRight`, so a right-to-left book turns the natural way); a tap in the side column, where the page runs under it (x ≥ SwiftUI's width, 867 pt unfolded), posts `tap` with zone `column`. Flat keeps 30% / 40% / 30%. Taps outside the section's frame (the page margins and the column) are now detected too; before, they did nothing.
 - **Controls hook:** `ReaderModel.onControlsTap(zone)` is called for a middle tap (flat) and a column tap (book mode). #17 shows the controls from it.
 - **Spine shadow** (`ReaderSpineShadow`): a SwiftUI gradient over the gap between the pages (66.6 pt on the Duo), darkest at the fold, drawn only in book mode and only over the page, never in the book's own content. Setting `reader.bookModeShadow` (`ReaderSettings`), on by default; the Customize toggle is #18. Screenshot: `duo-fold/screenshots/book-mode-90.png`.
-- Checked in the simulator at 90°: taps at 430 pt and 520 pt (both in the middle zone when flat) went back and forward; a tap at 910 pt posted `column` and didn't turn the page.
+- Checked in the simulator at 90°: taps at 430 pt and 520 pt (both in the middle zone when flat) went back and forward; a tap at 910 pt posted `column` and didn't turn the page. Video (real time, idle stretches cut): `duo-fold/videos/book-mode.mp4`: a 1 s sweep from flat to 90° (the shadow appears as the angle passes 150°), a tap on each half, a column tap (the debug strip shows `controls: column`), and the sweep back to flat.
 
 Simulator observations (angles must be set on a device anyway):
 
