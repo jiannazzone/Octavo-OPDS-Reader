@@ -30,6 +30,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
    - **Unfolding on the cover opens the book at your place immediately**, with no prompt (answers part of duo-spreads §7 question 5).
    - The cover runs under the camera column, which covers its top-right corner; accepted. The tab column stays visible over the cover.
 5. **Unfolded: grid | cover page.** The grid sits left of the hinge; the selected book's cover page (same strip and Open button as folded) fills the right half. Nothing sits on the hinge.
+26. **Home unfolded: Home | your current book.** Home sits left of the hinge; the right half shows the first "Continue reading" book's cover page with its compact sheet, ready to Open. Tapping another book on Home switches the right half.
 
 ### Library drill-ins (approved 2026-10-31)
 
@@ -78,6 +79,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
     - **Sign-in errors** appear under the fields ("That username or password didn't work.").
     - **No pop-up alerts**, except to confirm deleting or removing something.
     - A position that didn't sync shows "Not synced yet, will retry" on the strip's sync line.
+    - **Downloading** shows on the strip too: "Downloading · 42%", "Opens when it's done.", a progress bar and Cancel.
 
 ### Reader and the Duo (approved 2026-10-31)
 
@@ -139,19 +141,19 @@ The goal for v1: read your server's books well on the Duo.
 | Add your books (pick BookOrbit or OPDS, or import) | Designed (frame 05) |
 | Sign in to BookOrbit | Designed (frame 06) |
 | Add an OPDS server (address, optional sign-in) | Designed (frames 27, 28) |
-| Where reading progress syncs | Sketched in the brainstorm |
-| Home, folded and unfolded | Folded designed (frame 01) |
+| Where reading progress syncs | Designed (frame 39) |
+| Home, folded and unfolded | Designed (frames 01, 38) |
 | Library, folded and unfolded, with chips | Designed (frames 02, 04) |
 | Collections, Series, Authors lists (chip drill-ins) | Designed (frames 29–33) |
 | Book cover page, folded and unfolded | Designed (frames 03, 04) |
 | Book details (swipe up from the cover; Mark as finished, download) | Designed (frames 15, 16) |
 | Search tab and results | Designed (frames 17–20) |
 | Reader: one page folded, spread unfolded, book mode, controls shown | Designed (frames 07, 08, 09, 14) |
-| Contents and bookmarks | Contents designed (frame 12); Bookmarks tab sketched |
+| Contents and bookmarks | Designed (frames 12, 40) |
 | Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Designed (frames 10, 11) |
-| Search in book | Stepping bar designed (frame 13); results list sketched |
+| Search in book | Designed (frames 13, 41) |
 | Settings tab | Designed (frames 34–37) |
-| Empty and error states (no server yet, server unreachable, signed out, sign-in failed, download failed, offline) | Designed (frames 21–26; sample-book row on frame 05); the downloading-in-progress state is sketched |
+| Empty and error states (no server yet, server unreachable, signed out, sign-in failed, download failed, offline) | Designed (frames 21–26, 42; sample-book row on frame 05) |
 
 Import from Files uses the system document picker; no screen of our own.
 
@@ -202,6 +204,11 @@ Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX
 | 35 Server · folded | Address, account, sync status, Sign out, Remove server |
 | 36 Remove server · folded | Keep books on iPhone / Remove books too / Cancel |
 | 37 Settings · unfolded | List left of the hinge, server page right |
+| 38 Home · unfolded | Home left of the hinge, the current book's cover page right |
+| 39 Reading progress · folded | The sync step after BookOrbit sign-in |
+| 40 Bookmarks · folded | The Bookmarks tab of the Contents panel |
+| 41 Search in book · results · folded | Matches grouped by chapter |
+| 42 Downloading · folded | Cover strip: Downloading · 42% · Cancel |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
