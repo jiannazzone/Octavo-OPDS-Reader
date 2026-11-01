@@ -1,6 +1,6 @@
 # Octavo logo and app icon
 
-Status: **direction chosen, draft icon built** (logo brainstorm with Adam, 2026-11-01). Everything below marked as a decision was Adam's call. The icon isn't in the app target yet; that's a later step (see Next steps).
+Status: **direction chosen; the icon is the app's icon** (logo brainstorm with Adam, 2026-11-01; added to the app target the same day). Everything below marked as a decision was Adam's call.
 
 - **App icon:** the library book pocket (sketch e3). A checkout card, tilted and half pulled out of a kraft pocket, with **8vo** stamped on the pocket.
 - **Glyph (one colour):** the bare **8vo**, for monochrome places such as Settings → About or a Live Activity.
@@ -13,7 +13,7 @@ Status: **direction chosen, draft icon built** (logo brainstorm with Adam, 2026-
 
 | What | Where |
 |---|---|
-| Icon Composer file (the draft icon) | `logo/Octavo.icon` |
+| Icon Composer file, the app's icon (App Icon name `AppIcon`) | `Octavo/AppIcon.icon` |
 | Renders from Apple's `ictool` (iOS 27) | `logo/renders/` |
 | One-colour glyph, outlined | `logo/glyph-8vo.svg` |
 | Sketches of every direction explored | `logo/directions.svg` |
@@ -71,7 +71,7 @@ Specular, blur and refraction are at the defaults. Dark, Clear and Tinted are **
 **Rendering:** `ictool` ships inside Icon Composer:
 
 ```bash
-"/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool" docs/design/logo/Octavo.icon --export-image --output-file out.png --platform iOS --rendition Default --width 60 --height 60 --scale 3
+"/Applications/Xcode.app/Contents/Applications/Icon Composer.app/Contents/Executables/ictool" Octavo/AppIcon.icon --export-image --output-file out.png --platform iOS --rendition Default --width 60 --height 60 --scale 3
 ```
 
 Renditions: `Default`, `Dark`, `ClearLight`, `ClearDark`, `TintedLight`, `TintedDark` (tinted needs `--tint-color` and `--tint-strength`, e.g. 0.25 and 0.75).
@@ -96,5 +96,5 @@ The only third-party asset is **EB Garamond** (SIL OFL 1.1), used as outlines. I
 2. **Appearances.** Decide whether the auto-generated Dark, Clear and Tinted are final or need overrides in Icon Composer. The Dark, Tinted and Clear variants in Figma are hand-made simulations from before Icon Composer, superseded by the renders.
 3. **The glyph's rule.** The glyph has a rule under "vo" and the icon doesn't. Decide whether they should match.
 4. **Keeping Figma and the icon in step.** The Figma Light variant is the source for `1 Card.svg`, `2 Pocket.svg` and `3 Lettering.svg`. The stamp layers are recoloured copies of the lettering, moved ±4 px, and aren't in Figma. Re-export all of them after any Figma change.
-5. **Make it the app icon** (needs Adam's OK): add `Octavo.icon` to the app target, which replaces the `AppIcon` asset catalog, and check the App Store icon in App Store Connect.
+5. **App Store icon:** check the rendered icon in App Store Connect on the first upload. (The icon itself is in the app target: `Octavo/AppIcon.icon`, picked up by the synced `Octavo/` folder, with `ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon`.)
 6. **Re-render when iOS 28 arrives**, since Liquid Glass effects can change between system versions.
