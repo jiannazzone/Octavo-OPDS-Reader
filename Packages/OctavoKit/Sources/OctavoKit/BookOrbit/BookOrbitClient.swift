@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 public enum BookOrbitError: Error, Equatable, Sendable {
     /// No stored credentials. Call `login` first.
@@ -207,14 +208,66 @@ public actor BookOrbitClient {
 
     /// `GET collections`: the user's own collections plus public ones.
     public func collections() async throws -> [BookOrbitCollection] {
-        try await get("collections")
+        try await get("collections", as: LossyArray<BookOrbitCollection>.self).elements
     }
 
-    /// `GET collections/{id}/books`. `page` is 0-based.
+    // Paged lists below: `page` is 0-based. BookOrbit 3.6 allows `size` up to
+    // 100 for series and authors, 200 for `books/query`.
+
+    /// `GET collections/{id}/books`.
     public func collectionBooks(collectionID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
-        try await get("collections/\(collectionID)/books", query: [
-            URLQueryItem(name: "page", value: String(page)),
-            URLQueryItem(name: "size", value: String(size)),
+        try await get("collections/\(collectionID)/books", query: pageQuery(page, size))
+    }
+
+    /// `GET smart-scopes`: saved filters, the user's own plus public ones.
+    public func smartScopes() async throws -> [BookOrbitSmartScope] {
+        try await get("smart-scopes", as: LossyArray<BookOrbitSmartScope>.self).elements
+    }
+
+    /// `GET smart-scopes/{id}/books`, in the scope's own sort order.
+    public func smartScopeBooks(scopeID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await get("smart-scopes/\(scopeID)/books", query: pageQuery(page, size))
+    }
+
+    /// `POST books/query`: books across every library the user can see.
+    /// `query` matches titles, authors and series.
+    public func books(matching query: String? = nil, sort: [BookOrbitBookSort] = [], page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
+        struct Body: Encodable {
+            struct Pagination: Encodable { var page: Int; var size: Int }
+            var q: String?
+            var sort: [BookOrbitBookSort]
+            var pagination: Pagination
+        }
+        let body = Body(q: query, sort: sort, pagination: .init(page: page, size: size))
+        return try decode(BookOrbitPage<BookOrbitBook>.self, from: try await send(jsonRequest("books/query", method: "POST", body: body)))
+    }
+
+    /// `GET series`, by name.
+    public func series(page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitSeries> {
+        try await get("series", query: pageQuery(page, size) + sortQuery("name", "asc"))
+    }
+
+    /// `GET series/{id}/books`, in reading order.
+    public func seriesBooks(seriesID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await get("series/\(seriesID)/books", query: pageQuery(page, size) + sortQuery("seriesIndex", "asc"))
+    }
+
+    /// `GET authors`, by sort name ("Austen, Jane").
+    public func authors(page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitAuthor> {
+        try await get("authors", query: pageQuery(page, size) + sortQuery("sortName", "asc"))
+    }
+
+    /// `GET authors/{id}/books`, by title.
+    public func authorBooks(authorID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await get("authors/\(authorID)/books", query: pageQuery(page, size) + sortQuery("title", "asc"))
+    }
+
+    /// `GET search`: books, series and authors matching `query`, up to
+    /// `limit` (1–10) of each. BookOrbit needs at least 2 characters.
+    public func search(_ query: String, limit: Int = 10) async throws -> BookOrbitSearchResults {
+        try await get("search", query: [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "limit", value: String(limit)),
         ])
     }
 
@@ -223,13 +276,23 @@ public actor BookOrbitClient {
         try await get("books/\(id)")
     }
 
+    /// `GET books/{id}/thumbnail` (about 386×600) or `books/{id}/cover` (the
+    /// original): the image bytes.
+    public func cover(bookID: Int, thumbnail: Bool = true) async throws -> Data {
+        var request = URLRequest(url: apiURL("books/\(bookID)/\(thumbnail ? "thumbnail" : "cover")"))
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        return try await send(request)
+    }
+
     /// `GET books/files/{fileId}/serve`, saved to `destination` (replaced if
-    /// it exists).
+    /// it exists). `progress` gets 0...1 as bytes arrive; it stays at 0 if
+    /// the server doesn't send a length. Cancelling the task cancels the
+    /// download and leaves `destination` alone.
     @discardableResult
-    public func download(fileID: Int, to destination: URL) async throws -> URL {
+    public func download(fileID: Int, to destination: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws -> URL {
         let request = URLRequest(url: apiURL("books/files/\(fileID)/serve"))
         let (temporaryURL, response) = try await authorized(request) { [session] request in
-            let (url, response) = try await session.download(for: request)
+            let (url, response) = try await session.download(for: request, delegate: progress.map(DownloadProgress.init))
             // The retry downloads again; drop the 401's body.
             if (response as? HTTPURLResponse)?.statusCode == 401 { try? FileManager.default.removeItem(at: url) }
             return (url, response)
@@ -298,6 +361,14 @@ public actor BookOrbitClient {
         return (retryResult, retry)
     }
 
+    private func pageQuery(_ page: Int, _ size: Int) -> [URLQueryItem] {
+        [URLQueryItem(name: "page", value: String(page)), URLQueryItem(name: "size", value: String(size))]
+    }
+
+    private func sortQuery(_ sort: String, _ order: String) -> [URLQueryItem] {
+        [URLQueryItem(name: "sort", value: sort), URLQueryItem(name: "order", value: order)]
+    }
+
     private func apiURL(_ path: String) -> URL {
         baseURL.appending(path: "api/v1/" + path)
     }
@@ -347,5 +418,27 @@ public actor BookOrbitClient {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Not an ISO 8601 date: \(string)")
         }
         return decoder
+    }
+}
+
+/// Reports a download's progress. The async `download(for:delegate:)` never
+/// calls `didWriteData` on a task delegate, so this watches the task's
+/// `progress` instead, and only once the response is a success (a 401's
+/// body would otherwise count before the retry).
+private final class DownloadProgress: NSObject, URLSessionTaskDelegate, Sendable {
+    private let report: @Sendable (Double) -> Void
+    private let observation = Mutex<NSKeyValueObservation?>(nil)
+
+    init(_ report: @escaping @Sendable (Double) -> Void) {
+        self.report = report
+    }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        let report = report
+        let observation = task.progress.observe(\.fractionCompleted) { [weak task] progress, _ in
+            guard let status = (task?.response as? HTTPURLResponse)?.statusCode, (200..<300).contains(status) else { return }
+            report(progress.fractionCompleted)
+        }
+        self.observation.withLock { $0 = observation }
     }
 }

@@ -33,6 +33,26 @@ Spike 1b (`BookOrbitClient` in OctavoKit) and 2a (sync), measured against the lo
 - `GET books/files/{id}/serve` returns the file (`application/epub+zip`) with an ETag, `Accept-Ranges: bytes` and a Content-Disposition filename. It is byte-identical to the upload.
 - The web reader is at `/read/{bookId}/{fileId}?format=epub`. Opening a book there writes progress for that file.
 
+## Browsing (issue #7, `BookOrbitSource`)
+
+Checked live against v3.6.0, plus BookOrbit's request DTOs for parameter names (read for behaviour, nothing copied).
+
+- **All books:** `POST books/query {q?, sort: [{field, dir}], pagination: {page, size}}` returns `{items, total, page, size}` with status **201**. `size` is at most 200. Paging and sort go in the body; the same keys in the query string are ignored. The body is a zod schema that **silently drops unknown keys**, so a misspelt field just does nothing. Sort fields include `title`, `addedAt`, `relevance`, `seriesIndex`, `author`, `lastReadAt`. `q` matches titles, authors and series.
+- **Lists that reject unknown query parameters** (400 `property X should not exist`), with what each accepts:
+  - `GET series`: `page, size ≤ 100, q, sort (relevance|name|bookCount|lastAddedAt|readProgress), order, libraryId, completionStatus`. The page adds `facets`. Items: `{id, name, bookCount, readCount, authors: [String], coverBookIds, volumes, gaps, …}`.
+  - `GET series/{id}/books`: `page, size ≤ 100, sort (seriesIndex|title|addedAt), order, libraryId`. The page adds `seriesInfo`.
+  - `GET authors`: `page, size ≤ 100, q, sort (relevance|name|sortName|bookCount|lastAddedAt|lastEnrichedAt), order, libraryId, …`. Items: `{id, name, sortName, bookCount, coverBookId, imageUrl}`.
+  - `GET authors/{id}/books`: `page, size ≤ 100, sort (title|publishedYear|addedAt), order, libraryId, collapseSeries`. Default `addedAt desc`.
+  - `GET search`: `q` (2–200 characters), `limit` (1–10, default 5), `libraryId`. Returns `{query, books, authors, series}`, each `{items: [{item, matchedField, matchedText}], total}`.
+- **Lists that don't validate the query:** `GET collections/{id}/books` (`page, size, q, collapseSeries`) and `GET smart-scopes/{id}/books` (`page, size, q`). `GET collections` and `GET smart-scopes` return plain arrays; either can hold `mediaType: "podcasts"` entries.
+- **Shapes to decode tolerantly:**
+  - `seriesIndex` is a **string** in 3.6 (`"1"`, `"2.5"`), in lists, in `seriesMemberships` and in the detail.
+  - `title` can be `null` in lists.
+  - `books/{id}` adds `collections: [{id, name}]`, `seriesMemberships: [{seriesId, seriesName, seriesIndex, displayOrder, expectedBookCount}]`, `readStatus` and `addedAt`. Its `readingProgress` is `null`; lists carry it.
+- **Covers:** `GET books/{id}/thumbnail` (JPEG about 386×600) and `GET books/{id}/cover` (the original). Both need the bearer token, send `Cache-Control: private, max-age=86400` and an ETag, and reject unknown query parameters. `coverVersion` on a book changes when its cover does.
+- **Download progress:** `serve` sends `Content-Length`. URLSession's async `download(for:delegate:)` never calls `didWriteData` on the task delegate; `didCreateTask` plus observing `task.progress` works (370 updates for a 25 MB book).
+- **Smart scopes for tests:** `POST smart-scopes {name, icon, filter: {type: "group", join: "AND", rules: [{type: "rule", field, operator, value}]}, defaultSort: [{field, dir}]}`; `DELETE smart-scopes/{id}`.
+
 ## Seeding (used by `dev/bookorbit/seed.sh`)
 
 `POST auth/setup` (header `x-setup-token`), `POST libraries {name, icon, folders}`, `POST libraries/{id}/upload` (multipart `file`; 409 `UPLOAD_DESTINATION_CONFLICT` on a duplicate), `POST collections {name, icon}`, `POST collections/{id}/books {bookIds}` (idempotent).
