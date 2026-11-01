@@ -35,6 +35,17 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 
 6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync). "Import from Files" sits on the same first screen.
 
+### Reader and the Duo (approved 2026-10-31)
+
+Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first half is decision 4).
+
+7. **Controls are hidden while you read.** A tap in the middle shows them: Back, Contents, Text and theme, Search in book and Bookmark in the side column, plus a glass progress bar with the chapter and page. Taps on the left and right sides turn pages. A setting, **Always show controls**, keeps them visible; it is off by default.
+8. **The page never goes under the side column** (§7 Q3, Q4). Folded, the page stays in the 382 pt content area. Unfolded, the spread stays centred on the hinge and the left edge gives up the same 84 pt, so the margins match. The margin setting runs from wide down to text reaching the column's edge; the gutter on the hinge never drops below the hinge's 40 pt. No foliate patch is needed: the margin setting scales foliate's gap and outer margins together.
+9. **Half-open is book mode** (§7 Q1): controls stay hidden, a shadow at the spine, a tap on the left page goes back and on the right page goes forward.
+10. **Unfolding anywhere but a cover keeps the same screen** (§7 Q5): it takes its unfolded layout. Only a book's cover turns an unfold into "open".
+11. **Folds cross-fade** (§7 Q6): a snapshot of the old page fades into the settled layout (about 0.3 s), hiding the intermediate re-layouts.
+12. **Unfolded and turned sideways, one column runs straight across the fold** (§7 Q2), as the spike does today. Half-opened that way (laptop-style), the text bends over the fold; accepted.
+
 ## Mockups
 
 Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX?node-id=0-1), built 2026-10-31 on Apple's iOS and iPadOS 27 kit (`iPhone Duo/Standard/Outer - Portrait` and `Inner - Landscape`, `Tab Bar - iPhone Duo`, Liquid Glass buttons, rows, text fields, kit text styles and colour variables). Covers are the public-domain sample books.
@@ -61,6 +72,8 @@ What the kit showed:
 - **Default sync choice for an OPDS server.** Proposed (not approved): preselect iCloud once iCloud sync exists, "Don't sync" until then. A BookOrbit server preselects itself.
 - **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
 - **OPDS feeds with no search.** Search then covers only the books on the phone; how the Search tab says so is undecided.
+- **Reaching the controls in book mode.** Taps on the pages turn them, so controls need another way in. Proposed (not approved): tap the side column, which sits outside both pages.
+- **Book mode's angle range.** Roughly 60–150°; tune on a real device.
 
 ## Needs engineering
 
@@ -68,4 +81,7 @@ What the kit showed:
 - **Library chips from an OPDS feed.** Map the root feed's navigation entries and facets to chips, and decide what happens when a feed has many entries or none.
 - **Pull the synced position while the cover shows.** Start the `ProgressSync` pull when the cover page appears, so unfolding opens the reader at once instead of waiting up to the 5 s pull timeout (duo-spreads §6).
 - **Full-screen cover.** The cover runs under the trailing system column and the camera; the tab column and back button sit over the artwork, so they need a material that reads on any cover.
+- **Page area (decision 8).** Lay out the `foliate-view` with the bridge's left/right insets so the page never reaches the column, map the margin setting onto foliate's gap, and keep the hinge gutter at least the reserved region's width.
+- **Fold cross-fade (decision 11).** Show a `WebView` snapshot over the transition and fade it out once the layout settles; also batch the hinge, resize, layout and fold-region inputs into one re-layout (duo-spreads §5 counts 10–13 today).
+- **Book mode (decision 9).** Detect the half-open range from `onHingeChange`, swap the tap zones, and draw the spine shadow as an overlay outside the book's content.
 - **Unfold on the cover → reader.** The spike's handoff already does this from its book screen (about 20 ms). It must compare old and new hinge status, not react to repeated or on-appear callbacks.
