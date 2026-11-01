@@ -31,6 +31,15 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
    - The cover runs under the camera column, which covers its top-right corner; accepted. The tab column stays visible over the cover.
 5. **Unfolded: grid | cover page.** The grid sits left of the hinge; the selected book's cover page (same strip and Open button as folded) fills the right half. Nothing sits on the hinge.
 
+### Book details (approved 2026-10-31)
+
+20. **A glass sheet over the cover.** Swiping up on the cover slides up a Liquid Glass sheet; the cover stays behind it. Drag it down or tap the cover to dismiss; unfolding still opens the book. Unfolded, the same sheet slides up inside the right-hand cover pane. Contents:
+    - Title; author (tap: their books); where you are (chapter, percentage).
+    - Actions: **Open**, **Mark as finished**, **Download / Remove download**.
+    - Description (three lines, then More).
+    - Series, Collections, File (format, size), From (server), Added.
+    - Mark as finished goes to BookOrbit for BookOrbit books and stays on the iPhone for OPDS and imported books (OPDS can't store it). Ratings and editing collections come later.
+
 ### Connecting (approved 2026-10-31)
 
 6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync; v1 offers only BookOrbit, see v1 scope). "Import from Files" sits on the same first screen.
@@ -87,7 +96,7 @@ The goal for v1: read your server's books well on the Duo.
 | Library, folded and unfolded, with chips | Designed (frames 02, 04) |
 | Collections, Series, Authors lists (chip drill-ins) | Not designed |
 | Book cover page, folded and unfolded | Designed (frames 03, 04) |
-| Book details (swipe up from the cover; Mark as finished, download) | Not designed |
+| Book details (swipe up from the cover; Mark as finished, download) | Designed (frames 15, 16) |
 | Search tab and results | Not designed |
 | Reader: one page folded, spread unfolded, book mode, controls shown | Designed (frames 07, 08, 09, 14) |
 | Contents and bookmarks | Contents designed (frame 12); Bookmarks tab sketched |
@@ -118,6 +127,8 @@ Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/O
 | 12 Contents · folded | Contents \| Bookmarks switch, current chapter highlighted |
 | 13 Search in book · folded | Match highlighted, step bar |
 | 14 Book mode · half-open | Spine shadow, no controls, tap zones annotated |
+| 15 Book details · folded | Glass details sheet over the cover |
+| 16 Book details · unfolded | The same sheet inside the right-hand cover pane |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
