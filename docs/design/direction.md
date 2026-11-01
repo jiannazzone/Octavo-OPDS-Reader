@@ -40,6 +40,14 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
     - Series, Collections, File (format, size), From (server), Added.
     - Mark as finished goes to BookOrbit for BookOrbit books and stays on the iPhone for OPDS and imported books (OPDS can't store it). Ratings and editing collections come later.
 
+### Search tab (approved 2026-10-31)
+
+21. **Search** (the tab at the bottom of the column):
+    - **Before typing:** the search field ("Title, author, series"), your recent searches (with Clear), and Browse chips that jump into the Library's Authors, Series and Collections lists.
+    - **Results** update as you type: **Books** first, as rows with a small cover, author and your progress or a Downloaded mark, from the server and the iPhone together; then **Series** and **Authors** sections when the server supports them (BookOrbit) and there are matches.
+    - **An OPDS server without search** shows a short note ("Calibre-Web doesn't offer search. Showing books on your iPhone."), results from the iPhone, and the feed's own lists as Browse chips.
+    - **Unfolded:** results left of the hinge, the selected book's cover page (with its compact sheet) right of it, as in the Library.
+
 ### Connecting (approved 2026-10-31)
 
 6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync; v1 offers only BookOrbit, see v1 scope). "Import from Files" sits on the same first screen.
@@ -97,7 +105,7 @@ The goal for v1: read your server's books well on the Duo.
 | Collections, Series, Authors lists (chip drill-ins) | Not designed |
 | Book cover page, folded and unfolded | Designed (frames 03, 04) |
 | Book details (swipe up from the cover; Mark as finished, download) | Designed (frames 15, 16) |
-| Search tab and results | Not designed |
+| Search tab and results | Designed (frames 17–20) |
 | Reader: one page folded, spread unfolded, book mode, controls shown | Designed (frames 07, 08, 09, 14) |
 | Contents and bookmarks | Contents designed (frame 12); Bookmarks tab sketched |
 | Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Designed (frames 10, 11) |
@@ -129,6 +137,10 @@ Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/O
 | 14 Book mode · half-open | Spine shadow, no controls, tap zones annotated |
 | 15 Book details · folded | The strip expanded into the details sheet, over the cover |
 | 16 Book details · unfolded | The same sheet inside the right-hand cover pane |
+| 17 Search · folded | Before typing: recent searches, Browse chips |
+| 18 Search results · folded | Books, then Series |
+| 19 Search · OPDS server without search | The note, results from the iPhone, the feed's lists |
+| 20 Search results · unfolded | Results left of the hinge, cover page right of it |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
@@ -144,7 +156,6 @@ What the kit showed:
 - **Settings contents.** Too early to pin down. Working list from the brainstorm (not approved): Server (edit, sign out, replace, progress sync), Sync accounts (iCloud, KOReader sync), Reading defaults, iPhone Duo, Downloads and storage, About.
 - **The sync step for an OPDS server in v1.** With only BookOrbit sync in v1, an OPDS server has nothing to choose. Proposed (not approved): skip the step for OPDS servers until iCloud or KOReader sync exists, then preselect iCloud. A BookOrbit server preselects itself.
 - **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
-- **OPDS feeds with no search.** Search then covers only the books on the phone; how the Search tab says so is undecided.
 - **Reaching the controls in book mode.** Taps on the pages turn them, so controls need another way in. Proposed (not approved): tap the side column, which sits outside both pages.
 - **Book mode's angle range.** Roughly 60–150°; tune on a real device.
 - **The book-mode shadow switch.** Its default (on or off), and whether it lives in Customize or in Settings → iPhone Duo.
