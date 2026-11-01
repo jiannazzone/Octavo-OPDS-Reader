@@ -1,10 +1,9 @@
 import OctavoKit
 import SwiftUI
 
-/// The Home tab (frames 01, 38): Continue reading, from the server and the
-/// iPhone, then the server's newest books in a row that scrolls sideways.
-/// Unfolded, the first book's cover page sits right of the hinge; tapping
-/// another book switches it (decision 26).
+/// The Home tab: Continue reading, from the server and the iPhone, then the
+/// server's newest books in a row that scrolls sideways. Redone as "your
+/// book first" in milestone 5.
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
@@ -28,7 +27,7 @@ struct HomeView: View {
                             EmptyInvitation(
                                 symbol: "books.vertical", title: "Nothing in progress",
                                 message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
-                            ) { shell.tab = .library }
+                            ) { shell.select(.library) }
                         } else if library.connectionProblem == nil {
                             EmptyInvitation(
                                 symbol: "exclamationmark.triangle", title: "Couldn’t load Continue reading",
@@ -45,9 +44,6 @@ struct HomeView: View {
             } else {
                 NoLibraryInvitation()
             }
-        }
-        .onChange(of: library.continueReading.first, initial: true) { _, book in
-            shell[path: .home].companion = book.map { .cover($0) }
         }
     }
 
@@ -86,14 +82,13 @@ struct HomeView: View {
     }
 }
 
-/// A book in progress: its cover, title, place and progress bar. Selected
-/// while the pane beside shows it.
+/// A book in progress: its cover, title, place and progress bar.
 struct ContinueReadingRow: View {
     let book: SourcedBook
     let progress: Double?
 
     var body: some View {
-        OpenButton(route: .cover(book)) { isOpen in
+        OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
                     .frame(width: 48)
@@ -108,7 +103,6 @@ struct ContinueReadingRow: View {
                 }
             }
             .padding(6)
-            .background(isOpen ? Color.accentColor.opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
         }
     }
 }
@@ -116,22 +110,15 @@ struct ContinueReadingRow: View {
 /// The newest books, one row of covers that scrolls sideways.
 struct NewBooksRow: View {
     let books: [SourcedBook]
-    @Environment(\.pane) private var pane
 
     var body: some View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 12) {
                 ForEach(books) { book in
-                    OpenButton(route: .cover(book)) { isOpen in
+                    OpenButton(route: .cover(book)) {
                         BookCover(book: book)
-                            .overlay {
-                                if isOpen {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.accentColor, lineWidth: 3)
-                                }
-                            }
                     }
-                    .frame(width: pane.level == nil ? 106 : 98)
+                    .frame(width: 106)
                     .accessibilityLabel(book.book.title)
                 }
             }

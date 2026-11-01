@@ -1,9 +1,9 @@
 import OctavoKit
 import SwiftUI
 
-// The route-to-screen map and the stand-in screens, replaced by #15
-// (Search) and #16 (Settings). The stand-ins show the shell's layout and
-// shared states; nothing in them is a design.
+// The route-to-screen map and the stand-in screens for Search and Settings,
+// which haven't been designed yet. The stand-ins show the shell's layout
+// and shared states; nothing in them is a design.
 
 /// The view for a route.
 struct ShellScreen: View {
@@ -12,6 +12,7 @@ struct ShellScreen: View {
     var body: some View {
         switch route {
         case .feed(let entry, let source): FeedScreen(entry: entry, source: source)
+        case .settings: SettingsPlaceholder()
         case .settingsPage(let name): SettingsPagePlaceholder(name: name)
         case .cover(let book): CoverScreen(book: book)
         }
@@ -20,10 +21,11 @@ struct ShellScreen: View {
 
 struct SearchPlaceholder: View {
     var body: some View {
-        ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Stand-in until #15."))
+        ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Not designed yet."))
     }
 }
 
+/// Opened by the Settings button at the top of the side column.
 struct SettingsPlaceholder: View {
     var body: some View {
         List {
@@ -80,21 +82,20 @@ struct SettingsPagePlaceholder: View {
     }
 }
 
-/// A book's cover page (#14), from the library the book came from. Its
-/// author opens their books beside it, and Open goes through the shell so
-/// the book joins Home's Continue reading.
+/// A book's screen, from the library the book came from. Its author opens
+/// their books on top of it, and Open goes through the shell so the book
+/// joins Home's Continue reading.
 struct CoverScreen: View {
     let book: SourcedBook
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.pane) private var pane
 
     var body: some View {
         if let source = library.source(for: book.source) {
             BookCoverPage(book: book.book, source: source)
                 .id(library.connection)
                 .environment(\.openLibraryEntry) { entry in
-                    shell.open(.feed(entry, from: book.source), from: pane)
+                    shell.push(.feed(entry, from: book.source))
                 }
                 .environment(\.openBook) { opened in
                     shell.openBook(SourcedBook(source: book.source, book: opened))
@@ -127,8 +128,8 @@ struct ConnectionBannerSlot: View {
                 return
             }
             #endif
-            // Signing in again belongs to Settings (#9, #16).
-            shell.tab = .settings
+            // Signing in again belongs to Settings.
+            shell.openSettings()
         }
     }
 }

@@ -13,9 +13,6 @@ struct LibraryView: View {
             if let server = library.server {
                 if let root = library.root, let chip = library.chip, let feed = library.feed(chip, from: server.id) {
                     FeedContent(feed: feed) { header(root) }
-                        .onChange(of: feed.firstRoute, initial: true) { _, route in
-                            shell[path: .library].companion = route
-                        }
                 } else {
                     VStack {
                         ConnectionBannerSlot()
@@ -48,7 +45,7 @@ struct LibraryView: View {
                 guard link != library.chip else { return }
                 library.chip = link
                 // The screens opened from the old chip go with it.
-                shell[path: .library].routes = []
+                shell[path: .library].replace([])
             }
         }
     }
@@ -235,16 +232,6 @@ struct NoLibraryInvitation: View {
         EmptyInvitation(
             symbol: "books.vertical", title: "No library connected",
             message: "Connect a server in Settings to see your books.", actionTitle: "Open Settings"
-        ) { shell.tab = .settings }
-    }
-}
-
-extension FeedModel {
-    /// The first item as shown, which the pane beside opens on before
-    /// anything is tapped.
-    var firstRoute: ShellRoute? {
-        let entry = isAuthorList ? authorSections.first?.entries.first : entries.first
-        if let entry { return .feed(entry, from: source) }
-        return books.first.map { .cover(SourcedBook(source: source, book: $0)) }
+        ) { shell.openSettings() }
     }
 }

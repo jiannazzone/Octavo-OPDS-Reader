@@ -105,7 +105,7 @@ enum ReaderRemote {
             return nil
         case "home":
             shell.reading = nil
-            for tab in [ShellTab.home, .library, .settings, .search] { shell[path: tab].routes = [] }
+            for tab in ShellTab.allCases { shell[path: tab].replace([]) }
             return nil
         case "shape":
             guard let shape = command.shape.flatMap(ReaderMessage.CFIShape.init(rawValue:)) else { return "shape is point or range" }
@@ -151,8 +151,8 @@ enum ReaderRemote {
         let sourced = SourcedBook(source: server.id, book: book)
         shell.reading = nil
         if cover {
-            shell.tab = .library
-            shell[path: .library].routes = [.cover(sourced)]
+            shell.select(.library)
+            shell[path: .library].replace([.cover(sourced)])
         } else {
             syncs[id] = BookOrbitProgressSync(client: source.client, fileID: fileID)
             shell.openBook(sourced)

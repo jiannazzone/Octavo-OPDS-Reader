@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The app's root: four tabs in the side column (decision 2), each a
-/// `PaneStack` that splits at the hinge when unfolded or half open, and the
-/// reader over them when a book is open.
+/// The app's root: three tabs in the side column (Home, Library, Search),
+/// each a `ScreenStack` whose top screen fills the spread, and the reader
+/// over them when a book is open.
 ///
 /// The reader is a layer over the tabs, not a `fullScreenCover`: a cover
 /// presented by an unfold (which starts about 200 ms before the scene moves
@@ -11,9 +11,9 @@ import SwiftUI
 /// follows the scene like any other view.
 ///
 /// No pop-up alerts anywhere, except to confirm deleting or removing
-/// something (decision 22). Problems show as a `ConnectionBanner` at the top
-/// of a tab, a `CoverStripMessage` on a book's cover, or an
-/// `EmptyInvitation` on an empty screen; sign-in errors sit under the fields.
+/// something. Problems show as a `ConnectionBanner` at the top of a screen,
+/// a `CoverStripMessage` on a book's screen, or an `EmptyInvitation` on an
+/// empty screen; sign-in errors sit under the fields.
 struct AppShell: View {
     @State private var model = ShellModel()
 
@@ -51,20 +51,15 @@ struct AppShell: View {
     }
 
     private var tabs: some View {
-        TabView(selection: $model.tab) {
+        TabView(selection: Binding(get: { model.tab }, set: { model.select($0) })) {
             Tab("Home", systemImage: "house", value: .home) {
-                PaneStack(tab: .home, title: "Home", path: $model[path: .home], background: Color(.systemBackground)) { HomeView() }
+                ScreenStack(tab: .home, title: "Home") { HomeView() }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                PaneStack(tab: .library, title: "Library", path: $model[path: .library], background: Color(.systemBackground)) {
-                    LibraryView()
-                }
-            }
-            Tab("Settings", systemImage: "gearshape", value: .settings) {
-                PaneStack(tab: .settings, title: "Settings", path: $model[path: .settings]) { SettingsPlaceholder() }
+                ScreenStack(tab: .library, title: "Library") { LibraryView() }
             }
             Tab(value: .search, role: .search) {
-                PaneStack(tab: .search, title: "Search", path: $model[path: .search]) { SearchPlaceholder() }
+                ScreenStack(tab: .search, title: "Search") { SearchPlaceholder() }
             }
         }
     }

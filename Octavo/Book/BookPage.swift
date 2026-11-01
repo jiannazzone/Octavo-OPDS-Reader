@@ -4,7 +4,7 @@ import OctavoKit
 import UIKit
 
 /// One book's cover page: its details, its cover image and whether its
-/// sheet is expanded. A fold rebuilds the screens (`PaneStack`), so this
+/// sheet is expanded. A fold lays the screen out again, so this
 /// lives in `BookPages` rather than in the view, and the sheet stays as it
 /// was.
 @Observable

@@ -2,23 +2,21 @@ import Foundation
 import Observation
 import OctavoKit
 
-/// The shell's state: the selected tab, each tab's open screens and the
-/// shared states. It lives with the scene, which folding or unfolding moves
-/// between displays without rebuilding (`docs/notes/duo-spreads.md` §6), so
-/// a fold keeps the same screens.
+/// The shell's state: the selected tab, each tab's screens and the shared
+/// states. It lives with the scene, which folding or unfolding moves between
+/// displays without rebuilding (`docs/notes/duo-spreads.md` §6), so a fold
+/// keeps the same screens.
 @Observable
 final class ShellModel {
-    var tab: ShellTab = .home
+    private(set) var tab: ShellTab = .home
     // One property per tab, so navigating in one tab doesn't redraw the others.
-    // Home's and the Library's companions follow what they show (decision 26).
-    private var homePath = PanePath()
-    private var libraryPath = PanePath()
-    private var settingsPath = PanePath(companion: .settingsPage("BookOrbit"))
-    private var searchPath = PanePath()
+    private var homePath = ShellPath()
+    private var libraryPath = ShellPath()
+    private var searchPath = ShellPath()
 
     /// The books, and where they come from.
     let library: LibraryModel
-    /// The book open in the reader, which covers the tabs (frames 07–09).
+    /// The book open in the reader, which covers the tabs.
     var reading: OpenedBook? {
         didSet {
             if let closed = oldValue, closed != reading {
@@ -27,15 +25,18 @@ final class ShellModel {
             }
         }
     }
-    /// Downloads books and opens them in `reading` (#14).
+    /// The library of the book in the reader, for its screen when a fold
+    /// closes it.
+    private var readingSource: LibrarySourceID?
+    /// Downloads books and opens them in `reading`.
     let opener: BookOpener
     /// The library of each book asked to open, until it does.
     private var opening: [LibraryBookID: LibrarySourceID] = [:]
-    /// The cover pages' state, kept across folds.
+    /// The book screens' state, kept across folds.
     let pages = BookPages()
 
-    /// A debug override for the cover's strip (frames 23, 24, 42), to look
-    /// at its states without a failing download.
+    /// A debug override for the cover's strip, to look at its states without
+    /// a failing download.
     var coverStrip: CoverStripMessage?
 
     init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener()) {
@@ -47,19 +48,18 @@ final class ShellModel {
         library.serverChanged = { [weak self] in
             guard let self else { return }
             pages.removeAll()
-            for tab in [ShellTab.home, .library, .search] { self[path: tab].routes = [] }
+            for tab in ShellTab.allCases { self[path: tab].replace([]) }
         }
         #if DEBUG
         applyLaunchArguments()
         #endif
     }
 
-    subscript(path tab: ShellTab) -> PanePath {
+    subscript(path tab: ShellTab) -> ShellPath {
         get {
             switch tab {
             case .home: homePath
             case .library: libraryPath
-            case .settings: settingsPath
             case .search: searchPath
             }
         }
@@ -67,25 +67,45 @@ final class ShellModel {
             switch tab {
             case .home: homePath = newValue
             case .library: libraryPath = newValue
-            case .settings: settingsPath = newValue
             case .search: searchPath = newValue
             }
         }
     }
 
-    /// Opens `route` from the pane `pane` describes: pushed folded,
-    /// beside it or shifted along unfolded.
-    func open(_ route: ShellRoute, from pane: PaneContext) {
-        if let level = pane.level {
-            self[path: pane.tab].open(route, from: level)
+    // MARK: Navigation
+
+    /// Choosing the tab that's showing goes back to its root, as iOS does.
+    func select(_ tab: ShellTab) {
+        if tab == self.tab {
+            self[path: tab].popToRoot()
         } else {
-            self[path: pane.tab].routes.append(route)
+            self.tab = tab
         }
     }
 
+    /// Opens `route` on top of the current tab.
+    func push(_ route: ShellRoute) {
+        self[path: tab].push(route)
+    }
+
+    /// Back.
+    func pop(_ tab: ShellTab) {
+        self[path: tab].pop()
+    }
+
+    func popToRoot(_ tab: ShellTab) {
+        self[path: tab].popToRoot()
+    }
+
+    /// The Settings button at the top of the side column.
+    func openSettings() {
+        push(.settings)
+    }
+
+    // MARK: Books
+
     /// Opens `book` in the reader, downloading it first if it isn't on the
-    /// iPhone yet (decision 3; the cover's strip shows the progress), and
-    /// once it opens puts it first in Home's Continue reading.
+    /// iPhone yet, and once it opens puts it first in Continue reading.
     func openBook(_ book: SourcedBook) {
         guard let source = library.source(for: book.source), opener.canOpen(book.book) else { return }
         opening[book.book.id] = book.source
@@ -95,21 +115,44 @@ final class ShellModel {
     /// Only a book that reaches the reader joins Continue reading: not one
     /// whose download failed or was cancelled.
     private func opened(_ book: OpenedBook) {
-        if let source = opening.removeValue(forKey: book.book.id) {
+        let source = opening.removeValue(forKey: book.book.id)
+        if let source {
             library.bookOpened(SourcedBook(source: source, book: book.book))
         }
+        readingSource = source
         reading = book
     }
 
-    /// Unfolding on a book's cover opens the book at once (decision 4);
-    /// anywhere else the screen stays and takes its unfolded layout
-    /// (decision 10). The hinge reports the unfold before the scene moves to
-    /// the inner display, so the folded screen is still the deepest route.
+    /// The Duo as the book:
+    /// - Unfolding on a book's screen opens the book, if it's on the iPhone.
+    ///   If it isn't, the screen stays, as Cover | Details, and nothing
+    ///   downloads until Download or Open is tapped.
+    /// - Folding while reading closes the book back to its screen.
+    ///
+    /// The hinge reports an unfold before the scene moves to the inner
+    /// display, so the folded screen is still the top one.
     func hingeChanged(_ transition: HingeTransition) {
-        guard transition == .unfold, reading == nil,
-              let book = self[path: tab].routes.last?.bookOpenedOnUnfold
-        else { return }
-        openBook(book)
+        switch transition {
+        case .unfold:
+            guard reading == nil, case .cover(let book)? = self[path: tab].top,
+                  opener.status(of: book.book) == .downloaded
+            else { return }
+            openBook(book)
+        case .fold:
+            guard let book = reading else { return }
+            closeToItsScreen(book)
+        case .none:
+            break
+        }
+    }
+
+    /// Closes the reader onto `book`'s screen, opening that screen if the
+    /// book was opened from somewhere else (Home's debug launch argument).
+    private func closeToItsScreen(_ book: OpenedBook) {
+        reading = nil
+        guard let source = readingSource else { return }
+        if case .cover(let shown)? = self[path: tab].top, shown.book.id == book.book.id { return }
+        self[path: tab].replace(self[path: tab].routes + [.cover(SourcedBook(source: source, book: book.book))])
     }
 
     #if DEBUG
@@ -159,10 +202,10 @@ final class ShellModel {
                 from: SampleLibrarySource.id
             )
             switch opens {
-            case "collection": self[path: .library].routes = [classics]
-            case "deep": self[path: .library].routes = [classics, .cover(book)]
-            case "cover": self[path: .library].routes = [.cover(book)]
-            case "settings": self[path: .settings].routes = [.settingsPage("BookOrbit")]
+            case "collection": self[path: .library].replace([classics])
+            case "deep": self[path: .library].replace([classics, .cover(book)])
+            case "cover": self[path: .library].replace([.cover(book)])
+            case "settings": self[path: tab].replace([.settings])
             default: break
             }
             if reads, let first = library.continueReading.first {

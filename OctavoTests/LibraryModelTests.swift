@@ -147,23 +147,6 @@ struct FeedModelTests {
         await feed.retry()
         #expect(feed.books.map(\.title) == ["1", "2", "3"])
     }
-
-    @Test func firstRouteFollowsWhatShowsFirst() async throws {
-        let authors = [
-            LibraryEntry(kind: .author, title: "Mary Shelley", sortName: "Shelley, Mary", link: link("authors/2")),
-            LibraryEntry(kind: .author, title: "Jane Austen", sortName: "Austen, Jane", link: link("authors/1")),
-        ]
-        let library = await connected(PagedSource(pages: ["authors": LibraryFeed(entries: authors), "a": Self.pages["a"]!]))
-
-        let authorList = try #require(library.feed(link("authors"), from: server))
-        await authorList.load()
-        #expect(authorList.isAuthorList)
-        #expect(authorList.firstRoute == .feed(authors[1], from: server))
-
-        let books = try #require(library.feed(link("a"), from: server))
-        await books.load()
-        #expect(books.firstRoute == .cover(sourced(book("1"))))
-    }
 }
 
 @MainActor

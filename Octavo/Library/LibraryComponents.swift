@@ -4,25 +4,21 @@ import SwiftUI
 // The pieces Home and the Library are built from: covers that open a book,
 // grids, list rows and the chips.
 
-/// Opens `route` like `ShellLink` (pushed folded, beside or shifted along
-/// unfolded) for things that aren't list rows: a cover in a grid, a Home row.
-/// The label learns whether the pane beside shows its screen.
+/// Opens `route` like `ShellLink`, for things that aren't list rows: a cover
+/// in a grid, a Home row.
 struct OpenButton<Label: View>: View {
     let route: ShellRoute
-    @ViewBuilder let label: (_ isOpen: Bool) -> Label
+    @ViewBuilder let label: () -> Label
     @Environment(ShellModel.self) private var shell
-    @Environment(\.pane) private var pane
 
     var body: some View {
-        let isOpen = route.isSameScreen(as: pane.opened)
         Button {
-            shell.open(route, from: pane)
+            shell.push(route)
         } label: {
-            label(isOpen)
+            label()
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(isOpen ? .isSelected : [])
     }
 }
 
@@ -52,15 +48,9 @@ struct BookGrid: View {
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
             ForEach(books) { book in
-                OpenButton(route: .cover(book)) { isOpen in
+                OpenButton(route: .cover(book)) {
                     VStack(spacing: 4) {
                         BookCover(book: book)
-                            .overlay {
-                                if isOpen {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.accentColor, lineWidth: 3)
-                                }
-                            }
                         if numbered {
                             Text(book.book.series?.position.map(Self.number) ?? "")
                                 .font(.subheadline)
