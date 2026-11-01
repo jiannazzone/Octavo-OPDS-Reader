@@ -1,12 +1,14 @@
+#if DEBUG
 import SwiftUI
 import UIKit
 import WebKit
 
-/// SPIKE ONLY (deleted after the spike). Records what the hinge and
-/// reserved-region APIs report, scene changes, and screen appearances, one
-/// JSON object per line in `Documents/spike-events.jsonl`, so a script on the
-/// host can see what happened during a fold.
-enum SpikeEvents {
+/// DEBUG ONLY. Records what the hinge and reserved-region APIs report, scene
+/// changes, and screen appearances, one JSON object per line in
+/// `Documents/spike-events.jsonl` (the spike's file name, which the tools in
+/// `docs/notes/` read), so a script on the host can see what happened during
+/// a fold.
+enum DebugEvents {
     static let url = URL.documentsDirectory.appending(path: "spike-events.jsonl")
     /// Changes when the process starts, so a log shows relaunches.
     static let processID = UUID().uuidString.prefix(8)
@@ -68,7 +70,7 @@ enum SpikeEvents {
     }
 }
 
-private struct SpikeProbe: ViewModifier {
+private struct DebugProbe: ViewModifier {
     let name: String
     /// Distinguishes two copies of the same screen, e.g. after SwiftUI rebuilt it.
     @State private var instance = UUID().uuidString.prefix(6)
@@ -76,51 +78,55 @@ private struct SpikeProbe: ViewModifier {
 
     nonisolated struct Regions: Equatable {
         var size: CGSize
+        var safeArea: EdgeInsets
         var global: CGRect
         var regions: [ReservedRegion]
     }
 
     func body(content: Content) -> some View {
         content
-            .onAppear { SpikeEvents.log("appear", ["view": name, "instance": String(instance), "scenes": SpikeEvents.scenes()]) }
-            .onDisappear { SpikeEvents.log("disappear", ["view": name, "instance": String(instance)]) }
+            .onAppear { DebugEvents.log("appear", ["view": name, "instance": String(instance), "scenes": DebugEvents.scenes()]) }
+            .onDisappear { DebugEvents.log("disappear", ["view": name, "instance": String(instance)]) }
             .onChange(of: scenePhase, initial: true) { old, new in
-                SpikeEvents.log("scenePhase", ["view": name, "old": "\(old)", "new": "\(new)", "scenes": SpikeEvents.scenes()])
+                DebugEvents.log("scenePhase", ["view": name, "old": "\(old)", "new": "\(new)", "scenes": DebugEvents.scenes()])
             }
             .onHingeChange { old, new in
-                SpikeEvents.log("hinge", ["view": name, "instance": String(instance), "old": SpikeEvents.hinge(old), "new": SpikeEvents.hinge(new)])
+                DebugEvents.log("hinge", ["view": name, "instance": String(instance), "old": DebugEvents.hinge(old), "new": DebugEvents.hinge(new)])
             }
             .onGeometryChange(for: Regions.self) { proxy in
                 Regions(
                     size: proxy.size,
+                    safeArea: proxy.safeAreaInsets,
                     global: proxy.frame(in: .global),
                     regions: proxy.reservedRegions(kind: .division, options: .includeInactive, layoutDirectionBehavior: .fixed)
                         + proxy.reservedRegions(kind: .occlusion, options: .includeInactive, layoutDirectionBehavior: .fixed)
                 )
             } action: { value in
-                SpikeEvents.log("geometry", [
+                DebugEvents.log("geometry", [
                     "view": name,
                     "instance": String(instance),
                     "size": [value.size.width, value.size.height],
-                    "global": SpikeEvents.rect(value.global),
+                    "safeArea": [value.safeArea.top, value.safeArea.leading, value.safeArea.bottom, value.safeArea.trailing],
+                    "global": DebugEvents.rect(value.global),
                     "regions": value.regions.map { region in
                         [
                             "kind": region.kind == .division ? "division" : region.kind == .occlusion ? "occlusion" : "other",
-                            "frame": SpikeEvents.rect(region.frame),
+                            "frame": DebugEvents.rect(region.frame),
                             "margins": [region.margins.top, region.margins.leading, region.margins.bottom, region.margins.trailing],
                             "active": region.isActive,
                         ] as [String: Any]
                     },
-                    "scenes": SpikeEvents.scenes(),
-                    "webViews": SpikeEvents.webViews(),
+                    "scenes": DebugEvents.scenes(),
+                    "webViews": DebugEvents.webViews(),
                 ])
             }
     }
 }
 
 extension View {
-    /// SPIKE ONLY. Logs hinge, reserved-region and scene changes for `name`.
-    func spikeProbe(_ name: String) -> some View {
-        modifier(SpikeProbe(name: name))
+    /// DEBUG ONLY. Logs hinge, reserved-region and scene changes for `name`.
+    func debugProbe(_ name: String) -> some View {
+        modifier(DebugProbe(name: name))
     }
 }
+#endif

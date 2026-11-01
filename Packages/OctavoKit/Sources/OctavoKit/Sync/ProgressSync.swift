@@ -32,11 +32,15 @@ public struct LocalReadingProgress: Codable, Hashable, Sendable {
     /// The position changed since the last successful push (for example, it
     /// was read offline).
     public var needsPush: Bool
+    /// The chapter the position is in, as the book's contents name it, for
+    /// showing the place without opening the book. Never synced.
+    public var chapter: String?
 
-    public init(position: ReadingPosition, modifiedAt: Date, needsPush: Bool) {
+    public init(position: ReadingPosition, modifiedAt: Date, needsPush: Bool, chapter: String? = nil) {
         self.position = position
         self.modifiedAt = modifiedAt
         self.needsPush = needsPush
+        self.chapter = chapter
     }
 }
 

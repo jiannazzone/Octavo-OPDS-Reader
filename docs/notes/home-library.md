@@ -38,4 +38,4 @@ Merged after #14 (PR #24). `ShellScreen` maps `.cover(SourcedBook)` to `CoverScr
 - **On iPhone** chip, and switching to it when the server is unreachable: needs downloads (#10).
 - The place line is a percentage; the chapter ("Chapter 36 · 30%") needs the reader (#17).
 - The book files #14 downloads are still keyed by file ID alone (`CachedBookFiles`); #10 adds the library to the key.
-- `SpikeLibraryView` stays: the fold, sync and formats tools drive it with `-spike 1` through `SpikeRemote` (`signin`, `open`, `detail` by BookOrbit file id). Moving them to the real Library needs the real reader (#17), downloads (#10), and a way for `SpikeRemote` (or its replacement) to open a `SourcedBook`'s cover and reader in the shell.
+- `SpikeLibraryView` stayed until #17, which moved the tools onto the shell (`ReaderRemote` in `Octavo/Debug/` opens a `SourcedBook`'s reader or cover page) and deleted the spike's screens.

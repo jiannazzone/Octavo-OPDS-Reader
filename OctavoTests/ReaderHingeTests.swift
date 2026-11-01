@@ -110,9 +110,14 @@ struct ReaderHingeTests {
     // MARK: Tap mode
 
     @Test func tapModeArgumentsForTheBridge() {
-        let mode = ReaderTapMode(isBook: true, columnStart: 867)
+        let mode = ReaderTapMode(isBook: true, columnStart: 867, content: 0...867, dismisses: true)
         #expect(mode.scriptArguments["book"] as? Bool == true)
         #expect(mode.scriptArguments["columnStart"] as? Double == 867)
-        #expect(ReaderTapMode().scriptArguments["columnStart"] is NSNull)
+        #expect(mode.scriptArguments["content"] as? [Double] == [0, 867])
+        #expect(mode.scriptArguments["dismisses"] as? Bool == true)
+        let plain = ReaderTapMode().scriptArguments
+        #expect(plain["columnStart"] is NSNull)
+        #expect(plain["content"] is NSNull)
+        #expect(plain["dismisses"] as? Bool == false)
     }
 }

@@ -41,3 +41,12 @@ Frame 02 puts a filter button in the side column over the Library, but no decisi
 ## A nicer empty list (raised 2026-11-01)
 
 Adam, while settling #8's start chip: "we definitely need a nicer empty state than just a blank screen". Today an empty list (a chip, a collection, an OPDS feed with nothing in it) shows only "Nothing here yet" under the chips, with no action, and unfolded the right pane stays blank. Decision 22 asks for an invitation with one action. Needs a design: what the message says per kind of list (Keep Reading, On Deck, an empty shelf), its action (Open Home? Browse another chip?), and what the right pane shows unfolded.
+
+## Reader progress: what's left after #17 (parked 2026-11-01)
+
+#17 built each page's footer (chapter, page, percentage) and the glass bar as a scrubber (decision 7, amended). Not designed yet:
+
+- **Back to where you were.** After a scrub, Apple Books offers "Back to page N" for a while. Today a scrub just moves.
+- **The scrubber's look.** It's the system slider (round knob); frame 08 draws a thin line with no knob.
+- **Real page numbers.** The numbers are foliate's 1,500-character locations, so a page turn doesn't always change them. Counting real pages for the current layout means paginating the whole book after every fold and text change; the Contents panel (#18, "page numbers for the current layout") meets the same question.
+- **Footer on or off**, as a Customize setting, if anyone wants the page bare.

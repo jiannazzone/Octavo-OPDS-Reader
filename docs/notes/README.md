@@ -17,5 +17,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `home-library.md` (+ `home-library/`) | #13 | Home and Library: app-wide library state, a book's source, Continue reading, list layouts, the pane-title offset, debug connections, a simulator cover-decoding trap |
 | `opds-source.md` (+ `opds-source/`) | #8 | OPDS 1.2 and 2.0 as a library: why our own parsers, chips, start chip and Home rules, format order, sign-in and the origin rule, Kavita's key in URLs, the four local servers |
 | `network-trust.md` (+ `network-trust/`) | #9 | Plain http only for home and VPN addresses, "Trust this server" and pinning, credentials in the Keychain: threat model, measured iOS 27.1 ATS behaviour (incl. an ATS bypass), decisions, adversarial audit, review checklist |
+| `reader-page.md` (+ `reader-page/`) | #17 | The real reader: the page edge to edge with the text kept out of the side column, margins and the hinge gutter, controls and taps, the per-page footer and the scrubber, sideways, the debug remote that replaced the spike's screens for the check tools |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

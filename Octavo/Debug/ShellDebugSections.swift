@@ -2,39 +2,9 @@
 import OctavoKit
 import SwiftUI
 
-/// SPIKE ONLY (deleted with the spike). Debug-only controls the app shell
-/// shows until the real screens exist: the spike's screens over the tabs,
-/// a Library row to open them, and switches for the shell's stand-in states.
-
-/// The spike's library over the tabs, with a way back to the shell.
-struct SpikeLibraryOverlay: View {
-    @Environment(ShellModel.self) private var shell
-
-    var body: some View {
-        SpikeLibraryView()
-            .overlay(alignment: .bottomLeading) {
-                Button("Close spike library", systemImage: "xmark") { shell.showsSpike = false }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.glass)
-                    .padding()
-            }
-            .background(Color(.systemBackground))
-    }
-}
-
-/// The Library row that opens the spike's screens, for opening books until
-/// the reader (#17) does.
-struct SpikeLibrarySection: View {
-    @Environment(ShellModel.self) private var shell
-
-    var body: some View {
-        Section {
-            Button("Spike library", systemImage: "hammer") { shell.showsSpike = true }
-        } footer: {
-            Text("Debug builds only: the spike’s screens, for reading books until the reader (#17) exists.")
-        }
-    }
-}
+/// DEBUG ONLY. Switches the Settings stand-in shows until the real screens
+/// exist: the shell's stand-in states, and the reading settings whose
+/// Customize panel is #18.
 
 /// Switches the stand-in states on and off, to look at them.
 struct ShellStatesSection: View {
@@ -60,6 +30,30 @@ struct ShellStatesSection: View {
             Text("Shell states")
         } footer: {
             Text("Debug builds only.")
+        }
+    }
+}
+
+/// The reader's settings until the Customize panel (#18) has them
+/// (decision 13: they live only there). Same keys, so they carry over.
+struct ReaderSettingsSection: View {
+    @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
+    @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
+    @AppStorage(ReaderSettings.bookModeShadowKey) private var bookModeShadow = ReaderSettings.bookModeShadowDefault
+
+    var body: some View {
+        Section {
+            Toggle("Always show controls", isOn: $alwaysShowControls)
+            Picker("Margins", selection: $margins) {
+                Text("Narrow").tag(ReaderMargins.narrow)
+                Text("Medium").tag(ReaderMargins.medium)
+                Text("Wide").tag(ReaderMargins.wide)
+            }
+            Toggle("Book-mode shadow", isOn: $bookModeShadow)
+        } header: {
+            Text("Reader")
+        } footer: {
+            Text("Debug builds only, until the reader’s Customize panel (#18).")
         }
     }
 }

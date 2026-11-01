@@ -112,7 +112,7 @@ The #4 session also saw a cold launch where the reader got no hinge and no geome
 
 ## Reproducing
 
-All on 'Octavo Fold Duo' (387F2531-EF32-4A5A-9987-8431E2D55A91), sample books in the app's Documents (see `duo-spreads.md`, Reproducing). Since #6 the app opens on the shell; the spike screens these tools drive need the DEBUG launch argument `-spike 1` (`install.sh` passes it; for a manual cold launch, `xcrun simctl launch $SIM com.ianazzone.ereader -spike 1`).
+All on 'Octavo Fold Duo' (387F2531-EF32-4A5A-9987-8431E2D55A91), sample books in the app's Documents (see `duo-spreads.md`, Reproducing). Since #17 the tools drive the app's own reader through the DEBUG `ReaderRemote` (`Octavo/Debug/`), with the same commands and files; no launch argument is needed (`docs/notes/reader-page.md`).
 
 ```bash
 export SIM=387F2531-EF32-4A5A-9987-8431E2D55A91

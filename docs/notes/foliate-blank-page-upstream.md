@@ -364,3 +364,30 @@ Pages with any visible node go through the same code as before and get the same 
 ## Reproducing this
 
 The scratch tooling (driver page, static server, WKWebView runner, summarizers) and the page-by-page comparison (`compare.txt`) are in `docs/notes/foliate-blank-page/`. Re-run it to re-check patch 0001 when foliate-js is updated. `Scripts/make-blank-page-epub.py` regenerates the EPUBs: `--variants` writes the eight double-break variants. The raw results log (600 KB) was not committed.
+
+**The page-by-page comparison, step by step** (worked out and run in #17, 2026-11-01: byte-identical to `compare.txt` in about 13 minutes). `R` is the repo, `SP` a new, empty scratch folder outside it:
+
+```bash
+mkdir -p $SP/books $SP/out $SP/tools $SP/driver
+git clone https://github.com/johnfactotum/foliate-js $SP/main
+git -C $SP/main checkout 6b11e1744346f60504b727984f7d42f0fef3ab54
+rsync -a --exclude .git $SP/main/ $SP/patched/
+for p in $R/ReaderWeb/foliate-js/patches/*.patch; do patch -s -p1 -d $SP/patched < $p; done
+cmp $SP/patched/paginator.js $R/ReaderWeb/foliate-js/paginator.js      # must match
+cp $R/docs/notes/foliate-blank-page/tools/{*.py,batch.sh,wkrun.swift} $SP/tools/
+cp $R/docs/notes/foliate-blank-page/tools/driver/* $SP/driver/
+cp $R/SampleBooks/*.epub $SP/books/
+python3 -I $R/Scripts/make-blank-page-epub.py $SP/books/blank-page-test.epub   # pass a path: the default writes into SampleBooks/
+swiftc -O $SP/tools/wkrun.swift -o $SP/tools/wkrun
+python3 -I $SP/tools/server.py $SP 8765 $SP/out/log.jsonl &               # serves main/, patched/, books/, driver/
+# WebKit: a book's main and patched lines together, books one after another.
+# Chrome: one line at a time (run.py stops when its label appears in the log).
+for book in $(cut -d' ' -f2 $R/docs/notes/foliate-blank-page/tools/dump-wk.txt | sed 's/wk-[a-z]*-dump-//' | sort -u); do
+  grep -- "-dump-$book " $R/docs/notes/foliate-blank-page/tools/dump-wk.txt | $SP/tools/batch.sh
+done
+while read -r line; do echo "$line" | $SP/tools/batch.sh; done < $R/docs/notes/foliate-blank-page/tools/dump-chrome.txt
+python3 -I $SP/tools/compare.py $SP/out/log.jsonl > $SP/out/compare.txt
+cmp $SP/out/compare.txt $R/docs/notes/foliate-blank-page/compare.txt
+```
+
+`dump-wk.txt` and `dump-chrome.txt` hold the exact labels and queries (`interval=150`, `per=10`, and the P&P deep run `from=1&to=2&per=40`). Labels must stay as they are for a byte-identical result: `compare.py` prints them, and two Chrome labels (`frankenstein2`, `pp-s1-deep2`) keep the original run's retry names. `wkrun` opens visible windows while it runs.

@@ -23,8 +23,10 @@ const TAP_ZONE = 0.3
 
 // How taps behave (Swift's `ReaderTapMode`). In book mode (decision 9) each
 // half of the spread turns its way, and a tap in the side column, where the
-// page runs under it, is reported to Swift for the controls.
-let tapMode = { book: false, columnStart: null }
+// page runs under it, is reported to Swift for the controls. `content` is the
+// page's extent outside the system's areas; `dismisses` means the controls
+// cover the page, so any tap hides them.
+let tapMode = { book: false, columnStart: null, content: null, dismisses: false }
 
 const post = (type, payload = {}) => {
     const handler = window.webkit?.messageHandlers?.[HANDLER]
@@ -125,7 +127,11 @@ const onRelocate = ({ detail }) => {
         sectionIndex: detail.section?.current ?? null,
         sectionCount: detail.section?.total ?? null,
         location: detail.location
-            ? { current: finiteOrNull(detail.location.current), total: finiteOrNull(detail.location.total) }
+            ? {
+                current: finiteOrNull(detail.location.current),
+                next: finiteOrNull(detail.location.next),
+                total: finiteOrNull(detail.location.total),
+            }
             : null,
     }
     if (held) held.relocation = message
@@ -160,8 +166,11 @@ const detectTaps = (doc, onTap) => {
 }
 
 // Left and right turn pages the way the book reads (foliate's goLeft and
-// goRight), so in a right-to-left book the left half goes forward.
+// goRight), so in a right-to-left book the left half goes forward. The side
+// zones are a share of the page outside the system's areas; flat, a tap in
+// the side column counts as the right side.
 const tap = x => {
+    if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
     if (tapMode.book) {
         if (tapMode.columnStart !== null && x >= tapMode.columnStart) return post('tap', { zone: 'column' })
         // foliate centres the gap between the pages in its view.
@@ -171,8 +180,10 @@ const tap = x => {
         else view?.goRight()
         return
     }
-    if (x < innerWidth * TAP_ZONE) view?.goLeft()
-    else if (x > innerWidth * (1 - TAP_ZONE)) view?.goRight()
+    const [left, right] = tapMode.content ?? [0, innerWidth]
+    const zone = (right - left) * TAP_ZONE
+    if (x < left + zone) view?.goLeft()
+    else if (x > right - zone) view?.goRight()
     else post('tap', { zone: 'middle' })
 }
 
@@ -191,8 +202,9 @@ const onSectionLoad = ({ detail: { doc } }) => {
 detectTaps(document, e => tap(e.clientX))
 
 // Lays pages out the way Swift's `ReaderLayout` says: column count, gap and
-// text width through foliate's own attributes, and the view's left/right
-// insets so foliate's centred gap sits over the fold. `max-column-count-
+// text width through foliate's own attributes, and the view's insets, which
+// keep it out of the system's areas (the page itself runs edge to edge) and
+// put foliate's centred gap over the fold. `max-column-count-
 // portrait` is our patch 0002; without it a portrait reader area always gets
 // one column. Missing values fall back to foliate's defaults.
 //
@@ -206,7 +218,9 @@ const applyAttributes = () => {
     Object.assign(view.style, {
         left: `${layout?.leftInset ?? 0}px`,
         right: `${layout?.rightInset ?? 0}px`,
-        width: '', height: '', bottom: '',
+        top: `${layout?.topInset ?? 0}px`,
+        bottom: `${layout?.bottomInset ?? 0}px`,
+        width: '', height: '',
     })
     set('max-column-count', layout?.columns)
     set('max-column-count-portrait', layout?.columns)
@@ -375,6 +389,29 @@ const anchorToPage = async () => {
     await view.renderer.goTo(view.resolveNavigation(cfi))
 }
 
+// The table of contents in reading order, each entry with where its section
+// starts in the book (0...1), for naming the chapter at any point of the
+// progress bar. Entries whose target doesn't resolve are left out.
+const tocFractions = () => {
+    const fractions = view.getSectionFractions?.() ?? []
+    const entries = []
+    const walk = items => {
+        for (const item of items ?? []) {
+            const label = plainText(item.label)?.trim()
+            let index = null
+            try {
+                index = item.href ? view.resolveNavigation(item.href)?.index : null
+            } catch {
+                index = null
+            }
+            if (label && Number.isInteger(index)) entries.push({ label, fraction: finiteOrNull(fractions[index]) })
+            walk(item.subitems)
+        }
+    }
+    walk(view.book.toc)
+    return entries
+}
+
 // Try the CFI first, then the fraction, then the start of the book.
 // Fixed-layout books go by fraction first, like BookOrbit does.
 const restore = async (cfi, fraction) => {
@@ -427,6 +464,7 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
         title: plainText(view.book.metadata?.title),
         sectionCount: view.book.sections?.length ?? 0,
         isFixedLayout: view.isFixedLayout,
+        toc: tocFractions(),
     }
     post('opened', result)
     return result
@@ -474,7 +512,13 @@ window.octavo = Object.freeze({
         return hold()
     }),
     setTapMode: reported(async function setTapMode(mode) {
-        tapMode = { book: Boolean(mode?.book), columnStart: finiteOrNull(mode?.columnStart) }
+        const content = Array.isArray(mode?.content) ? mode.content.map(finiteOrNull) : null
+        tapMode = {
+            book: Boolean(mode?.book),
+            columnStart: finiteOrNull(mode?.columnStart),
+            content: content?.length === 2 && !content.includes(null) ? content : null,
+            dismisses: Boolean(mode?.dismisses),
+        }
         return true
     }),
     layoutReport: reported(async function layoutReport_() {

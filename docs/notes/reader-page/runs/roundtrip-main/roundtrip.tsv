@@ -1,0 +1,11 @@
+direction	file	source first words	CFI (app pushed / app pulled)	verdict
+A→W	1	bottom of a well?” The Dormouse again took	epubcfi(/6/18!/4/2[pgepubid00009]/164/1:189)	hit (on the web reader's page)
+A→W	2	Chapter 14 “Some time elapsed before I learned	epubcfi(/6/42!/4/2[pgepubid00020]/2)	hit (on the web reader's page)
+A→W	3	CHAPTER 60. The Line. With reference to the	epubcfi(/6/14!/4/116[pgepubid00064])	hit (on the web reader's page)
+A→W	4	who, though with some peculiarities, has abilities which	epubcfi(/6/10!/4/96/1:246)	hit (on the web reader's page)
+A→W	5	since, to a poor man, the loss was	epubcfi(/6/18!/4/2[pgepubid00011]/134/1:49)	hit (on the web reader's page)
+W→A	1	“You’re wrong about the crumbs,” said the Mock Turtle:	pulled epubcfi(/6/24!/4/2[pgepubid00012]/60/1:104) → server	HIT at char 640/1054: '"You\'re wrong about the crumbs," said the Mock'
+W→A	2	irm me in a determination of not creating you a companion	pulled epubcfi(/6/54!/4/2[pgepubid00026]/26/1:149) → server	HIT at char 690/1160: 'irm me in a determination of not creating'
+W→A	3	CHAPTER 90. Heads or Tails. “De balena vero sufficit, si r	pulled epubcfi(/6/18!/4/148[pgepubid00094]/1:0) → server	HIT at char 0/1095: 'CHAPTER 90. Heads or Tails. "De balena vero'
+W→A	4	spared something of these distressing scenes; but now, as th	pulled epubcfi(/6/12!/4/78/7:633) → server	HIT at char 727/1337: 'spared something of these distressing scenes; but now,'
+W→A	5	“And I say east,” said my patient. “I am for west,”	pulled epubcfi(/6/22!/4/2[pgepubid00013]/298/1:0) → server	HIT at char 270/957: '"And I say east," said my patient. "I'
