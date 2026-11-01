@@ -15,7 +15,8 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ### Structure and library (approved 2026-10-31)
 
 1. **One library server in v1.** You connect one server (BookOrbit, or one OPDS server) when you set up the app, and the app is built around it. Most people run one server; designing for several (a merged catalog index, deduplication, per-server switches, catalogs vs libraries) was explored and dropped as too complicated for v1. A second server comes later, as a menu in the Library title; servers are never merged (parked in `docs/UI-IDEAS.md`).
-2. **Four tabs in the trailing column:** Home, Library and Settings in one group, with Search in its own button at the very bottom (Apple's "Search Role" tab bar, the standard layout). The trailing column is the Duo's standard place for tab items, so nothing sits along the bottom of the screen.
+2. **Four tabs in the trailing column:** Home, Library and Settings, with Search last, at the very bottom (Apple's "Search Role" tab, the standard layout). The trailing column is the Duo's standard place for tab items, so nothing sits along the bottom of the screen.
+   - **Search sits inside the system tab bar** (amended 2026-11-01). On iOS 27.1 the system draws the Search-role tab as the last item in the same glass capsule, not as the separate button Apple's kit and our frames show; UIKit does the same. We use the system's tab bar as it is rather than draw our own (`docs/notes/duo-tabbar.md`).
    - **Home:** "Continue reading" (positions from sync and from the phone), plus what's new on your server.
    - **Library:** your server's books as a grid of covers, with chips across the top. For BookOrbit the chips come from its API (All, Collections, Series, Authors); for an OPDS server they are the feed's own top-level entries (for example Recent, Authors, Series, Shelves on Calibre-Web). An "On iPhone" chip shows downloaded and imported books.
    - **Search:** your server's search (BookOrbit search, or OPDS OpenSearch when the feed offers it) plus the books on the phone.
@@ -225,11 +226,11 @@ None right now; new questions go here as they come up.
 
 ## Needs engineering
 
-Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (decides the amber formats); SwiftUI `TabView` on the Duo; the fold cross-fade with batched re-layouts; book-mode posture detection. **No new foliate patch** is needed for these decisions (decision 8 works with foliate's own gap and the bridge's insets); patches 0001 and 0002 stay. The duo-spreads §8 risk still applies: after an unfold the synced position is the spread's start.
+Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (decides the amber formats); SwiftUI `TabView` on the Duo (done, `docs/notes/duo-tabbar.md`); the fold cross-fade with batched re-layouts; book-mode posture detection. **No new foliate patch** is needed for these decisions (decision 8 works with foliate's own gap and the bridge's insets); patches 0001 and 0002 stay. The duo-spreads §8 risk still applies: after an unfold the synced position is the spread's start.
 
 - **Network trust (decision 25): a thorough security review before it merges** (Adam's requirement, 2026-10-31). In scope: the http allowlist and its host parsing, name resolution and the per-connection re-check, certificate trust and pinning, and how passwords and BookOrbit tokens are handled on http. Also confirm the App Transport Security configuration that allows home-network IP addresses, and the App Review justification it needs.
 
-- **Tabs in the trailing column.** Apple's iOS 27 kit has a Duo tab bar at the bottom of the trailing column, so the placement is the system's design. Still check that SwiftUI's `TabView` renders it that way on the Duo, folded and unfolded.
+- **Tabs in the trailing column.** Checked (#6, `docs/notes/duo-tabbar.md`): SwiftUI's `TabView` puts the tab bar at the bottom of the trailing column folded, unfolded and half open, over a full-screen cover and below column controls, with Search inside the same capsule (decision 2). The system doesn't split screens at the hinge; the app shell does.
 - **Library chips from an OPDS feed.** Map the root feed's navigation entries and facets to chips, and decide what happens when a feed has many entries or none.
 - **Pull the synced position while the cover shows.** Start the `ProgressSync` pull when the cover page appears, so unfolding opens the reader at once instead of waiting up to the 5 s pull timeout (duo-spreads §6).
 - **Full-screen cover.** The cover runs under the trailing system column and the camera; the tab column and back button sit over the artwork, so they need a material that reads on any cover.
