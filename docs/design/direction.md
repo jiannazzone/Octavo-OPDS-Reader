@@ -31,6 +31,14 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
    - The cover runs under the camera column, which covers its top-right corner; accepted. The tab column stays visible over the cover.
 5. **Unfolded: grid | cover page.** The grid sits left of the hinge; the selected book's cover page (same strip and Open button as folded) fills the right half. Nothing sits on the hinge.
 
+### Library drill-ins (approved 2026-10-31)
+
+23. **Chips switch the Library in place; items open on a new screen.**
+    - **Collections** (including BookOrbit smart scopes) and **Series**: a list with three covers, the name and a count. Tapping one opens its books as a grid under its name; a series opens in reading order, numbered.
+    - **Authors:** A–Z sections with an index strip to jump, and a book count per author; tapping one opens their books.
+    - **OPDS:** the chips are the feed's own entries; entries that lead to more entries show as a list, entries that are books as a grid.
+    - **Unfolded, the panes shift one step at a time:** list left of the hinge, its books right; tapping a book shifts to books left, cover right; Back shifts back. Always two adjacent levels, nothing on the hinge.
+
 ### Book details (approved 2026-10-31)
 
 20. **The cover's strip expands into the details.** The progress strip and the details are one Liquid Glass sheet with two heights. Swiping up keeps the strip's top (chapter and percentage, progress bar, last sync, **Open**) and adds the details below; the cover stays behind it. Drag it down or tap the cover to return to the strip; unfolding still opens the book. Unfolded, the same sheet expands inside the right-hand cover pane. Below the strip:
@@ -116,7 +124,7 @@ The goal for v1: read your server's books well on the Duo.
 | Where reading progress syncs | Sketched in the brainstorm |
 | Home, folded and unfolded | Folded designed (frame 01) |
 | Library, folded and unfolded, with chips | Designed (frames 02, 04) |
-| Collections, Series, Authors lists (chip drill-ins) | Not designed |
+| Collections, Series, Authors lists (chip drill-ins) | Designed (frames 29–33) |
 | Book cover page, folded and unfolded | Designed (frames 03, 04) |
 | Book details (swipe up from the cover; Mark as finished, download) | Designed (frames 15, 16) |
 | Search tab and results | Designed (frames 17–20) |
@@ -167,10 +175,15 @@ Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX
 | 26 Sign-in failed · folded | Error under the fields |
 | 27 OPDS catalog · folded | Feed address with examples, Connect |
 | 28 OPDS sign-in (if asked) · folded | Shown only when the server asks for a password |
+| 29 Collections · folded | Collections chip: list with covers and counts |
+| 30 Collection · Classics · folded | A collection's books |
+| 31 Authors · folded | A–Z with an index strip |
+| 32 Series · Sherlock Holmes · folded | Reading order, numbered (books 2–3 are stand-in covers) |
+| 33 Collections · unfolded | List left of the hinge, the collection's books right |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
-Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected), `Reader controls (column)` (Back, Contents, Text and theme, Search in book, Bookmark), `Reader progress bar`, `Book sheet` (State = Compact / Expanded, with Place and Synced text properties) used by frames 03, 04, 15, 16, 20, 23 and 24, and `Banner` (Kind = Warning / Info, with Message and Action).
+Local components in the file: `Book Cover / …` (one per sample book), `Row / Continue reading` (progress set by the Progress frame's right padding), `Chip` (selected / unselected), `Reader controls (column)` (Back, Contents, Text and theme, Search in book, Bookmark), `Reader progress bar`, `Book sheet` (State = Compact / Expanded, with Place and Synced text properties) used by frames 03, 04, 15, 16, 20, 23 and 24, `Banner` (Kind = Warning / Info, with Message and Action), and `Row / Collection` (three covers, Name, Count).
 
 What the kit showed:
 - Apple's Duo layout puts toolbar buttons (including back) in a glass group under the vertical status bar, and the tab bar at the bottom of the same column.
