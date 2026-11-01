@@ -91,6 +91,10 @@ Nine runs, 72 hinge moves, five books: the eight origins of 2b plus the P&P dedi
 
 `duo-fold/runs/continuity/table.md` has every move.
 
+### Patch 0001's page-by-page comparison
+
+Re-run as `PINNED.md` asks, although this branch changes no foliate-js file. Upstream `6b11e17` (with its demo reader) against upstream plus our patches (applying `patches/*.patch` reproduces our `paginator.js` byte for byte), every linear section's first 10 pages of the five books and the test EPUB, at 390×844, in WebKit (a macOS `WKWebView`) and headless Chrome: 1,609 pages. The output is **identical to `foliate-blank-page/compare.txt`, byte for byte**: no CFI differs on a page with content, no layout differs. It took about an hour, mostly the Chrome runs, which had to go one at a time on the loaded Mac.
+
 ## 6. Cold launch into the reader
 
 After a cold launch straight back into the reader, the model laid out for SwiftUI's frame (867×411 unfolded) instead of the page (951×493): the spread came up with an 84 pt left inset and its gap off the hinge, until the next fold. Folded, the model had 382×420 against the page's 466×502 (harmless there: one column).
