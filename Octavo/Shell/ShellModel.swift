@@ -8,7 +8,11 @@ import Observation
 @Observable
 final class ShellModel {
     var tab: ShellTab = .home
-    private var paths: [ShellTab: PanePath] = [:]
+    // One property per tab, so navigating in one tab doesn't redraw the others.
+    private var homePath = PanePath(companion: .cover(PlaceholderBook.samples[0]))
+    private var libraryPath = PanePath(companion: .cover(PlaceholderBook.samples[0]))
+    private var settingsPath = PanePath(companion: .settingsPage("BookOrbit"))
+    private var searchPath = PanePath()
 
     /// Shown as a banner at the top of the tabs (decision 22).
     var connectionProblem: ConnectionProblem?
@@ -28,20 +32,28 @@ final class ShellModel {
     #endif
 
     init() {
-        paths = [
-            .home: PanePath(companion: .cover(PlaceholderBook.samples[0])),
-            .library: PanePath(companion: .cover(PlaceholderBook.samples[0])),
-            .settings: PanePath(companion: .settingsPage("BookOrbit")),
-            .search: PanePath(),
-        ]
         #if DEBUG
         applyLaunchArguments()
         #endif
     }
 
     subscript(path tab: ShellTab) -> PanePath {
-        get { paths[tab] ?? PanePath() }
-        set { paths[tab] = newValue }
+        get {
+            switch tab {
+            case .home: homePath
+            case .library: libraryPath
+            case .settings: settingsPath
+            case .search: searchPath
+            }
+        }
+        set {
+            switch tab {
+            case .home: homePath = newValue
+            case .library: libraryPath = newValue
+            case .settings: settingsPath = newValue
+            case .search: searchPath = newValue
+            }
+        }
     }
 
     /// Opens `route` from the pane `pane` describes: pushed folded,
@@ -63,10 +75,19 @@ final class ShellModel {
     /// (decision 10). The hinge reports the unfold before the scene moves to
     /// the inner display, so the folded screen is still the deepest route.
     func hingeChanged(_ transition: HingeTransition) {
-        guard transition == .unfold, reading == nil,
+        guard transition == .unfold, reading == nil, !isCoveredBySpike,
               let book = self[path: tab].routes.last?.bookOpenedOnUnfold
         else { return }
         openBook(book)
+    }
+
+    /// The spike's screens hide the tabs and do their own unfold handoff.
+    private var isCoveredBySpike: Bool {
+        #if DEBUG
+        showsSpike
+        #else
+        false
+        #endif
     }
 
     /// Retry or Sign in on the connection banner. A stand-in until #7 and #9.

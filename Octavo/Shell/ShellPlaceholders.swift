@@ -52,10 +52,6 @@ struct HomePlaceholder: View {
 }
 
 struct LibraryPlaceholder: View {
-    #if DEBUG
-    @Environment(ShellModel.self) private var shell
-    #endif
-
     var body: some View {
         List {
             ConnectionBannerSlot()
@@ -70,11 +66,7 @@ struct LibraryPlaceholder: View {
                 Text("Stand-in content until #13.")
             }
             #if DEBUG
-            Section {
-                Button("Spike library", systemImage: "hammer") { shell.showsSpike = true }
-            } footer: {
-                Text("Debug builds only: the spike’s screens, for opening books until the real Library exists.")
-            }
+            SpikeLibrarySection()
             #endif
         }
     }
@@ -290,32 +282,3 @@ struct ConnectionBannerSlot: View {
         }
     }
 }
-
-#if DEBUG
-/// Switches the stand-in states on and off, to look at them.
-struct ShellStatesSection: View {
-    @Environment(ShellModel.self) private var shell
-
-    var body: some View {
-        @Bindable var shell = shell
-        Section {
-            Picker("Connection", selection: $shell.connectionProblem) {
-                Text("Fine").tag(ConnectionProblem?.none)
-                Text("Unreachable").tag(ConnectionProblem?.some(.unreachable(server: "BookOrbit")))
-                Text("Signed out").tag(ConnectionProblem?.some(.signedOut(server: "BookOrbit")))
-            }
-            Toggle("Empty Home", isOn: $shell.homeIsEmpty)
-            Picker("Cover strip", selection: $shell.coverStrip) {
-                Text("Normal").tag(CoverStripMessage?.none)
-                Text("Couldn’t download").tag(CoverStripMessage?.some(.downloadFailed))
-                Text("Not downloaded").tag(CoverStripMessage?.some(.needsConnection))
-                Text("Downloading").tag(CoverStripMessage?.some(.downloading(fraction: 0.42)))
-            }
-        } header: {
-            Text("Shell states")
-        } footer: {
-            Text("Debug builds only.")
-        }
-    }
-}
-#endif

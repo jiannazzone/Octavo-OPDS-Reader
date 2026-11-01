@@ -27,14 +27,7 @@ struct AppShell: View {
             }
             #if DEBUG
             if model.showsSpike {
-                SpikeLibraryView()
-                    .overlay(alignment: .bottomLeading) {
-                        Button("Close spike library", systemImage: "xmark") { model.showsSpike = false }
-                            .labelStyle(.iconOnly)
-                            .buttonStyle(.glass)
-                            .padding()
-                    }
-                    .background(Color(.systemBackground))
+                SpikeLibraryOverlay()
             }
             #endif
         }
