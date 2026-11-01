@@ -46,6 +46,42 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 11. **Folds cross-fade** (§7 Q6): a snapshot of the old page fades into the settled layout (about 0.3 s), hiding the intermediate re-layouts.
 12. **Unfolded and turned sideways, one column runs straight across the fold** (§7 Q2), as the spike does today. Half-opened that way (laptop-style), the text bends over the fold; accepted.
 
+## v1 scope (approved 2026-10-31)
+
+The goal for v1: read your server's books well on the Duo.
+
+| | v1 | Later |
+|---|---|---|
+| Sources | BookOrbit, one OPDS server, Import from Files | A second server |
+| Progress sync | BookOrbit | iCloud, KOReader sync |
+| Formats | EPUB; MOBI, AZW3 and FB2 if they pass a check through foliate, the bridge and the script blocking | PDF (PDFKit), comics (CBZ, CBR) |
+| Reader | Text and theme, Contents, Search in book, Bookmarks | Highlights and notes |
+| Duo | Cover → unfold → read, book mode, fold cross-fade | Lock Screen widget, Live Activity |
+| BookOrbit extras | Mark as finished | Ratings, editing collections, reading sessions |
+
+## v1 screens
+
+| Screen | State |
+|---|---|
+| Add your books (pick BookOrbit or OPDS, or import) | Designed (frame 05) |
+| Sign in to BookOrbit | Designed (frame 06) |
+| Add an OPDS server (address, optional sign-in) | Not designed |
+| Where reading progress syncs | Sketched in the brainstorm |
+| Home, folded and unfolded | Folded designed (frame 01) |
+| Library, folded and unfolded, with chips | Designed (frames 02, 04) |
+| Collections, Series, Authors lists (chip drill-ins) | Not designed |
+| Book cover page, folded and unfolded | Designed (frames 03, 04) |
+| Book details (swipe up from the cover; Mark as finished, download) | Not designed |
+| Search tab and results | Not designed |
+| Reader: one page folded, spread unfolded, book mode, controls shown | Sketched in the brainstorm |
+| Contents and bookmarks | Not designed |
+| Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Not designed |
+| Search in book | Not designed |
+| Settings tab | Contents open |
+| Empty and error states (no server yet, server unreachable, sign-in failed, download failed) | Not designed |
+
+Import from Files uses the system document picker; no screen of our own.
+
 ## Mockups
 
 Figma: [Octavo-UX, Page 1](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX?node-id=0-1), built 2026-10-31 on Apple's iOS and iPadOS 27 kit (`iPhone Duo/Standard/Outer - Portrait` and `Inner - Landscape`, `Tab Bar - iPhone Duo`, Liquid Glass buttons, rows, text fields, kit text styles and colour variables). Covers are the public-domain sample books.
@@ -76,6 +112,8 @@ What the kit showed:
 - **Book mode's angle range.** Roughly 60–150°; tune on a real device.
 
 ## Needs engineering
+
+Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (decides the amber formats); SwiftUI `TabView` on the Duo; the fold cross-fade with batched re-layouts; book-mode posture detection. **No new foliate patch** is needed for these decisions (decision 8 works with foliate's own gap and the bridge's insets); patches 0001 and 0002 stay. The duo-spreads §8 risk still applies: after an unfold the synced position is the spread's start.
 
 - **Tabs in the trailing column.** Apple's iOS 27 kit has a Duo tab bar at the bottom of the trailing column, so the placement is the system's design. Still check that SwiftUI's `TabView` renders it that way on the Duo, folded and unfolded.
 - **Library chips from an OPDS feed.** Map the root feed's navigation entries and facets to chips, and decide what happens when a feed has many entries or none.
