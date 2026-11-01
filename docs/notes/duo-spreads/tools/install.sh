@@ -10,5 +10,6 @@ xcrun simctl terminate $SIM com.ianazzone.ereader 2>/dev/null || true
 xcrun simctl install $SIM "$DD/Build/Products/Debug-iphonesimulator/Octavo.app"
 D=$(xcrun simctl get_app_container $SIM com.ianazzone.ereader data)/Documents
 rm -f "$D/spike-events.jsonl" "$D/spike-state.json"
-xcrun simctl launch $SIM com.ianazzone.ereader >/dev/null
+# -spike 1: open on the spike screens (SpikeRemote) instead of the app shell.
+xcrun simctl launch $SIM com.ianazzone.ereader -spike 1 >/dev/null
 sleep 3
