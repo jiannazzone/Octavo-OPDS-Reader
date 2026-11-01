@@ -23,11 +23,11 @@ private extension StubServer.Response {
     static let notFound = Self(status: 404, headers: [:], body: Data())
 }
 
-private func source(_ server: StubServer, path: String = "/catalog", credentials: OPDSCredentials? = nil) -> OPDSSource {
+private func source(_ server: StubServer, path: String = "/catalog", credentials: PasswordCredentials? = nil) -> OPDSSource {
     OPDSSource(
         catalogURL: server.baseURL.appending(path: path),
-        session: URLSession(configuration: server.configuration),
-        credentials: InMemoryOPDSCredentialStore(credentials)
+        transport: URLSession(configuration: server.configuration),
+        credentials: InMemoryPasswordStore(credentials)
     )
 }
 
@@ -335,7 +335,7 @@ struct OPDSSourceTests {
     }
 
     @Test func signsInOnlyOnTheCatalogsOrigin() async throws {
-        let credentials = OPDSCredentials(username: "keeper", password: "lamp-oil")
+        let credentials = PasswordCredentials(username: "keeper", password: "lamp-oil")
         let expected = "Basic " + Data("keeper:lamp-oil".utf8).base64EncodedString()
         let images = StubServer { _ in .bytes("jpeg", type: "image/jpeg") }
         let catalog = StubServer { request in

@@ -1,41 +1,9 @@
 import Foundation
 
-/// The username and password an OPDS catalog asked for (HTTP Basic).
-public struct OPDSCredentials: Codable, Hashable, Sendable {
-    public var username: String
-    public var password: String
-
-    public init(username: String, password: String) {
-        self.username = username
-        self.password = password
-    }
-
-    var authorizationHeader: String {
+extension PasswordCredentials {
+    /// HTTP Basic, sent before the server asks.
+    var basicAuthorization: String {
         "Basic " + Data("\(username):\(password)".utf8).base64EncodedString()
-    }
-}
-
-/// Where an `OPDSSource` keeps its catalog's sign-in. One store per server.
-/// A Keychain-backed store (#9) slots in here.
-public protocol OPDSCredentialStore: Sendable {
-    func load() async throws -> OPDSCredentials?
-    /// `nil` clears the stored credentials.
-    func save(_ credentials: OPDSCredentials?) async throws
-}
-
-public actor InMemoryOPDSCredentialStore: OPDSCredentialStore {
-    private var credentials: OPDSCredentials?
-
-    public init(_ credentials: OPDSCredentials? = nil) {
-        self.credentials = credentials
-    }
-
-    public func load() -> OPDSCredentials? {
-        credentials
-    }
-
-    public func save(_ credentials: OPDSCredentials?) {
-        self.credentials = credentials
     }
 }
 

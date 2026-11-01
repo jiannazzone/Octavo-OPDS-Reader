@@ -3,15 +3,15 @@ import Synchronization
 
 /// HTTP for one OPDS catalog: feeds, images, downloads and the sign-in check.
 ///
-/// The `URLSession` is injected so the trust-aware session (#9) can replace
-/// it. The Basic sign-in goes only to the catalog's own origin (scheme, host
-/// and port): never to a cover or file on another host, and it's dropped
-/// when a redirect leaves the origin or drops to http. Whether http may
-/// carry it at all is the session's call (decision 25).
+/// The transport is injected: #9's `ServerTransport` checks the address
+/// before every request, pins certificates and strips credentials from
+/// redirects that change scheme, host or port. The Basic sign-in is sent up
+/// front, but only to the catalog's own origin (scheme, host and port):
+/// never to a cover or file on another host.
 struct OPDSClient: Sendable {
     let catalogURL: URL
-    let session: URLSession
-    let credentials: any OPDSCredentialStore
+    let transport: any HTTPTransport
+    let credentials: any PasswordStore
 
     static let feedAccept = "application/opds+json, application/atom+xml;profile=opds-catalog, application/atom+xml;q=0.9, application/json;q=0.8, application/xml;q=0.7, */*;q=0.5"
 
@@ -26,7 +26,7 @@ struct OPDSClient: Sendable {
     /// The bytes at `url`; throws `LibraryError` for a non-2xx answer.
     func data(at url: URL, accept: String? = nil) async throws -> (Data, HTTPURLResponse) {
         let request = try await request(url, accept: accept)
-        let (data, response) = try await session.data(for: request, delegate: TaskDelegate(origin: Self.origin(of: catalogURL)))
+        let (data, response) = try await transport.data(for: request)
         return (data, try Self.check(response, data: data))
     }
 
@@ -47,8 +47,7 @@ struct OPDSClient: Sendable {
 
     func download(_ url: URL, to destination: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
         let request = try await request(url, accept: nil)
-        let delegate = TaskDelegate(origin: Self.origin(of: catalogURL), progress: progress)
-        let (temporaryURL, response) = try await session.download(for: request, delegate: delegate)
+        let (temporaryURL, response) = try await transport.download(for: request, delegate: DownloadProgress(progress))
         do {
             _ = try Self.check(response, data: nil)
         } catch {
@@ -68,7 +67,7 @@ struct OPDSClient: Sendable {
     /// with the stored credentials if there are any.
     func checkAccess() async throws -> OPDSAccess {
         let request = try await request(catalogURL, accept: Self.feedAccept)
-        let (data, response) = try await session.data(for: request, delegate: TaskDelegate(origin: Self.origin(of: catalogURL)))
+        let (data, response) = try await transport.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LibraryError.invalidResponse }
         guard http.statusCode == 401 else {
             let feed = try Self.parseFeed(data, response: try Self.check(response, data: data), requested: catalogURL)
@@ -106,7 +105,7 @@ struct OPDSClient: Sendable {
         var request = URLRequest(url: url)
         if let accept { request.setValue(accept, forHTTPHeaderField: "Accept") }
         if Self.origin(of: url) == Self.origin(of: catalogURL), let credentials = try await credentials.load() {
-            request.setValue(credentials.authorizationHeader, forHTTPHeaderField: "Authorization")
+            request.setValue(credentials.basicAuthorization, forHTTPHeaderField: "Authorization")
         }
         return request
     }
@@ -138,34 +137,23 @@ struct OPDSClient: Sendable {
     }
 }
 
-/// Per request: drops the sign-in on a redirect that leaves the catalog's
-/// origin, and reports download progress. The async
-/// `download(for:delegate:)` never calls `didWriteData`, so progress comes
-/// from the task's `progress`, once the response is a success.
-private final class TaskDelegate: NSObject, URLSessionTaskDelegate, Sendable {
-    private let origin: OPDSClient.Origin?
-    private let report: (@Sendable (Double) -> Void)?
+/// Reports a download's progress. The async `download(for:delegate:)` never
+/// calls `didWriteData`, so this watches the task's `progress`, once the
+/// response is a success.
+private final class DownloadProgress: NSObject, URLSessionTaskDelegate, Sendable {
+    private let report: @Sendable (Double) -> Void
     private let observation = Mutex<NSKeyValueObservation?>(nil)
 
-    init(origin: OPDSClient.Origin?, progress: (@Sendable (Double) -> Void)? = nil) {
-        self.origin = origin
-        self.report = progress
+    init(_ report: @escaping @Sendable (Double) -> Void) {
+        self.report = report
     }
 
     func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
-        guard let report else { return }
+        let report = report
         let observation = task.progress.observe(\.fractionCompleted) { [weak task] progress, _ in
             guard let status = (task?.response as? HTTPURLResponse)?.statusCode, (200..<300).contains(status) else { return }
             report(progress.fractionCompleted)
         }
         self.observation.withLock { $0 = observation }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest) async -> URLRequest? {
-        var request = request
-        if let url = request.url, OPDSClient.origin(of: url) != origin {
-            request.setValue(nil, forHTTPHeaderField: "Authorization")
-        }
-        return request
     }
 }

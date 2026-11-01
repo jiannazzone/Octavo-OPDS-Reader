@@ -294,10 +294,10 @@ final class LibraryModel {
 
         var sourceID: LibrarySourceID { LibrarySourceID(rawValue: "debug-local-\(rawValue)") }
 
-        var credentials: OPDSCredentials? {
+        var credentials: PasswordCredentials? {
             switch self {
-            case .calibreWeb: OPDSCredentials(username: "octavo", password: "OctavoDev1")
-            case .komga, .komga2: OPDSCredentials(username: "octavo@example.com", password: "OctavoDev1")
+            case .calibreWeb: PasswordCredentials(username: "octavo", password: "OctavoDev1")
+            case .komga, .komga2: PasswordCredentials(username: "octavo@example.com", password: "OctavoDev1")
             case .cops, .kavita: nil
             }
         }
@@ -327,7 +327,7 @@ final class LibraryModel {
         do {
             let source = OPDSSource(
                 catalogURL: try await server.catalogURL(),
-                credentials: InMemoryOPDSCredentialStore(server.credentials)
+                credentials: InMemoryPasswordStore(server.credentials)
             )
             _ = try await source.root()
             debugConnection = .idle

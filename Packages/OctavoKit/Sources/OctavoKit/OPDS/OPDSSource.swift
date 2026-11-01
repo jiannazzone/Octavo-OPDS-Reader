@@ -16,15 +16,16 @@ public struct OPDSSource: LibrarySource {
     ///   - catalogURL: the root feed, e.g. `…/opds` (Calibre-Web),
     ///     `…/feed` (COPS), `…/opds/v1.2/catalog` (Komga) or the link from
     ///     Kavita's settings.
-    ///   - session: the trust-aware session from #9 once it lands.
+    ///   - transport: #9's `ServerTransport` for this server; a plain
+    ///     `URLSession` in tests.
     ///   - credentials: the HTTP Basic sign-in, if the catalog asked for one.
     public init(
         catalogURL: URL,
-        session: URLSession = URLSession(configuration: .ephemeral),
-        credentials: any OPDSCredentialStore = InMemoryOPDSCredentialStore()
+        transport: any HTTPTransport = URLSession(configuration: .ephemeral),
+        credentials: any PasswordStore = InMemoryPasswordStore()
     ) {
         self.catalogURL = catalogURL
-        client = OPDSClient(catalogURL: catalogURL, session: session, credentials: credentials)
+        client = OPDSClient(catalogURL: catalogURL, transport: transport, credentials: credentials)
     }
 
     /// Whether the catalog needs a sign-in, trying the stored one if any.

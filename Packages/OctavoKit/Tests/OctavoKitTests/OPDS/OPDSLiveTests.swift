@@ -133,10 +133,10 @@ enum LiveOPDS {
             URL(string: environment["OCTAVO_OPDS_\(key)_URL"] ?? fallback)!
         }
 
-        var credentials: OPDSCredentials? {
+        var credentials: PasswordCredentials? {
             switch self {
-            case .calibreWeb: OPDSCredentials(username: "octavo", password: "OctavoDev1")
-            case .komga, .komga2: OPDSCredentials(username: "octavo@example.com", password: "OctavoDev1")
+            case .calibreWeb: PasswordCredentials(username: "octavo", password: "OctavoDev1")
+            case .komga, .komga2: PasswordCredentials(username: "octavo@example.com", password: "OctavoDev1")
             case .cops, .kavita: nil
             }
         }
@@ -154,7 +154,7 @@ enum LiveOPDS {
         func source(signedIn: Bool = true) async throws -> OPDSSource {
             OPDSSource(
                 catalogURL: try await catalogURL(),
-                credentials: InMemoryOPDSCredentialStore(signedIn ? credentials : nil)
+                credentials: InMemoryPasswordStore(signedIn ? credentials : nil)
             )
         }
     }

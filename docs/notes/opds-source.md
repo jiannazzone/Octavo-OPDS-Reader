@@ -70,24 +70,27 @@ versions) and Kavita, run locally from `dev/opds/`. Screenshots in
   Basic` (Calibre-Web). A document that offers no Basic method says
   `supportsBasic: false`. This is what #12's form calls.
 - The Basic header goes **only to the catalog's origin** (scheme, host, port),
-  never to a cover or file on another host, and is dropped if a redirect
-  leaves the origin (including https → http). A 401 is `signedOut`.
-- `OPDSCredentialStore` (`load`/`save`, like `BookOrbitTokenStore`) with
-  `InMemoryOPDSCredentialStore` for now. **#9** supplies the Keychain store
-  and the trust-aware `URLSession` (both injected through `OPDSSource.init`);
-  whichever of #8 and #9 merges second wires them.
+  never to a cover or file on another host. A 401 is `signedOut`.
+- **Networking goes through #9's shapes**, mirrored in `OPDS/NetworkStandIns.swift`
+  until #9 merges (whichever merges second deletes that file and keeps #9's):
+  `OPDSSource(catalogURL:transport:credentials:)` takes `any HTTPTransport`
+  (#9's `ServerTransport` per server; a plain `URLSession` in tests and debug
+  builds) and `any PasswordStore` (`PasswordCredentials`; Keychain from #9,
+  `InMemoryPasswordStore` for now). The transport checks the address before
+  every request, pins certificates, refuses https → http and strips
+  `Authorization` on redirects that change scheme, host or port, so the OPDS
+  code doesn't. Its `NetworkTrustError`s pass through like `URLError`.
 
 ### For the security review (#9)
 
-- Whether Basic may go over plain http is the session's call (decision 25);
-  `OPDSSource` sends it on whatever the session lets through.
+- Whether Basic may go over plain http is the transport's call (decision 25).
+- Until #9 is wired in, debug builds use a plain `URLSession`, which has no
+  redirect hygiene of its own.
 - **Kavita's API key is in every URL** (`/api/opds/{key}/…`, covers'
   `apiKey=`). Those URLs become `LibraryLink`s, file IDs and cover values, and
   `RecentBooks` writes `SourcedBook`s to Application Support, so the key ends
   up on disk in plain JSON. Options: keep it (it's what Kavita hands out),
   or have the source store links without the key and add it back per request.
-- The redirect guard isn't covered by the stub tests (the stub protocol
-  doesn't redirect).
 
 ## Pitfalls
 
