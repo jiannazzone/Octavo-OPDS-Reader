@@ -23,6 +23,9 @@ import WebKit
 ///   unfold handoff.
 /// - `close`, `home`: closes the reader; `home` also closes the tabs' screens.
 /// - `goto` (`fraction` or `cfi`), `next`, `prev`.
+/// - `keyboard` (`on`: true or false): shows or hides the keyboard over the
+///   reader, through a hidden text field, to check that it never moves the
+///   page (the panels in #18 bring up a real one).
 /// - `shape` (`point` or `range`, for the next open), `layout` (a
 ///   `ReaderLayout` to try until the next fold), `watch` (`cfi`: the state
 ///   file then says whether the visible page contains it), `js` (`script`: a
@@ -42,6 +45,7 @@ enum ReaderRemote {
         var name: String?
         var layout: ReaderLayout?
         var script: String?
+        var on: Bool?
     }
 
     struct Ack: Encodable {
@@ -63,6 +67,7 @@ enum ReaderRemote {
     static let commandURL = URL.documentsDirectory.appending(path: "spike-command.json")
     static let ackURL = URL.documentsDirectory.appending(path: "spike-ack.json")
     static let scriptResultURL = URL.documentsDirectory.appending(path: "spike-js.json")
+    static let keyboardNotification = Notification.Name("ReaderRemote.keyboard")
 
     static func sync(for book: OpenedBook) -> (any ProgressSync)? {
         syncs[book.file.id]
@@ -109,6 +114,10 @@ enum ReaderRemote {
         case "js":
             guard let script = command.script else { return "js needs script" }
             return await runScript(script)
+        case "keyboard":
+            guard reader != nil else { return "no open reader" }
+            NotificationCenter.default.post(name: keyboardNotification, object: nil, userInfo: ["on": command.on ?? true])
+            return nil
         default:
             return handleReaderCommand(command)
         }
@@ -210,9 +219,23 @@ extension View {
 
 private struct ReaderRemoteHook: ViewModifier {
     let model: ReaderModel
+    @State private var text = ""
+    @FocusState private var keyboard: Bool
 
     func body(content: Content) -> some View {
         content
+            // For the `keyboard` command: a field nobody sees, focused to
+            // bring the keyboard up.
+            .background {
+                TextField("", text: $text)
+                    .focused($keyboard)
+                    .frame(width: 1, height: 1)
+                    .opacity(0.01)
+                    .accessibilityHidden(true)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: ReaderRemote.keyboardNotification)) { note in
+                keyboard = note.userInfo?["on"] as? Bool ?? false
+            }
             .task { ReaderRemote.reader = model }
             .task(id: ReaderStateFile.Key(model)) {
                 await ReaderStateFile.write(model)

@@ -19,6 +19,7 @@ The open question from spike 2b (`duo-spreads.md` §7 Q3): `WebView` already dre
 
 - `ReaderScreen` applies `.ignoresSafeArea()` to the `WebView`, so its frame is the page (466×678 folded, 951×669 unfolded) and the hinge's region frames are in page coordinates as they are.
 - **The safe area is measured outside the reader's `NavigationStack` and outside `ignoresSafeArea`.** A view laid out inside the safe area reports how far in it sits (`proxy.safeAreaInsets`: trailing 84, bottom 34 folded); a view that ignores it reports zero. Measured inside the stack it would include the reader's own toolbar, and showing the controls would move the text.
+- **The keyboard is left out of it** (`.ignoresSafeArea(.keyboard)` around the measurement). Without that, the keyboard raised the measured bottom inset from 34 to 304 pt and the page re-paginated (3 relocations up, 3 down); with it, the inset and the page stay put folded and unfolded. Nothing in #17 shows a keyboard; #18's Search in book will, and the DEBUG `keyboard` command (`ReaderRemote`) checks it without one.
 
 | Posture | Safe area (top, left, bottom, right) | `foliate-view` |
 |---|---|---|
@@ -111,6 +112,7 @@ All on 'Octavo Reader Duo' with this build (margins Medium), 2026-11-01.
 - `signin`: `LibraryModel.connectLocalBookOrbit` (one login; 5 per minute per IP).
 - `open` (`fileID`): the BookOrbit book holding that file, through `ShellModel.openBook` (download, Continue reading), with a `BookOrbitProgressSync` for that file. Only books a script opens sync; the app's own sync is #11.
 - `detail` (`fileID`): the book's cover page in the Library tab, for `handoff.sh`. BookOrbit books only: a book in Documents has no cover page, so `handoff.sh`'s local-book form no longer works.
+- `keyboard` (`on`): shows or hides the keyboard over the reader through a hidden text field.
 - `home`, `close`, `goto`, `next`, `prev`, `shape`, `layout`, `watch`, `js` as before. The state file adds `location` and `margins`.
 - `DebugEvents` (was `SpikeEvents`) logs hinge, region, safe-area and scene events for the shell and the reader.
 - The Settings stand-in has a DEBUG "Reader" section (Always show controls, Margins, Book-mode shadow) until the Customize panel (#18); same keys.

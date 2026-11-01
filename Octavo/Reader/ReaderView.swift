@@ -74,6 +74,10 @@ private struct ReaderScreen: View {
         } action: { insets in
             model.safeAreaChanged(insets)
         }
+        // Without this the measured bottom inset grows by the keyboard's
+        // height (34 → 304 pt) and the page re-paginates whenever a panel
+        // (#18) brings the keyboard up.
+        .ignoresSafeArea(.keyboard)
         .onChange(of: alwaysShowControls, initial: true) { _, always in
             controls.alwaysShowsButtons = always
         }
