@@ -20,11 +20,18 @@ struct LibraryView: View {
                     VStack {
                         ConnectionBannerSlot()
                             .padding(.horizontal, 20)
-                        if library.connectionProblem == nil {
+                        if library.connectionProblem != nil {
+                            // The banner says why, and retries.
+                            Spacer(minLength: 0)
+                        } else if library.rootFailed {
+                            EmptyInvitation(
+                                symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
+                                message: "The server didn’t send its lists.", actionTitle: "Try again"
+                            ) { Task { await library.retry() } }
+                        } else {
                             ProgressView()
                                 .frame(maxHeight: .infinity)
                         }
-                        Spacer(minLength: 0)
                     }
                 }
             } else {
@@ -65,7 +72,7 @@ struct FeedScreen: View {
                 }
             }
         } else {
-            ContentUnavailableView("Not connected", systemImage: "books.vertical", description: Text("This list’s library isn’t connected."))
+            LibraryNotConnected()
         }
     }
 
@@ -114,7 +121,7 @@ struct FeedContent<Header: View>: View {
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
             if feed.isAuthorList {
-                ForEach(AuthorIndex.sections(feed.entries)) { section in
+                ForEach(feed.authorSections) { section in
                     // The letter as a row, not a section header: plain
                     // lists space headers far apart (frame 31 is compact).
                     Section {
@@ -205,6 +212,20 @@ struct FeedContent<Header: View>: View {
     }
 }
 
+/// A screen from a library that isn't connected (any more): a stale route
+/// after the server changed, or a debug route into another library.
+struct LibraryNotConnected: View {
+    @Environment(LibraryModel.self) private var library
+
+    var body: some View {
+        if library.server == nil {
+            NoLibraryInvitation()
+        } else {
+            ContentUnavailableView("Not connected", systemImage: "books.vertical", description: Text("This comes from a library that isn’t connected."))
+        }
+    }
+}
+
 /// No server yet. First run (#12) will make this impossible; until then a
 /// debug build connects one from Settings.
 struct NoLibraryInvitation: View {
@@ -219,15 +240,10 @@ struct NoLibraryInvitation: View {
 }
 
 extension FeedModel {
-    /// Only authors: shown A–Z with an index strip.
-    var isAuthorList: Bool {
-        books.isEmpty && !entries.isEmpty && entries.allSatisfy { $0.kind == .author }
-    }
-
     /// The first item as shown, which the pane beside opens on before
     /// anything is tapped.
     var firstRoute: ShellRoute? {
-        let entry = isAuthorList ? AuthorIndex.sections(entries).first?.entries.first : entries.first
+        let entry = isAuthorList ? authorSections.first?.entries.first : entries.first
         if let entry { return .feed(entry, from: source) }
         return books.first.map { .cover(SourcedBook(source: source, book: $0)) }
     }

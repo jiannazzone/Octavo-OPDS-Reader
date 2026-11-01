@@ -41,6 +41,10 @@ struct CoverImage: View {
 final class CoverCache {
     private let images = NSCache<NSString, UIImage>()
     private var loading: [String: Task<UIImage?, Never>] = [:]
+    /// Covers the library said it hasn't got (or sent unreadable), so a
+    /// cell scrolling back into view doesn't ask again. Not a failed
+    /// connection: that cover loads once the server is back.
+    private var missing: Set<String> = []
 
     init() {
         images.countLimit = 400
@@ -52,14 +56,23 @@ final class CoverCache {
 
     /// `nil` if the book has no cover or it couldn't be fetched.
     func image(for book: SourcedBook, size: LibraryCoverSize, from library: any LibrarySource) async -> UIImage? {
-        guard let key = key(book, size), let cover = book.book.cover else { return nil }
+        guard let key = key(book, size), let cover = book.book.cover, !missing.contains(key) else { return nil }
         if let image = images.object(forKey: key as NSString) { return image }
         if let task = loading[key] { return await task.value }
-        let task = Task<UIImage?, Never> {
-            guard let data = try? await library.cover(cover, size: size) else { return nil }
-            // Not `byPreparingForDisplay()`: on the iOS 27.1 simulator its
-            // images blank the whole window.
-            return UIImage(data: data)
+        let task = Task<UIImage?, Never> { [weak self] in
+            do {
+                let data = try await library.cover(cover, size: size)
+                // Not `byPreparingForDisplay()`: on the iOS 27.1 simulator
+                // its images blank the whole window.
+                guard let image = UIImage(data: data) else {
+                    self?.missing.insert(key)
+                    return nil
+                }
+                return image
+            } catch {
+                if !(error is URLError || error is CancellationError) { self?.missing.insert(key) }
+                return nil
+            }
         }
         loading[key] = task
         let image = await task.value

@@ -20,14 +20,24 @@ struct HomeView: View {
                             .frame(maxHeight: .infinity)
                     }
                 } else if library.continueReading.isEmpty {
-                    // Frame 25.
                     VStack(spacing: 0) {
                         ConnectionBannerSlot()
                             .padding(.horizontal, 20)
-                        EmptyInvitation(
-                            symbol: "books.vertical", title: "Nothing in progress",
-                            message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
-                        ) { shell.tab = .library }
+                        if !library.continueReadingFailed {
+                            // Frame 25.
+                            EmptyInvitation(
+                                symbol: "books.vertical", title: "Nothing in progress",
+                                message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
+                            ) { shell.tab = .library }
+                        } else if library.connectionProblem == nil {
+                            EmptyInvitation(
+                                symbol: "exclamationmark.triangle", title: "Couldn’t load Continue reading",
+                                message: "The server didn’t send it.", actionTitle: "Try again"
+                            ) { Task { await library.loadHome() } }
+                        } else {
+                            // The banner says why, and retries.
+                            Spacer()
+                        }
                     }
                 } else {
                     content(server)
@@ -48,7 +58,13 @@ struct HomeView: View {
                     .padding(.horizontal, 20)
                 heading("Continue reading")
                 VStack(spacing: 2) {
-                    ForEach(library.continueReading) { ContinueReadingRow(book: $0) }
+                    // As the cover's strip shows it: the iPhone's position
+                    // if it has one, else the server's (#14). Worked out
+                    // here, so closing the reader (which redraws Home)
+                    // updates it.
+                    ForEach(library.continueReading) { book in
+                        ContinueReadingRow(book: book, progress: BookPage.progress(of: book.book))
+                    }
                 }
                 .padding(.horizontal, 14)
                 if !library.newBooks.isEmpty {
@@ -74,6 +90,7 @@ struct HomeView: View {
 /// while the pane beside shows it.
 struct ContinueReadingRow: View {
     let book: SourcedBook
+    let progress: Double?
 
     var body: some View {
         OpenButton(route: .cover(book)) { isOpen in
@@ -83,21 +100,16 @@ struct ContinueReadingRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
                         .lineLimit(1)
-                    Text(place)
+                    Text(BookPage.placeLine(progress: progress))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    ProgressView(value: book.book.progress ?? 0)
+                    ProgressView(value: progress ?? 0)
                         .padding(.top, 2)
                 }
             }
             .padding(6)
             .background(isOpen ? Color.accentColor.opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
         }
-    }
-
-    /// "30%". The chapter joins it once the reader (#17) records one.
-    private var place: String {
-        book.book.progress.map { $0.formatted(.percent.precision(.fractionLength(0))) } ?? "Not started"
     }
 }
 

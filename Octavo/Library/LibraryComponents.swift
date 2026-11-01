@@ -14,7 +14,7 @@ struct OpenButton<Label: View>: View {
     @Environment(\.pane) private var pane
 
     var body: some View {
-        let isOpen = Self.isOpen(route, beside: pane.opened)
+        let isOpen = route.isSameScreen(as: pane.opened)
         Button {
             shell.open(route, from: pane)
         } label: {
@@ -23,13 +23,6 @@ struct OpenButton<Label: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isOpen ? .isSelected : [])
-    }
-
-    /// A cover counts by its book, so a refreshed list (new progress) keeps
-    /// the book selected.
-    static func isOpen(_ route: ShellRoute, beside opened: ShellRoute?) -> Bool {
-        if let book = route.bookOpenedOnUnfold, let other = opened?.bookOpenedOnUnfold { return book.id == other.id }
-        return route == opened
     }
 }
 
@@ -143,9 +136,9 @@ struct EntryRow: View {
         }
     }
 
-    /// The entry's own covers where the library lists them; otherwise its
-    /// first page's, loaded as the row appears (the same list opens when the
-    /// row is tapped).
+    /// The entry's own covers where the library lists them; otherwise the
+    /// first books of its list, loaded as the row appears
+    /// (`LibraryModel.preview`).
     private var covers: some View {
         let books = previewBooks
         return HStack(spacing: 2) {
@@ -164,7 +157,7 @@ struct EntryRow: View {
         }
         .task(id: entry.link) {
             guard entry.previewCovers.isEmpty else { return }
-            await library.feed(entry.link, from: source)?.load()
+            await library.preview(entry.link, from: source)?.load()
         }
     }
 
@@ -175,7 +168,7 @@ struct EntryRow: View {
                                                               title: "", cover: cover))
             }
         }
-        let books = library.feed(entry.link, from: source)?.books.prefix(3) ?? []
+        let books = library.preview(entry.link, from: source)?.books.prefix(3) ?? []
         return books.map { SourcedBook(source: source, book: $0) }
     }
 }

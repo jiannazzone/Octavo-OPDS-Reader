@@ -11,6 +11,10 @@ struct LibraryServer {
     /// Where and who, for Settings: "localhost:3300 · octavo".
     var detail: String
     var source: any LibrarySource
+    /// The same library asking for small pages, for the three covers on a
+    /// collection's row. `nil`: rows load the list's first full page (which
+    /// is then ready when the row is tapped).
+    var previewSource: (any LibrarySource)? = nil
 }
 
 /// The app-wide library state: the connected server, its chips, Home's
@@ -32,6 +36,11 @@ final class LibraryModel {
     private(set) var newBooks: [SourcedBook] = []
     /// Home has loaded once; until then it shows a spinner, not the empty state.
     private(set) var homeLoaded = false
+    /// The server's Continue reading didn't load, so an empty list doesn't
+    /// mean nothing is in progress.
+    private(set) var continueReadingFailed = false
+    /// The chips didn't load for a reason the banner doesn't cover.
+    private(set) var rootFailed = false
 
     /// Changes with every connect and disconnect, so a screen holding the
     /// old server's source starts over.
@@ -42,6 +51,7 @@ final class LibraryModel {
     let covers = CoverCache()
     @ObservationIgnored let recents: RecentBooks
     @ObservationIgnored private var feeds: [FeedKey: FeedModel] = [:]
+    @ObservationIgnored private var previews: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var serverContinueReading: [SourcedBook] = []
 
     /// How many new books Home's row scrolls through.
@@ -64,9 +74,11 @@ final class LibraryModel {
         root = nil
         chip = nil
         feeds = [:]
+        previews = [:]
         serverContinueReading = []
         newBooks = []
         homeLoaded = false
+        continueReadingFailed = false
         connectionProblem = nil
         await loadRoot()
         await loadHome()
@@ -79,10 +91,13 @@ final class LibraryModel {
         root = nil
         chip = nil
         feeds = [:]
+        previews = [:]
         serverContinueReading = []
         continueReading = []
         newBooks = []
         homeLoaded = false
+        continueReadingFailed = false
+        rootFailed = false
         connectionProblem = nil
     }
 
@@ -99,6 +114,19 @@ final class LibraryModel {
         return feed
     }
 
+    /// The first few books at `link`, for a collection's row: from the
+    /// server's preview source when it has one, else the list itself.
+    func preview(_ link: LibraryLink, from source: LibrarySourceID) -> FeedModel? {
+        guard let server, server.id == source, let previewSource = server.previewSource else {
+            return feed(link, from: source)
+        }
+        let key = FeedKey(source: source, link: link)
+        if let preview = previews[key] { return preview }
+        let preview = FeedModel(link: link, source: source, library: previewSource) { [weak self] in self?.report($0) }
+        previews[key] = preview
+        return preview
+    }
+
     func coverImage(for book: SourcedBook, size: LibraryCoverSize) async -> UIImage? {
         guard let library = source(for: book.source) else { return nil }
         return await covers.image(for: book, size: size, from: library)
@@ -108,14 +136,18 @@ final class LibraryModel {
     func retry() async {
         connectionProblem = nil
         if root == nil { await loadRoot() }
-        await loadHome()
-        for feed in feeds.values where feed.state == .failed {
-            await feed.retry()
+        let failed = (Array(feeds.values) + Array(previews.values)).filter { $0.state == .failed }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.loadHome() }
+            for feed in failed {
+                group.addTask { await feed.retry() }
+            }
         }
     }
 
     private func loadRoot() async {
         guard let server else { return }
+        rootFailed = false
         do {
             let root = try await server.source.root()
             self.root = root
@@ -123,6 +155,7 @@ final class LibraryModel {
                 chip = root.chips.first?.link
             }
         } catch {
+            rootFailed = true
             report(error)
         }
     }
@@ -138,6 +171,7 @@ final class LibraryModel {
         let (readingBooks, newestBooks) = await (reading, new)
         // A failed list keeps what it showed.
         if let readingBooks { serverContinueReading = readingBooks }
+        continueReadingFailed = readingBooks == nil
         if let newestBooks { newBooks = Array(newestBooks.prefix(Self.newBooksLimit)) }
         mergeContinueReading()
         homeLoaded = true
@@ -149,7 +183,8 @@ final class LibraryModel {
         mergeContinueReading()
     }
 
-    private func mergeContinueReading() {
+    /// Lists Continue reading again, so its rows show the latest positions.
+    func mergeContinueReading() {
         // Records from a server that's gone can't be opened.
         let iPhone = recents.records().filter { source(for: $0.book.source) != nil }
         continueReading = ContinueReading.merge(server: serverContinueReading, iPhone: iPhone)
@@ -210,7 +245,8 @@ final class LibraryModel {
             debugConnection = .idle
             await connect(LibraryServer(
                 id: Self.localBookOrbitID, name: "BookOrbit",
-                detail: "localhost:3300 · octavo", source: BookOrbitSource(client: client)
+                detail: "localhost:3300 · octavo", source: BookOrbitSource(client: client),
+                previewSource: BookOrbitSource(client: client, pageSize: 3)
             ))
         } catch {
             debugConnection = .failed(String(describing: error))

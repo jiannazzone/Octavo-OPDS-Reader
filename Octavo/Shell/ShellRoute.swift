@@ -31,6 +31,17 @@ nonisolated enum ShellRoute: Hashable, Sendable {
         }
     }
 
+    /// Whether `other` shows the same screen, even if its list or book has
+    /// changed since (a new count, new progress): for marking the row whose
+    /// screen the pane beside shows.
+    func isSameScreen(as other: ShellRoute?) -> Bool {
+        switch (self, other) {
+        case let (.feed(entry, source), .feed(otherEntry, otherSource)?): entry.link == otherEntry.link && source == otherSource
+        case let (.cover(book), .cover(otherBook)?): book.id == otherBook.id
+        default: self == other
+        }
+    }
+
     /// The book that unfolding on this screen opens; `nil` everywhere but a
     /// cover, where unfolding keeps the same screen (decision 10).
     var bookOpenedOnUnfold: SourcedBook? {

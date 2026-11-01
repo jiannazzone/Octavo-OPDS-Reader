@@ -21,16 +21,21 @@ final class ShellModel {
     /// The book open in the reader, which covers the tabs (frames 07–09).
     var reading: OpenedBook? {
         didSet {
-            if let closed = oldValue, closed != reading { pages.existingPage(for: closed.book.id)?.readerClosed() }
+            if let closed = oldValue, closed != reading {
+                pages.existingPage(for: closed.book.id)?.readerClosed()
+                library.mergeContinueReading()
+            }
         }
     }
     /// Downloads books and opens them in `reading` (#14).
     let opener: BookOpener
+    /// The library of each book asked to open, until it does.
+    private var opening: [LibraryBookID: LibrarySourceID] = [:]
     /// The cover pages' state, kept across folds.
     let pages = BookPages()
 
-    /// A stand-in state until the cover page (#14): a problem on the
-    /// cover's strip (frames 23, 24, 42).
+    /// A debug override for the cover's strip (frames 23, 24, 42), to look
+    /// at its states without a failing download.
     var coverStrip: CoverStripMessage?
 
     #if DEBUG
@@ -42,7 +47,7 @@ final class ShellModel {
     init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener()) {
         self.library = library
         self.opener = opener
-        opener.onOpen = { [weak self] in self?.reading = $0 }
+        opener.onOpen = { [weak self] in self?.opened($0) }
         // Another server: its books' pages and the screens opened from
         // them go.
         library.serverChanged = { [weak self] in
@@ -86,11 +91,20 @@ final class ShellModel {
 
     /// Opens `book` in the reader, downloading it first if it isn't on the
     /// iPhone yet (decision 3; the cover's strip shows the progress), and
-    /// puts it first in Home's Continue reading.
+    /// once it opens puts it first in Home's Continue reading.
     func openBook(_ book: SourcedBook) {
-        guard let source = library.source(for: book.source) else { return }
-        library.bookOpened(book)
+        guard let source = library.source(for: book.source), opener.canOpen(book.book) else { return }
+        opening[book.book.id] = book.source
         opener.open(book.book, from: source)
+    }
+
+    /// Only a book that reaches the reader joins Continue reading: not one
+    /// whose download failed or was cancelled.
+    private func opened(_ book: OpenedBook) {
+        if let source = opening.removeValue(forKey: book.book.id) {
+            library.bookOpened(SourcedBook(source: source, book: book.book))
+        }
+        reading = book
     }
 
     /// Unfolding on a book's cover opens the book at once (decision 4);

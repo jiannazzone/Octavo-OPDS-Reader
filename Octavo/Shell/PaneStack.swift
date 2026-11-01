@@ -154,7 +154,7 @@ struct ShellLink<Label: View>: View {
             .contentShape(.rect)
         }
         .foregroundStyle(.primary)
-        .listRowBackground(pane.opened == route ? Color.accentColor.opacity(0.12) : nil)
-        .accessibilityAddTraits(pane.opened == route ? .isSelected : [])
+        .listRowBackground(route.isSameScreen(as: pane.opened) ? Color.accentColor.opacity(0.12) : nil)
+        .accessibilityAddTraits(route.isSameScreen(as: pane.opened) ? .isSelected : [])
     }
 }

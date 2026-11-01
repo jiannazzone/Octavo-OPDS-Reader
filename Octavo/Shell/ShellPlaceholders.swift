@@ -98,7 +98,7 @@ struct CoverScreen: View {
                     shell.openBook(SourcedBook(source: book.source, book: opened))
                 }
         } else {
-            NoLibraryInvitation()
+            LibraryNotConnected()
         }
     }
 }

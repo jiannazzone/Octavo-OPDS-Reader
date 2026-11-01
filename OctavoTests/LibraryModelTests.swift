@@ -40,6 +40,19 @@ private nonisolated struct PagedSource: LibrarySource {
     }
 }
 
+/// A server whose chips fail with something other than a connection
+/// problem.
+private nonisolated struct FailingRootSource: LibrarySource {
+    func root() async throws -> LibraryRoot { throw LibraryError.server(status: 500, message: nil) }
+    func feed(_ link: LibraryLink) async throws -> LibraryFeed { LibraryFeed() }
+    func search(_ query: String) async throws -> LibrarySearchResults { LibrarySearchResults(query: query) }
+    func details(for book: LibraryBook) async throws -> LibraryBookDetails { LibraryBookDetails(book: book) }
+    func cover(_ cover: LibraryCover, size: LibraryCoverSize) async throws -> Data { throw LibraryError.notFound }
+    func download(_ file: LibraryFile, to destination: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        throw LibraryError.notFound
+    }
+}
+
 private func book(_ id: String, hoursAgo: Double? = nil, progress: Double? = nil) -> LibraryBook {
     LibraryBook(id: LibraryBookID(rawValue: id), title: id, progress: progress,
                 lastReadAt: hoursAgo.map { Date(timeIntervalSinceReferenceDate: 1_000_000 - $0 * 3600) })
@@ -58,7 +71,7 @@ private func temporaryRecents() -> RecentBooks {
 }
 
 @MainActor
-private func connected(_ source: PagedSource, recents: RecentBooks = temporaryRecents()) async -> LibraryModel {
+private func connected(_ source: some LibrarySource, recents: RecentBooks = temporaryRecents()) async -> LibraryModel {
     let library = LibraryModel(recents: recents)
     await library.connect(LibraryServer(id: server, name: "Shelf", detail: "", source: source))
     return library
@@ -155,6 +168,43 @@ struct FeedModelTests {
 
 @MainActor
 struct LibraryModelTests {
+    @Test func aFailedContinueReadingIsntAnEmptyOne() async {
+        let library = await connected(PagedSource(faults: Faults(["reading": LibraryError.server(status: 500, message: nil)])))
+        #expect(library.homeLoaded)
+        #expect(library.continueReading.isEmpty)
+        #expect(library.continueReadingFailed)
+        #expect(library.connectionProblem == nil)
+    }
+
+    @Test func aFailedRootSaysSo() async {
+        let library = await connected(FailingRootSource())
+        #expect(library.root == nil)
+        #expect(library.rootFailed)
+        #expect(library.connectionProblem == nil)
+    }
+
+    // A collection row asks the preview source for its few covers, and
+    // keeps the full list apart.
+    @Test func rowsPreviewFromTheSmallPageSource() async throws {
+        let full = PagedSource(pages: ["c": LibraryFeed(books: (0..<50).map { book("\($0)") })])
+        let small = PagedSource(pages: ["c": LibraryFeed(books: (0..<3).map { book("\($0)") })])
+        let library = LibraryModel(recents: temporaryRecents())
+        await library.connect(LibraryServer(id: server, name: "Shelf", detail: "", source: full, previewSource: small))
+
+        let preview = try #require(library.preview(link("c"), from: server))
+        await preview.load()
+        #expect(preview.books.count == 3)
+        let list = try #require(library.feed(link("c"), from: server))
+        #expect(list !== preview)
+        await list.load()
+        #expect(list.books.count == 50)
+    }
+
+    @Test func withoutAPreviewSourceRowsShareTheList() async {
+        let library = await connected(PagedSource())
+        #expect(library.preview(link("c"), from: server) === library.feed(link("c"), from: server))
+    }
+
     @Test func startsOnTheFirstChip() async {
         let library = await connected(PagedSource())
         #expect(library.chip == link("all"))

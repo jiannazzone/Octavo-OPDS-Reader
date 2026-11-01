@@ -64,6 +64,24 @@ func makeShell(opener: BookOpener? = nil) -> ShellModel {
     )
 }
 
+struct ShellRouteTests {
+    // A refreshed list or book still marks the same row.
+    @Test func theSameScreenSurvivesNewDetails() {
+        var entry = LibraryEntry(kind: .collection, title: "Classics", count: 5, link: LibraryLink(rawValue: "collections/classics"))
+        let route = ShellRoute.feed(entry, from: SampleLibrarySource.id)
+        entry.count = 6
+        #expect(route.isSameScreen(as: .feed(entry, from: SampleLibrarySource.id)))
+        #expect(!route.isSameScreen(as: .feed(entry, from: .files)))
+
+        var book = SampleRoutes.book(0)
+        let cover = ShellRoute.cover(book)
+        book.book.progress = 0.9
+        #expect(cover.isSameScreen(as: .cover(book)))
+        #expect(!cover.isSameScreen(as: .cover(SampleRoutes.book(1))))
+        #expect(!cover.isSameScreen(as: nil))
+    }
+}
+
 struct PanePathTests {
     static let a = SampleRoutes.collections
     static let b = SampleRoutes.classics
@@ -223,14 +241,28 @@ struct ShellModelTests {
         #expect(model[path: .library].routes == [SampleRoutes.collections, .cover(Self.book)])
     }
 
-    @Test func openingABookPutsItFirstInContinueReading() async {
+    @Test func aBookJoinsContinueReadingOnceItOpens() async throws {
+        let files = try TemporaryBookFiles()
+        let model = makeShell(opener: BookOpener(files: files.store))
+        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", detail: "", source: StubLibrarySource()))
+        #expect(model.library.continueReading.isEmpty)
+
+        let alice = SampleRoutes.book(3)
+        model.openBook(alice)
+        #expect(await eventually { model.reading != nil })
+        #expect(model.library.continueReading.map(\.id) == [alice.id])
+    }
+
+    // Recorded only once the reader has it: a failed download isn't a book
+    // in progress.
+    @Test func aBookThatDoesntOpenStaysOut() async {
         let model = makeShell()
         await model.library.connectSampleLibrary()
+        let alice = SampleRoutes.book(3)
+        model.openBook(alice)
+        #expect(await eventually {
+            if case .failed = model.opener.status(of: alice.book) { true } else { false }
+        })
         #expect(model.library.continueReading.map(\.book.title) == ["Moby-Dick", "Frankenstein"])
-
-        // The sample library's downloads fail; the book still counts as
-        // opened on this iPhone.
-        model.openBook(SampleRoutes.book(3))
-        #expect(model.library.continueReading.map(\.book.title) == ["Alice’s Adventures in Wonderland", "Moby-Dick", "Frankenstein"])
     }
 }

@@ -23,6 +23,9 @@ final class FeedModel {
     private(set) var total: Int?
     private(set) var state = State.idle
     private(set) var hasMore = false
+    /// Authors A–Z, grouped once per page rather than on every redraw.
+    /// Empty unless the list is only authors.
+    private(set) var authorSections: [AuthorIndex.Section] = []
 
     @ObservationIgnored private let library: any LibrarySource
     @ObservationIgnored private let report: (any Error) -> Void
@@ -102,9 +105,17 @@ final class FeedModel {
             entries += feed.entries
             books += feed.books
         }
+        authorSections = isAuthorList ? AuthorIndex.sections(entries) : []
         total = feed.total ?? total
         next = feed.next
         hasMore = feed.next != nil
         state = .loaded
+    }
+}
+
+extension FeedModel {
+    /// Only authors: shown A–Z with an index strip.
+    var isAuthorList: Bool {
+        books.isEmpty && !entries.isEmpty && entries.allSatisfy { $0.kind == .author }
     }
 }
