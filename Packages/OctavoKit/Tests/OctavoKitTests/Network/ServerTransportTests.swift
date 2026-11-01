@@ -187,6 +187,9 @@ struct ServerTransportTests {
         #expect(Origin(URL(string: "http://nas.lan/x")!) != Origin(URL(string: "https://nas.lan/x")!))
         #expect(Origin(URL(string: "http://[::1]:3300/x")!) == Origin(scheme: "http", host: "::1", port: 3300))
         #expect(Origin(URL(string: "http://[::1]:3300/x")!) == Origin(scheme: "http", host: "[::1]", port: 3300))
+        // As URLProtectionSpace gives hosts: punycode, and a raw % before a zone.
+        #expect(Origin(URL(string: "https://bücher.local:8443/")!) == Origin(scheme: "https", host: "xn--bcher-kva.local", port: 8443))
+        #expect(Origin(URL(string: "http://[fe80::1%25en0]:3300/")!) == Origin(scheme: "http", host: "fe80::1%en0", port: 3300))
     }
 }
 

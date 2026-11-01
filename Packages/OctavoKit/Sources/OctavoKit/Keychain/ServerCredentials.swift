@@ -83,7 +83,7 @@ public struct KeychainBookOrbitTokenStore: BookOrbitTokenStore {
     }
 
     public func load() async throws -> BookOrbitCredentials? {
-        try item.read().map { try JSONDecoder().decode(BookOrbitCredentials.self, from: $0) }
+        try item.decoded(BookOrbitCredentials.self)
     }
 
     public func save(_ credentials: BookOrbitCredentials?) async throws {
@@ -104,7 +104,7 @@ public struct KeychainPasswordStore: PasswordStore {
     }
 
     public func load() async throws -> PasswordCredentials? {
-        try item.read().map { try JSONDecoder().decode(PasswordCredentials.self, from: $0) }
+        try item.decoded(PasswordCredentials.self)
     }
 
     public func save(_ credentials: PasswordCredentials?) async throws {
@@ -126,7 +126,7 @@ public struct KeychainCertificatePinStore: CertificatePinStore {
     }
 
     public func load() throws -> CertificatePin? {
-        try item.read().map { try JSONDecoder().decode(CertificatePin.self, from: $0) }
+        try item.decoded(CertificatePin.self)
     }
 
     public func save(_ pin: CertificatePin?) throws {
@@ -135,5 +135,17 @@ public struct KeychainCertificatePinStore: CertificatePinStore {
         } else {
             try item.delete()
         }
+    }
+}
+
+extension KeychainItem {
+    /// The stored value, or `nil` if there's none. One that no longer decodes
+    /// (a corrupt write, an older format) is deleted, so the person signs in
+    /// or trusts again instead of being stuck on an error.
+    func decoded<Value: Decodable>(_ type: Value.Type) throws -> Value? {
+        guard let data = try read() else { return nil }
+        if let value = try? JSONDecoder().decode(type, from: data) { return value }
+        try delete()
+        return nil
     }
 }

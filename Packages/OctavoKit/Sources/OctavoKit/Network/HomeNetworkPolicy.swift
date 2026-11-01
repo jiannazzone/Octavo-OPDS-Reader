@@ -117,7 +117,9 @@ public struct HomeNetworkPolicy: Sendable {
         if plainHTTP, !isHome(address, networks, onThisNetwork: true) {
             return .insecureAddress(host: host, reason: .internetAddress(address.description))
         }
-        if fromInternetServer, address.isHomeRange || address.isUnspecified || isHome(address, networks, onThisNetwork: true) {
+        // Through a proxy the address is the proxy's, often on the LAN.
+        if fromInternetServer, !throughProxy,
+           address.isHomeRange || address.isUnspecified || isHome(address, networks, onThisNetwork: true) {
             return .insecureAddress(host: host, reason: .localAddressFromInternetServer)
         }
         return nil
@@ -152,11 +154,8 @@ private struct Target {
         let refuse = NetworkTrustError.unsupportedAddress(url.trustDescription)
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               url.user(percentEncoded: true) == nil, url.password(percentEncoded: true) == nil,
-              // `absoluteString` is what's sent: internationalized names in
-              // their `xn--` form, other escapes as they are.
-              var host = URLComponents(string: url.absoluteString)?.encodedHost?.lowercased(), !host.isEmpty else { throw refuse }
-        if host.hasPrefix("["), host.hasSuffix("]") {
-            host = String(host.dropFirst().dropLast())
+              let host = url.connectionHost, !host.isEmpty else { throw refuse }
+        if host.contains(":") {
             guard let address = IPAddress(literal: host), !address.isIPv4 else { throw refuse }
             self.address = .ip(address)
         } else if Self.looksNumeric(host) {
@@ -213,7 +212,7 @@ public struct SystemHostResolver: HostResolver {
                 defer { freeaddrinfo(first) }
                 var addresses: [IPAddress] = []
                 for entry in sequence(first: first, next: { $0.pointee.ai_next }) {
-                    if let address = entry.pointee.ai_addr.flatMap(IPAddress.init(socketAddress:)), !addresses.contains(address) {
+                    if let address = entry.pointee.ai_addr.flatMap({ IPAddress(socketAddress: $0) }), !addresses.contains(address) {
                         addresses.append(address)
                     }
                 }
@@ -251,7 +250,7 @@ public struct LocalNetworks: Sendable {
                 result.hasSharedAddressTunnel = true
             }
             guard flags & (IFF_LOOPBACK | IFF_POINTOPOINT) == 0, address.isGlobalUnicastIPv6,
-                  let mask = entry.pointee.ifa_netmask.flatMap(IPAddress.init(socketAddress:)) else { continue }
+                  let mask = entry.pointee.ifa_netmask.flatMap({ IPAddress(socketAddress: $0) }) else { continue }
             let length = mask.bytes.reduce(0) { $0 + $1.nonzeroBitCount }
             guard (48...128).contains(length) else { continue }
             result.ipv6Prefixes.append(NetworkPrefix(address: address, length: length))
@@ -288,13 +287,19 @@ extension IPAddress {
             return nil
         }
     }
-
-    init?(socketAddress: UnsafeMutablePointer<sockaddr>) {
-        self.init(socketAddress: UnsafePointer(socketAddress))
-    }
 }
 
 extension URL {
+    /// The host as the connection uses it, lowercased and without IPv6
+    /// brackets: from `absoluteString`, so internationalized names are in
+    /// their `xn--` form (`host(percentEncoded:)` would percent-encode them)
+    /// and other escapes stay as they are.
+    var connectionHost: String? {
+        guard var host = URLComponents(string: absoluteString)?.encodedHost?.lowercased() else { return nil }
+        if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        return host
+    }
+
     /// Scheme, host and port only, for errors: no `user:password@`, and no
     /// path or query (Kavita puts its API key in the path).
     var trustDescription: String {

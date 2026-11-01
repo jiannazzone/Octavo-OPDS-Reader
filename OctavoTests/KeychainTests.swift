@@ -52,6 +52,22 @@ struct KeychainTests {
         try ServerCredentials.removeAll(serverID: serverID)
     }
 
+    /// An item that no longer decodes is dropped (sign in again), not an
+    /// error on every request.
+    @Test func undecodableItemsAreDropped() async throws {
+        let store = KeychainBookOrbitTokenStore(serverID: serverID)
+        try await store.save(BookOrbitCredentials(accessToken: "a"))
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: ServerCredentials.tokenService,
+            kSecAttrAccount: serverID,
+        ]
+        #expect(SecItemUpdate(query as CFDictionary, [kSecValueData: Data("not json".utf8)] as CFDictionary) == errSecSuccess)
+
+        #expect(try await store.load() == nil)
+        #expect(try await store.load() == nil)
+    }
+
     @Test func removeServerForgetsEverything() async throws {
         let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
         let passwords = KeychainPasswordStore(serverID: serverID)

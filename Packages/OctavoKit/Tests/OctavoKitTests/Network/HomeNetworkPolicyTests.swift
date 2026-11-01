@@ -266,6 +266,7 @@ struct HomeNetworkPolicyTests {
         #expect(verify(cover, nil, internet: true) == nil)                     // https: TLS decided
         #expect(verify(cover, "192.168.1.1", internet: false) == nil)
         #expect(verify(cover, "203.0.113.9", proxy: true) == nil)   // https through a proxy is still TLS to the server
+        #expect(verify(cover, "192.168.1.10", proxy: true, internet: true) == nil)   // the address is the LAN proxy's
     }
 
     @Test func unknownNamesCantBeReached() async {

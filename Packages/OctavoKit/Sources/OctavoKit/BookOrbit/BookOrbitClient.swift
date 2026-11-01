@@ -211,8 +211,12 @@ public actor BookOrbitClient {
         }
         let (data, urlResponse) = try await transport.data(for: request)
         let response = try http(urlResponse)
-        // Signed out or in again meanwhile: this answer belongs to the old session.
-        guard generation == sessionGeneration else { throw BookOrbitError.sessionExpired }
+        // Signed out or in again meanwhile: this answer belongs to the old
+        // session. After a new sign-in, the waiting requests use that.
+        guard generation == sessionGeneration else {
+            if let credentials { return credentials }
+            throw BookOrbitError.sessionExpired
+        }
         if response.statusCode == 401 {
             try await store(nil)
             throw BookOrbitError.sessionExpired

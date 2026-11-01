@@ -96,8 +96,14 @@ public final class ServerTransport: HTTPTransport {
             throw error
         }
         // The metrics showed a connection the checks wouldn't have allowed.
-        if !(await guardian.metricsCollected(within: .seconds(5))), rules.policy.verifiesConnections, url.scheme?.lowercased() == "http" {
-            guardian.refuse(.insecureAddress(host: url.host(percentEncoded: true) ?? "", reason: .unverifiedConnection))
+        // They matter for plain http and for an internet server's requests.
+        let plainHTTP = url.scheme?.lowercased() == "http"
+        if plainHTTP || !rules.serverIsLocal {
+            let collected = await guardian.metricsCollected(within: .seconds(5))
+            try Task.checkCancellation()
+            if !collected, plainHTTP, rules.policy.verifiesConnections {
+                guardian.refuse(.insecureAddress(host: url.connectionHost ?? "", reason: .unverifiedConnection))
+            }
         }
         if let refusal = guardian.refusal {
             if let file = result as? (URL, URLResponse) { try? FileManager.default.removeItem(at: file.0) }
@@ -146,16 +152,18 @@ struct Origin: Hashable {
     var host: String
     var port: Int
 
+    /// - Parameter host: as `URLProtectionSpace` gives it (punycode, a raw
+    ///   `%` before an IPv6 zone) or as `URL.connectionHost` does (`%25`).
     init(scheme: String, host: String, port: Int) {
         self.scheme = scheme.lowercased()
         var host = host.lowercased()
         if host.hasPrefix("["), host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
-        self.host = host
+        self.host = host.replacingOccurrences(of: "%25", with: "%")
         self.port = port > 0 ? port : (self.scheme == "https" ? 443 : 80)
     }
 
     init?(_ url: URL) {
-        guard let scheme = url.scheme, let host = url.host(percentEncoded: true) else { return nil }
+        guard let scheme = url.scheme, let host = url.connectionHost else { return nil }
         self.init(scheme: scheme, host: host, port: url.port ?? 0)
     }
 }
