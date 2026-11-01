@@ -1,6 +1,6 @@
 # Octavo design direction
 
-Status: **direction set** (UI brainstorm with Adam, 2026-10-31). Only decisions Adam approved are recorded as decisions; screens marked "Not designed" below are still to do. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`.
+Status: **being redone, area by area** (from 2026-11-01). Adam set aside the 2026-10-31 decisions and is deciding again, one area at a time, starting with the library. **"Library pass" below is the source of truth; where an older decision disagrees, the library pass wins.** The older decisions stay below for reference until each area is redone. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`.
 
 ## Device frame
 
@@ -10,7 +10,43 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Unfolded (inner display):** 951×669 pt, landscape. The hinge is a 40 pt strip at x 455.5–495.5. App content is 867 pt wide (the same trailing system column). The right half, from the hinge to the system column, is 372 pt wide: almost the folded content width (382 pt).
 - A 2:3 book cover nearly fills the folded display (466×699 against 466×678).
 
-## Decisions
+## Library pass (decided with Adam, 2026-11-01)
+
+### Shell
+- **Apple's tab bar, everything else ours.** The system tab bar stays in the side column; Octavo draws the screens, how they move, and the Back and action buttons at the top of the side column.
+- **Three tabs: Home, Library, Search.** Settings is a button at the top of the side column on a tab's top screen, not a tab.
+- **One screen, two pages.** Every screen is a spread: content flows from the left page onto the right, and nothing sits on the hinge. Folded, you see one page. Folded or unfolded it is the same stack of screens; a fold only lays the top screen out again.
+- **Going deeper replaces the whole spread** (a pushed screen slides in). Back, or a swipe from the left edge, returns.
+
+### The Duo as the book
+- **Unfolding on a book's screen opens the book**, if it's on the iPhone. If it isn't, the screen stays as Cover | Details and nothing downloads until you tap Download or Open.
+- **A book's screen, folded, has Open** (read on one page) **and Download** (when it isn't on the iPhone yet).
+- **Folding while reading closes the book** back to its screen. Default; may become a setting later.
+- Unfolding anywhere else just lays the screen out as two pages.
+
+### Home
+- **Your book first:** the book you're reading as a large cover, with your other books in progress (from the server and this iPhone, most recent first) beneath, or on the right page unfolded.
+- **Only books in progress.** New arrivals live in the Library.
+- Unfolding on Home doesn't open anything; tap a book to see its screen.
+
+### Library
+- **A list of sections** (All books, Recently added, Collections, Series, Authors, or an OPDS server's own sections), laid out like a contents page: each section's name and count, with a peek of its first covers (on the right page unfolded). One layout for every server; a chips layout may come later as an option.
+- **Each section fills the whole spread** (a grid of covers across both pages, or a list flowing from the left page onto the right).
+
+### A book's screen
+- **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, progress, Download and Open; pull it up for the details.
+- **Unfolded:** Cover | Details, the cover on the left page and the same details on the right.
+
+### Getting books onto the iPhone
+- **A check on downloaded books**, everywhere covers show. A downloading book shows a progress ring on its cover, everywhere.
+- **Opening a book downloads it, and it stays** until you remove it. Downloads live where iOS won't clear them.
+- **Nothing downloads in the background.**
+- **Lists and grids appear at once** with blank cover shapes that fill in; no spinners mid-screen. A server that can't be reached says so in place, with Try again.
+
+### Still to decide in the library pass
+Adding your server (first run and Settings), Search, series in reading order, Authors A–Z.
+
+## Decisions (2026-10-31, under review)
 
 ### Structure and library (approved 2026-10-31)
 
