@@ -63,6 +63,11 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
    - **The sync step is skipped for OPDS servers in v1** (only BookOrbit syncs); progress stays on the iPhone. The step returns once iCloud or KOReader sync exists, with iCloud preselected. A BookOrbit server shows it with itself preselected.
    - **No skip on first launch:** the first screen stays until a server is added or a file imported.
    - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
+25. **Plain http and self-signed certificates.**
+    - **Plain `http://` is allowed only for home and VPN addresses;** internet addresses need https ("Use https:// for servers on the internet."). An http address shows "Not encrypted" under it.
+    - **What counts as home or VPN** is a fixed set of standards-based rules applied to the address's host, not a list anyone maintains: IP addresses in 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (RFC 1918), 100.64.0.0/10 (RFC 6598, used by Tailscale), 127.0.0.0/8, 169.254.0.0/16, and the IPv6 equivalents (fc00::/7, fe80::/10, ::1); special-use local names (`localhost`, `*.local`, `*.home.arpa`, `*.internal`, `*.lan`); any other name counts only if every address it resolves to is in those ranges (covers `*.ts.net` and split DNS at home).
+    - **Checked on every connection,** not only when the server is added: if a saved http server's name resolves to a public address, Octavo refuses rather than send the password or token unencrypted. A home IP address can't be told apart from the same address on someone else's network (hotel Wi-Fi); that residual risk is accepted and mentioned in a short note when an http server is added.
+    - **Self-signed HTTPS certificates:** on first connect, a "Trust this server" step shows the certificate's details (issued to, fingerprint); once trusted, only that exact certificate is accepted for that server (pinned). A changed certificate asks again.
 
 ### Empty and error states (approved 2026-10-31)
 
@@ -81,6 +86,8 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 7. **Controls are hidden while you read.** A tap in the middle shows them: Back, Contents, Text and theme, Search in book and Bookmark in the side column, plus a glass progress bar with the chapter and page. Taps on the left and right sides turn pages. A setting, **Always show controls**, keeps them visible; it is off by default.
 8. **The page never goes under the side column** (§7 Q3, Q4). Folded, the page stays in the 382 pt content area. Unfolded, the spread stays centred on the hinge and the left edge gives up the same 84 pt, so the margins match. The margin setting runs from wide down to text reaching the column's edge; the gutter on the hinge never drops below the hinge's 40 pt. No foliate patch is needed: the margin setting scales foliate's gap and outer margins together.
 9. **Half-open is book mode** (§7 Q1): controls stay hidden, a shadow at the spine, a tap on the left page goes back and on the right page goes forward. The spine shadow, and any page-warp effect, is optional: **Book-mode shadow** in the Customize panel, on by default.
+   - **Controls in book mode:** tap the side column (empty in book mode, outside both pages) to show them there. Laying the phone flat also brings back the usual middle tap.
+   - **Angles:** book mode from about 60° to 150°, flat above about 160°, with buffers between so the mode doesn't flicker near a boundary (the system folds to the outer display below about 35°). Final numbers are set on a real device.
    - **Half-open, every screen splits 50/50 at the hinge** (Apple's guidance for the Duo). The unfolded layouts already divide at the hinge (grid | cover, list | page, the reader's two pages); nothing may span it when half-open.
 10. **Unfolding anywhere but a cover keeps the same screen** (§7 Q5): it takes its unfolded layout. Only a book's cover turns an unfold into "open".
 11. **Folds cross-fade** (§7 Q6): a snapshot of the old page fades into the settled layout (about 0.3 s), hiding the intermediate re-layouts.
@@ -207,13 +214,13 @@ What the kit showed:
 
 ## Open questions
 
-- **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
-- **Reaching the controls in book mode.** Taps on the pages turn them, so controls need another way in. Proposed (not approved): tap the side column, which sits outside both pages.
-- **Book mode's angle range.** Roughly 60–150°; tune on a real device.
+None right now; new questions go here as they come up.
 
 ## Needs engineering
 
 Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (decides the amber formats); SwiftUI `TabView` on the Duo; the fold cross-fade with batched re-layouts; book-mode posture detection. **No new foliate patch** is needed for these decisions (decision 8 works with foliate's own gap and the bridge's insets); patches 0001 and 0002 stay. The duo-spreads §8 risk still applies: after an unfold the synced position is the spread's start.
+
+- **Network trust (decision 25): a thorough security review before it merges** (Adam's requirement, 2026-10-31). In scope: the http allowlist and its host parsing, name resolution and the per-connection re-check, certificate trust and pinning, and how passwords and BookOrbit tokens are handled on http. Also confirm the App Transport Security configuration that allows home-network IP addresses, and the App Review justification it needs.
 
 - **Tabs in the trailing column.** Apple's iOS 27 kit has a Duo tab bar at the bottom of the trailing column, so the placement is the system's design. Still check that SwiftUI's `TabView` renders it that way on the Duo, folded and unfolded.
 - **Library chips from an OPDS feed.** Map the root feed's navigation entries and facets to chips, and decide what happens when a feed has many entries or none.
