@@ -98,12 +98,30 @@ public struct HomeNetworkPolicy: Sendable {
         }
     }
 
+    /// For an internet server's links to other hosts: refuses a home address,
+    /// or a name that resolves to one (DNS rebinding toward the LAN). A name
+    /// that doesn't resolve is left to fail on its own.
+    func refuseHomeAddresses(_ url: URL) async throws {
+        let refusal = NetworkTrustError.insecureAddress(host: url.connectionHost ?? "", reason: .localAddressFromInternetServer)
+        if Self.isLocalAddress(url) { throw refusal }
+        guard let target = try? Target(url) else { return }
+        let networks = localNetworks()
+        let addresses: [IPAddress]
+        switch target.address {
+        case .ip(let address): addresses = [address]
+        case .name(let name): addresses = (try? await resolver.addresses(of: name)) ?? []
+        }
+        for address in addresses where address.isHomeRange || address.isUnspecified || isHome(address, networks, onThisNetwork: true) {
+            throw refusal
+        }
+    }
+
     /// After the fact: what a request to `url` was actually connected to, from
     /// the task's metrics. `nil` if that's fine. Catches DNS answers that
     /// changed after `check` and proxies it couldn't see; it can't unsend the
     /// request, but the response is refused.
-    /// - Parameter fromInternetServer: the transport's server isn't local, so
-    ///   home addresses are off limits too.
+    /// - Parameter fromInternetServer: an internet server's link to another
+    ///   host, so home addresses are off limits too.
     func verify(_ url: URL, connectedTo remote: String?, throughProxy: Bool, fromInternetServer: Bool) -> NetworkTrustError? {
         guard verifiesConnections else { return nil }
         let host = url.host(percentEncoded: true) ?? ""

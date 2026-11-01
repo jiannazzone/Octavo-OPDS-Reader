@@ -15,6 +15,14 @@ public struct PasswordCredentials: Codable, Hashable, Sendable, CustomStringConv
     public var debugDescription: String { description }
 }
 
+/// How a server asked for its password when it was added. Recorded with the
+/// server, so a later challenge in a weaker scheme (an impostor at a home
+/// http address asking for Basic) gets nothing.
+public enum HTTPAuthScheme: String, Codable, Hashable, Sendable {
+    case basic
+    case digest
+}
+
 /// Where an OPDS server's password is kept. One store per server.
 public protocol PasswordStore: Sendable {
     func load() async throws -> PasswordCredentials?

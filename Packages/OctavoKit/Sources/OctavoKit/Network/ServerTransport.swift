@@ -25,8 +25,11 @@ public protocol HTTPTransport: Sendable {
 /// - Redirects never go from https to http, never carry a request body to
 ///   another server, and lose `Authorization` and `Cookie` when they change
 ///   scheme, host or port.
-/// - HTTP Basic and Digest challenges from the server itself are answered
-///   from `passwords`, once per request.
+/// - HTTP Basic or Digest challenges from the server itself are answered
+///   from `passwords`, once per request, and only in `authScheme`.
+/// - `data(for:)` answers longer than `maximumDataSize` fail with
+///   `URLError(.dataLengthExceedsMaximum)`, so an endless answer can't use up
+///   the app's memory. (Downloads go to a file.)
 /// - After each request, its metrics show where it actually connected;
 ///   a connection the checks wouldn't have allowed fails the request.
 /// - No cookie jar, no shared credential storage, no cache, TLS 1.2 or later.
@@ -36,18 +39,26 @@ public final class ServerTransport: HTTPTransport {
 
     private let session: URLSession
     private let rules: TrustRules
+    private let maximumDataSize: Int
 
-    /// - Parameter configuration: copied; cookies, credential storage and the
-    ///   cache are switched off on the copy.
+    /// - Parameters:
+    ///   - authScheme: the scheme the server asked for when it was added;
+    ///     `passwords` answer only that one, and nothing when it's `nil`.
+    ///   - maximumDataSize: the longest answer `data(for:)` accepts, in bytes.
+    ///   - configuration: copied; cookies, credential storage and the cache
+    ///     are switched off on the copy.
     public init(
         server: URL,
         pin: CertificatePin? = nil,
         passwords: (any PasswordStore)? = nil,
+        authScheme: HTTPAuthScheme? = nil,
+        maximumDataSize: Int = 64 << 20,
         policy: HomeNetworkPolicy = .system,
         configuration: URLSessionConfiguration = .default
     ) {
         self.server = server
-        rules = TrustRules(server: server, pin: pin, passwords: passwords, policy: policy)
+        self.maximumDataSize = maximumDataSize
+        rules = TrustRules(server: server, pin: pin, passwords: passwords, authScheme: authScheme, policy: policy)
         let configuration = configuration.copy() as! URLSessionConfiguration
         configuration.httpCookieAcceptPolicy = .never
         configuration.httpShouldSetCookies = false
@@ -68,8 +79,8 @@ public final class ServerTransport: HTTPTransport {
     }
 
     public func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        try await guarded(request, delegate: nil) { [session] request, guardian in
-            try await session.data(for: request, delegate: guardian)
+        try await guarded(request, delegate: nil) { [session, maximumDataSize] request, guardian in
+            try await guardian.load(request, in: session, limit: maximumDataSize)
         }
     }
 
@@ -118,24 +129,30 @@ struct TrustRules: Sendable {
     let policy: HomeNetworkPolicy
     let pin: CertificatePin?
     let passwords: (any PasswordStore)?
+    let authScheme: HTTPAuthScheme?
     private let origin: Origin?
     let serverIsLocal: Bool
 
-    init(server: URL, pin: CertificatePin?, passwords: (any PasswordStore)?, policy: HomeNetworkPolicy) {
+    init(server: URL, pin: CertificatePin?, passwords: (any PasswordStore)?, authScheme: HTTPAuthScheme? = nil, policy: HomeNetworkPolicy) {
         self.policy = policy
         self.pin = pin
         self.passwords = passwords
+        self.authScheme = authScheme
         origin = Origin(server)
         serverIsLocal = HomeNetworkPolicy.isLocalAddress(server)
     }
 
     /// The policy check, plus: a server on the internet doesn't get to send
-    /// the app to home addresses (a hostile catalog probing the router).
+    /// the app to home addresses on other hosts (a hostile catalog probing
+    /// the router). Its own address may be home (split DNS at home).
     func check(_ url: URL) async throws {
         try await policy.check(url)
-        if !serverIsLocal, HomeNetworkPolicy.isLocalAddress(url) {
-            throw NetworkTrustError.insecureAddress(host: url.host(percentEncoded: true) ?? "", reason: .localAddressFromInternetServer)
-        }
+        if linksElsewhereFromInternet(url) { try await policy.refuseHomeAddresses(url) }
+    }
+
+    /// `url` is another host than an internet server's own.
+    func linksElsewhereFromInternet(_ url: URL) -> Bool {
+        !serverIsLocal && Origin(url) != origin
     }
 
     /// The challenge came from the server itself, not from another host its
@@ -172,8 +189,9 @@ struct Origin: Hashable {
 /// challenges, and remembers why it refused. Other callbacks go to the
 /// caller's delegate (download progress, say), except ones that could change
 /// the request after it was checked.
-final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
+final class TaskGuard: NSObject, URLSessionDataDelegate, Sendable {
     private let rules: TrustRules
+    private let body = Mutex(Body())
     private let inner: (any URLSessionTaskDelegate)?
     private let refusalStorage = Mutex<NetworkTrustError?>(nil)
     private let collected = AsyncStream.makeStream(of: Void.self)
@@ -214,6 +232,71 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
         }
     }
 
+    // MARK: Loading data, up to a limit
+
+    private struct Body {
+        var data = Data()
+        var response: URLResponse?
+        var limit = Int.max
+        var tooLarge = false
+        var continuation: CheckedContinuation<(Data, URLResponse), any Error>?
+    }
+
+    /// Like `URLSession.data(for:delegate:)`, but stops past `limit` bytes,
+    /// which that can't.
+    func load(_ request: URLRequest, in session: URLSession, limit: Int) async throws -> (Data, URLResponse) {
+        let task = session.dataTask(with: request)
+        task.delegate = self
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                body.withLock {
+                    $0.limit = limit
+                    $0.continuation = continuation
+                }
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse) async -> URLSession.ResponseDisposition {
+        body.withLock { body in
+            body.response = response
+            body.tooLarge = response.expectedContentLength > body.limit
+            return body.tooLarge ? .cancel : .allow
+        }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        let tooLarge = body.withLock { body in
+            body.data.append(data)
+            body.tooLarge = body.tooLarge || body.data.count > body.limit
+            if body.tooLarge { body.data = Data() }
+            return body.tooLarge
+        }
+        if tooLarge { dataTask.cancel() }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        let finished = body.withLock { body -> (CheckedContinuation<(Data, URLResponse), any Error>, Result<(Data, URLResponse), any Error>)? in
+            guard let continuation = body.continuation else { return nil }
+            body.continuation = nil
+            let result: Result<(Data, URLResponse), any Error> = if body.tooLarge {
+                .failure(URLError(.dataLengthExceedsMaximum))
+            } else if let error {
+                .failure(error)
+            } else if let response = body.response {
+                .success((body.data, response))
+            } else {
+                .failure(URLError(.badServerResponse))
+            }
+            return (continuation, result)
+        }
+        if let (continuation, result) = finished { continuation.resume(with: result) }
+        inner?.urlSession?(session, task: task, didCompleteWithError: error)
+    }
+
     // MARK: Forwarding to the caller's delegate
 
     override func responds(to selector: Selector!) -> Bool {
@@ -237,7 +320,8 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
         case NSURLAuthenticationMethodServerTrust:
             return serverTrust(challenge)
         case NSURLAuthenticationMethodHTTPBasic, NSURLAuthenticationMethodHTTPDigest:
-            guard challenge.previousFailureCount == 0, rules.isServer(space),
+            let scheme: HTTPAuthScheme = space.authenticationMethod == NSURLAuthenticationMethodHTTPDigest ? .digest : .basic
+            guard challenge.previousFailureCount == 0, rules.isServer(space), scheme == rules.authScheme,
                   let credentials = try? await rules.passwords?.load() else { return (.performDefaultHandling, nil) }
             return (.useCredential, URLCredential(user: credentials.username, password: credentials.password, persistence: .none))
         default:
@@ -277,7 +361,7 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
             guard let url = transaction.request.url else { continue }
             if let refusal = rules.policy.verify(url, connectedTo: transaction.remoteAddress,
                                                  throughProxy: transaction.isProxyConnection,
-                                                 fromInternetServer: !rules.serverIsLocal) {
+                                                 fromInternetServer: rules.linksElsewhereFromInternet(url)) {
                 refuse(refusal)
             }
         }

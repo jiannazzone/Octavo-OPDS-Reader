@@ -175,6 +175,11 @@ The folded "changed" shot predates the red tint on the second button. Unfolding 
   - a login during a refresh gave a spurious "signed out";
   - an unnecessary metrics wait, duplicated host parsing, and a redundant overload.
 
+- **Requests from #8 (OPDS), and one more automated finding (`2026-11-01`, after `6947b87`):**
+  - **Auth-scheme pinning:** `ServerTransport(…, authScheme:)` answers Basic or Digest challenges only in the scheme recorded when the server was added, and none when it's `nil`. An impostor at a home http address can't downgrade a Digest server to Basic.
+  - **Size cap:** `data(for:)` stops past `maximumDataSize` (default 64 MB), from `expectedContentLength` and while streaming, with `URLError(.dataLengthExceedsMaximum)`. Downloads go to a file, uncapped.
+  - **Regression fixed:** the "internet server can't reach home" rule also hit the server's own address, so a split-DNS https server (real certificate, resolving to 192.168.x at home) refused its own requests. The rule now covers only *other* hosts it links to, and those are resolved before the request (names that resolve home are refused). That also closes the proxy gap the automated review raised.
+
 ## Review checklist (for sign-off)
 
 - [ ] Plain http can't reach a public address: IP literal, name, mixed DNS answer, redirect, proxy, odd spelling (`HomeNetworkPolicyTests`, `ServerTransportTests`; live `decimalAddressesAreStoppedBeforeATS`).

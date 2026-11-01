@@ -143,22 +143,28 @@ struct ServerTransportTests {
     }
 
     /// Basic and Digest challenges get the stored password only from the
-    /// server itself, and only once (a wrong password fails instead of looping).
+    /// server itself, only once (a wrong password fails instead of looping),
+    /// and only in the scheme recorded for it.
     @Test func answersPasswordChallengesOnlyFromTheServer() async throws {
-        let rules = TrustRules(
-            server: URL(string: "http://nas.lan:8083/opds")!, pin: nil,
-            passwords: InMemoryPasswordStore(PasswordCredentials(username: "octavo", password: "secret")),
-            policy: .testing(resolver)
-        )
-        let guardian = TaskGuard(rules: rules, inner: nil)
+        func guardian(_ scheme: HTTPAuthScheme?) -> TaskGuard {
+            TaskGuard(rules: TrustRules(
+                server: URL(string: "http://nas.lan:8083/opds")!, pin: nil,
+                passwords: InMemoryPasswordStore(PasswordCredentials(username: "octavo", password: "secret")),
+                authScheme: scheme, policy: .testing(resolver)
+            ), inner: nil)
+        }
+        let basicServer = guardian(.basic)
+        let digestServer = guardian(.digest)
+        let unknownScheme = guardian(nil)
         let session = URLSession(configuration: .ephemeral)
         let task = session.dataTask(with: URL(string: "http://nas.lan:8083/opds")!)
 
-        func answer(_ host: String, _ port: Int, _ scheme: String, method: String = NSURLAuthenticationMethodHTTPBasic, failures: Int = 0) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        func answer(_ host: String, _ port: Int, _ scheme: String, method: String = NSURLAuthenticationMethodHTTPBasic, failures: Int = 0,
+                    guardian: TaskGuard? = nil) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
             let space = URLProtectionSpace(host: host, port: port, protocol: scheme, realm: "OPDS", authenticationMethod: method)
             let challenge = URLAuthenticationChallenge(protectionSpace: space, proposedCredential: nil, previousFailureCount: failures,
                                                        failureResponse: nil, error: nil, sender: NoSender())
-            return await guardian.urlSession(session, task: task, didReceive: challenge)
+            return await (guardian ?? basicServer).urlSession(session, task: task, didReceive: challenge)
         }
 
         let basic = await answer("nas.lan", 8083, "http")
@@ -166,12 +172,54 @@ struct ServerTransportTests {
         #expect(basic.1?.user == "octavo")
         #expect(basic.1?.password == "secret")
         #expect(basic.1?.persistence == URLCredential.Persistence.none)
-        #expect(await answer("NAS.LAN", 8083, "http", method: NSURLAuthenticationMethodHTTPDigest).0 == .useCredential)
+        #expect(await answer("NAS.LAN", 8083, "http", method: NSURLAuthenticationMethodHTTPDigest, guardian: digestServer).0 == .useCredential)
+        // An impostor at the address asking a Digest server for Basic (cleartext) gets nothing.
+        #expect(await answer("nas.lan", 8083, "http", guardian: digestServer).0 == .performDefaultHandling)
+        #expect(await answer("nas.lan", 8083, "http", method: NSURLAuthenticationMethodHTTPDigest).0 == .performDefaultHandling)
+        #expect(await answer("nas.lan", 8083, "http", guardian: unknownScheme).0 == .performDefaultHandling)
         #expect(await answer("nas.lan", 8083, "http", failures: 1).0 == .performDefaultHandling)
         #expect(await answer("cdn.lan", 8083, "http").0 == .performDefaultHandling)
         #expect(await answer("nas.lan", 80, "http").0 == .performDefaultHandling)
         #expect(await answer("nas.lan", 8083, "https").0 == .performDefaultHandling)
         task.cancel()
+    }
+
+    /// An endless or oversized answer stops at the limit instead of filling memory.
+    @Test func capsTheAnswerSize() async throws {
+        let big = Data(repeating: 0x61, count: 4096)
+        let server = StubServer { request in
+            request.path == "/declared"
+                ? StubServer.Response(status: 200, headers: ["Content-Length": "4096"], body: big)
+                : StubServer.Response(status: 200, headers: [:], body: big)
+        }
+        let transport = ServerTransport(server: server.baseURL, maximumDataSize: 1024, policy: .testing(resolver), configuration: server.configuration)
+        for path in ["declared", "undeclared"] {
+            await #expect(throws: URLError(.dataLengthExceedsMaximum)) {
+                try await transport.data(for: URLRequest(url: server.baseURL.appending(path: path)))
+            }
+        }
+        let roomy = ServerTransport(server: server.baseURL, maximumDataSize: 4096, policy: .testing(resolver), configuration: server.configuration)
+        #expect(try await roomy.data(for: URLRequest(url: server.baseURL.appending(path: "declared"))).0 == big)
+    }
+
+    /// A server with a public name and a real certificate that resolves home
+    /// (split DNS) reaches its own address; its links to other names that
+    /// resolve home (DNS rebinding toward the LAN) don't.
+    @Test func internetServersReachTheirOwnHomeAddressOnly() async throws {
+        resolver.set("rebind.example.net", ["192.168.1.1"])
+        resolver.set("cdn.example.net", ["203.0.113.20"])
+        let rules = TrustRules(server: URL(string: "https://books.example.com/opds")!, pin: nil, passwords: nil,
+                               policy: .testing(resolver, verifiesConnections: true))
+        try await rules.check(URL(string: "https://books.example.com/opds/new")!)
+        try await rules.check(URL(string: "https://cdn.example.net/cover.jpg")!)
+        await #expect(throws: NetworkTrustError.insecureAddress(host: "rebind.example.net", reason: .localAddressFromInternetServer)) {
+            try await rules.check(URL(string: "https://rebind.example.net/admin")!)
+        }
+        #expect(!rules.linksElsewhereFromInternet(URL(string: "https://books.example.com/x")!))
+        #expect(rules.linksElsewhereFromInternet(URL(string: "https://cdn.example.net/x")!))
+        // After the fact, its own connection to 192.168.1.5 is fine.
+        #expect(rules.policy.verify(URL(string: "https://books.example.com/x")!, connectedTo: "192.168.1.5", throughProxy: false,
+                                    fromInternetServer: rules.linksElsewhereFromInternet(URL(string: "https://books.example.com/x")!)) == nil)
     }
 
     @Test func passwordsNeverPrint() {
