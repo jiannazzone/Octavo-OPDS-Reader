@@ -1,0 +1,16 @@
+format	file	position	appFraction	appCFI (pushed)	appFirstWords	webLandedCFI	verdict	note
+mobi	6	0.12+2	0.13405	epubcfi(/6/12!/4/10)	“Where’s——?” said I, naming our host. “You’ve just	epubcfi(/6/12!/4/6/3:863)	hit	app point is an element; web page starts 'own part, I was particularly', words at its end half
+mobi	6	0.5+2	0.51097	epubcfi(/6/24!/4/2[filepos0000114103])	IX. The Morlocks “It may seem odd to	epubcfi(/6/24!/4/4/2/1:0)	hit	app point is mobi.js's inserted filepos anchor; web page starts with the same words
+mobi	6	0.88+2	0.89097	epubcfi(/6/38!/4/58/1:358)	has never returned.	epubcfi(/6/38!/4/58/1:289)	hit	last page of the story; web page holds it
+azw3	7	0.12+2	0.13209	epubcfi(/6/12!/4/2[pgepubid00004]/2[calibre_pb_1])	III. The Time Traveller Returns I think that	epubcfi(/6/12!/4/2[pgepubid00004]/2[calibre_pb_1]/3:0)	hit	same page start; web walks into the first text node
+azw3	7	0.5+2	0.50953	epubcfi(/6/24!/4/2[pgepubid00010]/2[calibre_pb_1])	IX. The Morlocks “It may seem odd to	epubcfi(/6/24!/4/2[pgepubid00010]/2[calibre_pb_1]/3:0)	hit	same page start
+azw3	7	0.88+2	0.89128	epubcfi(/6/40!/4/2[pgepubid00018]/2[calibre_pb_1])	Epilogue One cannot choose but wonder. Will he	epubcfi(/6/40!/4/2[pgepubid00018]/2[calibre_pb_1]/3:0)	hit	same page start
+fb2	8	0.12+2	0.29242	epubcfi(/6/4!/4/2/26)	*** START OF THE PROJECT GUTENBERG EBOOK THE	epubcfi(/6/4!/4/2/4/2/1:0)	hit	12% lands at 29%: the cover section is 29% of foliate's FB2 size (see note)
+fb2	8	0.5+2	0.50755	epubcfi(/6/16!/4/2/38/1:883)	better. That is the drift of the current	epubcfi(/6/16!/4/2/38/1:214)	hit	words mid-page on the web
+fb2	8	0.88+2	0.88936	epubcfi(/6/32!/4/2/38/1:730)	terrible dread of lying helpless in that remote	epubcfi(/6/32!/4/2/38/1:452)	hit	words in the web page's last lines
+mobi	6	0.3+3	0.31586	epubcfi(/6/18!/4/28/1:501)	they are—gradually by selective breeding; now a new	epubcfi(/6/18!/4/28/1:166)	hit	mid-paragraph; words in the web page's first lines
+mobi	6	0.7+3	0.72203	epubcfi(/6/30!/4/18/1:236)	faintest idea in what direction lay my path.	epubcfi(/6/30!/4/16/1:99)	hit	words near the web page's end
+azw3	7	0.3+3	0.31581	epubcfi(/6/18!/4/2[pgepubid00007]/24/1:117)	mankind. For the first time I began to	epubcfi(/6/18!/4/2[pgepubid00007]/20/1:716)	hit	words mid-page on the web
+azw3	7	0.7+3	0.71638	epubcfi(/6/30!/4/2[pgepubid00013]/16/1:179)	turned myself about several times, and now I	epubcfi(/6/30!/4/2[pgepubid00013]/14/1:0)	hit	words near the web page's end
+fb2	8	0.3+3	0.31678	epubcfi(/6/6!/4/2/46)	“I think so,” murmured the Provincial Mayor; and,	epubcfi(/6/6!/4/2/44/3:391)	hit	app point is an element; words in the web page's second line
+fb2	8	0.7+3	0.71291	epubcfi(/6/24!/4/2/30/1:125)	another came out. The ground grew dim and	epubcfi(/6/24!/4/2/28/1:444)	hit	words mid-page on the web
