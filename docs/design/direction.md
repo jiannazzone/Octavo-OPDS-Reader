@@ -1,6 +1,6 @@
 # Octavo design direction
 
-Status: **draft, in progress** (UI brainstorm with Adam, started 2026-10-31). Only decisions Adam approved are recorded as decisions. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`.
+Status: **direction set** (UI brainstorm with Adam, 2026-10-31). Only decisions Adam approved are recorded as decisions; screens marked "Not designed" below are still to do. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`.
 
 ## Device frame
 
@@ -26,14 +26,14 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 
 4. **Folded: full-screen cover.** Tapping a book shows its cover filling the outer display.
    - Over the cover: a bottom strip with the chapter and percentage, a progress bar, when it last synced, and an **Open** button.
-   - Swipe up for details: description, series, collections, download, status, rating, file info.
+   - Swipe up for details: description, series, collections, download, Mark as finished, file info (ratings come later).
    - **Unfolding on the cover opens the book at your place immediately**, with no prompt (answers part of duo-spreads §7 question 5).
    - The cover runs under the camera column, which covers its top-right corner; accepted. The tab column stays visible over the cover.
 5. **Unfolded: grid | cover page.** The grid sits left of the hinge; the selected book's cover page (same strip and Open button as folded) fills the right half. Nothing sits on the hinge.
 
 ### Connecting (approved 2026-10-31)
 
-6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync). "Import from Files" sits on the same first screen.
+6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync; v1 offers only BookOrbit, see v1 scope). "Import from Files" sits on the same first screen.
 
 ### Reader and the Duo (approved 2026-10-31)
 
@@ -105,7 +105,7 @@ What the kit showed:
 ## Open questions
 
 - **Settings contents.** Too early to pin down. Working list from the brainstorm (not approved): Server (edit, sign out, replace, progress sync), Sync accounts (iCloud, KOReader sync), Reading defaults, iPhone Duo, Downloads and storage, About.
-- **Default sync choice for an OPDS server.** Proposed (not approved): preselect iCloud once iCloud sync exists, "Don't sync" until then. A BookOrbit server preselects itself.
+- **The sync step for an OPDS server in v1.** With only BookOrbit sync in v1, an OPDS server has nothing to choose. Proposed (not approved): skip the step for OPDS servers until iCloud or KOReader sync exists, then preselect iCloud. A BookOrbit server preselects itself.
 - **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
 - **OPDS feeds with no search.** Search then covers only the books on the phone; how the Search tab says so is undecided.
 - **Reaching the controls in book mode.** Taps on the pages turn them, so controls need another way in. Proposed (not approved): tap the side column, which sits outside both pages.
