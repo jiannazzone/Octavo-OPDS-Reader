@@ -155,6 +155,26 @@ The folded "changed" shot predates the red tint on the second button. Unfolding 
 | 11 | The caller's task delegate could override the policy | Low | `TaskGuard` is always the task delegate and withholds request-changing callbacks |
 | 12 | Keychain details: add only on not-found, interaction-not-allowed isn't sign-out, wipe only with protected data, clear caches on remove | Low | Done. The cache is memory-only and per transport, so dropping the transport clears it |
 
+## Reviews before sign-off (2026-11-01)
+
+- **Adversarial design audit:** 12 findings. Disposition is in the table above.
+- **`/security-review`** of `cfe9dce`: **no findings at its reporting bar.** It checked about 40 hostile URL spellings against Foundation's and CFNetwork's parsers, two-hop redirects against real CFNetwork, pin matching, delegate forwarding, Keychain queries, token rotation and DEBUG gating.
+  - It measured that CFNetwork already drops `Authorization` on cross-origin redirects but **does** forward a hand-set `Cookie`, so the explicit strip matters. It also measured that 307 resends a POST body even though `newRequest.httpBody` reads nil, so checking the method is the right test.
+  - Two items below the bar are fixed in `b494dc9`: a sign-out during the first Keychain load could be undone, and errors carried full URLs (now scheme, host and port only).
+- **Automated security review (plugin), on each commit:**
+  - *DNS changing between check and connection:* accepted as a residual, with defence in depth added. The metrics check after each request fails plain http that landed outside home addresses, went through a proxy, or can't be verified.
+  - *An internet server reaching home by DNS rebinding:* http was already blocked, and https fails at TLS. Hardened anyway: `0.0.0.0` and `::` now count as local, and the metrics check covers it.
+  - *A refused answer served from the URL cache:* the cache is gone.
+  - *Metrics arriving after the response:* the transport now waits for them, failing closed for http.
+  - *Parity of the home check for internet servers:* fixed.
+- **High-effort code review:** 8 findings, all fixed in `c0c00c6`:
+  - a LAN proxy made internet servers look "home";
+  - IDN and zoned hosts never matched their pin or password, so a single `URL.connectionHost` now feeds both checks;
+  - cancellation was misreported;
+  - an undecodable Keychain item wedged the session;
+  - a login during a refresh gave a spurious "signed out";
+  - an unnecessary metrics wait, duplicated host parsing, and a redundant overload.
+
 ## Review checklist (for sign-off)
 
 - [ ] Plain http can't reach a public address: IP literal, name, mixed DNS answer, redirect, proxy, odd spelling (`HomeNetworkPolicyTests`, `ServerTransportTests`; live `decimalAddressesAreStoppedBeforeATS`).
