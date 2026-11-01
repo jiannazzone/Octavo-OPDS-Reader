@@ -11,5 +11,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `sync-spike.md` (+ `sync-spike/`) | 2a | Position sync with BookOrbit's web reader: 31/31, the disagreement rule, repro tools and screenshots |
 | `foliate-blank-page-upstream.md` (+ `foliate-blank-page/`) | vetting | The foliate-js blank-page bug: cause, fix (patch 0001), draft upstream issue and PR (not sent), re-check harness |
 | `duo-spreads.md` (+ `duo-spreads/`) | 2b | Duo layout: hinge APIs, one/two pages, gap at the hinge, position across folds, cover-display handoff, open UX questions |
+| `formats-spike.md` (+ `formats-spike/`) | #4 | MOBI, AZW3 and FB2 through foliate-js, the bridge and the CSP: go/no-go per format, script-blocking tests with a positive control, positions, folds, BookOrbit round trip, a prototype second blocking layer |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

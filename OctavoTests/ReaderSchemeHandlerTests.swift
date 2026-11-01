@@ -42,6 +42,8 @@ struct ReaderSchemeHandlerTests {
     @Test(arguments: [
         ("js", "text/javascript"), ("mjs", "text/javascript"), ("html", "text/html"),
         ("css", "text/css"), ("epub", "application/epub+zip"), ("CBZ", "application/vnd.comicbook+zip"),
+        ("fb2", "application/x-fictionbook+xml"), ("fbz", "application/x-zip-compressed-fb2"),
+        ("mobi", "application/x-mobipocket-ebook"), ("azw3", "application/x-mobipocket-ebook"),
     ])
     func pinsWebMIMETypes(ext: String, mimeType: String) {
         #expect(ReaderSchemeHandler.mimeType(forPathExtension: ext) == mimeType)
