@@ -33,6 +33,12 @@ final class LibraryModel {
     /// Home has loaded once; until then it shows a spinner, not the empty state.
     private(set) var homeLoaded = false
 
+    /// Changes with every connect and disconnect, so a screen holding the
+    /// old server's source starts over.
+    private(set) var connection = 0
+    /// Called when the server changes (the shell closes its screens).
+    @ObservationIgnored var serverChanged: () -> Void = {}
+
     let covers = CoverCache()
     @ObservationIgnored let recents: RecentBooks
     @ObservationIgnored private var feeds: [FeedKey: FeedModel] = [:]
@@ -53,6 +59,8 @@ final class LibraryModel {
     /// Replaces the server and loads its chips and Home.
     func connect(_ server: LibraryServer) async {
         self.server = server
+        connection += 1
+        serverChanged()
         root = nil
         chip = nil
         feeds = [:]
@@ -66,6 +74,8 @@ final class LibraryModel {
 
     func disconnect() {
         server = nil
+        connection += 1
+        serverChanged()
         root = nil
         chip = nil
         feeds = [:]

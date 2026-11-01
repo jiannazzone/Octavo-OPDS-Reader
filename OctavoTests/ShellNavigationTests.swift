@@ -53,12 +53,15 @@ enum SampleRoutes {
     static let classics = feed("Classics", "collections/classics")
 }
 
-/// A shell whose library keeps its records in a temporary folder, not the
-/// app's.
+/// A shell whose library and downloads keep their files in a temporary
+/// folder, not the app's.
 @MainActor
-func makeShell() -> ShellModel {
-    let file = URL.temporaryDirectory.appending(path: "RecentBooks-\(UUID().uuidString).json")
-    return ShellModel(library: LibraryModel(recents: RecentBooks(fileURL: file)))
+func makeShell(opener: BookOpener? = nil) -> ShellModel {
+    let folder = URL.temporaryDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    return ShellModel(
+        library: LibraryModel(recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json"))),
+        opener: opener ?? BookOpener(files: CachedBookFiles(directory: folder.appending(path: "Books")))
+    )
 }
 
 struct PanePathTests {
@@ -153,12 +156,16 @@ struct HingeTransitionTests {
 struct ShellModelTests {
     static let book = SampleRoutes.book(1)
 
-    @Test func unfoldingOnACoverOpensTheBook() {
-        let model = makeShell()
+    // The book isn't on the iPhone yet: it downloads, then opens (#14).
+    @Test func unfoldingOnACoverOpensTheBook() async throws {
+        let files = try TemporaryBookFiles()
+        let model = makeShell(opener: BookOpener(files: files.store))
+        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", detail: "", source: StubLibrarySource()))
         model.tab = .library
         model[path: .library].routes = [SampleRoutes.collections, .cover(Self.book)]
         model.hingeChanged(.unfold)
-        #expect(model.reading == Self.book)
+        #expect(await eventually { model.reading != nil })
+        #expect(model.reading?.book.id == Self.book.book.id)
     }
 
     @Test func unfoldingElsewhereKeepsTheScreen() {
@@ -221,9 +228,9 @@ struct ShellModelTests {
         await model.library.connectSampleLibrary()
         #expect(model.library.continueReading.map(\.book.title) == ["Moby-Dick", "Frankenstein"])
 
-        let alice = SampleRoutes.book(3)
-        model.openBook(alice)
-        #expect(model.reading == alice)
+        // The sample library's downloads fail; the book still counts as
+        // opened on this iPhone.
+        model.openBook(SampleRoutes.book(3))
         #expect(model.library.continueReading.map(\.book.title) == ["Alice’s Adventures in Wonderland", "Moby-Dick", "Frankenstein"])
     }
 }

@@ -1,9 +1,9 @@
 import OctavoKit
 import SwiftUI
 
-// Stand-in screens for the shell, replaced by #14 (the cover page), #15
-// (Search), #16 (Settings) and #17 (the reader). They show the shell's
-// layout and shared states; nothing here is a design.
+// The route-to-screen map and the stand-in screens, replaced by #15
+// (Search), #16 (Settings) and #17 (the reader). The stand-ins show the
+// shell's layout and shared states; nothing in them is a design.
 
 /// The view for a route.
 struct ShellScreen: View {
@@ -13,7 +13,7 @@ struct ShellScreen: View {
         switch route {
         case .feed(let entry, let source): FeedScreen(entry: entry, source: source)
         case .settingsPage(let name): SettingsPagePlaceholder(name: name)
-        case .cover(let book): CoverPlaceholder(book: book)
+        case .cover(let book): CoverScreen(book: book)
         }
     }
 }
@@ -78,58 +78,44 @@ struct SettingsPagePlaceholder: View {
     }
 }
 
-/// A book's cover page: the cover filling the screen, under the camera
-/// column (decision 4), and the strip at the bottom. Folded, unfolding here
-/// opens the book (`ShellModel.hingeChanged`).
-struct CoverPlaceholder: View {
+/// A book's cover page (#14), from the library the book came from. Its
+/// author opens their books beside it, and Open goes through the shell so
+/// the book joins Home's Continue reading.
+struct CoverScreen: View {
     let book: SourcedBook
+    @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
+    @Environment(\.pane) private var pane
 
     var body: some View {
-        CoverImage(book: book, size: .full)
-            .ignoresSafeArea()
-            .overlay(alignment: .bottom) {
-                strip
-                    .padding()
-                    .glassEffect(in: .rect(cornerRadius: 24))
-                    .padding(8)
-            }
-    }
-
-    @ViewBuilder
-    private var strip: some View {
-        if let message = shell.coverStrip {
-            CoverStripStatus(message: message) { shell.coverStrip = nil }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(book.book.progress.map { $0.formatted(.percent.precision(.fractionLength(0))) } ?? "Not started")
-                            .font(.headline)
-                        Text("Stand-in strip until #14")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 8)
-                    Button("Open") { shell.openBook(book) }
-                        .buttonStyle(.glassProminent)
+        if let source = library.source(for: book.source) {
+            BookCoverPage(book: book.book, source: source)
+                .id(library.connection)
+                .environment(\.openLibraryEntry) { entry in
+                    shell.open(.feed(entry, from: book.source), from: pane)
                 }
-                ProgressView(value: book.book.progress ?? 0)
-            }
+                .environment(\.openBook) { opened in
+                    shell.openBook(SourcedBook(source: book.source, book: opened))
+                }
+        } else {
+            NoLibraryInvitation()
         }
     }
 }
 
-/// The reader, over the tabs. #17 replaces it.
+/// The reader, over the tabs: the spike's reader until #17 replaces it.
+/// Positions stay on the iPhone; syncing them is #11.
 struct ReaderPlaceholder: View {
-    let book: SourcedBook
+    let book: OpenedBook
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(book.book.title, systemImage: "book.pages", description: Text("Opened from the shell. The reader comes with #17."))
+            SpikeReaderView(book: book.reader, sync: nil, cfiShape: .point)
                 .toolbar {
-                    Button("Close", systemImage: "xmark") { shell.reading = nil }
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Close", systemImage: "xmark") { shell.reading = nil }
+                    }
                 }
         }
         .background(Color(.systemBackground))

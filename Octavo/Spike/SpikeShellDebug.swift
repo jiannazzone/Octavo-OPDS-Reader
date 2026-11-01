@@ -1,4 +1,5 @@
 #if DEBUG
+import OctavoKit
 import SwiftUI
 
 /// SPIKE ONLY (deleted with the spike). Debug-only controls the app shell

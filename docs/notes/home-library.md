@@ -19,9 +19,13 @@ Built 2026-11-01 on the simulator 'Octavo Shell Duo' (iOS 27.1) against the loca
 - Connection failures (`URLError`, `LibraryError.signedOut`) become the tab's `ConnectionBanner`; other failures stay with the list that failed ("Couldn't load this list · Try again"). Retry reloads what failed.
 - `SampleLibrarySource` (DEBUG) is made-up data with no network for screenshots, previews and tests.
 
+## With #14's cover page
+
+Merged after #14 (PR #24). `ShellScreen` maps `.cover(SourcedBook)` to `CoverScreen`, which looks up the book's library and shows `BookCoverPage(book:source:)`, or the No library invitation if that library isn't connected. It also sets two environment hooks for the page: `\.openLibraryEntry` opens an author's books beside the cover, and `\.openBook` sends Open through `ShellModel.openBook(SourcedBook)`, which records the book for Continue reading and then hands it to #14's `BookOpener` (download, then read). Unfolding on a cover takes the same path. A new connection (`LibraryModel.connection`) clears the cover pages' state and the screens opened from the old server. #14's stand-ins (`BookStandIns.swift`, `ShellModel.librarySource`, `-shellSource`, `-shellCoverBook`) are gone; `-connectBookOrbit 1` and `-sampleLibrary 1` replace them.
+
 ## Things that bit
 
-- **`UIImage.byPreparingForDisplay()` blanks the whole window on the iOS 27.1 simulator**, tab bar included, for as long as the prepared images are on screen. Plain `UIImage(data:)` renders. Covers decode that way for now; check on a real device before adding pre-decoding back.
+- **`UIImage.byPreparingForDisplay()` blanks the whole window on the iOS 27.1 simulator**, tab bar included, for as long as the prepared images are on screen. Plain `UIImage(data:)` renders. Covers decode that way for now, #14's full cover included; check on a real device before adding pre-decoding back.
 - **A filled image grows its view.** `Image.resizable().scaledToFill()` reports a frame larger than it was offered unless it sits in an overlay of a view that keeps the offered size (`CoverImage`). Otherwise anything aligned to it, such as the cover's strip, moves off screen.
 - **A reused view keeps its `.task(id:)`.** Switching chips hands the same `FeedContent` another list, so its load task is keyed on the list's identity, not only on what kind of list it is.
 - **Plain `List` section headers** sit far apart; the A–Z letters are small rows inside each section instead, which still feed the index strip.
@@ -32,5 +36,5 @@ Built 2026-11-01 on the simulator 'Octavo Shell Duo' (iOS 27.1) against the loca
 
 - **On iPhone** chip, and switching to it when the server is unreachable: needs downloads (#10).
 - The place line is a percentage; the chapter ("Chapter 36 · 30%") needs the reader (#17).
-- The cover page is #6's stand-in until #14's is wired into `ShellScreen`.
+- The book files #14 downloads are still keyed by file ID alone (`CachedBookFiles`); #10 adds the library to the key.
 - `SpikeLibraryView` stays: the fold, sync and formats tools drive it with `-spike 1` through `SpikeRemote` (`signin`, `open`, `detail` by BookOrbit file id). Moving them to the real Library needs the real reader (#17), downloads (#10), and a way for `SpikeRemote` (or its replacement) to open a `SourcedBook`'s cover and reader in the shell.

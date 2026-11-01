@@ -27,6 +27,13 @@ v1 is built around one library server (`docs/design/direction.md`). Explored in 
 
 Unfolded, opening a screen from the right pane shifts both panes one level along (decision 23). The shell (#6) uses the system's push slide for that: the whole pair slides in. A closer match to "shift" would slide only one pane: the right pane moves over to the left and the new screen slides in on the right, and Back does the reverse. Adam judges the system slide on screen first; this needs a custom transition if it's wanted.
 
+## Tab bar over the cover (parked 2026-11-01)
+
+On the cover page (#14) the side column has no backing of its own: the system's glass capsules (clock, Back, the tabs) read on light, dark and busy covers, so Adam chose system glass only over a material strip or a dark scrim. He asked whether the tab bar could also collapse while it isn't in use, to show more of the cover.
+
+- iOS 26+ has `tabBarMinimizeBehavior(.onScrollDown)`, which minimizes the tab bar while content scrolls. The cover doesn't scroll, so it would never trigger there. Whether it works in the Duo's side column at all is unchecked.
+- Hiding the tab bar on the cover (`toolbarVisibility(.hidden, for: .tabBar)`) would change decision 4 ("the tab column stays visible over the cover"), and it's a shell-wide behaviour.
+
 ## The Library's filter button (parked 2026-11-01)
 
 Frame 02 puts a filter button in the side column over the Library, but no decision says what it offers, so #13 leaves it out. Candidates: sort the All grid (Title, Author, Recently added; BookOrbit supports all three, while OPDS feeds keep their own order, so the button would hide there), and later filters such as Unread, In progress and Finished (needs BookOrbit's read status in OctavoKit). Design it before building.
