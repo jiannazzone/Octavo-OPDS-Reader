@@ -16,3 +16,6 @@ SampleBooks/
 # Local BookOrbit server state and any API schema snapshots (BookOrbit is AGPL: keep its material out of the repo)
 dev/bookorbit/data/
 dev/bookorbit/*.local.*
+
+# Local OPDS servers' state (dev/opds/README.md)
+dev/opds/data/

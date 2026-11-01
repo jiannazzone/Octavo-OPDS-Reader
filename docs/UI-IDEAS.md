@@ -38,6 +38,10 @@ On the cover page (#14) the side column has no backing of its own: the system's 
 
 Frame 02 puts a filter button in the side column over the Library, but no decision says what it offers, so #13 leaves it out. Candidates: sort the All grid (Title, Author, Recently added; BookOrbit supports all three, while OPDS feeds keep their own order, so the button would hide there), and later filters such as Unread, In progress and Finished (needs BookOrbit's read status in OctavoKit). Design it before building.
 
+## A nicer empty list (raised 2026-11-01)
+
+Adam, while settling #8's start chip: "we definitely need a nicer empty state than just a blank screen". Today an empty list (a chip, a collection, an OPDS feed with nothing in it) shows only "Nothing here yet" under the chips, with no action, and unfolded the right pane stays blank. Decision 22 asks for an invitation with one action. Needs a design: what the message says per kind of list (Keep Reading, On Deck, an empty shelf), its action (Open Home? Browse another chip?), and what the right pane shows unfolded.
+
 ## Reader progress: what's left after #17 (parked 2026-11-01)
 
 #17 built each page's footer (chapter, page, percentage) and the glass bar as a scrubber (decision 7, amended). Not designed yet:

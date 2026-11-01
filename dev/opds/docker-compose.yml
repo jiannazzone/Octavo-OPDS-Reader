@@ -1,0 +1,58 @@
+# Local OPDS servers for Octavo development. Dev only: every password is a
+# throwaway value, and every port is bound to 127.0.0.1. See README.md.
+#
+# Uses each project's published image; nothing from them is vendored here
+# (Calibre-Web, COPS and Kavita are GPL-3.0; Komga is MIT).
+
+name: octavo-opds
+
+services:
+  # OPDS 1.2 at /opds, HTTP Basic sign-in.
+  calibre-web:
+    image: lscr.io/linuxserver/calibre-web:${CALIBRE_WEB_TAG:-0.6.27-ls408}
+    ports:
+      - "127.0.0.1:${CALIBRE_WEB_PORT:-3310}:8083"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: UTC
+    volumes:
+      - ./data/calibre-web:/config
+      - ./data/calibre-library:/books
+
+  # OPDS 1.2 at /feed.php (and 2.0 at /opds.php), no sign-in. Reads the same
+  # calibre library as Calibre-Web, read-only.
+  cops:
+    image: lscr.io/linuxserver/cops:${COPS_TAG:-4.6.1-ls17}
+    ports:
+      - "127.0.0.1:${COPS_PORT:-3320}:80"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: UTC
+    volumes:
+      - ./data/cops:/config
+      - ./data/calibre-library:/books:ro
+
+  # OPDS 1.2 at /opds/v1.2/catalog and 2.0 at /opds/v2/catalog, HTTP Basic
+  # sign-in (with the account's email).
+  komga:
+    image: gotson/komga:${KOMGA_TAG:-1.29.2}
+    ports:
+      - "127.0.0.1:${KOMGA_PORT:-3330}:25600"
+    environment:
+      TZ: UTC
+    volumes:
+      - ./data/komga:/config
+      - ./data/komga-books:/books:ro
+
+  # OPDS 1.2 at /api/opds/{apiKey}: the key in the path is the sign-in.
+  kavita:
+    image: jvmilazz0/kavita:${KAVITA_TAG:-0.9.1}
+    ports:
+      - "127.0.0.1:${KAVITA_PORT:-3340}:5000"
+    environment:
+      TZ: UTC
+    volumes:
+      - ./data/kavita:/kavita/config
+      - ./data/kavita-books:/books:ro

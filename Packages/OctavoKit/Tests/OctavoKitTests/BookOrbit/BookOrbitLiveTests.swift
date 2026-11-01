@@ -65,7 +65,7 @@ struct BookOrbitLiveTests {
         let store = InMemoryBookOrbitTokenStore()
         let client = BookOrbitClient(
             baseURL: LiveServer.url, tokenStore: store, deviceLabel: "OctavoKit live tests",
-            configuration: .default, requestsNativeCredentials: false
+            transport: ServerTransport(server: LiveServer.url), requestsNativeCredentials: false
         )
         try await client.login(username: LiveServer.user, password: LiveServer.pass)
         var stale = try #require(await store.load())

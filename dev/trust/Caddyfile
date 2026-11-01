@@ -1,0 +1,18 @@
+{
+	auto_https off
+	admin off
+}
+
+# The certificate you trust.
+:8443 {
+	tls /certs/a.crt /certs/a.key
+	header Content-Type application/json
+	respond `{"server":"octavo-trust-test","cert":"a"}` 200
+}
+
+# The same server after its certificate changed.
+:8444 {
+	tls /certs/b.crt /certs/b.key
+	header Content-Type application/json
+	respond `{"server":"octavo-trust-test","cert":"b"}` 200
+}

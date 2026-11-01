@@ -52,6 +52,7 @@ struct SettingsPlaceholder: View {
             }
             #if DEBUG
             DebugServerSection()
+            DebugTrustSection()
             ShellStatesSection()
             ReaderSettingsSection()
             #endif

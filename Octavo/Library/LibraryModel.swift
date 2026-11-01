@@ -85,6 +85,12 @@ final class LibraryModel {
     }
 
     func disconnect() {
+        #if DEBUG
+        // The debug servers' Keychain items, like Remove server will (#12).
+        if let id = server?.id, id.rawValue.hasPrefix("debug-local-") {
+            try? ServerCredentials.removeAll(serverID: id.rawValue)
+        }
+        #endif
         server = nil
         connection += 1
         serverChanged()
@@ -152,7 +158,9 @@ final class LibraryModel {
             let root = try await server.source.root()
             self.root = root
             if !root.chips.contains(where: { $0.link == chip }) {
-                chip = root.chips.first?.link
+                // OPDS: the whole-library chip, not an empty "Keep Reading".
+                let start = root.startChip.flatMap { start in root.chips.contains { $0.link == start } ? start : nil }
+                chip = start ?? root.chips.first?.link
             }
         } catch {
             rootFailed = true
@@ -235,13 +243,23 @@ final class LibraryModel {
     static let localBookOrbitID = LibrarySourceID(rawValue: "debug-local-bookorbit")
 
     /// The local BookOrbit from `dev/bookorbit/README.md`, until first run
-    /// (#12) adds servers. Tokens stay in memory until #9, so every launch
-    /// signs in once (BookOrbit allows 5 a minute).
+    /// (#12) adds servers. Tokens are kept in the Keychain, so it signs in
+    /// (BookOrbit allows 5 a minute) only when there are none or they've
+    /// expired; Disconnect forgets them.
     func connectLocalBookOrbit() async {
         debugConnection = .connecting
-        let client = BookOrbitClient(baseURL: URL(string: "http://localhost:3300")!, deviceLabel: "Octavo (debug)")
+        let client = BookOrbitClient(
+            baseURL: URL(string: "http://localhost:3300")!,
+            tokenStore: KeychainBookOrbitTokenStore(serverID: Self.localBookOrbitID.rawValue),
+            deviceLabel: "Octavo (debug)",
+            transport: ServerTransport(server: URL(string: "http://localhost:3300")!)
+        )
         do {
-            try await client.login(username: "octavo", password: "OctavoDev1")
+            do {
+                _ = try await client.libraries()
+            } catch BookOrbitError.notSignedIn, BookOrbitError.sessionExpired {
+                try await client.login(username: "octavo", password: "OctavoDev1")
+            }
             debugConnection = .idle
             await connect(LibraryServer(
                 id: Self.localBookOrbitID, name: "BookOrbit",
@@ -251,6 +269,99 @@ final class LibraryModel {
         } catch {
             debugConnection = .failed(String(describing: error))
         }
+    }
+
+    /// The local OPDS servers from `dev/opds/README.md`, until first run
+    /// (#12) adds servers. Passwords stay in memory.
+    enum DebugOPDSServer: String, CaseIterable, Identifiable {
+        case calibreWeb, cops, komga, komga2, kavita
+
+        var id: Self { self }
+
+        var name: String {
+            switch self {
+            case .calibreWeb: "Calibre-Web"
+            case .cops: "COPS"
+            case .komga, .komga2: "Komga"
+            case .kavita: "Kavita"
+            }
+        }
+
+        private var port: Int {
+            switch self {
+            case .calibreWeb: 3310
+            case .cops: 3320
+            case .komga, .komga2: 3330
+            case .kavita: 3340
+            }
+        }
+
+        private var base: URL { URL(string: "http://localhost:\(port)")! }
+
+        var detail: String {
+            switch self {
+            case .calibreWeb: "localhost:3310 · OPDS 1.2 · octavo"
+            case .cops: "localhost:3320 · OPDS 1.2"
+            case .komga: "localhost:3330 · OPDS 1.2 · octavo@example.com"
+            case .komga2: "localhost:3330 · OPDS 2.0 · octavo@example.com"
+            case .kavita: "localhost:3340 · OPDS 1.2 · API key"
+            }
+        }
+
+        var sourceID: LibrarySourceID { LibrarySourceID(rawValue: "debug-local-\(rawValue)") }
+
+        var credentials: PasswordCredentials? {
+            switch self {
+            case .calibreWeb: PasswordCredentials(username: "octavo", password: "OctavoDev1")
+            case .komga, .komga2: PasswordCredentials(username: "octavo@example.com", password: "OctavoDev1")
+            case .cops, .kavita: nil
+            }
+        }
+
+        func catalogURL() async throws -> URL {
+            switch self {
+            case .calibreWeb: return base.appending(path: "opds")
+            case .cops: return base.appending(path: "feed")
+            case .komga: return base.appending(path: "opds/v1.2/catalog")
+            case .komga2: return base.appending(path: "opds/v2/catalog")
+            case .kavita:
+                // The OPDS address carries the account's API key, which
+                // Kavita's REST login returns (its settings page shows it too).
+                var request = URLRequest(url: base.appending(path: "api/Account/login"))
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.httpBody = try JSONEncoder().encode(["username": "octavo", "password": "OctavoDev1"])
+                let (data, _) = try await ServerTransport(server: base).data(for: request)
+                struct Login: Decodable { var apiKey: String }
+                return base.appending(path: "api/opds/\(try JSONDecoder().decode(Login.self, from: data).apiKey)")
+            }
+        }
+    }
+
+    func connectLocalOPDS(_ server: DebugOPDSServer) async {
+        debugConnection = .connecting
+        let catalog: URL
+        do {
+            catalog = try await server.catalogURL()
+        } catch {
+            debugConnection = .failed(String(describing: error))
+            return
+        }
+        let secret = OPDSURLSecret.detect(in: catalog)
+        // The password goes to the Keychain, as first run (#12) will do.
+        let passwords = KeychainPasswordStore(serverID: server.sourceID.rawValue)
+        if let credentials = server.credentials { try? await passwords.save(credentials) }
+        // All four local servers ask for Basic (dev/opds/README.md).
+        let scheme: HTTPAuthScheme? = server.credentials == nil ? nil : .basic
+        let source = OPDSSource(
+            catalogURL: catalog,
+            transport: ServerTransport(server: catalog, passwords: passwords, authScheme: scheme),
+            credentials: passwords,
+            authScheme: scheme,
+            secret: secret
+        )
+        await connect(LibraryServer(id: server.sourceID, name: server.name, detail: server.detail, source: source))
+        debugConnection = root == nil ? .failed("\(server.name) didn’t send its catalog.") : .idle
     }
 
     /// Made-up books, no network: for screenshots and previews.

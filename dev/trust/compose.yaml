@@ -1,0 +1,14 @@
+# Self-signed HTTPS for testing "Trust this server" (#9): port 8443 serves
+# certificate `a`, 8444 certificate `b` (the server's certificate changed).
+# Listens on every interface so the simulator can reach it by the Mac's LAN
+# address too.
+#   ./make-certs.sh && docker compose -p octavo-trust up -d
+services:
+  https:
+    image: caddy:2.10-alpine
+    ports:
+      - "8443:8443"
+      - "8444:8444"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro

@@ -114,7 +114,9 @@ final class ShellModel {
 
     #if DEBUG
     /// Launch arguments that set up a state to look at:
-    /// `-connectBookOrbit 1` (the local server), `-sampleLibrary 1|empty`
+    /// `-connectBookOrbit 1` (the local server),
+    /// `-connectOPDS calibreWeb|cops|komga|komga2|kavita` (`dev/opds/`),
+    /// `-sampleLibrary 1|empty`
     /// (made-up books; `empty` has nothing in progress), `-shellTab library`,
     /// `-shellConnection unreachable|signedOut`,
     /// `-shellCoverStrip failed|offline|downloading`,
@@ -138,11 +140,14 @@ final class ShellModel {
         }
         let sample = defaults.string(forKey: "sampleLibrary")
         let connectsBookOrbit = defaults.bool(forKey: "connectBookOrbit")
+        let opds = defaults.string(forKey: "connectOPDS").flatMap(LibraryModel.DebugOPDSServer.init(rawValue:))
         let opens = defaults.string(forKey: "shellOpen")
         let reads = defaults.bool(forKey: "shellReading")
         Task {
             if connectsBookOrbit {
                 await library.connectLocalBookOrbit()
+            } else if let opds {
+                await library.connectLocalOPDS(opds)
             } else if let sample, sample != "0" {
                 await library.connectSampleLibrary(nothingInProgress: sample == "empty")
             }

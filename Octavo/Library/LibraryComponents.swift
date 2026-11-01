@@ -182,24 +182,31 @@ struct ChipBar: View {
     let select: (LibraryLink) -> Void
 
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(chips) { chip in
-                    let isSelected = chip.link == selected
-                    Button(chip.title) { select(chip.link) }
-                        .font(.subheadline)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .foregroundStyle(isSelected ? Color.white : Color.primary)
-                        .background(isSelected ? Color.accentColor : Color(.secondarySystemFill), in: .capsule)
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(chips) { chip in
+                        let isSelected = chip.link == selected
+                        Button(chip.title) { select(chip.link) }
+                            .font(.subheadline)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .foregroundStyle(isSelected ? Color.white : Color.primary)
+                            .background(isSelected ? Color.accentColor : Color(.secondarySystemFill), in: .capsule)
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(isSelected ? .isSelected : [])
+                            .id(chip.link)
+                    }
                 }
+                .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 20)
+            .scrollIndicators(.hidden)
+            .scrollClipDisabled()
+            // An OPDS library can open on a chip far along the bar.
+            .onAppear {
+                if let selected, selected != chips.first?.link { proxy.scrollTo(selected, anchor: .center) }
+            }
         }
-        .scrollIndicators(.hidden)
-        .scrollClipDisabled()
     }
 }
 
