@@ -48,6 +48,21 @@ struct BookOrbitDecodingTests {
         #expect(book.primaryFile == nil)
     }
 
+    /// v3.6 sends `seriesIndex` as a string; older servers as a number.
+    @Test(arguments: [
+        (#""2""#, 2.0), (#""2.5""#, 2.5), ("3", 3.0), ("1.5", 1.5), (#"" 4 ""#, 4.0),
+        (#""two""#, nil), (#""nan""#, nil), (#""inf""#, nil), ("null", nil), ("{}", nil),
+    ] as [(String, Double?)])
+    func decodesSeriesIndexAsStringOrNumber(json: String, index: Double?) throws {
+        let book = try decoder.decode(BookOrbitBook.self, from: Data(#"{"id":1,"title":"T","seriesIndex":\#(json)}"#.utf8))
+        #expect(book.seriesIndex == index)
+    }
+
+    @Test func decodesNullTitleAsEmpty() throws {
+        let book = try decoder.decode(BookOrbitBook.self, from: Data(#"{"id":1,"title":null}"#.utf8))
+        #expect(book.title == "")
+    }
+
     @Test func decodesCollectionPage() throws {
         let json = #"""
         {"items":[{"id":1,"title":"Frankenstein","authors":["Mary Wollstonecraft Shelley"],"files":[]}],
