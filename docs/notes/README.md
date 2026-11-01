@@ -15,5 +15,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `duo-tabbar.md` (+ `duo-tabbar/`) | #6 | SwiftUI `TabView` on the Duo: the tab bar in the side column, Search in one capsule, over a cover, next to column controls, how to split screens at the hinge, and presenting during an unfold |
 | `duo-fold.md` (+ `duo-fold/`) | #5 | One re-layout per fold under a cross-fade, book mode (angles, taps, spine shadow), the cold-launch page-size fix, measuring tools and videos |
 | `home-library.md` (+ `home-library/`) | #13 | Home and Library: app-wide library state, a book's source, Continue reading, list layouts, the pane-title offset, debug connections, a simulator cover-decoding trap |
+| `opds-source.md` (+ `opds-source/`) | #8 | OPDS 1.2 and 2.0 as a library: why our own parsers, chips, start chip and Home rules, format order, sign-in and the origin rule, Kavita's key in URLs, the four local servers |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

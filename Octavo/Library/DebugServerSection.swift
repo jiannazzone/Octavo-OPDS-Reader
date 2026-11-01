@@ -2,8 +2,8 @@
 import SwiftUI
 
 /// Connects a library until first run (#12) can: the local BookOrbit from
-/// `dev/bookorbit/`, or the made-up sample library. In the Settings stand-in;
-/// debug builds only.
+/// `dev/bookorbit/`, a local OPDS server from `dev/opds/`, or the made-up
+/// sample library. In the Settings stand-in; debug builds only.
 struct DebugServerSection: View {
     @Environment(LibraryModel.self) private var library
 
@@ -24,6 +24,19 @@ struct DebugServerSection: View {
                     }
                 }
                 .disabled(library.debugConnection == .connecting)
+                ForEach(LibraryModel.DebugOPDSServer.allCases) { server in
+                    Button {
+                        Task { await library.connectLocalOPDS(server) }
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Text("Connect local \(server.name)")
+                            Text(server.detail)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(library.debugConnection == .connecting)
+                }
                 Button("Use sample library") {
                     Task { await library.connectSampleLibrary() }
                 }
@@ -39,7 +52,7 @@ struct DebugServerSection: View {
         } header: {
             Text("Debug server")
         } footer: {
-            Text("Debug builds only. Tokens stay in memory until #9, so each launch signs in again.")
+            Text("Debug builds only. Tokens and passwords stay in memory until #9, so each launch signs in again.")
         }
     }
 }
