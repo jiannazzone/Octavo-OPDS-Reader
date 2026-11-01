@@ -100,7 +100,7 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
 ## iPhone Duo
 
 - Use the iOS 27.1 hinge APIs (`onHingeChange` in SwiftUI / `UIHingeInteraction` in UIKit) and the ReservedRegion APIs for layouts that hug the fold.
-- Planned behavior: two-page spread when unfolded, a "book" layout when half-folded, and keeping the exact reading position when folding or unfolding.
+- Behavior: two-page spread when unfolded, the exact reading position kept when folding or unfolding, and **book mode** when half open (#5, `docs/notes/duo-fold.md`): from 60° to 150°, flat from 160°, lasting until the reader lies flat or folds. Each half of the spread turns its way, a side-column tap calls `ReaderModel.onControlsTap`, and a spine shadow (setting `reader.bookModeShadow`, on by default) sits in the gap. The angles live in `BookModeThresholds`; set them on a real device.
 - **Limitation:** apps can't draw on the outer display while the Duo is open. On iOS 27.1, scene accessories only work through `CameraCaptureAccessory`, which needs an active camera session. The "book cover on the outer screen" idea is parked. Don't fake it with a dummy camera session. Feedback has been filed asking for a non-camera scene accessory; revisit when the SDK changes.
 - Closest workaround available today: a Live Activity or Lock Screen widget showing the current cover and progress.
 - **Measured in spike 2b** (simulator only; `docs/notes/duo-spreads.md`):
@@ -108,7 +108,7 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
   - `onHingeChange` fires once on appear, then repeats unchanged values for about half a second after each move, so compare before acting. `.fullyOpen` arrives about 200 ms before the scene resizes.
   - Folding moves the same window between displays and app state survives, so the cover-display flow in `docs/UI-IDEAS.md` is feasible.
   - The page count comes from the hinge (`ReaderLayout`, foliate patch 0002): one page folded, two open or half open, with no text on the hinge.
-  - A fold fires 10–13 re-layouts. The position holds because foliate keeps its anchor through them, which a foliate update could break.
+  - A fold does one re-layout (#5; it was 10–13 relocations): the page holds its size under a snapshot of itself until the page has resized and the inputs have gone quiet (`FoldBatch`), then `bridge.js` renders once and the snapshot fades out in 0.3 s. The position holds because foliate keeps its anchor through the render, which a foliate update could break (`PINNED.md`, step 4).
   - `WebView` draws under the camera column and the bottom toolbar, so the page reports its own size to Swift. Whether to keep that is an open UX question.
 
 ## Licensing rules (important)

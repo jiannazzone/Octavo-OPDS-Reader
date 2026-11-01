@@ -42,3 +42,7 @@ foliate-js says its API is unstable. Update deliberately:
 1. Diff `epubcfi.js`, `paginator.js` (`getVisibleRange`, `#getVisibleRange`) and `view.js` (`#onRelocate`, `getCFI`, `resolveCFI`) against this commit, and against whatever BookOrbit uses at that point.
 2. Copy the new files in unmodified, re-apply each patch in `patches/` (drop any that upstream has absorbed), and update this file.
 3. Re-run the CFI round-trip check from spike step 4 and the fold-continuity check from spike 2b (`docs/notes/duo-spreads.md`) before merging.
+4. Check what `bridge.js` relies on without patching (`docs/notes/duo-fold.md`), and re-count re-layouts per fold (one render per fold is expected):
+   - The paginator calls `this.render()` from its `ResizeObserver` and from `attributeChangedCallback` (`max-inline-size`). `applyLayout` shadows `render` on the instance to skip those and render once.
+   - A render re-scrolls to the paginator's anchor (`#scrollToAnchor`) without replacing it, so a fold keeps the position.
+   - The paginator relocates with `reason: 'anchor'` after a render, and once more when the section's body is measured; `settle` waits for those to stop.

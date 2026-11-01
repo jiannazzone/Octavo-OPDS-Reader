@@ -13,9 +13,11 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     case opened(Opened)
     /// The visible page changed.
     case relocate(Relocation)
-    /// The user tapped the middle of the page.
+    /// The user tapped where the controls show: the `"middle"` of the page,
+    /// or in book mode the side `"column"`.
     case tap(zone: String)
-    /// The page's size in CSS px (= points), sent on load and on resize.
+    /// The page's size in CSS px (= points), sent on load and whenever it
+    /// changes.
     case viewport(width: Double, height: Double)
     /// The user followed a link out of the book. The bridge has already
     /// stopped foliate from opening it.

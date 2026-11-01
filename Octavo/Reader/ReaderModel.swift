@@ -1,6 +1,7 @@
 import Foundation
 import OctavoKit
 import Observation
+import UIKit
 import WebKit
 import os
 
@@ -39,14 +40,38 @@ final class ReaderModel {
     private(set) var relocationCount = 0
 
     // Layout, decided from the fold. See `ReaderLayout`.
-    private(set) var posture: ReaderPosture = .noHinge
+    /// The hinge's posture and angle, and whether that's book mode.
+    private(set) var hinge = ReaderHinge()
+    var posture: ReaderPosture { hinge.posture }
     /// The hinge angle in degrees, as last reported.
-    private(set) var hingeAngle: Double?
+    var hingeAngle: Double? { hinge.angle }
+    var isBookMode: Bool { hinge.isBookMode }
     /// The SwiftUI view's geometry, with the page's own size once known.
     private(set) var geometry: ReaderGeometry?
     private(set) var layout: ReaderLayout = .automatic
     /// The page's size as the page reports it.
     @ObservationIgnored private var viewport: CGSize?
+    /// The SwiftUI view's own size. The page runs past it, under the side
+    /// column.
+    @ObservationIgnored private var viewSize: CGSize?
+    @ObservationIgnored private var sentTapMode: ReaderTapMode?
+
+    /// A tap where the controls show: `"middle"` of the page, or the side
+    /// `"column"` in book mode. The controls themselves are #17.
+    @ObservationIgnored var onControlsTap: ((_ zone: String) -> Void)?
+
+    // Folding: one re-layout per fold, under a cross-fade. See `FoldBatch`.
+    /// Shown over the page while a fold settles (`ReaderFoldCoverView`).
+    private(set) var foldCover: ReaderFoldCover?
+    /// The last fold's timings, for the debug overlay.
+    private(set) var lastFold: FoldReport?
+    @ObservationIgnored private let foldTiming = FoldBatch.Timing()
+    @ObservationIgnored private var foldBatch: FoldBatch?
+    @ObservationIgnored private var foldTask: Task<Void, Never>?
+    @ObservationIgnored private var coverTask: Task<Void, Never>?
+    @ObservationIgnored private var coverCount = 0
+    /// Snapshots up to this one arrived too late to be shown.
+    @ObservationIgnored private var lastClosedCover = 0
 
     // Sync state, for the debug overlay.
     /// Where the book opened, decided from the local and pulled positions.
@@ -123,22 +148,54 @@ final class ReaderModel {
     func goTo(fraction: Double) { call("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": fraction]) }
 
     /// The hinge changed. `angle` is in degrees. The system repeats
-    /// unchanged values many times a second while the hinge settles.
+    /// unchanged values many times a second while the hinge settles; those
+    /// change nothing.
     func hingeChanged(_ posture: ReaderPosture, angle: Double?) {
-        if angle != hingeAngle { hingeAngle = angle }
-        guard posture != self.posture else { return }
+        let old = hinge.posture
+        let change = hinge.update(posture: posture, angle: angle)
+        if change.contains(.bookMode) {
+            log.debug("book mode \(self.isBookMode)")
+            sendTapMode()
+        }
+        guard change.contains(.posture) else { return }
         log.debug("posture \(posture.rawValue, privacy: .public)")
-        self.posture = posture
+        // `.noHinge` is only the first report, before the hinge is known.
+        if old != .noHinge, old.isFolded != posture.isFolded { beginFold(folded: posture.isFolded) }
         relayout()
     }
 
     /// The reader view's size or the fold's regions changed.
     func geometryChanged(_ geometry: ReaderGeometry) {
+        viewSize = geometry.size
+        updateGeometry(geometry)
+    }
+
+    /// `geometry` with the page's own size, once the page has reported it.
+    private func updateGeometry(_ geometry: ReaderGeometry) {
         var geometry = geometry
         if let viewport { geometry.size = viewport }
         guard geometry != self.geometry else { return }
         self.geometry = geometry
         relayout()
+        sendTapMode()
+    }
+
+    /// Book mode, and where the side column starts when the page runs
+    /// under it.
+    var tapMode: ReaderTapMode {
+        var mode = ReaderTapMode(isBook: isBookMode)
+        if let viewSize, let viewport, viewport.width > viewSize.width {
+            mode.columnStart = Double(viewSize.width)
+        }
+        return mode
+    }
+
+    /// While the book is opening, `.opened` sends it instead.
+    private func sendTapMode() {
+        let mode = tapMode
+        guard phase == .open, mode != sentTapMode else { return }
+        sentTapMode = mode
+        call("return await window.octavo.setTapMode(mode)", arguments: ["mode": mode.scriptArguments])
     }
 
     /// For checking a layout by hand; the next posture or geometry change
@@ -148,7 +205,113 @@ final class ReaderModel {
     }
 
     private func relayout() {
+        if foldBatch != nil {
+            foldBatch?.input(at: .now)
+            scheduleFoldEnd()
+            return
+        }
         apply(ReaderLayout(posture: posture, geometry: geometry))
+    }
+
+    // MARK: Folding
+
+    /// The timings of one fold in milliseconds from the hinge, for the
+    /// debug overlay.
+    struct FoldReport: Equatable, Encodable {
+        /// When the page resized, if it did.
+        var resized: Int?
+        /// When the new layout was sent.
+        var laidOut: Int?
+        /// When the snapshot was ready.
+        var snapshot: Int?
+        /// Whether the new layout re-rendered the page.
+        var rendered: Bool?
+
+        static func milliseconds(since start: ContinuousClock.Instant) -> Int {
+            let elapsed = (ContinuousClock.now - start).components
+            return Int(elapsed.seconds * 1000 + elapsed.attoseconds / 1_000_000_000_000_000)
+        }
+    }
+
+    /// The hinge moved between folded and unfolded: hold the page as it is,
+    /// cover it with a snapshot, and lay out once the fold's inputs settle.
+    private func beginFold(folded: Bool) {
+        guard phase == .open else { return }
+        let now = ContinuousClock.now
+        if foldBatch != nil {
+            foldBatch?.hingeMoved(folded: folded, at: now)
+            scheduleFoldEnd()
+            return
+        }
+        foldBatch = FoldBatch(folded: folded, at: now)
+        lastFold = FoldReport()
+        call("return await window.octavo.hold()")
+        captureCover(startedAt: now)
+        scheduleFoldEnd()
+    }
+
+    /// (Re)starts the wait for the batch's deadline, which each input moves.
+    private func scheduleFoldEnd() {
+        guard let deadline = foldBatch?.deadline(foldTiming) else { return }
+        foldTask?.cancel()
+        foldTask = Task { [weak self] in
+            do {
+                try await Task.sleep(until: deadline, clock: .continuous)
+            } catch {
+                return
+            }
+            await self?.endFold()
+        }
+    }
+
+    private func captureCover(startedAt: ContinuousClock.Instant) {
+        coverCount += 1
+        let id = coverCount
+        let size = geometry?.size ?? .zero
+        coverTask = Task { [page] in
+            guard let data = try? await page.exported(as: .image(afterScreenUpdates: false)),
+                  let image = UIImage(data: data) else { return }
+            // The fold may have been laid out already.
+            guard id > self.lastClosedCover else { return }
+            self.lastFold?.snapshot = FoldReport.milliseconds(since: startedAt)
+            self.foldCover = ReaderFoldCover(id: id, image: image, size: size)
+        }
+    }
+
+    private func endFold() async {
+        guard let startedAt = foldBatch?.startedAt else { return }
+        // Nothing can move the deadline from here on.
+        foldBatch = nil
+        foldTask = nil
+        let cover = coverCount
+        // The snapshot normally arrived long ago; don't wait long for a slow one.
+        if let coverTask {
+            _ = try? await Self.withTimeout(.milliseconds(300)) { await coverTask.value }
+        }
+        lastClosedCover = max(lastClosedCover, cover)
+        let layout = ReaderLayout(posture: posture, geometry: geometry)
+        self.layout = layout
+        sentLayout = layout
+        lastFold?.laidOut = FoldReport.milliseconds(since: startedAt)
+        do {
+            let rendered = try await page.callJavaScript(
+                "return await window.octavo.setLayout(layout)", arguments: ["layout": layout.scriptArguments])
+            lastFold?.rendered = rendered as? Bool
+        } catch {
+            log.error("Fold layout failed: \(error)")
+        }
+        // Folded back meanwhile: that fold fades the cover.
+        guard foldBatch == nil else { return }
+        fadeCover()
+    }
+
+    private func fadeCover() {
+        guard let id = foldCover?.id else { return }
+        foldCover?.isFading = true
+        Task {
+            try? await Task.sleep(for: .seconds(ReaderFoldCover.fadeDuration + 0.05))
+            if foldCover?.id == id { foldCover = nil }
+        }
     }
 
     private func apply(_ layout: ReaderLayout) {
@@ -229,6 +392,7 @@ final class ReaderModel {
             hasMoved = false
             didOpen()
             sendLayout()
+            sendTapMode()
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             self.relocation = relocation
@@ -237,11 +401,19 @@ final class ReaderModel {
             tocLabel = relocation.tocLabel
             location = relocation.location
             if !isRestoring { moved(to: relocation) }
-        case .tap:
-            break
+        case .tap(let zone):
+            onControlsTap?(zone)
         case .viewport(let width, let height):
+            log.debug("viewport \(width)×\(height)")
             viewport = CGSize(width: width, height: height)
-            if let geometry { geometryChanged(geometry) }
+            if foldBatch != nil {
+                foldBatch?.pageResized(at: .now)
+                if lastFold?.resized == nil, let startedAt = foldBatch?.startedAt {
+                    lastFold?.resized = FoldReport.milliseconds(since: startedAt)
+                }
+                scheduleFoldEnd()
+            }
+            if let geometry { updateGeometry(geometry) }
         case .externalLink(let href):
             log.notice("Ignored external link \(href, privacy: .public)")
         case .error(let error):
