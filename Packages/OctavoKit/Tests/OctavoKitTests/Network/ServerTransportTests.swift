@@ -35,6 +35,19 @@ struct ServerTransportTests {
         #expect(server.requests.count == 1)
     }
 
+    /// Plain http whose real connection can't be checked (a stub protocol
+    /// has no address) fails closed, after the transfer.
+    @Test func plainHTTPFailsClosedWhenTheConnectionCantBeVerified() async throws {
+        let server = homeServer { _ in .json("{}") }
+        let transport = ServerTransport(server: server.baseURL, policy: .testing(resolver, verifiesConnections: true), configuration: server.configuration)
+        await #expect(throws: NetworkTrustError.insecureAddress(host: server.baseURL.host()!, reason: .unverifiedConnection)) {
+            try await transport.data(for: URLRequest(url: server.baseURL.appending(path: "opds")))
+        }
+        await #expect(throws: NetworkTrustError.self) {
+            try await transport.download(for: URLRequest(url: server.baseURL.appending(path: "book.epub")), delegate: nil)
+        }
+    }
+
     @Test func refusesHTTPSToHTTPRedirects() async throws {
         let target = homeServer { _ in .json("{}") }
         let server = StubServer { _ in StubServer.Response(status: 302, headers: ["Location": target.baseURL.appending(path: "x").absoluteString], body: Data()) }

@@ -27,8 +27,9 @@ public protocol HTTPTransport: Sendable {
 ///   scheme, host or port.
 /// - HTTP Basic and Digest challenges from the server itself are answered
 ///   from `passwords`, once per request.
-/// - No cookie jar, no shared credential storage, no disk cache, TLS 1.2 or
-///   later.
+/// - After each request, its metrics show where it actually connected;
+///   a connection the checks wouldn't have allowed fails the request.
+/// - No cookie jar, no shared credential storage, no cache, TLS 1.2 or later.
 public final class ServerTransport: HTTPTransport {
     /// The server's root, e.g. `http://192.168.1.5:3300`.
     public let server: URL
@@ -37,7 +38,7 @@ public final class ServerTransport: HTTPTransport {
     private let rules: TrustRules
 
     /// - Parameter configuration: copied; cookies, credential storage and the
-    ///   disk cache are switched off on the copy.
+    ///   cache are switched off on the copy.
     public init(
         server: URL,
         pin: CertificatePin? = nil,
@@ -52,8 +53,10 @@ public final class ServerTransport: HTTPTransport {
         configuration.httpShouldSetCookies = false
         configuration.httpCookieStorage = nil
         configuration.urlCredentialStorage = nil
-        // Feeds can carry account details (Kavita puts its key in every link).
-        configuration.urlCache = URLCache(memoryCapacity: 4 << 20, diskCapacity: 0)
+        // No cache: a cached answer would skip the connection checks, and
+        // feeds can carry account details (Kavita puts its key in every link).
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.tlsMinimumSupportedProtocolVersion = .TLSv12
         // No session delegate: challenges and redirects go to each task's
         // `TaskGuard`, which can tie a refusal to its request.
@@ -93,6 +96,9 @@ public final class ServerTransport: HTTPTransport {
             throw error
         }
         // The metrics showed a connection the checks wouldn't have allowed.
+        if !(await guardian.metricsCollected(within: .seconds(5))), rules.policy.verifiesConnections, url.scheme?.lowercased() == "http" {
+            guardian.refuse(.insecureAddress(host: url.host(percentEncoded: true) ?? "", reason: .unverifiedConnection))
+        }
         if let refusal = guardian.refusal {
             if let file = result as? (URL, URLResponse) { try? FileManager.default.removeItem(at: file.0) }
             throw refusal
@@ -162,6 +168,7 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
     private let rules: TrustRules
     private let inner: (any URLSessionTaskDelegate)?
     private let refusalStorage = Mutex<NetworkTrustError?>(nil)
+    private let collected = AsyncStream.makeStream(of: Void.self)
 
     /// Never forwarded: they could swap the request after the checks.
     private static let withheld: Set<Selector> = [
@@ -177,8 +184,26 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
 
     var refusal: NetworkTrustError? { refusalStorage.withLock { $0 } }
 
-    private func refuse(_ error: NetworkTrustError) {
+    func refuse(_ error: NetworkTrustError) {
         refusalStorage.withLock { $0 = $0 ?? error }
+    }
+
+    /// Waits for `didFinishCollecting`, which can come after the transfer
+    /// returns. `false` if it didn't come in time.
+    func metricsCollected(within timeout: Duration) async -> Bool {
+        await withTaskGroup(of: Bool.self) { [stream = collected.stream] group in
+            group.addTask {
+                for await _ in stream { return true }
+                return false
+            }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return false
+            }
+            let first = await group.next() ?? false
+            group.cancelAll()
+            return first
+        }
     }
 
     // MARK: Forwarding to the caller's delegate
@@ -235,7 +260,12 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
     // MARK: Where it actually connected
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
-        for transaction in metrics.transactionMetrics where transaction.resourceFetchType == .networkLoad {
+        defer {
+            collected.continuation.yield()
+            collected.continuation.finish()
+        }
+        // Every transaction: with no cache, each one went to the network.
+        for transaction in metrics.transactionMetrics {
             guard let url = transaction.request.url else { continue }
             if let refusal = rules.policy.verify(url, connectedTo: transaction.remoteAddress,
                                                  throughProxy: transaction.isProxyConnection,

@@ -17,6 +17,9 @@ public enum NetworkTrustError: Error, Equatable, Sendable {
         case throughProxy
         /// A server on the internet linked or redirected to a home address.
         case localAddressFromInternetServer
+        /// Plain http whose connection couldn't be checked afterwards (no
+        /// address in the task's metrics, or none in time).
+        case unverifiedConnection
     }
 
     /// Plain http to something that isn't a home or VPN address.

@@ -28,8 +28,10 @@ final class FakeResolver: HostResolver {
 extension HomeNetworkPolicy {
     /// The developer's home Wi-Fi (a global IPv6 /64), with Tailscale up
     /// unless `tunnel` is false.
+    /// `verifiesConnections` is off by default: stub `URLProtocol`s have no
+    /// addresses, so plain http to them would fail closed.
     static func testing(_ resolver: FakeResolver, networks: [String] = ["2603:7001:f100:669::1/64"],
-                        tunnel: Bool = true, proxy: Bool = false) -> HomeNetworkPolicy {
+                        tunnel: Bool = true, proxy: Bool = false, verifiesConnections: Bool = false) -> HomeNetworkPolicy {
         let prefixes = networks.map { entry in
             let parts = entry.split(separator: "/")
             return NetworkPrefix(address: IPAddress(literal: String(parts[0]))!, length: Int(parts[1])!)
@@ -37,7 +39,8 @@ extension HomeNetworkPolicy {
         return HomeNetworkPolicy(
             resolver: resolver,
             localNetworks: { LocalNetworks(ipv6Prefixes: prefixes, hasSharedAddressTunnel: tunnel) },
-            usesProxy: { _ in proxy }
+            usesProxy: { _ in proxy },
+            verifiesConnections: verifiesConnections
         )
     }
 }
@@ -233,7 +236,7 @@ struct HomeNetworkPolicyTests {
 
     /// After the fact, from the task's metrics: where the request really went.
     @Test func verifiesWhereItActuallyConnected() {
-        let policy = HomeNetworkPolicy.testing(resolver, tunnel: false)
+        let policy = HomeNetworkPolicy.testing(resolver, tunnel: false, verifiesConnections: true)
         let http = URL(string: "http://nas.lan/opds")!
         func verify(_ url: URL, _ remote: String?, proxy: Bool = false, internet: Bool = false) -> NetworkTrustError? {
             policy.verify(url, connectedTo: remote, throughProxy: proxy, fromInternetServer: internet)
@@ -241,7 +244,8 @@ struct HomeNetworkPolicyTests {
         #expect(verify(http, "192.168.1.5") == nil)
         #expect(verify(http, "fe80::1%en0") == nil)
         #expect(verify(http, "2603:7001:f100:669::5") == nil)   // on this network
-        #expect(verify(http, nil) == nil)                       // not known (a cache, a stub)
+        #expect(verify(http, nil) == .insecureAddress(host: "nas.lan", reason: .unverifiedConnection))   // fails closed
+        #expect(verify(http, "not an address") == .insecureAddress(host: "nas.lan", reason: .unverifiedConnection))
         // DNS changed after the check: refuse the response.
         #expect(verify(http, "203.0.113.9") == .insecureAddress(host: "nas.lan", reason: .internetAddress("203.0.113.9")))
         #expect(verify(http, "100.101.102.103") == .insecureAddress(host: "nas.lan", reason: .internetAddress("100.101.102.103")))
@@ -252,6 +256,8 @@ struct HomeNetworkPolicyTests {
         #expect(verify(cover, "203.0.113.9", internet: true) == nil)
         #expect(verify(cover, "192.168.1.1", internet: true) == .insecureAddress(host: "rebind.example.com", reason: .localAddressFromInternetServer))
         #expect(verify(cover, "0.0.0.0", internet: true) != nil)
+        #expect(verify(cover, "2603:7001:f100:669::7", internet: true) != nil)   // home IPv6 on this network
+        #expect(verify(cover, nil, internet: true) == nil)                     // https: TLS decided
         #expect(verify(cover, "192.168.1.1", internet: false) == nil)
         #expect(verify(cover, "203.0.113.9", proxy: true) == nil)   // https through a proxy is still TLS to the server
     }

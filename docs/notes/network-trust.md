@@ -118,7 +118,8 @@ ATS stays on for the internet. `HomeNetworkPolicy` is the real check inside that
 URLSession has no hook before an http request is sent, so the per-request check lives in a wrapper.
 - **Interface:** `HTTPTransport` (`data(for:)`, `download(for:delegate:)`). `ServerTransport(server:pin:passwords:policy:configuration:)`, one per server; a new pin needs a new transport.
 - **Delegate per task:** each task gets a `TaskGuard` that handles challenges and redirects and forwards everything else to the caller's delegate (download progress). The exceptions are callbacks that could swap the request after the check (`willBeginDelayedRequest`, `needNewBodyStream`).
-- **Session settings:** no session delegate, no cookie jar, no `URLCredentialStorage`, a memory-only `URLCache`, TLS 1.2 minimum.
+- **Session settings:** no session delegate, no cookie jar, no `URLCredentialStorage`, no `URLCache` (a cached answer would skip the connection checks), TLS 1.2 minimum.
+- **After each request,** its metrics show where it really connected. Plain http that landed outside home addresses, went through a proxy, or can't be verified (no address in the metrics, or none within 5 s) fails, and so does an internet server's request that landed on a home address. This can't unsend the request, but the app never uses the answer.
 - **Basic and Digest** challenges are answered from the `PasswordStore`, only for the server's own host, port and scheme, and only once.
 - **For #8:** take `any HTTPTransport` and a `PasswordStore`. In tests, use `ServerTransport(server:policy:configuration:)` with a stub `URLProtocol` and a fake resolver (`HomeNetworkPolicyTests.swift` has `HomeNetworkPolicy.testing`). There's deliberately no `URLSession: HTTPTransport` conformance, so nothing can skip the rules.
 

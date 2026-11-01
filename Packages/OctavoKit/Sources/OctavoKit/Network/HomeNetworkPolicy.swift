@@ -41,15 +41,28 @@ public struct HomeNetworkPolicy: Sendable {
     private let resolver: any HostResolver
     private let localNetworks: @Sendable () -> LocalNetworks
     private let usesProxy: @Sendable (URL) -> Bool
+    /// Check where each request actually connected (`verify`). Only tests
+    /// with stub `URLProtocol`s, which have no addresses, turn it off.
+    let verifiesConnections: Bool
 
     public init(
         resolver: any HostResolver,
         localNetworks: @escaping @Sendable () -> LocalNetworks,
         usesProxy: @escaping @Sendable (URL) -> Bool = { _ in false }
     ) {
+        self.init(resolver: resolver, localNetworks: localNetworks, usesProxy: usesProxy, verifiesConnections: true)
+    }
+
+    init(
+        resolver: any HostResolver,
+        localNetworks: @escaping @Sendable () -> LocalNetworks,
+        usesProxy: @escaping @Sendable (URL) -> Bool,
+        verifiesConnections: Bool
+    ) {
         self.resolver = resolver
         self.localNetworks = localNetworks
         self.usesProxy = usesProxy
+        self.verifiesConnections = verifiesConnections
     }
 
     /// Throws `NetworkTrustError` if `url` mustn't be loaded, or
@@ -92,14 +105,19 @@ public struct HomeNetworkPolicy: Sendable {
     /// - Parameter fromInternetServer: the transport's server isn't local, so
     ///   home addresses are off limits too.
     func verify(_ url: URL, connectedTo remote: String?, throughProxy: Bool, fromInternetServer: Bool) -> NetworkTrustError? {
+        guard verifiesConnections else { return nil }
         let host = url.host(percentEncoded: true) ?? ""
         let plainHTTP = url.scheme?.lowercased() == "http"
         if plainHTTP, throughProxy { return .insecureAddress(host: host, reason: .throughProxy) }
-        guard let remote, let address = IPAddress(literal: remote) else { return nil }
-        if plainHTTP, !isHome(address, localNetworks(), onThisNetwork: true) {
+        guard let remote, let address = IPAddress(literal: remote) else {
+            // Plain http that can't be shown to have stayed home fails closed.
+            return plainHTTP ? .insecureAddress(host: host, reason: .unverifiedConnection) : nil
+        }
+        let networks = localNetworks()
+        if plainHTTP, !isHome(address, networks, onThisNetwork: true) {
             return .insecureAddress(host: host, reason: .internetAddress(address.description))
         }
-        if fromInternetServer, address.isHomeRange || address.isUnspecified {
+        if fromInternetServer, address.isHomeRange || address.isUnspecified || isHome(address, networks, onThisNetwork: true) {
             return .insecureAddress(host: host, reason: .localAddressFromInternetServer)
         }
         return nil
