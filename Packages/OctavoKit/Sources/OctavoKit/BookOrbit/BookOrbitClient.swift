@@ -141,8 +141,12 @@ public actor BookOrbitClient {
     /// Credentials loaded from the store on first use. Retries a failed save.
     private func currentCredentials() async throws -> BookOrbitCredentials {
         if !credentialsLoaded {
-            credentials = try await tokenStore.load()
-            credentialsLoaded = true
+            let loaded = try await tokenStore.load()
+            // A sign-in or sign-out while it loaded is newer than the store.
+            if !credentialsLoaded {
+                credentials = loaded
+                credentialsLoaded = true
+            }
         }
         if saveFailed { try? await store(credentials) }
         guard let credentials else { throw BookOrbitError.notSignedIn }

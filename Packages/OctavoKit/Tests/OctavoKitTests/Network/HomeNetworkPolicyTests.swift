@@ -223,6 +223,12 @@ struct HomeNetworkPolicyTests {
         try? await proxied.check(URL(string: "https://books.example.com/")!)
     }
 
+    /// Errors never carry a password or a key from the address.
+    @Test func errorsCarryOnlyTheServer() async {
+        let error = await refusal("http://octavo:secret@192.168.1.5:8083/api/opds/0f1e2d3c?x=1")
+        #expect(error == .unsupportedAddress("http://192.168.1.5:8083"))
+    }
+
     @Test func localAddresses() {
         #expect(HomeNetworkPolicy.isLocalAddress(URL(string: "http://192.168.1.1/cgi-bin")!))
         #expect(HomeNetworkPolicy.isLocalAddress(URL(string: "https://router/")!))

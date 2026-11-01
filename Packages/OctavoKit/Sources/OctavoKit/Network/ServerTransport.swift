@@ -287,7 +287,7 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
         let method = request.httpMethod?.uppercased() ?? "GET"
         if from.scheme?.lowercased() == "https" && to.scheme?.lowercased() != "https"
             || crossOrigin && method != "GET" && method != "HEAD" {
-            refuse(.insecureRedirect(to.absoluteString))
+            refuse(.insecureRedirect(to.trustDescription))
             task.cancel()
             return nil
         }

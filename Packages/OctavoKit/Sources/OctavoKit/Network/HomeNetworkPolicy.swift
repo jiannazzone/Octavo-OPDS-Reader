@@ -149,7 +149,7 @@ private struct Target {
     var address: Address
 
     init(_ url: URL) throws {
-        let refuse = NetworkTrustError.unsupportedAddress(url.absoluteString)
+        let refuse = NetworkTrustError.unsupportedAddress(url.trustDescription)
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               url.user(percentEncoded: true) == nil, url.password(percentEncoded: true) == nil,
               // `absoluteString` is what's sent: internationalized names in
@@ -291,5 +291,19 @@ extension IPAddress {
 
     init?(socketAddress: UnsafeMutablePointer<sockaddr>) {
         self.init(socketAddress: UnsafePointer(socketAddress))
+    }
+}
+
+extension URL {
+    /// Scheme, host and port only, for errors: no `user:password@`, and no
+    /// path or query (Kavita puts its API key in the path).
+    var trustDescription: String {
+        guard var components = URLComponents(url: self, resolvingAgainstBaseURL: true) else { return scheme ?? "" }
+        components.user = nil
+        components.password = nil
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
+        return components.string ?? scheme ?? ""
     }
 }

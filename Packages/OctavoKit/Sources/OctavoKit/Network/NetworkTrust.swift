@@ -24,15 +24,16 @@ public enum NetworkTrustError: Error, Equatable, Sendable {
 
     /// Plain http to something that isn't a home or VPN address.
     case insecureAddress(host: String, reason: InsecureReason)
-    /// Not a standard address (`3232235777`, `0177.0.0.1`, `nas.lan.`), or
-    /// not http(s).
+    /// Not a standard address (`3232235777`, `0177.0.0.1`, `nas.lan.`), not
+    /// http(s), or with `user:password@`. Carries scheme, host and port only.
     case unsupportedAddress(String)
     /// iOS doesn't trust the server's certificate and none is pinned for it.
     case untrustedCertificate(CertificateSummary)
     /// The server's certificate isn't the one that was trusted.
     case certificateChanged(CertificateSummary)
     /// A redirect to plain http from https, or one that would send a
-    /// request body (a password, a token) on to another server.
+    /// request body (a password, a token) on to another server. Carries the
+    /// target's scheme, host and port only.
     case insecureRedirect(String)
 }
 

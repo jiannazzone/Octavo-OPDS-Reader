@@ -203,6 +203,21 @@ struct BookOrbitTokenRotationTests {
         await #expect(throws: BookOrbitError.notSignedIn) { try await client.libraries() }
     }
 
+    /// A sign-out while the first Keychain load is still running wins.
+    @Test func signOutDuringTheFirstLoadWins() async throws {
+        let store = SlowLoadStore(BookOrbitCredentials(accessToken: "access-1", refreshToken: "refresh-1"))
+        let server = StubServer { _ in .json("[]") }
+        let client = BookOrbitClient(baseURL: server.baseURL, tokenStore: store, configuration: server.configuration)
+
+        let request = Task { try await client.libraries() }
+        try await Task.sleep(for: .milliseconds(20))
+        try await client.signOut()
+
+        await #expect(throws: BookOrbitError.notSignedIn) { try await request.value }
+        await #expect(throws: BookOrbitError.notSignedIn) { try await client.libraries() }
+        #expect(server.requests.isEmpty)
+    }
+
     /// Saves land in the order they were made, even when an earlier one is slow.
     @Test func savesLandInOrder() async throws {
         let server = RotatingServer(events: events)
@@ -216,5 +231,26 @@ struct BookOrbitTokenRotationTests {
         await request
 
         #expect(await store.load() == nil)
+    }
+}
+
+/// Its first load takes a while; saves are immediate.
+private actor SlowLoadStore: BookOrbitTokenStore {
+    private var stored: BookOrbitCredentials?
+    private var loads = 0
+
+    init(_ credentials: BookOrbitCredentials?) {
+        stored = credentials
+    }
+
+    func load() async throws -> BookOrbitCredentials? {
+        let snapshot = stored
+        loads += 1
+        if loads == 1 { try await Task.sleep(for: .milliseconds(100)) }
+        return snapshot
+    }
+
+    func save(_ credentials: BookOrbitCredentials?) {
+        stored = credentials
     }
 }

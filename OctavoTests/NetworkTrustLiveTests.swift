@@ -67,7 +67,7 @@ struct NetworkTrustLiveTests {
     /// The decimal spelling of 1.1.1.1 got past ATS in the spike; the policy
     /// stops it before anything is sent.
     @Test func decimalAddressesAreStoppedBeforeATS() async throws {
-        await #expect(throws: NetworkTrustError.unsupportedAddress("http://16843009/")) {
+        await #expect(throws: NetworkTrustError.unsupportedAddress("http://16843009")) {
             try await ServerTransport(server: URL(string: "http://16843009/")!).data(for: URLRequest(url: URL(string: "http://16843009/")!))
         }
     }

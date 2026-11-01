@@ -52,7 +52,7 @@ struct ServerTransportTests {
         let target = homeServer { _ in .json("{}") }
         let server = StubServer { _ in StubServer.Response(status: 302, headers: ["Location": target.baseURL.appending(path: "x").absoluteString], body: Data()) }
 
-        await #expect(throws: NetworkTrustError.insecureRedirect(target.baseURL.appending(path: "x").absoluteString)) {
+        await #expect(throws: NetworkTrustError.insecureRedirect(target.baseURL.absoluteString)) {
             try await transport(server).data(for: URLRequest(url: server.baseURL.appending(path: "opds")))
         }
         #expect(target.requests.isEmpty)
@@ -124,7 +124,7 @@ struct ServerTransportTests {
         login.httpMethod = "POST"
         login.httpBody = Data(#"{"username":"octavo","password":"secret"}"#.utf8)
 
-        await #expect(throws: NetworkTrustError.insecureRedirect(other.baseURL.appending(path: "auth/login").absoluteString)) {
+        await #expect(throws: NetworkTrustError.insecureRedirect(other.baseURL.absoluteString)) {
             try await transport(server).data(for: login)
         }
         #expect(other.requests.isEmpty)
