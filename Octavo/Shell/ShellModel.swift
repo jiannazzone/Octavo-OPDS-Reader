@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OctavoKit
 
 /// The shell's state: the selected tab, each tab's open screens and the
 /// shared states. It lives with the scene, which folding or unfolding moves
@@ -9,29 +10,29 @@ import Observation
 final class ShellModel {
     var tab: ShellTab = .home
     // One property per tab, so navigating in one tab doesn't redraw the others.
-    private var homePath = PanePath(companion: .cover(PlaceholderBook.samples[0]))
-    private var libraryPath = PanePath(companion: .cover(PlaceholderBook.samples[0]))
+    // Home's and the Library's companions follow what they show (decision 26).
+    private var homePath = PanePath()
+    private var libraryPath = PanePath()
     private var settingsPath = PanePath(companion: .settingsPage("BookOrbit"))
     private var searchPath = PanePath()
 
-    /// Shown as a banner at the top of the tabs (decision 22).
-    var connectionProblem: ConnectionProblem?
+    /// The books, and where they come from.
+    let library: LibraryModel
     /// The book open in the reader, which covers the tabs (frames 07–09).
-    var reading: PlaceholderBook?
+    var reading: SourcedBook?
 
-    /// Stand-in states until the real sources exist: an empty Home
-    /// (frame 25) and a problem on the cover's strip (frames 23, 24, 42).
-    var homeIsEmpty = false {
-        didSet { self[path: .home].companion = homeIsEmpty ? nil : .cover(PlaceholderBook.samples[0]) }
-    }
+    /// A stand-in state until the cover page (#14): a problem on the
+    /// cover's strip (frames 23, 24, 42).
     var coverStrip: CoverStripMessage?
 
     #if DEBUG
-    /// The spike's screens, kept reachable from the Library until #13.
+    /// The spike's screens, kept reachable from the Library until the
+    /// reader (#17) opens books.
     var showsSpike = false
     #endif
 
-    init() {
+    init(library: LibraryModel = LibraryModel()) {
+        self.library = library
         #if DEBUG
         applyLaunchArguments()
         #endif
@@ -66,8 +67,9 @@ final class ShellModel {
         }
     }
 
-    func openBook(_ book: PlaceholderBook) {
+    func openBook(_ book: SourcedBook) {
         reading = book
+        library.bookOpened(book)
     }
 
     /// Unfolding on a book's cover opens the book at once (decision 4);
@@ -90,37 +92,48 @@ final class ShellModel {
         #endif
     }
 
-    /// Retry or Sign in on the connection banner. A stand-in until #7 and #9.
-    func resolveConnectionProblem() {
-        connectionProblem = nil
-    }
-
     #if DEBUG
     /// Launch arguments that set up a state to look at:
-    /// `-shellTab library`, `-shellConnection unreachable|signedOut`,
-    /// `-shellEmptyHome 1`, `-shellCoverStrip failed|offline|downloading`,
-    /// `-shellOpen collection|deep|cover|settings`, `-shellReading 1`.
+    /// `-connectBookOrbit 1` (the local server), `-sampleLibrary 1|empty`
+    /// (made-up books; `empty` has nothing in progress), `-shellTab library`,
+    /// `-shellConnection unreachable|signedOut`,
+    /// `-shellCoverStrip failed|offline|downloading`,
+    /// `-shellOpen collection|deep|cover|settings` and `-shellReading 1`
+    /// (sample books).
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
             self.tab = tab
         }
-        switch defaults.string(forKey: "shellConnection") {
-        case "unreachable": connectionProblem = .unreachable(server: "BookOrbit")
-        case "signedOut": connectionProblem = .signedOut(server: "BookOrbit")
-        default: break
+        let problem: ConnectionProblem? = switch defaults.string(forKey: "shellConnection") {
+        case "unreachable": .unreachable(server: "BookOrbit")
+        case "signedOut": .signedOut(server: "BookOrbit")
+        default: nil
         }
-        homeIsEmpty = defaults.bool(forKey: "shellEmptyHome")
+        let sample = defaults.string(forKey: "sampleLibrary")
+        let connectsBookOrbit = defaults.bool(forKey: "connectBookOrbit")
+        Task { [library] in
+            if connectsBookOrbit {
+                await library.connectLocalBookOrbit()
+            } else if let sample, sample != "0" {
+                await library.connectSampleLibrary(nothingInProgress: sample == "empty")
+            }
+            if let problem { library.connectionProblem = problem }
+        }
         switch defaults.string(forKey: "shellCoverStrip") {
         case "failed": coverStrip = .downloadFailed
         case "offline": coverStrip = .needsConnection
         case "downloading": coverStrip = .downloading(fraction: 0.42)
         default: break
         }
-        let book = PlaceholderBook.samples[0]
+        let book = SourcedBook(source: SampleLibrarySource.id, book: SampleLibrarySource.books[0])
+        let classics = ShellRoute.feed(
+            LibraryEntry(kind: .collection, title: "Classics", count: 5, link: LibraryLink(rawValue: "collections/classics")),
+            from: SampleLibrarySource.id
+        )
         switch defaults.string(forKey: "shellOpen") {
-        case "collection": self[path: .library].routes = [.collections, .collection("Classics")]
-        case "deep": self[path: .library].routes = [.collections, .collection("Classics"), .cover(book)]
+        case "collection": self[path: .library].routes = [classics]
+        case "deep": self[path: .library].routes = [classics, .cover(book)]
         case "cover": self[path: .library].routes = [.cover(book)]
         case "settings": self[path: .settings].routes = [.settingsPage("BookOrbit")]
         default: break

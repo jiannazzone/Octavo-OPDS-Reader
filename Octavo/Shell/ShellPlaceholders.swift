@@ -1,8 +1,9 @@
+import OctavoKit
 import SwiftUI
 
-// Stand-in screens for the shell, replaced by #13 (Home, Library), #14 (the
-// cover page), #15 (Search), #16 (Settings) and #17 (the reader). They show
-// the shell's layout and shared states; nothing here is a design.
+// Stand-in screens for the shell, replaced by #14 (the cover page), #15
+// (Search), #16 (Settings) and #17 (the reader). They show the shell's
+// layout and shared states; nothing here is a design.
 
 /// The view for a route.
 struct ShellScreen: View {
@@ -10,64 +11,9 @@ struct ShellScreen: View {
 
     var body: some View {
         switch route {
-        case .collections: CollectionsPlaceholder()
-        case .collection: BookListPlaceholder(books: PlaceholderBook.samples, note: "#13")
+        case .feed(let entry, let source): FeedScreen(entry: entry, source: source)
         case .settingsPage(let name): SettingsPagePlaceholder(name: name)
         case .cover(let book): CoverPlaceholder(book: book)
-        }
-    }
-}
-
-struct HomePlaceholder: View {
-    @Environment(ShellModel.self) private var shell
-
-    var body: some View {
-        if shell.homeIsEmpty {
-            VStack(spacing: 0) {
-                ConnectionBannerSlot()
-                    .padding(.horizontal, 20)
-                EmptyInvitation(
-                    symbol: "books.vertical", title: "Nothing in progress",
-                    message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
-                ) { shell.tab = .library }
-            }
-        } else {
-            List {
-                ConnectionBannerSlot()
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                Section("Continue reading") {
-                    ForEach(PlaceholderBook.samples.prefix(2)) { BookLink(book: $0) }
-                }
-                Section {
-                    ForEach(PlaceholderBook.samples.dropFirst(2)) { BookLink(book: $0) }
-                } header: {
-                    Text("New on BookOrbit")
-                } footer: {
-                    Text("Stand-in content until #13.")
-                }
-            }
-        }
-    }
-}
-
-struct LibraryPlaceholder: View {
-    var body: some View {
-        List {
-            ConnectionBannerSlot()
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            Section {
-                ShellLink(.collections) { Text("Collections") }
-            }
-            Section {
-                ForEach(PlaceholderBook.samples) { BookLink(book: $0) }
-            } footer: {
-                Text("Stand-in content until #13.")
-            }
-            #if DEBUG
-            SpikeLibrarySection()
-            #endif
         }
     }
 }
@@ -105,44 +51,9 @@ struct SettingsPlaceholder: View {
                 Text("Stand-in content until #16.")
             }
             #if DEBUG
+            DebugServerSection()
             ShellStatesSection()
             #endif
-        }
-    }
-}
-
-struct CollectionsPlaceholder: View {
-    var body: some View {
-        List {
-            Section {
-                ForEach(["Classics", "Spike", "To read next"], id: \.self) { name in
-                    ShellLink(.collection(name)) {
-                        VStack(alignment: .leading) {
-                            Text(name)
-                            Text("5 books")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            } footer: {
-                Text("Stand-in content until #13.")
-            }
-        }
-    }
-}
-
-struct BookListPlaceholder: View {
-    let books: [PlaceholderBook]
-    let note: String
-
-    var body: some View {
-        List {
-            Section {
-                ForEach(books) { BookLink(book: $0) }
-            } footer: {
-                Text("Stand-in content until \(note).")
-            }
         }
     }
 }
@@ -167,37 +78,15 @@ struct SettingsPagePlaceholder: View {
     }
 }
 
-/// A row that opens a book's cover.
-struct BookLink: View {
-    let book: PlaceholderBook
-
-    var body: some View {
-        ShellLink(.cover(book)) {
-            HStack(spacing: 12) {
-                StandInCover(book: book)
-                    .frame(width: 30, height: 45)
-                    .clipShape(.rect(cornerRadius: 3))
-                VStack(alignment: .leading) {
-                    Text(book.title)
-                        .lineLimit(1)
-                    Text(book.place)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-}
-
 /// A book's cover page: the cover filling the screen, under the camera
 /// column (decision 4), and the strip at the bottom. Folded, unfolding here
 /// opens the book (`ShellModel.hingeChanged`).
 struct CoverPlaceholder: View {
-    let book: PlaceholderBook
+    let book: SourcedBook
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        StandInCover(book: book)
+        CoverImage(book: book, size: .full)
             .ignoresSafeArea()
             .overlay(alignment: .bottom) {
                 strip
@@ -215,7 +104,7 @@ struct CoverPlaceholder: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(book.place)
+                        Text(book.book.progress.map { $0.formatted(.percent.precision(.fractionLength(0))) } ?? "Not started")
                             .font(.headline)
                         Text("Stand-in strip until #14")
                             .font(.caption)
@@ -225,45 +114,20 @@ struct CoverPlaceholder: View {
                     Button("Open") { shell.openBook(book) }
                         .buttonStyle(.glassProminent)
                 }
-                ProgressView(value: book.progress)
+                ProgressView(value: book.book.progress ?? 0)
             }
-        }
-    }
-}
-
-/// A coloured block with the title, standing in for cover artwork.
-struct StandInCover: View {
-    let book: PlaceholderBook
-
-    var body: some View {
-        let hue = Double(book.id.unicodeScalars.reduce(0) { ($0 + Int($1.value)) % 360 }) / 360
-        LinearGradient(
-            colors: [Color(hue: hue, saturation: 0.45, brightness: 0.55), Color(hue: hue, saturation: 0.6, brightness: 0.3)],
-            startPoint: .top, endPoint: .bottom
-        )
-        .overlay {
-            VStack(spacing: 8) {
-                Text(book.title)
-                    .font(.system(.largeTitle, design: .serif).bold())
-                Text(book.author)
-                    .font(.system(.title3, design: .serif))
-            }
-            .multilineTextAlignment(.center)
-            .foregroundStyle(.white)
-            .padding(40)
-            .minimumScaleFactor(0.2)
         }
     }
 }
 
 /// The reader, over the tabs. #17 replaces it.
 struct ReaderPlaceholder: View {
-    let book: PlaceholderBook
+    let book: SourcedBook
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
         NavigationStack {
-            ContentUnavailableView(book.title, systemImage: "book.pages", description: Text("Opened from the shell. The reader comes with #17."))
+            ContentUnavailableView(book.book.title, systemImage: "book.pages", description: Text("Opened from the shell. The reader comes with #17."))
                 .toolbar {
                     Button("Close", systemImage: "xmark") { shell.reading = nil }
                 }
@@ -274,11 +138,28 @@ struct ReaderPlaceholder: View {
 
 /// The connection banner, when there's a problem.
 struct ConnectionBannerSlot: View {
+    @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        if let problem = shell.connectionProblem {
-            ConnectionBanner(problem: problem) { shell.resolveConnectionProblem() }
+        if let problem = library.connectionProblem {
+            ConnectionBanner(problem: problem) { resolve(problem) }
+        }
+    }
+
+    private func resolve(_ problem: ConnectionProblem) {
+        switch problem {
+        case .unreachable:
+            Task { await library.retry() }
+        case .signedOut:
+            #if DEBUG
+            if library.server?.id == LibraryModel.localBookOrbitID {
+                Task { await library.connectLocalBookOrbit() }
+                return
+            }
+            #endif
+            // Signing in again belongs to Settings (#9, #16).
+            shell.tab = .settings
         }
     }
 }

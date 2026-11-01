@@ -1,4 +1,6 @@
 import CoreGraphics
+import Foundation
+import OctavoKit
 import Testing
 @testable import Octavo
 
@@ -37,11 +39,33 @@ struct PaneSplitTests {
     }
 }
 
+/// Routes into the sample library.
+enum SampleRoutes {
+    static func book(_ index: Int) -> SourcedBook {
+        SourcedBook(source: SampleLibrarySource.id, book: SampleLibrarySource.books[index])
+    }
+
+    static func feed(_ title: String, _ link: String) -> ShellRoute {
+        .feed(LibraryEntry(kind: .collection, title: title, link: LibraryLink(rawValue: link)), from: SampleLibrarySource.id)
+    }
+
+    static let collections = feed("Collections", "collections")
+    static let classics = feed("Classics", "collections/classics")
+}
+
+/// A shell whose library keeps its records in a temporary folder, not the
+/// app's.
+@MainActor
+func makeShell() -> ShellModel {
+    let file = URL.temporaryDirectory.appending(path: "RecentBooks-\(UUID().uuidString).json")
+    return ShellModel(library: LibraryModel(recents: RecentBooks(fileURL: file)))
+}
+
 struct PanePathTests {
-    static let a = ShellRoute.collections
-    static let b = ShellRoute.collection("Classics")
-    static let c = ShellRoute.cover(PlaceholderBook.samples[0])
-    static let d = ShellRoute.cover(PlaceholderBook.samples[1])
+    static let a = SampleRoutes.collections
+    static let b = SampleRoutes.classics
+    static let c = ShellRoute.cover(SampleRoutes.book(0))
+    static let d = ShellRoute.cover(SampleRoutes.book(1))
 
     @Test func levelsCountFromTheRoot() {
         let path = PanePath(routes: [Self.a, Self.b])
@@ -127,35 +151,35 @@ struct HingeTransitionTests {
 
 @MainActor
 struct ShellModelTests {
-    static let book = PlaceholderBook.samples[1]
+    static let book = SampleRoutes.book(1)
 
     @Test func unfoldingOnACoverOpensTheBook() {
-        let model = ShellModel()
+        let model = makeShell()
         model.tab = .library
-        model[path: .library].routes = [.collections, .cover(Self.book)]
+        model[path: .library].routes = [SampleRoutes.collections, .cover(Self.book)]
         model.hingeChanged(.unfold)
         #expect(model.reading == Self.book)
     }
 
     @Test func unfoldingElsewhereKeepsTheScreen() {
-        let model = ShellModel()
+        let model = makeShell()
         model.tab = .library
-        model[path: .library].routes = [.cover(Self.book), .collections]
+        model[path: .library].routes = [.cover(Self.book), SampleRoutes.collections]
         model.hingeChanged(.unfold)
         #expect(model.reading == nil)
-        #expect(model[path: .library].routes == [.cover(Self.book), .collections])
+        #expect(model[path: .library].routes == [.cover(Self.book), SampleRoutes.collections])
     }
 
     // Home's companion is a cover, but it isn't on screen folded.
     @Test func unfoldingOnARootDoesNothing() {
-        let model = ShellModel()
+        let model = makeShell()
         model.tab = .home
         model.hingeChanged(.unfold)
         #expect(model.reading == nil)
     }
 
     @Test func onlyTheSelectedTabCounts() {
-        let model = ShellModel()
+        let model = makeShell()
         model.tab = .home
         model[path: .library].routes = [.cover(Self.book)]
         model.hingeChanged(.unfold)
@@ -165,7 +189,7 @@ struct ShellModelTests {
     #if DEBUG
     // The spike's screens cover the tabs and do their own handoff.
     @Test func unfoldingUnderTheSpikeLibraryDoesNothing() {
-        let model = ShellModel()
+        let model = makeShell()
         model.tab = .library
         model[path: .library].routes = [.cover(Self.book)]
         model.showsSpike = true
@@ -175,7 +199,7 @@ struct ShellModelTests {
     #endif
 
     @Test func foldingDoesNothing() {
-        let model = ShellModel()
+        let model = makeShell()
         model.tab = .library
         model[path: .library].routes = [.cover(Self.book)]
         model.hingeChanged(.fold)
@@ -184,19 +208,22 @@ struct ShellModelTests {
     }
 
     @Test func linksPushFoldedAndShiftUnfolded() {
-        let model = ShellModel()
-        model.open(.collections, from: PaneContext(tab: .library))
-        model.open(.collection("Classics"), from: PaneContext(tab: .library))
-        #expect(model[path: .library].routes == [.collections, .collection("Classics")])
+        let model = makeShell()
+        model.open(SampleRoutes.collections, from: PaneContext(tab: .library))
+        model.open(SampleRoutes.classics, from: PaneContext(tab: .library))
+        #expect(model[path: .library].routes == [SampleRoutes.collections, SampleRoutes.classics])
         model.open(.cover(Self.book), from: PaneContext(tab: .library, level: 1))
-        #expect(model[path: .library].routes == [.collections, .cover(Self.book)])
+        #expect(model[path: .library].routes == [SampleRoutes.collections, .cover(Self.book)])
     }
 
-    @Test func anEmptyHomeHasNoCompanion() {
-        let model = ShellModel()
-        model.homeIsEmpty = true
-        #expect(model[path: .home].companion == nil)
-        model.homeIsEmpty = false
-        #expect(model[path: .home].companion == .cover(PlaceholderBook.samples[0]))
+    @Test func openingABookPutsItFirstInContinueReading() async {
+        let model = makeShell()
+        await model.library.connectSampleLibrary()
+        #expect(model.library.continueReading.map(\.book.title) == ["Moby-Dick", "Frankenstein"])
+
+        let alice = SampleRoutes.book(3)
+        model.openBook(alice)
+        #expect(model.reading == alice)
+        #expect(model.library.continueReading.map(\.book.title) == ["Alice’s Adventures in Wonderland", "Moby-Dick", "Frankenstein"])
     }
 }

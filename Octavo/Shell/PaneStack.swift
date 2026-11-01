@@ -16,6 +16,9 @@ struct PaneStack<Root: View>: View {
     let tab: ShellTab
     let title: String
     @Binding var path: PanePath
+    /// Behind both panes and the hinge between them, unfolded: white for
+    /// plain screens, grouped grey for inset lists.
+    var background = Color(.systemGroupedBackground)
     @ViewBuilder let root: () -> Root
     @State private var split: PaneSplit?
 
@@ -78,13 +81,15 @@ struct PaneStack<Root: View>: View {
         // panes; the Duo keeps the bar's buttons in the side column, so the
         // panes ignore it and place their titles themselves.
         .ignoresSafeArea(.container, edges: .top)
-        .background(Color(.systemGroupedBackground))
+        .background(background)
         .toolbarTitleDisplayMode(.inline)
     }
 
     /// Where a pane's title starts: level with the large title the system
-    /// draws folded, so a title doesn't jump when the Duo unfolds.
-    private static var titleTop: CGFloat { 28 }
+    /// draws folded, so a title doesn't jump when the Duo unfolds. Measured
+    /// on the simulator (#13): the folded title's ink starts at 37.3 pt, and
+    /// 28 left the pane's 2 pt higher.
+    private static var titleTop: CGFloat { 30 }
 
     /// The navigation bar holds one title, so each pane draws its own.
     private func pane<Content: View>(

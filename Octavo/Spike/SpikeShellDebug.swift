@@ -22,7 +22,7 @@ struct SpikeLibraryOverlay: View {
 }
 
 /// The Library row that opens the spike's screens, for opening books until
-/// the real Library exists (#13).
+/// the reader (#17) does.
 struct SpikeLibrarySection: View {
     @Environment(ShellModel.self) private var shell
 
@@ -30,7 +30,7 @@ struct SpikeLibrarySection: View {
         Section {
             Button("Spike library", systemImage: "hammer") { shell.showsSpike = true }
         } footer: {
-            Text("Debug builds only: the spike’s screens, for opening books until the real Library exists.")
+            Text("Debug builds only: the spike’s screens, for reading books until the reader (#17) exists.")
         }
     }
 }
@@ -38,16 +38,17 @@ struct SpikeLibrarySection: View {
 /// Switches the stand-in states on and off, to look at them.
 struct ShellStatesSection: View {
     @Environment(ShellModel.self) private var shell
+    @Environment(LibraryModel.self) private var library
 
     var body: some View {
         @Bindable var shell = shell
+        @Bindable var library = library
         Section {
-            Picker("Connection", selection: $shell.connectionProblem) {
+            Picker("Connection", selection: $library.connectionProblem) {
                 Text("Fine").tag(ConnectionProblem?.none)
                 Text("Unreachable").tag(ConnectionProblem?.some(.unreachable(server: "BookOrbit")))
                 Text("Signed out").tag(ConnectionProblem?.some(.signedOut(server: "BookOrbit")))
             }
-            Toggle("Empty Home", isOn: $shell.homeIsEmpty)
             Picker("Cover strip", selection: $shell.coverStrip) {
                 Text("Normal").tag(CoverStripMessage?.none)
                 Text("Couldn’t download").tag(CoverStripMessage?.some(.downloadFailed))
