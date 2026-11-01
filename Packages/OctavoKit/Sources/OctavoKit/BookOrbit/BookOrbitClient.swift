@@ -20,11 +20,16 @@ public enum BookOrbitError: Error, Equatable, Sendable {
 /// Servers older than BookOrbit 3.0 only hand out a refresh cookie; the client
 /// lifts that out of `Set-Cookie` and replays it by hand, so it never depends
 /// on a cookie jar.
+///
+/// A refreshed token is saved to `tokenStore` before anything uses it, and
+/// saves happen in order, so a crash or a sign-out can't leave the store
+/// behind. If a save fails, the new credentials stay in memory and the save
+/// is tried again on the next request.
 public actor BookOrbitClient {
     /// The server root, e.g. `http://localhost:3300`.
     public nonisolated let baseURL: URL
 
-    private let session: URLSession
+    private let transport: any HTTPTransport
     private let tokenStore: any BookOrbitTokenStore
     private let deviceLabel: String
     private let requestsNativeCredentials: Bool
@@ -34,10 +39,20 @@ public actor BookOrbitClient {
     private var credentials: BookOrbitCredentials?
     private var credentialsLoaded = false
     private var refreshTask: Task<BookOrbitCredentials, any Error>?
+    /// Saves to `tokenStore`, chained so they land in the order they were made.
+    private var lastSave: Task<Void, any Error>?
+    /// The last save failed; `credentials` is ahead of the store.
+    private var saveFailed = false
+    /// Bumped by sign-in and sign-out, so a refresh that was already running
+    /// can't bring back the session it belonged to.
+    private var sessionGeneration = 0
 
+    /// A client for tests and previews, on its own `ServerTransport` with the
+    /// system's trust rules.
+    ///
     /// - Parameters:
     ///   - deviceLabel: shown in BookOrbit's list of signed-in sessions.
-    ///   - configuration: copied; cookie handling is switched off on the copy.
+    ///   - configuration: for the transport (copied).
     public init(
         baseURL: URL,
         tokenStore: any BookOrbitTokenStore = InMemoryBookOrbitTokenStore(),
@@ -48,9 +63,20 @@ public actor BookOrbitClient {
             baseURL: baseURL,
             tokenStore: tokenStore,
             deviceLabel: deviceLabel,
-            configuration: configuration,
+            transport: ServerTransport(server: baseURL, configuration: configuration),
             requestsNativeCredentials: true
         )
+    }
+
+    /// - Parameter transport: the server's `ServerTransport` (its pin and
+    ///   trust rules).
+    public init(
+        baseURL: URL,
+        tokenStore: any BookOrbitTokenStore,
+        deviceLabel: String = "Octavo",
+        transport: any HTTPTransport
+    ) {
+        self.init(baseURL: baseURL, tokenStore: tokenStore, deviceLabel: deviceLabel, transport: transport, requestsNativeCredentials: true)
     }
 
     /// `requestsNativeCredentials: false` signs in like the web app (refresh
@@ -59,18 +85,14 @@ public actor BookOrbitClient {
         baseURL: URL,
         tokenStore: any BookOrbitTokenStore,
         deviceLabel: String,
-        configuration: URLSessionConfiguration,
+        transport: any HTTPTransport,
         requestsNativeCredentials: Bool
     ) {
         self.baseURL = baseURL
         self.tokenStore = tokenStore
         self.deviceLabel = deviceLabel
         self.requestsNativeCredentials = requestsNativeCredentials
-        let configuration = configuration.copy() as! URLSessionConfiguration
-        configuration.httpCookieAcceptPolicy = .never
-        configuration.httpShouldSetCookies = false
-        configuration.httpCookieStorage = nil
-        session = URLSession(configuration: configuration)
+        self.transport = transport
     }
 
     // MARK: - Auth
@@ -87,12 +109,15 @@ public actor BookOrbitClient {
         try check(response, data)
         let body = try decode(LoginResponse.self, from: data)
         guard let user = body.user else { throw BookOrbitError.invalidResponse }
+        sessionGeneration += 1
         try await store(credentials(from: body, response: response, previous: nil))
         return user
     }
 
-    /// Forgets the stored credentials. Doesn't end the session on the server.
+    /// Forgets the stored credentials, here and in `tokenStore`, and drops a
+    /// refresh that's still running. Doesn't end the session on the server.
     public func signOut() async throws {
+        sessionGeneration += 1
         try await store(nil)
     }
 
@@ -109,24 +134,39 @@ public actor BookOrbitClient {
             clientKind: native ? "native" : nil,
             deviceLabel: native ? deviceLabel : nil
         )
-        let (data, response) = try await session.data(for: jsonRequest("auth/login", method: "POST", body: body))
+        let (data, response) = try await transport.data(for: jsonRequest("auth/login", method: "POST", body: body))
         return (data, try http(response))
     }
 
-    /// Credentials loaded from the store on first use.
+    /// Credentials loaded from the store on first use. Retries a failed save.
     private func currentCredentials() async throws -> BookOrbitCredentials {
         if !credentialsLoaded {
             credentials = try await tokenStore.load()
             credentialsLoaded = true
         }
+        if saveFailed { try? await store(credentials) }
         guard let credentials else { throw BookOrbitError.notSignedIn }
         return credentials
     }
 
+    /// Makes `new` current and saves it, after any earlier save has landed.
+    /// Throws if the save fails; `new` stays current either way.
     private func store(_ new: BookOrbitCredentials?) async throws {
         credentials = new
         credentialsLoaded = true
-        try await tokenStore.save(new)
+        let previous = lastSave
+        let save = Task { [tokenStore] in
+            _ = await previous?.result
+            try await tokenStore.save(new)
+        }
+        lastSave = save
+        do {
+            try await save.value
+            if lastSave == save { saveFailed = false }
+        } catch {
+            if lastSave == save { saveFailed = true }
+            throw error
+        }
     }
 
     /// Fresh credentials after `staleAccessToken` got a 401. Concurrent
@@ -142,8 +182,17 @@ public actor BookOrbitClient {
 
     /// `POST auth/refresh`. A 401 ends the session; other failures (offline,
     /// 5xx) leave the credentials alone.
+    ///
+    /// The server has already retired the old refresh token when the answer
+    /// arrives (it accepts it again for about 30 s), so the new one is saved
+    /// before it's used. If that save fails the refresh still succeeds, with
+    /// the save retried on the next request.
     private func performRefresh() async throws -> BookOrbitCredentials {
+        // Suspension between the answer and the save would lose the session.
+        let activity = ExpiringActivity(reason: "Saving your BookOrbit sign-in")
+        defer { activity.end() }
         let current = try await currentCredentials()
+        let generation = sessionGeneration
         guard let refreshToken = current.refreshToken else {
             try await store(nil)
             throw BookOrbitError.sessionExpired
@@ -156,15 +205,17 @@ public actor BookOrbitClient {
             request = try jsonRequest("auth/refresh", method: "POST", body: [String: String]())
             request.setValue("refresh_token=\(refreshToken)", forHTTPHeaderField: "Cookie")
         }
-        let (data, urlResponse) = try await session.data(for: request)
+        let (data, urlResponse) = try await transport.data(for: request)
         let response = try http(urlResponse)
+        // Signed out or in again meanwhile: this answer belongs to the old session.
+        guard generation == sessionGeneration else { throw BookOrbitError.sessionExpired }
         if response.statusCode == 401 {
             try await store(nil)
             throw BookOrbitError.sessionExpired
         }
         try check(response, data)
         let fresh = credentials(from: try decode(LoginResponse.self, from: data), response: response, previous: current)
-        try await store(fresh)
+        try? await store(fresh)
         return fresh
     }
 
@@ -300,8 +351,8 @@ public actor BookOrbitClient {
     @discardableResult
     public func download(fileID: Int, to destination: URL, progress: (@Sendable (Double) -> Void)? = nil) async throws -> URL {
         let request = URLRequest(url: apiURL("books/files/\(fileID)/serve"))
-        let (temporaryURL, response) = try await authorized(request) { [session] request in
-            let (url, response) = try await session.download(for: request, delegate: progress.map(DownloadProgress.init))
+        let (temporaryURL, response) = try await authorized(request) { [transport] request in
+            let (url, response) = try await transport.download(for: request, delegate: progress.map(DownloadProgress.init))
             // The retry downloads again; drop the 401's body.
             if (response as? HTTPURLResponse)?.statusCode == 401 { try? FileManager.default.removeItem(at: url) }
             return (url, response)
@@ -345,7 +396,7 @@ public actor BookOrbitClient {
 
     /// Sends an authorized request and checks the status.
     private func send(_ request: URLRequest) async throws -> Data {
-        let (data, response) = try await authorized(request) { [session] in try await session.data(for: $0) }
+        let (data, response) = try await authorized(request) { [transport] in try await transport.data(for: $0) }
         try check(response, data)
         return data
     }

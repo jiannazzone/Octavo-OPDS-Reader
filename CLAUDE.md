@@ -36,7 +36,7 @@ cd dev/bookorbit && docker compose up -d && ./seed.sh
 - Drive the fold with **Hinge** (`hinge open|close|half|<deg>`, `sweep`, `posture`, `screenshot <path>`; also the `hinge` skill).
 - Layout: `Octavo/` app target and `OctavoTests/` use folder-synchronized groups (new files need no `project.pbxproj` edit). `Packages/OctavoKit` is a local SwiftPM package for models, sources, sync and API clients. `ReaderWeb/` is a folder reference (paths preserved) holding foliate-js and our bridge.
   - `Octavo/Reader/` is the reader core (`WebView`, `octavo://` scheme handler, hinge → layout). `Octavo/Spike/` holds the spike's throwaway debug screens, the only place for those; delete them when real screens replace them.
-  - `Config/Octavo-Info.plist` (ATS: `NSAllowsLocalNetworking`), `dev/bookorbit/` (local server), `docs/notes/` (engineering notes, indexed in its README).
+  - `Config/Octavo-Info.plist` (ATS: local networking plus home-name and 100.64/10 exceptions, `docs/notes/network-trust.md`), `dev/bookorbit/` (local server), `docs/notes/` (engineering notes, indexed in its README).
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
 - **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask. Show the owner every GitHub issue as a draft before creating it.
 - On GitHub, `main` is protected by the ruleset "Protect main": changes land only through a pull request, and force pushes and branch deletion are blocked, with no bypass (owner included).
@@ -57,6 +57,12 @@ cd dev/bookorbit && docker compose up -d && ./seed.sh
 - **Book scripts never run.** Every `octavo://` response carries a CSP that allows scripts only from `bridge.js` and `foliate-js/`; the book file is sandboxed and `nosniff`; foliate's load hook refuses script items; the bridge accepts messages only from the main `octavo://app` frame; external links are cancelled. Keep every layer when changing the bridge or the scheme handler (`docs/notes/reader-spike.md`).
 - **PDF: PDFKit.**
 - **Comics: native SwiftUI** paging for CBZ/CBR, plus OPDS Page Streaming / BookOrbit `cbz/files/{fileId}/pages` for streamed reading.
+
+### Network trust (#9, D25; `docs/notes/network-trust.md`)
+- Every server request goes through OctavoKit's `ServerTransport` (one per server), never a bare `URLSession`. It checks the address before every request and redirect: plain http only to home and VPN addresses, with standard address spellings only (ATS alone lets `http://16843009/` out). It also applies the server's certificate pin and redirect hygiene.
+- Self-signed HTTPS: an exact-certificate pin per server host and port. A changed certificate asks again, even if iOS would trust it.
+- Secrets live in the Keychain (`ServerCredentials`, `AfterFirstUnlockThisDeviceOnly`), never in saved URLs or logs. Remove server calls `ServerCredentials.removeAll(serverID:)`.
+- Changes here need a security review that Adam signs off before merge.
 
 ### Parsing and OPDS
 - Evaluate **Readium Swift Toolkit (BSD-3)**, specifically the `ReadiumShared`, `ReadiumStreamer` and `ReadiumOPDS` modules (no UI), for OPDS feeds and native metadata/cover extraction. Do **not** use `ReadiumNavigator`. It was evaluated in spike 1c and not chosen; see Rendering above. If Readium is adopted, its non-MIT/BSD/Apache dependencies (CryptoSwift and minizip under zlib-style licenses, SIL OFL fonts) need owner sign-off first.

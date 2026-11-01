@@ -10,11 +10,57 @@
 <dict>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- Plain-http servers on localhost, unqualified names and .local
-		     (the local BookOrbit dev server). Remote http servers are an
-		     owner decision; see docs/notes/sync-spike.md. -->
+		<!--
+		  Plain http and self-signed certificates only for home and VPN
+		  addresses (D25, docs/notes/network-trust.md). ATS is the outer
+		  fence; OctavoKit's HomeNetworkPolicy checks every request inside it
+		  (and catches what ATS misses, like http://16843009/).
+		  NSAllowsLocalNetworking: home-range IP addresses (RFC 1918,
+		  loopback, link-local, IPv6 ULA and link-local), names without dots
+		  and .local.
+		-->
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<!-- RFC 6598 shared address space: Tailscale's addresses. -->
+			<key>100.64.0.0/10</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<!-- Special-use home names. Keep in step with
+			     HomeNetworkPolicy.localSuffixes. -->
+			<key>home.arpa</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>internal</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>lan</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<!-- Tailscale MagicDNS names (WireGuard-encrypted underneath). -->
+			<key>ts.net</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
 </dict>
 </plist>

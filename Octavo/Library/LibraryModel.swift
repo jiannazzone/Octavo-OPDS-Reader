@@ -85,6 +85,11 @@ final class LibraryModel {
     }
 
     func disconnect() {
+        #if DEBUG
+        if server?.id == Self.localBookOrbitID {
+            try? ServerCredentials.removeAll(serverID: Self.localBookOrbitID.rawValue)
+        }
+        #endif
         server = nil
         connection += 1
         serverChanged()
@@ -235,13 +240,23 @@ final class LibraryModel {
     static let localBookOrbitID = LibrarySourceID(rawValue: "debug-local-bookorbit")
 
     /// The local BookOrbit from `dev/bookorbit/README.md`, until first run
-    /// (#12) adds servers. Tokens stay in memory until #9, so every launch
-    /// signs in once (BookOrbit allows 5 a minute).
+    /// (#12) adds servers. Tokens are kept in the Keychain, so it signs in
+    /// (BookOrbit allows 5 a minute) only when there are none or they've
+    /// expired; Disconnect forgets them.
     func connectLocalBookOrbit() async {
         debugConnection = .connecting
-        let client = BookOrbitClient(baseURL: URL(string: "http://localhost:3300")!, deviceLabel: "Octavo (debug)")
+        let client = BookOrbitClient(
+            baseURL: URL(string: "http://localhost:3300")!,
+            tokenStore: KeychainBookOrbitTokenStore(serverID: Self.localBookOrbitID.rawValue),
+            deviceLabel: "Octavo (debug)",
+            transport: ServerTransport(server: URL(string: "http://localhost:3300")!)
+        )
         do {
-            try await client.login(username: "octavo", password: "OctavoDev1")
+            do {
+                _ = try await client.libraries()
+            } catch BookOrbitError.notSignedIn, BookOrbitError.sessionExpired {
+                try await client.login(username: "octavo", password: "OctavoDev1")
+            }
             debugConnection = .idle
             await connect(LibraryServer(
                 id: Self.localBookOrbitID, name: "BookOrbit",

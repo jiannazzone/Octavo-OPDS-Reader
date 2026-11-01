@@ -39,7 +39,7 @@ struct DebugServerSection: View {
         } header: {
             Text("Debug server")
         } footer: {
-            Text("Debug builds only. Tokens stay in memory until #9, so each launch signs in again.")
+            Text("Debug builds only. Tokens are kept in the Keychain; Disconnect forgets them.")
         }
     }
 }
