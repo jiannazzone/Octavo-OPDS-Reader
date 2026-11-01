@@ -37,9 +37,12 @@ final class StubServer: Sendable {
     private let handler: @Sendable (Request) -> Response
     private let log = Mutex<[Request]>([])
 
-    init(_ handler: @escaping @Sendable (Request) -> Response) {
-        let host = "\(UUID().uuidString.lowercased()).stub.test"
-        baseURL = URL(string: "https://\(host)")!
+    /// - Parameters:
+    ///   - scheme: `http` needs a domain that `HomeNetworkPolicy` counts as
+    ///     local (`lan`) and a policy whose resolver knows the host.
+    init(scheme: String = "https", domain: String = "stub.test", _ handler: @escaping @Sendable (Request) -> Response) {
+        let host = "\(UUID().uuidString.lowercased()).\(domain)"
+        baseURL = URL(string: "\(scheme)://\(host)")!
         self.handler = handler
         StubURLProtocol.register(self, host: host)
     }
@@ -97,6 +100,13 @@ final class StubURLProtocol: URLProtocol, @unchecked Sendable {
         )
         let response = server.handle(stubRequest)
         let http = HTTPURLResponse(url: url, statusCode: response.status, httpVersion: "HTTP/1.1", headerFields: response.headers)!
+        if (300..<400).contains(response.status), let location = response.headers["Location"],
+           let target = URL(string: location, relativeTo: url)?.absoluteURL {
+            var redirected = request
+            redirected.url = target
+            client?.urlProtocol(self, wasRedirectedTo: redirected, redirectResponse: http)
+            return
+        }
         client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: response.body)
         client?.urlProtocolDidFinishLoading(self)

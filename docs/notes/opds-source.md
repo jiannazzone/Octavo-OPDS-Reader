@@ -96,15 +96,13 @@ side; Adam is the design owner and leaves these calls to us.
   link to another host keeps `{key}` and is refused. Checked on the
   simulator: after opening a Kavita book, the key appears nowhere in the
   app's data; `RecentBooks.json` holds `{key}`.
-- **Networking goes through #9's types**, mirrored in
-  `OPDS/NetworkStandIns.swift` until #9 merges (whichever merges second
-  deletes that file and keeps #9's). `transport` is required, with no
-  `URLSession` shortcut in OctavoKit: in the app it's #9's
-  `ServerTransport` for that server, one per source. Tests use a test-only
-  `SessionTransport`, and the debug rows a DEBUG-only
-  `DebugSessionTransport`, both to be swapped for `ServerTransport` (tests:
-  with the stub protocol in `configuration.protocolClasses` and
-  `HomeNetworkPolicy.testing`). The transport checks every address,
+- **Networking goes through #9's types** (wired when #9 merged, after
+  this): `transport` is required, with no `URLSession` shortcut in
+  OctavoKit. In the app it's #9's `ServerTransport` for that server, one per
+  source. The tests use `ServerTransport` too (with the stub protocol in
+  `configuration.protocolClasses`), and the debug rows pass
+  `ServerTransport(server:passwords:authScheme:)` with the password in the
+  Keychain. The transport checks every address,
   pins certificates, refuses https → http and `user:pass@` URLs, and strips
   `Authorization` on redirects that change origin, so the OPDS code doesn't.
   Its `NetworkTrustError`s pass through like `URLError`; a `URLError` loses

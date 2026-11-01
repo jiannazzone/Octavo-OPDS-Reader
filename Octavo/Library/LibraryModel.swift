@@ -85,6 +85,12 @@ final class LibraryModel {
     }
 
     func disconnect() {
+        #if DEBUG
+        // The debug servers' Keychain items, like Remove server will (#12).
+        if let id = server?.id, id.rawValue.hasPrefix("debug-local-") {
+            try? ServerCredentials.removeAll(serverID: id.rawValue)
+        }
+        #endif
         server = nil
         connection += 1
         serverChanged()
@@ -237,13 +243,23 @@ final class LibraryModel {
     static let localBookOrbitID = LibrarySourceID(rawValue: "debug-local-bookorbit")
 
     /// The local BookOrbit from `dev/bookorbit/README.md`, until first run
-    /// (#12) adds servers. Tokens stay in memory until #9, so every launch
-    /// signs in once (BookOrbit allows 5 a minute).
+    /// (#12) adds servers. Tokens are kept in the Keychain, so it signs in
+    /// (BookOrbit allows 5 a minute) only when there are none or they've
+    /// expired; Disconnect forgets them.
     func connectLocalBookOrbit() async {
         debugConnection = .connecting
-        let client = BookOrbitClient(baseURL: URL(string: "http://localhost:3300")!, deviceLabel: "Octavo (debug)")
+        let client = BookOrbitClient(
+            baseURL: URL(string: "http://localhost:3300")!,
+            tokenStore: KeychainBookOrbitTokenStore(serverID: Self.localBookOrbitID.rawValue),
+            deviceLabel: "Octavo (debug)",
+            transport: ServerTransport(server: URL(string: "http://localhost:3300")!)
+        )
         do {
-            try await client.login(username: "octavo", password: "OctavoDev1")
+            do {
+                _ = try await client.libraries()
+            } catch BookOrbitError.notSignedIn, BookOrbitError.sessionExpired {
+                try await client.login(username: "octavo", password: "OctavoDev1")
+            }
             debugConnection = .idle
             await connect(LibraryServer(
                 id: Self.localBookOrbitID, name: "BookOrbit",
@@ -315,7 +331,7 @@ final class LibraryModel {
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.httpBody = try JSONEncoder().encode(["username": "octavo", "password": "OctavoDev1"])
-                let (data, _) = try await URLSession(configuration: .ephemeral).data(for: request)
+                let (data, _) = try await ServerTransport(server: base).data(for: request)
                 struct Login: Decodable { var apiKey: String }
                 return base.appending(path: "api/opds/\(try JSONDecoder().decode(Login.self, from: data).apiKey)")
             }
@@ -332,12 +348,16 @@ final class LibraryModel {
             return
         }
         let secret = OPDSURLSecret.detect(in: catalog)
+        // The password goes to the Keychain, as first run (#12) will do.
+        let passwords = KeychainPasswordStore(serverID: server.sourceID.rawValue)
+        if let credentials = server.credentials { try? await passwords.save(credentials) }
+        // All four local servers ask for Basic (dev/opds/README.md).
+        let scheme: HTTPAuthScheme? = server.credentials == nil ? nil : .basic
         let source = OPDSSource(
             catalogURL: catalog,
-            transport: DebugSessionTransport(),
-            credentials: InMemoryPasswordStore(server.credentials),
-            // All four local servers ask for Basic (dev/opds/README.md).
-            authScheme: server.credentials == nil ? nil : .basic,
+            transport: ServerTransport(server: catalog, passwords: passwords, authScheme: scheme),
+            credentials: passwords,
+            authScheme: scheme,
             secret: secret
         )
         await connect(LibraryServer(id: server.sourceID, name: server.name, detail: server.detail, source: source))
@@ -353,23 +373,6 @@ final class LibraryModel {
     }
     #endif
 }
-
-#if DEBUG
-/// Sends the debug OPDS servers' requests until #9's `ServerTransport` is
-/// wired in (whichever of #8 and #9 merges second swaps it). It has none of
-/// #9's trust rules; the debug servers are on this Mac.
-private struct DebugSessionTransport: HTTPTransport {
-    private let session = URLSession(configuration: .ephemeral)
-
-    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        try await session.data(for: request, delegate: nil)
-    }
-
-    func download(for request: URLRequest, delegate: (any URLSessionTaskDelegate)?) async throws -> (URL, URLResponse) {
-        try await session.download(for: request, delegate: delegate)
-    }
-}
-#endif
 
 private struct FeedKey: Hashable {
     var source: LibrarySourceID
