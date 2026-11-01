@@ -100,3 +100,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## EB Garamond (logo lettering)
+
+- Source: https://github.com/octaviopardo/EBGaramond12 (as distributed by Google Fonts), styles Medium and Medium Italic
+- Location: the "8vo" in the app icon (`Octavo/AppIcon.icon`) and in `docs/design/logo/glyph-8vo.svg`, drawn as outlines. No font file is bundled.
+- License: SIL Open Font License 1.1 (https://openfontlicense.org). Copyright 2017 The EB Garamond Project Authors.
+- The OFL allows using the font in artwork such as logos. This entry is a credit, not a requirement of the license.

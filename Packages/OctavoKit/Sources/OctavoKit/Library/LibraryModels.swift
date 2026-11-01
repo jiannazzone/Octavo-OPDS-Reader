@@ -57,19 +57,24 @@ public struct LibraryRoot: Hashable, Codable, Sendable {
     /// The books the server says you're reading, most recently read first,
     /// for Home. `nil` if the source doesn't track reading (OPDS).
     public var continueReading: LibraryLink?
+    /// The chip the Library opens on. `nil`: the first. OPDS: the chip that
+    /// lists the whole library, not an empty "Keep Reading".
+    public var startChip: LibraryLink?
 
     public init(
         title: String? = nil,
         chips: [LibraryEntry],
         search: LibrarySearchSupport,
         recentlyAdded: LibraryLink? = nil,
-        continueReading: LibraryLink? = nil
+        continueReading: LibraryLink? = nil,
+        startChip: LibraryLink? = nil
     ) {
         self.title = title
         self.chips = chips
         self.search = search
         self.recentlyAdded = recentlyAdded
         self.continueReading = continueReading
+        self.startChip = startChip
     }
 }
 
