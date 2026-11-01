@@ -51,6 +51,8 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ### Connecting (approved 2026-10-31)
 
 6. **Adding the server: pick the type first.** "BookOrbit" or "OPDS catalog" (Calibre-Web, COPS, Kavita, Komga…), then that type's form (address, sign-in), then where reading progress syncs (this BookOrbit server, iCloud, KOReader sync, or don't sync; v1 offers only BookOrbit, see v1 scope). "Import from Files" sits on the same first screen.
+   - **OPDS catalog:** enter the feed address (examples under the field: Calibre-Web `…/opds`, COPS `…/feed.php`, Komga `…/opds/v1.2/catalog`, Kavita: paste the OPDS link from its settings) and tap Connect. The account fields appear only if the server asks for a password ("Found “Calibre-Web”. It asks for a sign-in."); otherwise you land in the Library.
+   - **The sync step is skipped for OPDS servers in v1** (only BookOrbit syncs); progress stays on the iPhone. The step returns once iCloud or KOReader sync exists, with iCloud preselected. A BookOrbit server shows it with itself preselected.
    - **No skip on first launch:** the first screen stays until a server is added or a file imported.
    - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
 
@@ -110,7 +112,7 @@ The goal for v1: read your server's books well on the Duo.
 |---|---|
 | Add your books (pick BookOrbit or OPDS, or import) | Designed (frame 05) |
 | Sign in to BookOrbit | Designed (frame 06) |
-| Add an OPDS server (address, optional sign-in) | Not designed |
+| Add an OPDS server (address, optional sign-in) | Designed (frames 27, 28) |
 | Where reading progress syncs | Sketched in the brainstorm |
 | Home, folded and unfolded | Folded designed (frame 01) |
 | Library, folded and unfolded, with chips | Designed (frames 02, 04) |
@@ -133,7 +135,7 @@ Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX
 
 - **Pages by area:** Cover, 1 · Setup, 2 · Home and Library, 3 · Book, 4 · Reader, 5 · Search, 6 · Settings and states (states done, Settings to do), Components, Parked. Sections inside each page group the frames (Folded / Unfolded, or Reading / Panels).
 - **Frame names:** `Area / NN Screen · posture`, for example `Reader / 07 Reading · folded`. The numbers below stay stable.
-- **Prototype links** work within a page (Figma can't link across pages): Setup (BookOrbit row ↔ sign-in), Home and Library (Home ↔ Library tabs), Book (cover strip ↔ details, tap or drag), Reader (page ↔ controls, controls → Text and theme / Contents / Search in book and back), Search (field → results, clear → empty). Each page has a flow starting point; links are invisible hotspots named `Hotspot → …`.
+- **Prototype links** work within a page (Figma can't link across pages): Setup (BookOrbit row ↔ sign-in; OPDS row → address → sign-in), Home and Library (Home ↔ Library tabs), Book (cover strip ↔ details, tap or drag), Reader (page ↔ controls, controls → Text and theme / Contents / Search in book and back), Search (field → results, clear → empty). Each page has a flow starting point; links are invisible hotspots named `Hotspot → …`.
 
 | Frame | Shows |
 |---|---|
@@ -163,6 +165,8 @@ Figma: [Octavo-UX](https://www.figma.com/design/ElJJ7OtF8LOuX6dc68qZ23/Octavo-UX
 | 24 Offline, not downloaded · folded | Cover strip: Needs a connection to download |
 | 25 Nothing in progress · folded | Empty Home: invitation to the Library |
 | 26 Sign-in failed · folded | Error under the fields |
+| 27 OPDS catalog · folded | Feed address with examples, Connect |
+| 28 OPDS sign-in (if asked) · folded | Shown only when the server asks for a password |
 
 The reader frames (second row) set the book text in Charis SIL as a stand-in for the book's own font; Figma has none of the iOS book fonts.
 
@@ -176,7 +180,6 @@ What the kit showed:
 ## Open questions
 
 - **Settings contents.** Too early to pin down. Working list from the brainstorm (not approved): Server (edit, sign out, replace, progress sync), Sync accounts (iCloud, KOReader sync), Reading defaults, iPhone Duo, Downloads and storage, About.
-- **The sync step for an OPDS server in v1.** With only BookOrbit sync in v1, an OPDS server has nothing to choose. Proposed (not approved): skip the step for OPDS servers until iCloud or KOReader sync exists, then preselect iCloud. A BookOrbit server preselects itself.
 - **Plain `http://` servers on a LAN IP or a remote host.** `NSAllowsLocalNetworking` covers `localhost` and `.local` names only (`docs/notes/bookorbit-api.md`). Many self-hosted servers are plain http on a LAN IP.
 - **Reaching the controls in book mode.** Taps on the pages turn them, so controls need another way in. Proposed (not approved): tap the side column, which sits outside both pages.
 - **Book mode's angle range.** Roughly 60–150°; tune on a real device.
