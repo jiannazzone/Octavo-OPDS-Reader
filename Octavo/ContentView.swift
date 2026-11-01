@@ -1,10 +1,18 @@
 import SwiftUI
 
-/// Root. During the spike this shows the throwaway screens in `Spike/`;
-/// real UI comes after the spike, with the owner's approval.
+/// Root: the app shell. In debug builds, launching with `-spike 1` shows the
+/// spike's screens instead, for the tools in `docs/notes/` that drive them.
 struct ContentView: View {
     var body: some View {
-        SpikeLibraryView()
+        #if DEBUG
+        if UserDefaults.standard.bool(forKey: "spike") {
+            SpikeLibraryView()
+        } else {
+            AppShell()
+        }
+        #else
+        AppShell()
+        #endif
     }
 }
 

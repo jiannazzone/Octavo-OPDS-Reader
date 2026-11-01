@@ -22,3 +22,7 @@ v1 is built around one library server (`docs/design/direction.md`). Explored in 
 - **A merged library across servers** was explored and dropped as too complicated: OPDS can't be queried, so it needs a local catalog index (crawling every feed, hours for public catalogs like Project Gutenberg, no change detection), metadata reconciliation, deduplication, and per-server "Show in Library" switches.
 - If both servers hold the same book, show both covers labelled with their server rather than merging: positions (CFIs) belong to a file, and OPDS gives no way to tell editions or translations apart.
 - Public catalogs (Project Gutenberg, Standard Ebooks) as browse-only feeds, separate from your library server.
+
+## Shifting panes one at a time (parked 2026-11-01)
+
+Unfolded, opening a screen from the right pane shifts both panes one level along (decision 23). The shell (#6) uses the system's push slide for that: the whole pair slides in. A closer match to "shift" would slide only one pane: the right pane moves over to the left and the new screen slides in on the right, and Back does the reverse. Adam judges the system slide on screen first; this needs a custom transition if it's wanted.

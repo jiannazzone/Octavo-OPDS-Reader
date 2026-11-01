@@ -10,6 +10,7 @@ Step 1 of #6 (app shell). Written 2026-10-31 on 'Octavo Shell Duo' (185ADEDA-2C8
 - **Next to side-column controls (D7):** works. Toolbar items go into the column under the status bar (Back in its own glass circle, the rest in one glass group), the tab bar stays at the bottom. Folded, Back + 4 controls + 4 tabs fit in the 678 pt column with little room to spare. (The reader frames have no tab bar, so this matters for tab screens with buttons, such as Library's filter or the cover's Back and More.)
 - **The system doesn't split content at the hinge.** A `List` unfolded or half-open runs straight across the hinge. `NavigationSplitView` doesn't split at it either (its sidebar is a fixed 320 pt). The shell has to do the two panes itself.
 - **How the shell should split:** one `NavigationStack` per tab whose unfolded screens are *pairs of panes*, left and right of the division region. Both panes' toolbar items and the system Back button then land in the column, as in the Figma frames. Two side-by-side `NavigationStack`s don't: only the right one's toolbar reaches the column; the left one gets its own top bar.
+- **Don't present modally on an unfold.** A `fullScreenCover` presented when the hinge reports the unfold stays laid out for the outer display, on its side (§6). The shell shows the reader as a layer over the tabs instead.
 
 ## 1. Tab bar placement
 
@@ -62,7 +63,13 @@ Also seen: with `.searchable` inside the Search tab's `NavigationStack`, no sear
 | Two `NavigationStack`s in an `HStack`, split at the division region | Splits at the hinge. The right stack's toolbar (Back, More) goes to the column; the left stack's (Filter) sits in its own top bar and pushes its large title down. | `6-two-stacks-unfolded-half-open.png` |
 | **One `NavigationStack`; each screen is a pair of panes** split at the division region, each pane with its own large title drawn as content | Splits at the hinge. Both panes' toolbar items share one glass group in the column; on a pushed pair the system Back button appears above them. | `7-pane-pairs-root-pushed.png` |
 
-The third matches the Figma frames (04, 33, 37, 38: titles in both panes, the filter button in the column, nothing on the hinge), keeps the system Back button and swipe-back, and works the same flat and half-open. The shell uses it. One detail to sort out while building: on the pushed pair the left pane's list starts about 35 pt lower than the right one's.
+The third matches the Figma frames (04, 33, 37, 38: titles in both panes, the filter button in the column, nothing on the hinge), keeps the system Back button and swipe-back, and works the same flat and half-open. The shell uses it (`Octavo/Shell/PaneStack.swift`). Once Back appears the bar gets taller and pushes the panes down about 35 pt, so the pairs ignore the top safe area and place their titles themselves, level with the folded large title.
+
+## 6. Presenting during an unfold (found while building the shell)
+
+The shell first showed the reader with `fullScreenCover`. Unfolding on a cover opens the book, and the hinge reports the unfold about 200 ms before the scene moves to the inner display (`duo-spreads.md` §1). A cover presented in that window stays laid out for the outer display: on the inner display its content is turned on its side (`duo-tabbar/8-full-screen-cover-after-unfold.png`: the stand-in reader's text runs top to bottom). The spike's handoff pushed the reader onto a `NavigationStack` instead and never hit this.
+
+The shell now shows the reader as a layer over the tabs in the same view hierarchy, which resizes with the scene like everything else. For #17: keep the reader in the hierarchy (a layer or a push), or wait for the scene's new size before presenting anything modal on a fold.
 
 ## Reproducing
 
