@@ -86,6 +86,13 @@ public struct IPAddress: Hashable, Sendable, CustomStringConvertible {
             || (b[0] == 0xfe && b[1] & 0xc0 == 0x80)             // fe80::/10
     }
 
+    /// 0.0.0.0/8 or `::`: "this host" to the connection layer (macOS and iOS
+    /// connect 0.0.0.0 to the device itself), so treated as local.
+    public var isUnspecified: Bool {
+        if let mapped = mappedIPv4 { return mapped.isUnspecified }
+        return bytes.count == 4 ? bytes[0] == 0 : bytes.allSatisfy { $0 == 0 }
+    }
+
     /// In 100.64.0.0/10 (RFC 6598): Tailscale's addresses, but also the
     /// shared space mobile carriers and some ISPs number their customers in.
     public var isSharedAddressSpace: Bool {

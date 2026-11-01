@@ -225,8 +225,35 @@ struct HomeNetworkPolicyTests {
         #expect(HomeNetworkPolicy.isLocalAddress(URL(string: "https://router/")!))
         #expect(HomeNetworkPolicy.isLocalAddress(URL(string: "https://nas.local:5001/")!))
         #expect(HomeNetworkPolicy.isLocalAddress(URL(string: "http://[::1]/")!))
+        #expect(HomeNetworkPolicy.isLocalAddress(URL(string: "https://0.0.0.0:8443/")!))   // the device itself
+        #expect(HomeNetworkPolicy.isLocalAddress(URL(string: "https://[::]/")!))
         #expect(!HomeNetworkPolicy.isLocalAddress(URL(string: "https://books.example.com/")!))
         #expect(!HomeNetworkPolicy.isLocalAddress(URL(string: "https://8.8.8.8/")!))
+    }
+
+    /// After the fact, from the task's metrics: where the request really went.
+    @Test func verifiesWhereItActuallyConnected() {
+        let policy = HomeNetworkPolicy.testing(resolver, tunnel: false)
+        let http = URL(string: "http://nas.lan/opds")!
+        func verify(_ url: URL, _ remote: String?, proxy: Bool = false, internet: Bool = false) -> NetworkTrustError? {
+            policy.verify(url, connectedTo: remote, throughProxy: proxy, fromInternetServer: internet)
+        }
+        #expect(verify(http, "192.168.1.5") == nil)
+        #expect(verify(http, "fe80::1%en0") == nil)
+        #expect(verify(http, "2603:7001:f100:669::5") == nil)   // on this network
+        #expect(verify(http, nil) == nil)                       // not known (a cache, a stub)
+        // DNS changed after the check: refuse the response.
+        #expect(verify(http, "203.0.113.9") == .insecureAddress(host: "nas.lan", reason: .internetAddress("203.0.113.9")))
+        #expect(verify(http, "100.101.102.103") == .insecureAddress(host: "nas.lan", reason: .internetAddress("100.101.102.103")))
+        #expect(verify(http, "64:ff9b::c0a8:105") != nil)       // out through the carrier's NAT64
+        #expect(verify(http, "192.168.1.5", proxy: true) == .insecureAddress(host: "nas.lan", reason: .throughProxy))
+
+        let cover = URL(string: "https://rebind.example.com/cover.jpg")!
+        #expect(verify(cover, "203.0.113.9", internet: true) == nil)
+        #expect(verify(cover, "192.168.1.1", internet: true) == .insecureAddress(host: "rebind.example.com", reason: .localAddressFromInternetServer))
+        #expect(verify(cover, "0.0.0.0", internet: true) != nil)
+        #expect(verify(cover, "192.168.1.1", internet: false) == nil)
+        #expect(verify(cover, "203.0.113.9", proxy: true) == nil)   // https through a proxy is still TLS to the server
     }
 
     @Test func unknownNamesCantBeReached() async {

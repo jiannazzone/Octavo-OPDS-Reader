@@ -80,9 +80,29 @@ public struct HomeNetworkPolicy: Sendable {
     public static func isLocalAddress(_ url: URL) -> Bool {
         guard let target = try? Target(url) else { return false }
         switch target.address {
-        case .ip(let address): return address.isHomeRange
+        case .ip(let address): return address.isHomeRange || address.isUnspecified
         case .name(let name): return isLocalName(name)
         }
+    }
+
+    /// After the fact: what a request to `url` was actually connected to, from
+    /// the task's metrics. `nil` if that's fine. Catches DNS answers that
+    /// changed after `check` and proxies it couldn't see; it can't unsend the
+    /// request, but the response is refused.
+    /// - Parameter fromInternetServer: the transport's server isn't local, so
+    ///   home addresses are off limits too.
+    func verify(_ url: URL, connectedTo remote: String?, throughProxy: Bool, fromInternetServer: Bool) -> NetworkTrustError? {
+        let host = url.host(percentEncoded: true) ?? ""
+        let plainHTTP = url.scheme?.lowercased() == "http"
+        if plainHTTP, throughProxy { return .insecureAddress(host: host, reason: .throughProxy) }
+        guard let remote, let address = IPAddress(literal: remote) else { return nil }
+        if plainHTTP, !isHome(address, localNetworks(), onThisNetwork: true) {
+            return .insecureAddress(host: host, reason: .internetAddress(address.description))
+        }
+        if fromInternetServer, address.isHomeRange || address.isUnspecified {
+            return .insecureAddress(host: host, reason: .localAddressFromInternetServer)
+        }
+        return nil
     }
 
     /// - Parameter onThisNetwork: also count a global IPv6 address on the

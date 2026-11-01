@@ -84,13 +84,20 @@ public final class ServerTransport: HTTPTransport {
         guard let url = request.url else { throw URLError(.badURL) }
         try await rules.check(url)
         let guardian = TaskGuard(rules: rules, inner: delegate)
+        let result: Result
         do {
-            return try await transfer(request, guardian)
+            result = try await transfer(request, guardian)
         } catch {
             // The guard cancelled the task; say why instead of "cancelled".
             if let refusal = guardian.refusal { throw refusal }
             throw error
         }
+        // The metrics showed a connection the checks wouldn't have allowed.
+        if let refusal = guardian.refusal {
+            if let file = result as? (URL, URLResponse) { try? FileManager.default.removeItem(at: file.0) }
+            throw refusal
+        }
+        return result
     }
 }
 
@@ -100,7 +107,7 @@ struct TrustRules: Sendable {
     let pin: CertificatePin?
     let passwords: (any PasswordStore)?
     private let origin: Origin?
-    private let serverIsLocal: Bool
+    let serverIsLocal: Bool
 
     init(server: URL, pin: CertificatePin?, passwords: (any PasswordStore)?, policy: HomeNetworkPolicy) {
         self.policy = policy
@@ -223,6 +230,20 @@ final class TaskGuard: NSObject, URLSessionTaskDelegate, Sendable {
         if trustedBySystem { return (.performDefaultHandling, nil) }
         refuse(.untrustedCertificate(CertificateSummary(leaf, host: space.host, port: space.port)))
         return (.cancelAuthenticationChallenge, nil)
+    }
+
+    // MARK: Where it actually connected
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        for transaction in metrics.transactionMetrics where transaction.resourceFetchType == .networkLoad {
+            guard let url = transaction.request.url else { continue }
+            if let refusal = rules.policy.verify(url, connectedTo: transaction.remoteAddress,
+                                                 throughProxy: transaction.isProxyConnection,
+                                                 fromInternetServer: !rules.serverIsLocal) {
+                refuse(refusal)
+            }
+        }
+        inner?.urlSession?(session, task: task, didFinishCollecting: metrics)
     }
 
     // MARK: Redirects

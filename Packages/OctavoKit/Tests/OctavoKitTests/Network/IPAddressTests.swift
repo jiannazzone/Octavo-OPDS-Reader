@@ -93,6 +93,15 @@ struct IPAddressTests {
         #expect(try !#require(IPAddress(literal: literal)).isHomeRange)
     }
 
+    @Test func unspecified() throws {
+        for literal in ["0.0.0.0", "0.1.2.3", "::", "::ffff:0.0.0.0"] {
+            #expect(try #require(IPAddress(literal: literal)).isUnspecified, "\(literal)")
+        }
+        for literal in ["1.0.0.0", "::1", "10.0.0.0"] {
+            #expect(try !#require(IPAddress(literal: literal)).isUnspecified, "\(literal)")
+        }
+    }
+
     @Test func prefixes() throws {
         let home = NetworkPrefix(address: try #require(IPAddress(literal: "2603:7001:f100:669:c5d:569:60af:96b3")), length: 64)
         #expect(home.contains(try #require(IPAddress(literal: "2603:7001:f100:669::1"))))
