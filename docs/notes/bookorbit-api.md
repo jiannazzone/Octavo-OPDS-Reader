@@ -44,6 +44,7 @@ Checked live against v3.6.0, plus BookOrbit's request DTOs for parameter names (
   - `GET authors`: `page, size ≤ 100, q, sort (relevance|name|sortName|bookCount|lastAddedAt|lastEnrichedAt), order, libraryId, …`. Items: `{id, name, sortName, bookCount, coverBookId, imageUrl}`.
   - `GET authors/{id}/books`: `page, size ≤ 100, sort (title|publishedYear|addedAt), order, libraryId, collapseSeries`. Default `addedAt desc`.
   - `GET search`: `q` (2–200 characters), `limit` (1–10, default 5), `libraryId`. Returns `{query, books, authors, series}`, each `{items: [{item, matchedField, matchedText}], total}`.
+- **Continue reading (#13):** `GET dashboard/scrollers/continue-reading?limit=N` returns `{books: [book], total}`, the list BookOrbit's own home shows, most recently read first. Items are ordinary list books plus `readStatus {status, source, startedAt, finishedAt, updatedAt}`; `readStatus.updatedAt` gives the order. Not paged. Swagger marks `smartScopeId` required, but the call works without it. `dashboard/widgets/currently-reading` lists the same books in a different shape.
 - **Lists that don't validate the query:** `GET collections/{id}/books` (`page, size, q, collapseSeries`) and `GET smart-scopes/{id}/books` (`page, size, q`). `GET collections` and `GET smart-scopes` return plain arrays; either can hold `mediaType: "podcasts"` entries.
 - **Shapes to decode tolerantly:**
   - `seriesIndex` is a **string** in 3.6 (`"1"`, `"2.5"`), in lists, in `seriesMemberships` and in the detail.

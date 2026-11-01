@@ -33,3 +33,7 @@ On the cover page (#14) the side column has no backing of its own: the system's 
 
 - iOS 26+ has `tabBarMinimizeBehavior(.onScrollDown)`, which minimizes the tab bar while content scrolls. The cover doesn't scroll, so it would never trigger there. Whether it works in the Duo's side column at all is unchecked.
 - Hiding the tab bar on the cover (`toolbarVisibility(.hidden, for: .tabBar)`) would change decision 4 ("the tab column stays visible over the cover"), and it's a shell-wide behaviour.
+
+## The Library's filter button (parked 2026-11-01)
+
+Frame 02 puts a filter button in the side column over the Library, but no decision says what it offers, so #13 leaves it out. Candidates: sort the All grid (Title, Author, Recently added; BookOrbit supports all three, while OPDS feeds keep their own order, so the button would hide there), and later filters such as Unread, In progress and Finished (needs BookOrbit's read status in OctavoKit). Design it before building.

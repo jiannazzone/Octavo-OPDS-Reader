@@ -88,10 +88,12 @@ struct BookTitleCover: View {
     }
 }
 
+#if DEBUG
 #Preview("Cover page") {
     let shell = ShellModel()
     NavigationStack {
-        BookCoverPage(book: PlaceholderBook.samples[0].libraryBook, source: SampleLibrarySource())
+        BookCoverPage(book: SampleLibrarySource.books[0], source: SampleLibrarySource())
     }
     .environment(shell)
 }
+#endif

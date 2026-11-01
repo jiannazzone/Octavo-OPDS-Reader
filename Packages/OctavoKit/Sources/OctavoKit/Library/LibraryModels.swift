@@ -54,12 +54,22 @@ public struct LibraryRoot: Hashable, Codable, Sendable {
     public var search: LibrarySearchSupport
     /// Newest books first, for Home. `nil` if the source has no such list.
     public var recentlyAdded: LibraryLink?
+    /// The books the server says you're reading, most recently read first,
+    /// for Home. `nil` if the source doesn't track reading (OPDS).
+    public var continueReading: LibraryLink?
 
-    public init(title: String? = nil, chips: [LibraryEntry], search: LibrarySearchSupport, recentlyAdded: LibraryLink? = nil) {
+    public init(
+        title: String? = nil,
+        chips: [LibraryEntry],
+        search: LibrarySearchSupport,
+        recentlyAdded: LibraryLink? = nil,
+        continueReading: LibraryLink? = nil
+    ) {
         self.title = title
         self.chips = chips
         self.search = search
         self.recentlyAdded = recentlyAdded
+        self.continueReading = continueReading
     }
 }
 
@@ -151,6 +161,9 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
     /// The server's progress through the book, 0...1, for lists. `nil` if it
     /// doesn't track one. The reader's own position comes from `ProgressSync`.
     public var progress: Double?
+    /// When the server last saw the book read, for ordering Continue
+    /// reading. `nil` if it doesn't say.
+    public var lastReadAt: Date?
 
     public init(
         id: LibraryBookID,
@@ -159,7 +172,8 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         series: LibrarySeriesPosition? = nil,
         cover: LibraryCover? = nil,
         files: [LibraryFile] = [],
-        progress: Double? = nil
+        progress: Double? = nil,
+        lastReadAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -168,6 +182,7 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         self.cover = cover
         self.files = files
         self.progress = progress
+        self.lastReadAt = lastReadAt
     }
 
     /// The file the server marks primary, else the first one.

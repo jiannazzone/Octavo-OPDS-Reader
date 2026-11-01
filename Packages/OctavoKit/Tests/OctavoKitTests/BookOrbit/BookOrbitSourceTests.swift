@@ -22,7 +22,7 @@ private func page(_ items: String..., total: Int, page: Int = 0, size: Int = 2) 
 
 struct BookOrbitRouteTests {
     @Test(arguments: [
-        BookOrbitRoute.books(page: 0), .recent(page: 3), .collections, .collection(id: 1, page: 2), .smartScope(id: 9, page: 0),
+        BookOrbitRoute.books(page: 0), .recent(page: 3), .continueReading, .collections, .collection(id: 1, page: 2), .smartScope(id: 9, page: 0),
         .seriesList(page: 1), .series(id: 3, page: 0), .authors(page: 4), .author(id: 5, page: 1),
         .search(query: "pride", page: 0), .search(query: "Tom & Jerry = fun+ 100%?#/", page: 2), .search(query: "Brontë", page: 0),
     ])
@@ -53,6 +53,7 @@ struct BookOrbitSourceTests {
         #expect(root.chips.map(\.link) == [link(.books(page: 0)), link(.collections), link(.seriesList(page: 0)), link(.authors(page: 0))])
         #expect(root.search == .booksSeriesAndAuthors)
         #expect(root.recentlyAdded == link(.recent(page: 0)))
+        #expect(root.continueReading == link(.continueReading))
         #expect(server.requests.isEmpty)
     }
 
@@ -86,6 +87,23 @@ struct BookOrbitSourceTests {
         let server = StubServer { _ in .json(201, #"{"items":[\#(alice)],"total":1,"page":0,"size":2}"#) }
         _ = try await source(server).feed(link(.recent(page: 0)))
         #expect(server.requests.first?.json?["sort"] as? [[String: String]] == [["field": "addedAt", "dir": "desc"]])
+    }
+
+    @Test func continueReadingIsBookOrbitsOwnList() async throws {
+        let reading = #"{"id":4,"title":"Pride and Prejudice","authors":["Jane Austen"],"files":[{"id":4,"format":"epub","role":"primary"}],"readingProgress":2.5,"readStatus":{"status":"reading","source":"auto","startedAt":"2026-10-31T00:00:00.000Z","finishedAt":null,"updatedAt":"2026-11-01T14:08:50.887Z"}}"#
+        let server = StubServer { _ in .json(#"{"books":[\#(reading),\#(frankenstein)],"total":2}"#) }
+
+        let feed = try await source(server).feed(link(.continueReading))
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "GET")
+        #expect(request.path == "/api/v1/dashboard/scrollers/continue-reading")
+        #expect(request.query == ["limit": "20"])
+        #expect(feed.books.map(\.title) == ["Pride and Prejudice", "Frankenstein"])
+        #expect(feed.books[0].progress == 0.025)
+        #expect(feed.books[0].lastReadAt == Date(timeIntervalSinceReferenceDate: 815_234_930.887))
+        #expect(feed.books[1].lastReadAt == nil)
+        #expect(feed.next == nil)
     }
 
     @Test func mapsBooksForTheGrid() async throws {

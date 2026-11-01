@@ -36,6 +36,7 @@ struct AppShell: View {
             model.hingeChanged(HingeTransition(from: old, to: new))
         }
         .environment(model)
+        .environment(model.library)
     }
 
     private var isCovered: Bool {
@@ -49,10 +50,12 @@ struct AppShell: View {
     private var tabs: some View {
         TabView(selection: $model.tab) {
             Tab("Home", systemImage: "house", value: .home) {
-                PaneStack(tab: .home, title: "Home", path: $model[path: .home]) { HomePlaceholder() }
+                PaneStack(tab: .home, title: "Home", path: $model[path: .home], background: Color(.systemBackground)) { HomeView() }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                PaneStack(tab: .library, title: "Library", path: $model[path: .library]) { LibraryPlaceholder() }
+                PaneStack(tab: .library, title: "Library", path: $model[path: .library], background: Color(.systemBackground)) {
+                    LibraryView()
+                }
             }
             Tab("Settings", systemImage: "gearshape", value: .settings) {
                 PaneStack(tab: .settings, title: "Settings", path: $model[path: .settings]) { SettingsPlaceholder() }

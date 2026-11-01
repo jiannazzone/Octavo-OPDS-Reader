@@ -10,50 +10,51 @@ import OctavoKit
 final class ShellModel {
     var tab: ShellTab = .home
     // One property per tab, so navigating in one tab doesn't redraw the others.
-    private var homePath = PanePath(companion: .cover(PlaceholderBook.samples[0]))
-    private var libraryPath = PanePath(companion: .cover(PlaceholderBook.samples[0]))
+    // Home's and the Library's companions follow what they show (decision 26).
+    private var homePath = PanePath()
+    private var libraryPath = PanePath()
     private var settingsPath = PanePath(companion: .settingsPage("BookOrbit"))
     private var searchPath = PanePath()
 
-    /// Shown as a banner at the top of the tabs (decision 22).
-    var connectionProblem: ConnectionProblem?
+    /// The books, and where they come from.
+    let library: LibraryModel
     /// The book open in the reader, which covers the tabs (frames 07–09).
     var reading: OpenedBook? {
         didSet {
-            if let closed = oldValue, closed != reading { pages.existingPage(for: closed.book.id)?.readerClosed() }
+            if let closed = oldValue, closed != reading {
+                pages.existingPage(for: closed.book.id)?.readerClosed()
+                library.mergeContinueReading()
+            }
         }
     }
     /// Downloads books and opens them in `reading` (#14).
     let opener: BookOpener
+    /// The library of each book asked to open, until it does.
+    private var opening: [LibraryBookID: LibrarySourceID] = [:]
     /// The cover pages' state, kept across folds.
     let pages = BookPages()
-    /// Where books come from. A stand-in until #13 provides the current
-    /// source.
-    var librarySource: any LibrarySource = SampleLibrarySource() {
-        didSet {
-            pages.removeAll()
-            sourceGeneration += 1
-        }
-    }
-    /// Changes with `librarySource`, so the screens showing its books load
-    /// again.
-    private(set) var sourceGeneration = 0
 
-    /// Stand-in states until the real sources exist: an empty Home
-    /// (frame 25) and a problem on the cover's strip (frames 23, 24, 42).
-    var homeIsEmpty = false {
-        didSet { self[path: .home].companion = homeIsEmpty ? nil : .cover(PlaceholderBook.samples[0]) }
-    }
+    /// A debug override for the cover's strip (frames 23, 24, 42), to look
+    /// at its states without a failing download.
     var coverStrip: CoverStripMessage?
 
     #if DEBUG
-    /// The spike's screens, kept reachable from the Library until #13.
+    /// The spike's screens, kept reachable from the Library until the
+    /// reader (#17) opens books.
     var showsSpike = false
     #endif
 
-    init(opener: BookOpener = BookOpener()) {
+    init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener()) {
+        self.library = library
         self.opener = opener
-        opener.onOpen = { [weak self] in self?.reading = $0 }
+        opener.onOpen = { [weak self] in self?.opened($0) }
+        // Another server: its books' pages and the screens opened from
+        // them go.
+        library.serverChanged = { [weak self] in
+            guard let self else { return }
+            pages.removeAll()
+            for tab in [ShellTab.home, .library, .search] { self[path: tab].routes = [] }
+        }
         #if DEBUG
         applyLaunchArguments()
         #endif
@@ -89,9 +90,21 @@ final class ShellModel {
     }
 
     /// Opens `book` in the reader, downloading it first if it isn't on the
-    /// iPhone yet (decision 3); the cover's strip shows the progress.
-    func openBook(_ book: LibraryBook) {
-        opener.open(book, from: librarySource)
+    /// iPhone yet (decision 3; the cover's strip shows the progress), and
+    /// once it opens puts it first in Home's Continue reading.
+    func openBook(_ book: SourcedBook) {
+        guard let source = library.source(for: book.source), opener.canOpen(book.book) else { return }
+        opening[book.book.id] = book.source
+        opener.open(book.book, from: source)
+    }
+
+    /// Only a book that reaches the reader joins Continue reading: not one
+    /// whose download failed or was cancelled.
+    private func opened(_ book: OpenedBook) {
+        if let source = opening.removeValue(forKey: book.book.id) {
+            library.bookOpened(SourcedBook(source: source, book: book.book))
+        }
+        reading = book
     }
 
     /// Unfolding on a book's cover opens the book at once (decision 4);
@@ -102,7 +115,7 @@ final class ShellModel {
         guard transition == .unfold, reading == nil, !isCoveredBySpike,
               let book = self[path: tab].routes.last?.bookOpenedOnUnfold
         else { return }
-        openBook(book.libraryBook)
+        openBook(book)
     }
 
     /// The spike's screens hide the tabs and do their own unfold handoff.
@@ -114,46 +127,57 @@ final class ShellModel {
         #endif
     }
 
-    /// Retry or Sign in on the connection banner. A stand-in until #7 and #9.
-    func resolveConnectionProblem() {
-        connectionProblem = nil
-    }
-
     #if DEBUG
     /// Launch arguments that set up a state to look at:
-    /// `-shellTab library`, `-shellConnection unreachable|signedOut`,
-    /// `-shellEmptyHome 1`, `-shellCoverStrip failed|offline|downloading`,
-    /// `-shellOpen collection|deep|cover|settings`, `-shellReading 1`,
-    /// `-shellSource bookorbit` (the local dev server, `dev/bookorbit/`).
+    /// `-connectBookOrbit 1` (the local server), `-sampleLibrary 1|empty`
+    /// (made-up books; `empty` has nothing in progress), `-shellTab library`,
+    /// `-shellConnection unreachable|signedOut`,
+    /// `-shellCoverStrip failed|offline|downloading`,
+    /// `-shellOpen collection|deep|cover|settings` (sample books) and
+    /// `-shellReading 1` (the first book in Continue reading, once connected).
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
             self.tab = tab
         }
-        switch defaults.string(forKey: "shellConnection") {
-        case "unreachable": connectionProblem = .unreachable(server: "BookOrbit")
-        case "signedOut": connectionProblem = .signedOut(server: "BookOrbit")
-        default: break
+        let problem: ConnectionProblem? = switch defaults.string(forKey: "shellConnection") {
+        case "unreachable": .unreachable(server: "BookOrbit")
+        case "signedOut": .signedOut(server: "BookOrbit")
+        default: nil
         }
-        homeIsEmpty = defaults.bool(forKey: "shellEmptyHome")
         switch defaults.string(forKey: "shellCoverStrip") {
         case "failed": coverStrip = .downloadFailed
         case "offline": coverStrip = .needsConnection
         case "downloading": coverStrip = .downloading(fraction: 0.42)
         default: break
         }
-        let book = PlaceholderBook.samples[0]
-        switch defaults.string(forKey: "shellOpen") {
-        case "collection": self[path: .library].routes = [.collections, .collection("Classics")]
-        case "deep": self[path: .library].routes = [.collections, .collection("Classics"), .cover(book)]
-        case "cover": self[path: .library].routes = [.cover(book)]
-        case "settings": self[path: .settings].routes = [.settingsPage("BookOrbit")]
-        default: break
-        }
-        if defaults.string(forKey: "shellSource") == "bookorbit" {
-            ShellDebugSource.connect(self, openingBook: defaults.bool(forKey: "shellReading") ? book.libraryBook : nil)
-        } else if defaults.bool(forKey: "shellReading") {
-            openBook(book.libraryBook)
+        let sample = defaults.string(forKey: "sampleLibrary")
+        let connectsBookOrbit = defaults.bool(forKey: "connectBookOrbit")
+        let opens = defaults.string(forKey: "shellOpen")
+        let reads = defaults.bool(forKey: "shellReading")
+        Task {
+            if connectsBookOrbit {
+                await library.connectLocalBookOrbit()
+            } else if let sample, sample != "0" {
+                await library.connectSampleLibrary(nothingInProgress: sample == "empty")
+            }
+            // After connecting, which closes the screens opened before it.
+            if let problem { library.connectionProblem = problem }
+            let book = SourcedBook(source: SampleLibrarySource.id, book: SampleLibrarySource.books[0])
+            let classics = ShellRoute.feed(
+                LibraryEntry(kind: .collection, title: "Classics", count: 5, link: LibraryLink(rawValue: "collections/classics")),
+                from: SampleLibrarySource.id
+            )
+            switch opens {
+            case "collection": self[path: .library].routes = [classics]
+            case "deep": self[path: .library].routes = [classics, .cover(book)]
+            case "cover": self[path: .library].routes = [.cover(book)]
+            case "settings": self[path: .settings].routes = [.settingsPage("BookOrbit")]
+            default: break
+            }
+            if reads, let first = library.continueReading.first {
+                openBook(first)
+            }
         }
     }
     #endif

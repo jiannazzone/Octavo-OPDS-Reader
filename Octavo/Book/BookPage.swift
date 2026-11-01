@@ -75,9 +75,10 @@ final class BookPage {
         self.cover = await Self.decode(data)
     }
 
-    /// Decodes off the main thread; a full cover can be a few megapixels.
+    /// Not `byPreparingForDisplay()`: on the iOS 27.1 simulator its images
+    /// blank the whole window (`docs/notes/home-library.md`).
     nonisolated private static func decode(_ data: Data) async -> UIImage? {
-        await UIImage(data: data)?.byPreparingForDisplay()
+        UIImage(data: data)
     }
 
     // MARK: What the sheet shows
@@ -87,10 +88,15 @@ final class BookPage {
     /// two). `nil` if neither knows.
     func progress(positions: ReadingPositionStore = ReadingPositionStore()) -> Double? {
         _ = positionsChanged
-        if let file = current.readableFile, let position = positions.position(forBook: file.storageKey) {
+        return Self.progress(of: current, positions: positions)
+    }
+
+    /// The same for any book, such as a Home row (#13).
+    nonisolated static func progress(of book: LibraryBook, positions: ReadingPositionStore = ReadingPositionStore()) -> Double? {
+        if let file = book.readableFile, let position = positions.position(forBook: file.storageKey) {
             return position.fraction
         }
-        return current.progress
+        return book.progress
     }
 
     /// The strip's place line: "30%" or "Not started". #11 adds the

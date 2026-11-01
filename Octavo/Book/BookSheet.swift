@@ -88,6 +88,7 @@ struct BookStrip: View {
     let page: BookPage
     let source: any LibrarySource
     @Environment(ShellModel.self) private var shell
+    @Environment(\.openBook) private var openBook
 
     var body: some View {
         if let message {
@@ -100,7 +101,9 @@ struct BookStrip: View {
                     Text(BookPage.placeLine(progress: progress))
                         .font(.headline)
                     Spacer(minLength: 8)
-                    Button("Open") { shell.opener.open(page.current, from: source) }
+                    Button("Open") {
+                        if let openBook { openBook(page.current) } else { shell.opener.open(page.current, from: source) }
+                    }
                         .buttonStyle(.glassProminent)
                         .disabled(!shell.opener.canOpen(page.current))
                 }
@@ -314,4 +317,8 @@ extension EnvironmentValues {
     /// Opens a library entry's books, such as an author's (decision 20).
     /// The Library (#13) provides it; without it the author isn't a link.
     @Entry var openLibraryEntry: ((LibraryEntry) -> Void)?
+    /// Opens the book in the reader (Open). The shell (#13) provides it so
+    /// the book joins Home's Continue reading; without it the opener opens
+    /// the book directly.
+    @Entry var openBook: ((LibraryBook) -> Void)?
 }
