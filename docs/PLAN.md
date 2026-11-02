@@ -10,7 +10,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] **4. Downloads.** A check on downloaded covers and a ring while downloading, everywhere covers show; downloads kept where iOS won't clear them; Remove download; nothing downloads in the background.
 - [x] **5. Home.** The book you're reading, large, with your other books in progress beneath (or on the right page).
 - [x] **6. Series and authors.** Series as cover stacks, opening in reading order; Authors first name first, filed by last name, with an A–Z strip on long lists.
-- [ ] **7. Search tab.** *Needs decisions.*
+- [x] **7. Search tab.** The field under the title; Recent and Browse before typing; Books, then Series and Authors, as you type, with books on the iPhone included.
 - [ ] **8. Adding your server.** First run, and the server in Settings. *Needs decisions.*
 - [ ] **Library on the Duo:** Adam signs off, then a pull request to `main` (with Adam's OK).
 
@@ -39,7 +39,6 @@ These screens are still the old ones or stand-ins; the step that replaces them i
 
 | You see | Fixed in |
 |---|---|
-| Search says "Not designed yet" | 7 |
 | Settings is a stand-in; connecting is a debug switch | 8, 14 |
 | Anything in the reader | 9–12 |
 | A book opens somewhere other than the % its screen shows, or after a pause on unfolding | 13 |

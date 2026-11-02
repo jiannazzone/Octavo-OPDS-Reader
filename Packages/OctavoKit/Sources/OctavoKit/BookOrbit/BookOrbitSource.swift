@@ -88,6 +88,7 @@ public struct BookOrbitSource: LibrarySource {
             return LibrarySearchResults(
                 query: query,
                 books: try await books,
+                booksLink: BookOrbitRoute.search(query: query, page: 0).link,
                 series: try await matches.series.map(entry),
                 authors: try await matches.authors.map(entry)
             )

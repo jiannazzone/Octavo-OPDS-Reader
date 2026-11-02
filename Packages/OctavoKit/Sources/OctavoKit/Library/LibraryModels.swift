@@ -281,13 +281,19 @@ public struct LibrarySearchResults: Hashable, Codable, Sendable {
     public var query: String
     /// The first page of matching books; `books.next` pages on.
     public var books: LibraryFeed
+    /// The matching books' first page as a list, to show them all.
+    public var booksLink: LibraryLink?
     /// Empty unless the source supports `.booksSeriesAndAuthors`.
     public var series: [LibraryEntry]
     public var authors: [LibraryEntry]
 
-    public init(query: String, books: LibraryFeed = LibraryFeed(), series: [LibraryEntry] = [], authors: [LibraryEntry] = []) {
+    public init(
+        query: String, books: LibraryFeed = LibraryFeed(), booksLink: LibraryLink? = nil,
+        series: [LibraryEntry] = [], authors: [LibraryEntry] = []
+    ) {
         self.query = query
         self.books = books
+        self.booksLink = booksLink
         self.series = series
         self.authors = authors
     }

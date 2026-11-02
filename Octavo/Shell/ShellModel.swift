@@ -34,6 +34,8 @@ final class ShellModel {
     private var opening: [LibraryBookID: LibrarySourceID] = [:]
     /// The book screens' state, kept across folds.
     let pages = BookPages()
+    /// The Search tab's query and results.
+    let search: SearchModel
 
     /// A debug override for the cover's strip, to look at its states without
     /// a failing download.
@@ -42,12 +44,14 @@ final class ShellModel {
     init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener()) {
         self.library = library
         self.opener = opener
+        search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         opener.onOpen = { [weak self] in self?.opened($0) }
-        // Another server: its books' pages and the screens opened from
-        // them go.
+        // Another server: its books' pages, the screens opened from them
+        // and the search go.
         library.serverChanged = { [weak self] in
             guard let self else { return }
             pages.removeAll()
+            search.reset()
             for tab in ShellTab.allCases { self[path: tab].replace([]) }
         }
         #if DEBUG
@@ -109,7 +113,15 @@ final class ShellModel {
     func openBook(_ book: SourcedBook) {
         guard let source = library.source(for: book.source), opener.canOpen(book.book) else { return }
         opening[book.book.id] = book.source
+        if opener.status(of: book.book) != .downloaded { library.bookDownloading(book) }
         opener.open(book.book, from: source)
+    }
+
+    /// Downloads `book` without opening it (the details' Download button).
+    func downloadBook(_ book: SourcedBook) {
+        guard let source = library.source(for: book.source) else { return }
+        library.bookDownloading(book)
+        opener.download(book.book, from: source)
     }
 
     /// Only a book that reaches the reader joins Continue reading: not one
@@ -163,8 +175,9 @@ final class ShellModel {
     /// (made-up books; `empty` has nothing in progress), `-shellTab library`,
     /// `-shellConnection unreachable|signedOut`,
     /// `-shellCoverStrip failed|offline|downloading`,
-    /// `-shellOpen collection|deep|cover|settings` (sample books) and
-    /// `-shellReading 1` (the first book in Continue reading, once connected).
+    /// `-shellOpen collection|deep|cover|settings` (sample books),
+    /// `-shellReading 1` (the first book in Continue reading, once connected)
+    /// and `-searchQuery austen` (typed into Search, once connected).
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
@@ -186,6 +199,7 @@ final class ShellModel {
         let opds = defaults.string(forKey: "connectOPDS").flatMap(LibraryModel.DebugOPDSServer.init(rawValue:))
         let opens = defaults.string(forKey: "shellOpen")
         let reads = defaults.bool(forKey: "shellReading")
+        let query = defaults.string(forKey: "searchQuery")
         Task {
             if connectsBookOrbit {
                 await library.connectLocalBookOrbit()
@@ -211,6 +225,7 @@ final class ShellModel {
             if reads, let first = library.continueReading.first {
                 openBook(first)
             }
+            if let query { search.query = query }
         }
     }
     #endif

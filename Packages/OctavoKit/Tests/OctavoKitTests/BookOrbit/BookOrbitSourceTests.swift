@@ -291,6 +291,7 @@ struct BookOrbitSourceTests {
         #expect(results.query == "holmes")
         #expect(results.books.books.map(\.title) == ["A Study in Scarlet", "Alice's Adventures in Wonderland"])
         #expect(results.books.next == link(.search(query: "holmes", page: 1)))
+        #expect(results.booksLink == link(.search(query: "holmes", page: 0)))
         #expect(results.series.map(\.title) == ["Sherlock Holmes"])
         #expect(results.series.first?.link == link(.series(id: 3, page: 0)))
         #expect(results.authors.map(\.title) == ["Arthur Conan Doyle"])

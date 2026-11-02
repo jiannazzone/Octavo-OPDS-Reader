@@ -1,9 +1,9 @@
 import OctavoKit
 import SwiftUI
 
-// The route-to-screen map and the stand-in screens for Search and Settings,
-// which haven't been designed yet. The stand-ins show the shell's layout
-// and shared states; nothing in them is a design.
+// The route-to-screen map and the stand-in screens for Settings, which
+// hasn't been designed yet. The stand-ins show the shell's layout and shared
+// states; nothing in them is a design.
 
 /// The view for a route.
 struct ShellScreen: View {
@@ -16,12 +16,6 @@ struct ShellScreen: View {
         case .settingsPage(let name): SettingsPagePlaceholder(name: name)
         case .cover(let book): CoverScreen(book: book)
         }
-    }
-}
-
-struct SearchPlaceholder: View {
-    var body: some View {
-        ContentUnavailableView("Search", systemImage: "magnifyingglass", description: Text("Not designed yet."))
     }
 }
 
@@ -99,6 +93,9 @@ struct CoverScreen: View {
                 }
                 .environment(\.openBook) { opened in
                     shell.openBook(SourcedBook(source: book.source, book: opened))
+                }
+                .environment(\.downloadBook) { downloading in
+                    shell.downloadBook(SourcedBook(source: book.source, book: downloading))
                 }
         } else {
             LibraryNotConnected()

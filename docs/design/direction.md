@@ -55,7 +55,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Lists and grids appear at once** with blank cover shapes that fill in; no spinners mid-screen. A server that can't be reached says so in place, with Try again.
 
 ### Still to decide in the library pass
-Adding your server (first run and Settings), Search.
+Adding your server (first run and Settings).
 
 ## Decisions (2026-10-31, under review)
 
@@ -104,6 +104,12 @@ Adding your server (first run and Settings), Search.
     - **Results** update as you type: **Books** first, as rows with a small cover, author and your progress or a Downloaded mark, from the server and the iPhone together; then **Series** and **Authors** sections when the server supports them (BookOrbit) and there are matches.
     - **An OPDS server without search** shows a short note ("Calibre-Web doesn't offer search. Showing books on your iPhone."), results from the iPhone, and the feed's own lists as Browse chips.
     - **Unfolded:** results left of the hinge, the selected book's cover page (with its compact sheet) right of it, as in the Library.
+    - **Built (step 7, 2026-11-01), adapted to the shell:**
+      - **The field sits under the title on the left page** (Adam chose it over iOS's own field, which the Duo puts top right unfolded and across the top folded, and which would stay over a book's screen opened from the results). It slides away with the Search screen.
+      - **A result opens its own screen in the Search tab**, as everywhere else, so unfolded shows Books on the left page and Series and Authors on the right; with neither, the books flow down the left page and on down the right. Before typing, Recent sits on the left page and Browse on the right.
+      - **Books show the first 12**, then "All 134 books", which opens every match as a Library list. Series and Authors stay in reach below them folded.
+      - **Search starts at two characters** (BookOrbit's minimum), after a short pause in the typing; Return searches at once. A search is kept in Recent (eight at most) on Return or when a result opens.
+      - **Books on the iPhone** are the ones downloaded here, matched by title, author or series. Offline they're the results, under the connection banner.
 
 ### Connecting (approved 2026-10-31)
 

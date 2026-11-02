@@ -196,6 +196,7 @@ struct BookOpenButton: View {
     let source: any LibrarySource
     @Environment(ShellModel.self) private var shell
     @Environment(\.openBook) private var openBook
+    @Environment(\.downloadBook) private var downloadBook
 
     enum State: Equatable {
         case open, download
@@ -234,7 +235,7 @@ struct BookOpenButton: View {
             .disabled(!opener.canOpen(book))
         case .download:
             Button {
-                opener.download(book, from: source)
+                if let downloadBook { downloadBook(book) } else { opener.download(book, from: source) }
             } label: {
                 Label("Download", systemImage: "arrow.down")
                     .frame(maxWidth: .infinity)
@@ -397,4 +398,8 @@ extension EnvironmentValues {
     /// the book joins Home's Continue reading; without it the opener opens
     /// the book directly.
     @Entry var openBook: ((LibraryBook) -> Void)?
+    /// Downloads the book without opening it (Download). The shell provides
+    /// it so Search can find the book on the iPhone; without it the opener
+    /// downloads directly.
+    @Entry var downloadBook: ((LibraryBook) -> Void)?
 }

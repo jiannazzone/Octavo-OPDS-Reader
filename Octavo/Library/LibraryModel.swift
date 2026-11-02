@@ -51,6 +51,7 @@ final class LibraryModel {
     let covers = CoverCache()
     @ObservationIgnored let recents: RecentBooks
     @ObservationIgnored let finished: FinishedBooks
+    @ObservationIgnored let onIPhone: BooksOnIPhone
     @ObservationIgnored private var feeds: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var previews: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var serverContinueReading: [SourcedBook] = []
@@ -58,9 +59,10 @@ final class LibraryModel {
     /// The book you're reading and the others in progress Home shows.
     static let continueReadingLimit = 8
 
-    init(recents: RecentBooks = RecentBooks(), finished: FinishedBooks = FinishedBooks()) {
+    init(recents: RecentBooks = RecentBooks(), finished: FinishedBooks = FinishedBooks(), onIPhone: BooksOnIPhone = BooksOnIPhone()) {
         self.recents = recents
         self.finished = finished
+        self.onIPhone = onIPhone
     }
 
     /// The library `id` names, if it's connected.
@@ -197,6 +199,22 @@ final class LibraryModel {
     func bookOpened(_ book: SourcedBook) {
         try? recents.record(book)
         mergeContinueReading()
+    }
+
+    /// A download (or an Open that downloads) is starting, so Search can
+    /// find the book once it's on the iPhone.
+    func bookDownloading(_ book: SourcedBook) {
+        try? onIPhone.record(book)
+    }
+
+    /// The connected server's books this iPhone has asked for, newest first,
+    /// including ones opened before `onIPhone` kept a list. Whether each is
+    /// still on the iPhone is the opener's to say.
+    func iPhoneBooks() -> [SourcedBook] {
+        guard let server else { return [] }
+        var seen = Set<SourcedBook.ID>()
+        return (onIPhone.books() + recents.records().map(\.book))
+            .filter { $0.source == server.id && seen.insert($0.id).inserted }
     }
 
     /// Lists Continue reading again, so its rows show the latest positions.
