@@ -155,6 +155,24 @@ struct RemoveServerTests {
         #expect(hasBookmarks(imported))
     }
 
+    // Which server a removed one was: its kind, full address (two behind
+    // one proxy differ by path) and account, and a catalog's key.
+    @Test func identitiesTellServersApart() throws {
+        let home = SavedServer(id: SavedServer.newID(), kind: .bookOrbit, address: "https://nas.example.com/bookorbit", name: "BookOrbit", username: "adam")
+        var other = home
+        other.id = SavedServer.newID()
+        #expect(home.libraryServer()?.identity == other.libraryServer()?.identity, "the same server at a new ID")
+        other.address = "https://nas.example.com/friends-bookorbit"
+        #expect(home.libraryServer()?.identity != other.libraryServer()?.identity)
+        other = home
+        other.username = "sam"
+        #expect(home.libraryServer()?.identity != other.libraryServer()?.identity)
+        let key1 = try #require(OPDSURLSecret("0123456789abcdef0123456789abcdef"))
+        let key2 = try #require(OPDSURLSecret("fedcba9876543210fedcba9876543210"))
+        let catalog = "https://kavita.example.com/api/opds/\(OPDSURLSecret.placeholder)"
+        #expect(LibraryServer.origin(kind: .opds, address: catalog, secret: key1) != LibraryServer.origin(kind: .opds, address: catalog, secret: key2))
+    }
+
     // The same server and account, at a new ID: its books are where they
     // were, as "Keep books on iPhone" promised.
     @Test func theSameServerComingBackFindsItsBooks() async {

@@ -15,6 +15,8 @@ struct LibraryServer {
     /// There's a sign-in to sign out of: BookOrbit's, or the password an
     /// OPDS catalog asked for.
     var signsIn = false
+    /// The server's kind and full address, for `identity` (Remove server).
+    var origin: String?
     var source: any LibrarySource
     /// The same library asking for small pages, for the three covers on a
     /// collection's row. `nil`: rows load the list's first full page (which
@@ -343,7 +345,8 @@ final class LibraryModel {
             debugConnection = .idle
             await connect(LibraryServer(
                 id: Self.localBookOrbitID, name: "BookOrbit", address: "localhost:3300", username: "octavo",
-                signsIn: true, source: BookOrbitSource(client: client),
+                signsIn: true, origin: LibraryServer.origin(kind: .bookOrbit, address: "http://localhost:3300"),
+                source: BookOrbitSource(client: client),
                 previewSource: BookOrbitSource(client: client, pageSize: 3), syncsProgress: true
             ))
         } catch {
@@ -442,7 +445,9 @@ final class LibraryModel {
         )
         await connect(LibraryServer(
             id: server.sourceID, name: server.name, address: catalog.host().map { host in catalog.port.map { "\(host):\($0)" } ?? host } ?? "",
-            username: server.credentials?.username, signsIn: server.credentials != nil, source: source
+            username: server.credentials?.username, signsIn: server.credentials != nil,
+            origin: LibraryServer.origin(kind: .opds, address: secret?.redact(catalog.absoluteString) ?? catalog.absoluteString, secret: secret),
+            source: source
         ))
         debugConnection = root == nil ? .failed("\(server.name) didn’t send its catalog.") : .idle
     }

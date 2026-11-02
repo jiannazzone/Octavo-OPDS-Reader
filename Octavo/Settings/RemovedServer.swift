@@ -1,4 +1,6 @@
+import CryptoKit
 import Foundation
+import OctavoKit
 
 /// The server Remove server took away, kept until the next one is added
 /// (security review, 2026-11-02). A book's file, place and bookmarks are kept
@@ -38,9 +40,21 @@ nonisolated struct RemovedServerStore: Sendable {
 
 extension LibraryServer {
     /// Which server and account this is, whatever ID it was added under:
-    /// "books.example.com|adam". Another account on the same server is
-    /// another identity, as its places are its own.
+    /// the kind and full address (`origin`), else the shown address, then
+    /// the account. Another account on the same server is another identity,
+    /// as its places are its own.
     nonisolated var identity: String {
-        "\(address.lowercased())|\(username ?? "")"
+        "\(origin ?? address.lowercased())|\(username ?? "")"
+    }
+
+    /// `origin` for a server at `address` (as saved: scheme, host, port and
+    /// path, a catalog's secret as its placeholder): "bookOrbit|https://…",
+    /// with a digest of that secret, so two Kavita accounts on one server
+    /// (told apart only by their keys) are two identities.
+    nonisolated static func origin(kind: SavedServer.Kind, address: String, secret: OPDSURLSecret? = nil) -> String {
+        let digest = secret.map { secret in
+            "|" + SHA256.hash(data: Data(secret.value.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
+        }
+        return "\(kind.rawValue)|\(address)\(digest ?? "")"
     }
 }

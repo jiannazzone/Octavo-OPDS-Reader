@@ -61,6 +61,7 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
             let client = Self.bookOrbitClient(id: id, url: url)
             return LibraryServer(
                 id: id, name: name, address: host, username: username, signsIn: true,
+                origin: LibraryServer.origin(kind: kind, address: address),
                 source: BookOrbitSource(client: client, includesProgress: progressSyncs),
                 previewSource: BookOrbitSource(client: client, pageSize: 3, includesProgress: progressSyncs),
                 syncsProgress: progressSyncs
@@ -70,7 +71,10 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
             if address.contains(OPDSURLSecret.placeholder), secret == nil { return nil }
             guard let url = URL(string: secret?.restore(address) ?? address) else { return nil }
             let source = Self.opdsSource(id: id, url: url, scheme: authScheme, secret: secret)
-            return LibraryServer(id: id, name: name, address: host, username: username, signsIn: authScheme != nil, source: source)
+            return LibraryServer(
+                id: id, name: name, address: host, username: username, signsIn: authScheme != nil,
+                origin: LibraryServer.origin(kind: kind, address: address, secret: secret), source: source
+            )
         }
     }
 
