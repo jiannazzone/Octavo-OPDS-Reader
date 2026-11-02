@@ -33,8 +33,9 @@ private actor MemoryBookmarkSync: BookmarkSync {
 /// One book's bookmarks (decisions 17–18): the page's Bookmark button, the
 /// list's order, and syncing with BookOrbit.
 @MainActor
+@Suite(.temporaryFiles)
 struct ReaderBookmarksTests {
-    private let store = BookmarkStore(directory: URL.temporaryDirectory.appending(path: "Bookmarks-\(UUID().uuidString)"))
+    private let store = BookmarkStore(directory: URL.testDirectory.appending(path: "Bookmarks-\(UUID().uuidString)"))
     private let cfiA = "epubcfi(/6/4!/4/44/1:54)"
     private let cfiB = "epubcfi(/6/4!/4/58/1:52)"
 

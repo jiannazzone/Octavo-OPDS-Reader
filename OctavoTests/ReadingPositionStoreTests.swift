@@ -3,9 +3,10 @@ import OctavoKit
 import Testing
 @testable import Octavo
 
+@Suite(.temporaryFiles)
 struct ReadingPositionStoreTests {
     let store = ReadingPositionStore(
-        directory: URL.temporaryDirectory.appending(path: "positions-\(UUID().uuidString)", directoryHint: .isDirectory)
+        directory: URL.testDirectory.appending(path: "positions-\(UUID().uuidString)", directoryHint: .isDirectory)
     )
 
     @Test func roundTripsAPosition() throws {

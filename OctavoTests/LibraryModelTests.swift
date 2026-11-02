@@ -67,7 +67,7 @@ private func sourced(_ book: LibraryBook, from source: LibrarySourceID = server)
 }
 
 private func temporaryRecents() -> RecentBooks {
-    RecentBooks(fileURL: URL.temporaryDirectory.appending(path: "RecentBooks-\(UUID().uuidString).json"))
+    RecentBooks(fileURL: URL.testDirectory.appending(path: "RecentBooks-\(UUID().uuidString).json"))
 }
 
 @MainActor
@@ -78,6 +78,7 @@ private func connected(_ source: some LibrarySource, recents: RecentBooks = temp
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct FeedModelTests {
     static let pages = [
         "a": LibraryFeed(books: [book("1"), book("2")], total: 3, next: link("a?page=1")),
@@ -176,6 +177,7 @@ struct FeedModelTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct LibraryModelTests {
     @Test func aFailedContinueReadingIsntAnEmptyOne() async {
         let library = await connected(PagedSource(faults: Faults(["reading": LibraryError.server(status: 500, message: nil)])))
@@ -314,6 +316,7 @@ struct ContinueReadingTests {
     }
 }
 
+@Suite(.temporaryFiles)
 struct RecentBooksTests {
     @Test func newestFirstWithoutRepeats() throws {
         let recents = temporaryRecents()

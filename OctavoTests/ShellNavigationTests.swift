@@ -72,7 +72,7 @@ enum SampleRoutes {
 /// folder, not the app's.
 @MainActor
 func makeShell(opener: BookOpener? = nil) -> ShellModel {
-    let folder = URL.temporaryDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let folder = URL.testDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     return ShellModel(
         library: LibraryModel(
             recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json")),
@@ -149,6 +149,7 @@ struct HingeTransitionTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct ShellModelTests {
     static let book = SampleRoutes.book(1)
 

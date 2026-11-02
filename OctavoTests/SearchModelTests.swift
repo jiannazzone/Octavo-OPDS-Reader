@@ -47,7 +47,7 @@ private func book(_ id: String, _ title: String, by author: String = "Someone") 
 }
 
 private func temporaryFile(_ name: String) -> URL {
-    URL.temporaryDirectory.appending(path: "\(name)-\(UUID().uuidString).json")
+    URL.testDirectory.appending(path: "\(name)-\(UUID().uuidString).json")
 }
 
 @MainActor
@@ -75,6 +75,7 @@ private struct Harness {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct SearchModelTests {
     @Test func resultsArriveOnceTheTypingPauses() async {
         let found = LibrarySearchResults(
@@ -226,6 +227,7 @@ struct SearchModelTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct BooksOnIPhoneTests {
     @Test func keepsTheNewestFirstOnceEach() throws {
         let store = BooksOnIPhone(fileURL: temporaryFile("BooksOnIPhone"))
