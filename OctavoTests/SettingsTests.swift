@@ -171,6 +171,9 @@ struct RemoveServerTests {
         let key2 = try #require(OPDSURLSecret("fedcba9876543210fedcba9876543210"))
         let catalog = "https://kavita.example.com/api/opds/\(OPDSURLSecret.placeholder)"
         #expect(LibraryServer.origin(kind: .opds, address: catalog, secret: key1) != LibraryServer.origin(kind: .opds, address: catalog, secret: key2))
+        #expect(LibraryServer.origin(kind: .opds, address: catalog, secret: key1) != LibraryServer.origin(kind: .opds, address: catalog, secret: key1),
+                "a catalog with a key never matches, as nothing derived from its key is kept")
+        #expect(!LibraryServer.origin(kind: .opds, address: catalog, secret: key1).contains(key1.value))
     }
 
     // The same server and account, at a new ID: its books are where they

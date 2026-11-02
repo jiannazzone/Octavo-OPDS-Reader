@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import OctavoKit
 
@@ -48,13 +47,13 @@ extension LibraryServer {
     }
 
     /// `origin` for a server at `address` (as saved: scheme, host, port and
-    /// path, a catalog's secret as its placeholder): "bookOrbit|https://…",
-    /// with a digest of that secret, so two Kavita accounts on one server
-    /// (told apart only by their keys) are two identities.
+    /// path, a catalog's secret as its placeholder): "bookOrbit|https://…".
+    /// Two Kavita accounts on one server differ only by their keys, and
+    /// nothing derived from a key is kept outside the Keychain, so a catalog
+    /// with a key never counts as the same server again: its kept books,
+    /// places and bookmarks go when any server is added after it.
     nonisolated static func origin(kind: SavedServer.Kind, address: String, secret: OPDSURLSecret? = nil) -> String {
-        let digest = secret.map { secret in
-            "|" + SHA256.hash(data: Data(secret.value.utf8)).prefix(8).map { String(format: "%02x", $0) }.joined()
-        }
-        return "\(kind.rawValue)|\(address)\(digest ?? "")"
+        let unmatched = secret == nil ? "" : "|key:\(UUID().uuidString)"
+        return "\(kind.rawValue)|\(address)\(unmatched)"
     }
 }
