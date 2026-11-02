@@ -8,8 +8,13 @@ struct LibraryServer {
     var id: LibrarySourceID
     /// "BookOrbit", or the OPDS catalog's name, for headings and banners.
     var name: String
-    /// Where and who, for Settings: "localhost:3300 · octavo".
-    var detail: String
+    /// Where, for Settings: "books.example.com", "localhost:3300".
+    var address = ""
+    /// Who's signed in, if anyone: "adam".
+    var username: String?
+    /// There's a sign-in to sign out of: BookOrbit's, or the password an
+    /// OPDS catalog asked for.
+    var signsIn = false
     var source: any LibrarySource
     /// The same library asking for small pages, for the three covers on a
     /// collection's row. `nil`: rows load the list's first full page (which
@@ -17,6 +22,11 @@ struct LibraryServer {
     var previewSource: (any LibrarySource)? = nil
     /// Reading progress syncs with this server (setup's choice, decision 6).
     var syncsProgress = false
+
+    /// Where and who, for Settings: "localhost:3300 · octavo".
+    var detail: String {
+        [address, username ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
 }
 
 /// The app-wide library state: the connected server, its chips, Home's
@@ -101,12 +111,6 @@ final class LibraryModel {
     }
 
     func disconnect() {
-        #if DEBUG
-        // The debug servers' Keychain items, like Remove server will (#12).
-        if let id = server?.id, id.rawValue.hasPrefix("debug-local-") {
-            try? ServerCredentials.removeAll(serverID: id.rawValue)
-        }
-        #endif
         server = nil
         connection += 1
         serverChanged()
@@ -122,6 +126,19 @@ final class LibraryModel {
         connectionProblem = nil
     }
 
+    /// Sign in again worked as `username`.
+    func signedIn(as username: String) {
+        server?.username = username
+    }
+
+    /// Remove server: the records of `server`'s books that can't be opened
+    /// once it's gone (Continue reading, finished marks). Its books on the
+    /// iPhone stay listed, so Storage shows the ones kept.
+    func forgetBooks(of server: LibrarySourceID) {
+        try? recents.remove(source: server)
+        try? finished.remove(source: server)
+    }
+
     // MARK: Lists
 
     /// The list at `link` in library `source`, made once and kept. `nil` if
@@ -130,7 +147,7 @@ final class LibraryModel {
         let key = FeedKey(source: source, link: link)
         if let feed = feeds[key] { return feed }
         guard let library = self.source(for: source) else { return nil }
-        let feed = FeedModel(link: link, source: source, library: library) { [weak self] in self?.report($0) }
+        let feed = FeedModel(link: link, source: source, library: library, report: reporter())
         feeds[key] = feed
         return feed
     }
@@ -143,7 +160,7 @@ final class LibraryModel {
         }
         let key = FeedKey(source: source, link: link)
         if let preview = previews[key] { return preview }
-        let preview = FeedModel(link: link, source: source, library: previewSource) { [weak self] in self?.report($0) }
+        let preview = FeedModel(link: link, source: source, library: previewSource, report: reporter())
         previews[key] = preview
         return preview
     }
@@ -174,9 +191,13 @@ final class LibraryModel {
 
     private func loadRoot() async {
         guard let server else { return }
+        let connection = connection
         rootFailed = false
         do {
             let root = try await server.source.root()
+            // Another server meanwhile (Remove server, then setup): this
+            // answer is the old one's.
+            guard connection == self.connection else { return }
             self.root = root
             if !root.chips.contains(where: { $0.link == chip }) {
                 // OPDS: the whole-library chip, not an empty "Keep Reading".
@@ -184,6 +205,7 @@ final class LibraryModel {
                 chip = start ?? root.chips.first?.link
             }
         } catch {
+            guard connection == self.connection else { return }
             rootFailed = true
             report(error)
         }
@@ -195,8 +217,10 @@ final class LibraryModel {
     /// live in the Library, not here.
     func loadHome() async {
         guard let server else { return }
+        let connection = connection
         if root == nil { await loadRoot() }
         let readingBooks = await books(at: root?.continueReading, from: server)
+        guard connection == self.connection else { return }
         // A failed list keeps what it showed.
         if let readingBooks { serverContinueReading = readingBooks }
         continueReadingFailed = readingBooks == nil
@@ -249,12 +273,22 @@ final class LibraryModel {
         do {
             return try await server.source.feed(link).books.map { SourcedBook(source: server.id, book: $0) }
         } catch {
-            report(error)
+            if self.server?.id == server.id { report(error) }
             return nil
         }
     }
 
     // MARK: Errors
+
+    /// A list's problems, for the banner, while the server it was made for
+    /// is the connected one.
+    private func reporter() -> (any Error) -> Void {
+        let connection = connection
+        return { [weak self] error in
+            guard let self, self.connection == connection else { return }
+            report(error)
+        }
+    }
 
     /// Connection problems become the banner; anything else stays with the
     /// list that failed.
@@ -307,8 +341,8 @@ final class LibraryModel {
             }
             debugConnection = .idle
             await connect(LibraryServer(
-                id: Self.localBookOrbitID, name: "BookOrbit",
-                detail: "localhost:3300 · octavo", source: BookOrbitSource(client: client),
+                id: Self.localBookOrbitID, name: "BookOrbit", address: "localhost:3300", username: "octavo",
+                signsIn: true, source: BookOrbitSource(client: client),
                 previewSource: BookOrbitSource(client: client, pageSize: 3), syncsProgress: true
             ))
         } catch {
@@ -405,14 +439,17 @@ final class LibraryModel {
             authScheme: scheme,
             secret: secret
         )
-        await connect(LibraryServer(id: server.sourceID, name: server.name, detail: server.detail, source: source))
+        await connect(LibraryServer(
+            id: server.sourceID, name: server.name, address: catalog.host().map { host in catalog.port.map { "\(host):\($0)" } ?? host } ?? "",
+            username: server.credentials?.username, signsIn: server.credentials != nil, source: source
+        ))
         debugConnection = root == nil ? .failed("\(server.name) didn’t send its catalog.") : .idle
     }
 
     /// Made-up books, no network: for screenshots and previews.
     func connectSampleLibrary(nothingInProgress: Bool = false) async {
         await connect(LibraryServer(
-            id: SampleLibrarySource.id, name: "BookOrbit", detail: "Sample library",
+            id: SampleLibrarySource.id, name: "BookOrbit", address: "Sample library",
             source: SampleLibrarySource(nothingInProgress: nothingInProgress)
         ))
     }

@@ -22,6 +22,14 @@ nonisolated struct FinishedBooks: Sendable {
         try JSONEncoder().encode(books).write(to: fileURL, options: .atomic)
     }
 
+    /// Forgets the marks on `source`'s books (Remove server).
+    func remove(source: LibrarySourceID) throws {
+        let books = books()
+        let kept = books.filter { $0.source != source }
+        guard kept.count != books.count else { return }
+        try JSONEncoder().encode(kept).write(to: fileURL, options: .atomic)
+    }
+
     private func books() -> Set<SourcedBook.ID> {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
         return (try? JSONDecoder().decode(Set<SourcedBook.ID>.self, from: data)) ?? []

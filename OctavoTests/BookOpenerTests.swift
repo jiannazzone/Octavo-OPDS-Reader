@@ -62,6 +62,19 @@ struct BookOpenerTests {
         #expect(files.store.localFile(for: source.files[0]) == nil)
     }
 
+    // Storage's Remove all downloads: every file, known or not.
+    @Test func removingAllDownloadsEmptiesTheStore() async throws {
+        let source = StubLibrarySource()
+        let book = try await source.details(for: Self.book).book
+        opener.download(book, from: source)
+        #expect(await eventually { opener.status(of: book) == .downloaded })
+        try Data("left over".utf8).write(to: files.directory.appending(path: "book-unknown.epub"))
+
+        opener.removeAllDownloads()
+        #expect(opener.status(of: book) == .notDownloaded)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: files.directory.path).isEmpty)
+    }
+
     // Open (or an unfold) during a plain download opens it when it's done.
     @Test func openingDuringADownloadOpensWhenDone() async {
         var source = StubLibrarySource()

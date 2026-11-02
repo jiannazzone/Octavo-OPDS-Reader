@@ -46,6 +46,11 @@ public struct OPDSSource: LibrarySource {
         try await client.checkAccess()
     }
 
+    /// Sign out: forgets the catalog's password, in its store and in memory.
+    public func signOut() async throws {
+        try await client.signOut()
+    }
+
     // MARK: - LibrarySource
 
     public func root() async throws -> LibraryRoot {

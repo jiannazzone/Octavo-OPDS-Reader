@@ -111,6 +111,20 @@ final class BookOpener {
         removals += 1
     }
 
+    /// Storage's Remove all downloads: every book's file, including any
+    /// whose book the iPhone no longer knows. Downloads still running carry
+    /// on.
+    func removeAllDownloads() {
+        try? files.removeAll()
+        removals += 1
+    }
+
+    /// The downloaded file of `book`, for Storage's sizes.
+    func localFile(for book: LibraryBook) -> URL? {
+        _ = removals
+        return book.readableFile.flatMap(files.localFile(for:))
+    }
+
     /// Forgets a failure, so the strip shows Open again.
     func clearFailure(_ book: LibraryBook) {
         if case .failed = statuses[book.id] { statuses[book.id] = nil }

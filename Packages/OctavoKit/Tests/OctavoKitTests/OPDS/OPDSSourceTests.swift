@@ -457,6 +457,21 @@ struct OPDSSourceTests {
         #expect(await store.loads == 2, "a 401 makes the next request read the store again")
     }
 
+    /// Settings' Sign out: the password leaves the store and memory, so the
+    /// next request goes without it.
+    @Test func signOutForgetsThePassword() async throws {
+        let store = InMemoryPasswordStore(PasswordCredentials(username: "keeper", password: "lamp-oil"))
+        let server = StubServer { request in
+            request.headers["authorization"] == nil ? .atom("", status: 401) : .atom(OPDSFixtures.atomRoot)
+        }
+        let source = source(server, credentials: store)
+        _ = try await source.root()
+        try await source.signOut()
+        #expect(try await store.load() == nil)
+        await #expect(throws: LibraryError.signedOut) { try await source.root() }
+        #expect(server.requests.last?.headers["authorization"] == nil)
+    }
+
     @Test func aDigestChallengeIsRecordedAsDigest() async throws {
         // Even when the Authentication Document only knows Basic.
         let digest = StubServer { _ in

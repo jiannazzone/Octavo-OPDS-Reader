@@ -193,6 +193,24 @@ struct BookPlacesTests {
         #expect(await backend.pulls == pulls)
     }
 
+    // Settings' "N books pending.", and Remove server forgetting them.
+    @Test func countsAndForgetsAServersPendingPlaces() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
+        let places = places(backend)
+        #expect(places.pendingCount(on: Self.book.source) == 0)
+        _ = places.readerSync(for: Self.book)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+        places.readerClosed()
+        #expect(places.pendingCount(on: Self.book.source) == 1)
+        #expect(places.pendingCount(on: LibrarySourceID(rawValue: "another")) == 0)
+
+        places.forget(server: Self.book.source)
+        #expect(places.pendingCount(on: Self.book.source) == 0)
+        await places.retryUnsent()
+        #expect(await backend.pushes.isEmpty, "a removed server's places go nowhere")
+        #expect(store.progress(forBook: key)?.position == Self.iPhonePlace, "the place itself stays")
+    }
+
     // The list of unsent places is kept on disk, so a relaunch still sends.
     @Test func aRelaunchStillSendsIt() async throws {
         let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
@@ -333,7 +351,7 @@ struct BookPlacesTests {
     @Test func onlyABookOrbitServerSetToSyncSyncs() {
         let client = BookOrbitClient(baseURL: URL(string: "http://localhost:3300")!)
         let id = LibrarySourceID(rawValue: "server")
-        var server = LibraryServer(id: id, name: "BookOrbit", detail: "", source: BookOrbitSource(client: client), syncsProgress: true)
+        var server = LibraryServer(id: id, name: "BookOrbit", source: BookOrbitSource(client: client), syncsProgress: true)
         let book = SourcedBook(source: id, book: Self.book.book)
         // Debug builds wrap it, for the debug remote's `offline`.
         let sync = ShellModel.progressSync(for: book, on: server)
@@ -348,7 +366,7 @@ struct BookPlacesTests {
         server.syncsProgress = false
         #expect(ShellModel.progressSync(for: book, on: server) == nil)
 
-        let opds = LibraryServer(id: id, name: "Calibre", detail: "", source: StubLibrarySource(), syncsProgress: true)
+        let opds = LibraryServer(id: id, name: "Calibre", source: StubLibrarySource(), syncsProgress: true)
         #expect(ShellModel.progressSync(for: book, on: opds) == nil)
     }
 

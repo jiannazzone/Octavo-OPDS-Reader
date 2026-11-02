@@ -121,6 +121,45 @@ public actor BookOrbitClient {
         try await store(nil)
     }
 
+    /// Sign out and Remove server: signs out here, as `signOut()` does, then
+    /// asks the server to end the session (`POST auth/logout` with the
+    /// refresh token, measured against v3.6.0), so a copy of the token is no
+    /// use to anyone. That request goes on after this returns (the returned
+    /// task) and its answer is ignored: offline, or on a server without the
+    /// endpoint, the session lapses there on its own. It's sent even if the
+    /// token couldn't be removed from `tokenStore`, which is then rethrown.
+    @discardableResult
+    public func signOutEverywhere() async throws -> Task<Void, Never> {
+        let ending = credentialsLoaded ? credentials : try? await tokenStore.load()
+        var removal: (any Error)?
+        do {
+            try await signOut()
+        } catch {
+            removal = error
+        }
+        var request: URLRequest?
+        if let ending, let refreshToken = ending.refreshToken {
+            switch ending.refreshTransport {
+            case .body:
+                request = try? jsonRequest("auth/logout", method: "POST", body: ["refreshToken": refreshToken])
+            case .cookie:
+                request = try? jsonRequest("auth/logout", method: "POST", body: [String: String]())
+                request?.setValue("refresh_token=\(refreshToken)", forHTTPHeaderField: "Cookie")
+            }
+            request?.timeoutInterval = Self.logoutTimeout
+        }
+        let transport = transport
+        let logout = Task {
+            guard let request else { return }
+            _ = try? await transport.data(for: request)
+        }
+        if let removal { throw removal }
+        return logout
+    }
+
+    /// Ending the session on the server doesn't wait longer than this.
+    static let logoutTimeout: TimeInterval = 15
+
     private func postLogin(username: String, password: String, native: Bool) async throws -> (Data, HTTPURLResponse) {
         struct Body: Encodable {
             var username: String

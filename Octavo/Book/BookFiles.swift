@@ -15,6 +15,9 @@ nonisolated protocol BookFiles: Sendable {
 
     /// Deletes the downloaded copy, if there is one.
     func remove(_ file: LibraryFile) throws
+
+    /// Deletes every downloaded book (Storage's Remove all downloads).
+    func removeAll() throws
 }
 
 nonisolated extension LibraryBook {
@@ -76,6 +79,14 @@ nonisolated struct StoredBookFiles: BookFiles {
     func remove(_ file: LibraryFile) throws {
         guard let url = localFile(for: file) else { return }
         try FileManager.default.removeItem(at: url)
+    }
+
+    func removeAll() throws {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names {
+            try manager.removeItem(at: directory.appending(path: name))
+        }
     }
 
     /// The app's store, with any books from before it moved in.

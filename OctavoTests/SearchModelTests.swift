@@ -65,7 +65,7 @@ private struct Harness {
         )
         defaults = UserDefaults(suiteName: "SearchModelTests-\(UUID().uuidString)")!
         search = SearchModel(library: library, isOnIPhone: { downloaded.contains($0.id.rawValue) }, defaults: defaults, pause: pause)
-        await library.connect(LibraryServer(id: server, name: "Calibre-Web", detail: "", source: source))
+        await library.connect(LibraryServer(id: server, name: "Calibre-Web", source: source))
     }
 
     func type(_ query: String) async {
@@ -246,7 +246,7 @@ struct BooksOnIPhoneTests {
             recents: recents, finished: FinishedBooks(fileURL: temporaryFile("FinishedBooks")),
             onIPhone: BooksOnIPhone(fileURL: temporaryFile("BooksOnIPhone"))
         )
-        await library.connect(LibraryServer(id: server, name: "Shelf", detail: "", source: SearchSource()))
+        await library.connect(LibraryServer(id: server, name: "Shelf", source: SearchSource()))
         library.bookDownloading(SourcedBook(source: server, book: book("2", "Downloaded")))
         library.bookDownloading(SourcedBook(source: server, book: book("1", "Opened long ago")))
         #expect(library.iPhoneBooks().map(\.book.title) == ["Opened long ago", "Downloaded"])

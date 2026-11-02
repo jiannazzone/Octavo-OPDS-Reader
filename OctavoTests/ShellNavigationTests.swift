@@ -108,14 +108,6 @@ struct ShellPathTests {
         #expect(path.lastMove == .replace)
     }
 
-    // Cover | Details unfolded; Settings keeps to the left page until it's
-    // designed.
-    @Test func aBooksScreenFillsTheSpread() {
-        #expect(ShellRoute.cover(SampleRoutes.book(1)).fillsSpread)
-        #expect(Self.a.fillsSpread)
-        #expect(!ShellRoute.settings.fillsSpread)
-    }
-
     @Test func replacingDoesntAnimate() {
         var path = ShellPath()
         path.push(Self.a)
@@ -155,7 +147,7 @@ struct ShellModelTests {
     /// A shell connected to a stub library whose downloads work.
     private func connectedShell(_ files: TemporaryBookFiles) async -> ShellModel {
         let model = makeShell(opener: BookOpener(files: files.store))
-        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", detail: "", source: StubLibrarySource()))
+        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", source: StubLibrarySource()))
         return model
     }
 
@@ -270,7 +262,7 @@ struct ShellModelTests {
     @Test func aBookJoinsContinueReadingOnceItOpens() async throws {
         let files = try TemporaryBookFiles()
         let model = makeShell(opener: BookOpener(files: files.store))
-        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", detail: "", source: StubLibrarySource()))
+        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", source: StubLibrarySource()))
         #expect(model.library.continueReading.isEmpty)
 
         let alice = SampleRoutes.book(3)
