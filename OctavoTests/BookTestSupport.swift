@@ -74,7 +74,7 @@ nonisolated struct TemporaryBookFiles {
     let store: StoredBookFiles
 
     init() throws {
-        directory = FileManager.default.temporaryDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        directory = URL.testDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         store = StoredBookFiles(directory: directory)
     }

@@ -5,7 +5,7 @@ import Testing
 
 /// The real Keychain, in the app's own process (the simulator), where the
 /// app's entitlements and data protection apply.
-@Suite(.serialized)
+@Suite(.serialized, .temporaryFiles)
 struct KeychainTests {
     let serverID = "keychain-test-\(UUID().uuidString)"
 
@@ -97,7 +97,7 @@ struct KeychainTests {
     /// Keychain items outlive the app; the first launch after an install
     /// deletes them, once.
     @Test func reinstallStartsSignedOut() async throws {
-        let defaults = try #require(UserDefaults(suiteName: "keychain-test-\(UUID().uuidString)"))
+        let defaults = UserDefaults.testSuite("keychain-test")
         let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
         try await tokens.save(BookOrbitCredentials(accessToken: "left over"))
 

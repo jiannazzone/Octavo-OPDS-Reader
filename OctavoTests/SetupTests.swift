@@ -40,9 +40,10 @@ struct ServerAddressTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct SavedServerTests {
     private static func temporaryStore() -> ServerStore {
-        ServerStore(fileURL: URL.temporaryDirectory.appending(path: "Server-\(UUID().uuidString).json"))
+        ServerStore(fileURL: URL.testDirectory.appending(path: "Server-\(UUID().uuidString).json"))
     }
 
     @Test func keepsTheServerBetweenLaunches() throws {
@@ -88,6 +89,7 @@ struct SavedServerTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct SetupFlowTests {
     @Test func withoutAServerSetupShowsAndOpensItsSteps() {
         let shell = makeShell()

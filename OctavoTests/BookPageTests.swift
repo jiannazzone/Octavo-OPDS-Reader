@@ -6,6 +6,7 @@ import Testing
 
 /// What the cover's sheet shows (decision 20).
 @MainActor
+@Suite(.temporaryFiles)
 struct BookPageTests {
     static let book = LibraryBook(id: LibraryBookID(rawValue: "3"), title: "Moby-Dick", authors: ["Herman Melville"], progress: 0.3)
 
@@ -60,7 +61,7 @@ struct BookPageTests {
     // MARK: Mark finished
 
     private static func finishedBooks() -> FinishedBooks {
-        FinishedBooks(fileURL: URL.temporaryDirectory.appending(path: "FinishedBooks-\(UUID().uuidString).json"))
+        FinishedBooks(fileURL: URL.testDirectory.appending(path: "FinishedBooks-\(UUID().uuidString).json"))
     }
 
     private static let id = SourcedBook.ID(source: LibrarySourceID(rawValue: "server"), book: book.id)

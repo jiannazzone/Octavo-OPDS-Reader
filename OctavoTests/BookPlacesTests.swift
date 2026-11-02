@@ -44,6 +44,7 @@ actor FakeProgressSync: ProgressSync {
 
 /// Where a book opens and whether its place synced (step 13).
 @MainActor
+@Suite(.temporaryFiles)
 struct BookPlacesTests {
     static let file = LibraryFile(id: LibraryFileID(rawValue: "3"), format: "epub", isPrimary: true)
     /// The library list says 30%, as BookOrbit's lists do.
@@ -57,7 +58,7 @@ struct BookPlacesTests {
     static let longAgo = Date(timeIntervalSince1970: 0)
 
     let store = ReadingPositionStore(
-        directory: URL.temporaryDirectory.appending(path: "places-\(UUID().uuidString)", directoryHint: .isDirectory)
+        directory: URL.testDirectory.appending(path: "places-\(UUID().uuidString)", directoryHint: .isDirectory)
     )
     let clock = TestClock()
     var key: String { Self.file.storageKey }

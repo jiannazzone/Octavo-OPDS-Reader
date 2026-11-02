@@ -6,6 +6,7 @@ import Testing
 /// Settings (step 14): its pages folded and unfolded, Remove server, the
 /// books on the iPhone and the licences.
 @MainActor
+@Suite(.temporaryFiles)
 struct SettingsNavigationTests {
     // Folded, a row's page slides in over the list, and Back returns to it.
     @Test func foldedAPageGoesOverTheList() {
@@ -60,6 +61,7 @@ struct SettingsNavigationTests {
 
 /// Remove server (decision 24): what goes, what stays.
 @MainActor
+@Suite(.temporaryFiles)
 struct RemoveServerTests {
     static let server = LibrarySourceID(rawValue: "server-remove-test")
     let files: TemporaryBookFiles
@@ -214,6 +216,7 @@ struct RemoveServerTests {
 
 /// Sign out (decision 24): the server stays, signed out.
 @MainActor
+@Suite(.temporaryFiles)
 struct SignOutTests {
     @Test func signingOutShowsTheBannerAndKeepsTheServer() async {
         let model = makeShell()
