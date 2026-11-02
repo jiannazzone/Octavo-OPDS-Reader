@@ -1,6 +1,5 @@
 import Foundation
 import OctavoKit
-import Testing
 @testable import Octavo
 
 /// A source for the cover page and opener tests: one book, details, and a
@@ -67,39 +66,6 @@ nonisolated struct StubLibrarySource: LibrarySource {
 nonisolated final class FinishedMarks: @unchecked Sendable {
     var sent: [Bool] = []
     var refuses = false
-}
-
-/// Gives each test case a temporary folder of its own, `URL.testDirectory`,
-/// and removes it when the case ends, so test files don't pile up in the
-/// app's `tmp`. Every suite that writes files takes it: `@Suite(.temporaryFiles)`.
-nonisolated struct TemporaryFiles: SuiteTrait, TestTrait, TestScoping {
-    @TaskLocal static var directory: URL?
-
-    var isRecursive: Bool { true }
-
-    func scopeProvider(for test: Test, testCase: Test.Case?) -> Self? {
-        testCase == nil ? nil : self
-    }
-
-    func provideScope(for test: Test, testCase: Test.Case?, performing function: @concurrent @Sendable () async throws -> Void) async throws {
-        let directory = URL.temporaryDirectory.appending(path: "OctavoTests-\(UUID().uuidString)", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        try await Self.$directory.withValue(directory) { try await function() }
-    }
-}
-
-extension Trait where Self == TemporaryFiles {
-    static var temporaryFiles: Self { TemporaryFiles() }
-}
-
-extension URL {
-    /// The running test case's temporary folder, removed when it ends.
-    nonisolated static var testDirectory: URL {
-        if let directory = TemporaryFiles.directory { return directory }
-        Issue.record("This suite writes files: give it @Suite(.temporaryFiles), or they stay in tmp.")
-        return .temporaryDirectory
-    }
 }
 
 /// `StoredBookFiles` in a temporary directory of its own.

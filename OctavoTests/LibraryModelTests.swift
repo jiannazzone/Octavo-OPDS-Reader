@@ -70,9 +70,19 @@ private func temporaryRecents() -> RecentBooks {
     RecentBooks(fileURL: URL.testDirectory.appending(path: "RecentBooks-\(UUID().uuidString).json"))
 }
 
+/// A library whose lists keep their files in the test's folder, not the app's.
+@MainActor
+private func temporaryLibrary(recents: RecentBooks = temporaryRecents()) -> LibraryModel {
+    LibraryModel(
+        recents: recents,
+        finished: FinishedBooks(fileURL: URL.testDirectory.appending(path: "FinishedBooks-\(UUID().uuidString).json")),
+        onIPhone: BooksOnIPhone(fileURL: URL.testDirectory.appending(path: "BooksOnIPhone-\(UUID().uuidString).json"))
+    )
+}
+
 @MainActor
 private func connected(_ source: some LibrarySource, recents: RecentBooks = temporaryRecents()) async -> LibraryModel {
-    let library = LibraryModel(recents: recents)
+    let library = temporaryLibrary(recents: recents)
     await library.connect(LibraryServer(id: server, name: "Shelf", detail: "", source: source))
     return library
 }
@@ -199,7 +209,7 @@ struct LibraryModelTests {
     @Test func rowsPreviewFromTheSmallPageSource() async throws {
         let full = PagedSource(pages: ["c": LibraryFeed(books: (0..<50).map { book("\($0)") })])
         let small = PagedSource(pages: ["c": LibraryFeed(books: (0..<3).map { book("\($0)") })])
-        let library = LibraryModel(recents: temporaryRecents())
+        let library = temporaryLibrary()
         await library.connect(LibraryServer(id: server, name: "Shelf", detail: "", source: full, previewSource: small))
 
         let preview = try #require(library.preview(link("c"), from: server))
