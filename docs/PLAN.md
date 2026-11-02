@@ -36,6 +36,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 ## To revisit
 
 - The book sheet at rest, folded, is still quite tall; try a smaller resting state (Adam, after step 4).
+- The reader's progress bar sits too close to the screen's bottom-left corner when flat; tidy its placement, with the reader's panels (step 12) or sooner (Adam, after step 9).
 
 ## What you'll see that isn't right yet
 
