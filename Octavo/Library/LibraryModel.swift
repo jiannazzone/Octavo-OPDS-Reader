@@ -151,6 +151,12 @@ final class LibraryModel {
         return await covers.image(for: book, size: size, from: library)
     }
 
+    /// An author's photo, from the library that listed them.
+    func portraitImage(_ portrait: LibraryCover, from source: LibrarySourceID) async -> UIImage? {
+        guard let library = self.source(for: source) else { return nil }
+        return await covers.image(for: portrait, in: source, size: .thumbnail, from: library)
+    }
+
     /// Retry on the banner: what failed loads again.
     func retry() async {
         connectionProblem = nil

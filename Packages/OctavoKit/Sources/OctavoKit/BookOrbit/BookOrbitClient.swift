@@ -352,6 +352,13 @@ public actor BookOrbitClient {
         return try await send(request)
     }
 
+    /// `GET authors/{id}/thumbnail`: the author's photo, small.
+    public func authorThumbnail(authorID: Int) async throws -> Data {
+        var request = URLRequest(url: apiURL("authors/\(authorID)/thumbnail"))
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        return try await send(request)
+    }
+
     /// `GET books/files/{fileId}/serve`, saved to `destination` (replaced if
     /// it exists). `progress` gets 0...1 as bytes arrive; it stays at 0 if
     /// the server doesn't send a length. Cancelling the task cancels the

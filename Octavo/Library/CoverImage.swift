@@ -51,12 +51,24 @@ final class CoverCache {
     }
 
     func cachedImage(for book: SourcedBook, size: LibraryCoverSize) -> UIImage? {
-        key(book, size).flatMap { images.object(forKey: $0 as NSString) }
+        book.book.cover.flatMap { cachedImage(for: $0, in: book.source, size: size) }
+    }
+
+    /// Any image a library hands out as a cover: a book's, an author's photo.
+    func cachedImage(for cover: LibraryCover, in source: LibrarySourceID, size: LibraryCoverSize) -> UIImage? {
+        images.object(forKey: key(cover, source, size) as NSString)
     }
 
     /// `nil` if the book has no cover or it couldn't be fetched.
     func image(for book: SourcedBook, size: LibraryCoverSize, from library: any LibrarySource) async -> UIImage? {
-        guard let key = key(book, size), let cover = book.book.cover, !missing.contains(key) else { return nil }
+        guard let cover = book.book.cover else { return nil }
+        return await image(for: cover, in: book.source, size: size, from: library)
+    }
+
+    /// `nil` if it couldn't be fetched.
+    func image(for cover: LibraryCover, in source: LibrarySourceID, size: LibraryCoverSize, from library: any LibrarySource) async -> UIImage? {
+        let key = key(cover, source, size)
+        guard !missing.contains(key) else { return nil }
         if let image = images.object(forKey: key as NSString) { return image }
         if let task = loading[key] { return await task.value }
         let task = Task<UIImage?, Never> { [weak self] in
@@ -81,8 +93,8 @@ final class CoverCache {
         return image
     }
 
-    private func key(_ book: SourcedBook, _ size: LibraryCoverSize) -> String? {
-        book.book.cover.map { "\(book.source.rawValue) \(size == .full ? "full" : "thumb") \($0.cacheKey)" }
+    private func key(_ cover: LibraryCover, _ source: LibrarySourceID, _ size: LibraryCoverSize) -> String {
+        "\(source.rawValue) \(size == .full ? "full" : "thumb") \(cover.cacheKey)"
     }
 }
 

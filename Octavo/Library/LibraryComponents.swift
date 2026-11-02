@@ -1,5 +1,6 @@
 import OctavoKit
 import SwiftUI
+import UIKit
 
 // The pieces Home and the Library are built from: covers that open a book,
 // grid cells and list rows.
@@ -38,10 +39,13 @@ struct BookCover: View {
 }
 
 /// A cover in a grid, opening the book's screen; a series numbers it.
+/// With Titles under covers on (Settings), its title shows beneath, up to
+/// two lines, for covers that don't make the book clear.
 struct BookGridCell: View {
     let book: SourcedBook
     var numbered = false
     @Environment(ShellModel.self) private var shell
+    @AppStorage(LibrarySettings.titlesUnderCoversKey) private var showsTitle = false
 
     var body: some View {
         OpenButton(route: .cover(book)) {
@@ -52,6 +56,14 @@ struct BookGridCell: View {
                     Text(book.book.series?.position.map(Self.number) ?? "")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+                if showsTitle {
+                    Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
+                        .font(.footnote)
+                        .lineLimit(2, reservesSpace: true)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityHidden(true)
                 }
             }
         }
@@ -129,14 +141,14 @@ struct EntryRow: View {
                     covers
                 }
                 if entry.kind == .author {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    AuthorAvatar(entry: entry, source: source)
+                    VStack(alignment: .leading, spacing: 1) {
                         Text(AuthorIndex.displayName(entry))
                             .lineLimit(1)
                         if let detail = entry.listDetail {
                             Text(detail)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                                .fixedSize()
                         }
                     }
                 } else {
@@ -331,4 +343,61 @@ nonisolated enum AuthorIndex {
         else { return "#" }
         return String(first).uppercased()
     }
+}
+
+/// An author beside their name (Adam, 2026-11-02): their photo if the
+/// server has one (BookOrbit's, from the server itself), else their
+/// initials on a tint that stays the same for the same name.
+struct AuthorAvatar: View {
+    let entry: LibraryEntry
+    let source: LibrarySourceID
+    var size: CGFloat = 36
+    @Environment(LibraryModel.self) private var library
+    @State private var loaded: UIImage?
+
+    var body: some View {
+        let name = AuthorIndex.displayName(entry)
+        let tint = Self.tint(for: name)
+        let image = loaded ?? entry.portrait.flatMap { library.covers.cachedImage(for: $0, in: source, size: .thumbnail) }
+        ZStack {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                tint.opacity(0.18)
+                Text(Self.initials(name))
+                    .font(.system(size: size * 0.38, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(.circle)
+        .task(id: entry.portrait) {
+            guard let portrait = entry.portrait else { return }
+            loaded = await library.portraitImage(portrait, from: source)
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// "JA" for Jane Austen, "HW" for H. G. Wells, "P" for Plato: the first
+    /// and last names' first letters.
+    nonisolated static func initials(_ name: String) -> String {
+        let words = name.split(whereSeparator: { $0.isWhitespace }).filter { $0.first?.isLetter == true }
+        let letters = [words.first, words.count > 1 ? words.last : nil].compactMap { $0?.first }
+        return String(letters).uppercased()
+    }
+
+    nonisolated private static let tints: [Color] = [.purple, .teal, .orange, .blue, .pink, .indigo, .green, .brown]
+
+    nonisolated static func tint(for name: String) -> Color {
+        let sum = name.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFFFF }
+        return tints[sum % tints.count]
+    }
+}
+
+/// The Library's display choices, kept on the iPhone.
+enum LibrarySettings {
+    /// Titles under covers (Adam, 2026-11-02): off by default.
+    static let titlesUnderCoversKey = "library.titlesUnderCovers"
 }

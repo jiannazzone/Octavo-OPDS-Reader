@@ -190,3 +190,17 @@ struct AttemptTests {
         #expect(setup.error == nil)
     }
 }
+
+struct AuthorAvatarTests {
+    @Test func initialsAreTheFirstAndLastNames() {
+        #expect(AuthorAvatar.initials("Jane Austen") == "JA")
+        #expect(AuthorAvatar.initials("H. G. Wells") == "HW")
+        #expect(AuthorAvatar.initials("Arthur Conan Doyle") == "AD")
+        #expect(AuthorAvatar.initials("Plato") == "P")
+        #expect(AuthorAvatar.initials("  ") == "")
+    }
+
+    @Test func aNameKeepsItsTint() {
+        #expect(AuthorAvatar.tint(for: "Jane Austen") == AuthorAvatar.tint(for: "Jane Austen"))
+    }
+}

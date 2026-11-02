@@ -23,8 +23,17 @@ struct ShellScreen: View {
 
 /// Opened by the Settings button at the top of the side column.
 struct SettingsPlaceholder: View {
+    @AppStorage(LibrarySettings.titlesUnderCoversKey) private var titlesUnderCovers = false
+
     var body: some View {
         List {
+            Section {
+                Toggle("Titles under covers", isOn: $titlesUnderCovers)
+            } header: {
+                Text("Library")
+            } footer: {
+                Text("Shows each book’s title beneath its cover in the Library.")
+            }
             Section("Server") {
                 ShellLink(.settingsPage("BookOrbit")) {
                     VStack(alignment: .leading) {

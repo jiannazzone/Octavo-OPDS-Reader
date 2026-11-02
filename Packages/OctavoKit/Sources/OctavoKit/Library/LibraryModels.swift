@@ -131,6 +131,9 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
     /// Up to three covers to show on the row. Empty when the source doesn't
     /// list them (BookOrbit collections): load the entry's first page instead.
     public var previewCovers: [LibraryCover]
+    /// An author's photo, if the server has one (BookOrbit). Loaded like a
+    /// cover, from the same server.
+    public var portrait: LibraryCover?
     public var link: LibraryLink
 
     public var id: LibraryLink { link }
@@ -142,6 +145,7 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
         count: Int? = nil,
         sortName: String? = nil,
         previewCovers: [LibraryCover] = [],
+        portrait: LibraryCover? = nil,
         link: LibraryLink
     ) {
         self.kind = kind
@@ -150,6 +154,7 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
         self.count = count
         self.sortName = sortName
         self.previewCovers = previewCovers
+        self.portrait = portrait
         self.link = link
     }
 }

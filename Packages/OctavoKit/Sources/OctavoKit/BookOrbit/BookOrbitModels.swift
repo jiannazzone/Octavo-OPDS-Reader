@@ -78,8 +78,12 @@ public struct BookOrbitAuthor: Decodable, Hashable, Sendable, Identifiable {
     public var bookCount: Int?
     /// One of their books with a cover, newest first.
     public var coverBookID: Int?
+    /// Their photo's thumbnail, if the server has one: a path on the server
+    /// (`/api/v1/authors/5/thumbnail?t=…`), the query changing with the
+    /// image. Only its version is used; the source builds the request itself.
+    public var imageURL: String?
 
-    private enum CodingKeys: String, CodingKey { case id, name, sortName, bookCount, coverBookId }
+    private enum CodingKeys: String, CodingKey { case id, name, sortName, bookCount, coverBookId, imageUrl }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -88,6 +92,7 @@ public struct BookOrbitAuthor: Decodable, Hashable, Sendable, Identifiable {
         sortName = c.lenient(String.self, .sortName)
         bookCount = c.lenient(Int.self, .bookCount)
         coverBookID = c.lenient(Int.self, .coverBookId)
+        imageURL = c.lenient(String.self, .imageUrl)
     }
 }
 

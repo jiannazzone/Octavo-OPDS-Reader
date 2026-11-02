@@ -37,9 +37,13 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 
 ### Series and authors (Adam, 2026-11-01)
 - **Series: cover stacks.** The Series list is a grid across both pages; each series is a small stack of its first covers with its name and book count under it. Opening one shows its books numbered in reading order. On the Library page, a shelf of series (or authors) shows the same tiles, each opening that series. Adam was split between this and rows; built as stacks to judge on the device.
-- **Authors: first name first, filed by last name.** "Jane Austen 1 book" under A, "H. G. Wells" under W (made from the name when the server's sort name isn't last name first). The count follows the name; no chevrons.
+- **Authors: first name first, filed by last name.** "Jane Austen" under A, "H. G. Wells" under W (made from the name when the server's sort name isn't last name first); no chevrons.
+- **Each author has a picture** (Adam, 2026-11-02, over a cover each and a grid of tiles): their photo when the server has one (BookOrbit keeps author photos and serves them itself), else their initials on a tint that stays with the name, like Contacts. The name sits over the book count.
 - **An A–Z strip** at the trailing edge of the page once an author list reaches 30 names: tap or slide to jump to a letter.
 - Library list rows have no chevron: unfolded it sat mid-screen at the left page's edge.
+
+### Titles under covers (Adam, 2026-11-02)
+- **A Settings switch, off by default:** Settings → Library → Titles under covers puts up to two lines of each book's title beneath its cover, in every grid of books, for covers that don't make the book clear. Kept on the iPhone. It moves into the real Settings in step 14.
 
 ### A book's screen
 - **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, author, place and progress bar, then **Mark finished | Open**; pull it up for the details.

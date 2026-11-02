@@ -138,6 +138,9 @@ public struct BookOrbitSource: LibrarySource {
     }
 
     public func cover(_ cover: LibraryCover, size: LibraryCoverSize) async throws -> Data {
+        if let authorID = Self.portraitAuthorID(cover) {
+            return try await mappingErrors { try await client.authorThumbnail(authorID: authorID) }
+        }
         guard let bookID = Self.coverBookID(cover) else { throw LibraryError.invalidLink }
         return try await mappingErrors { try await client.cover(bookID: bookID, thumbnail: size == .thumbnail) }
     }
@@ -220,12 +223,25 @@ public struct BookOrbitSource: LibrarySource {
             count: author.bookCount,
             sortName: author.sortName,
             previewCovers: author.coverBookID.map { [Self.cover(bookID: $0, version: nil)] } ?? [],
+            portrait: author.imageURL.map { Self.portrait(authorID: author.id, imageURL: $0) },
             link: BookOrbitRoute.author(id: author.id, page: 0).link
         )
     }
 
     private static func cover(bookID: Int, version: String?) -> LibraryCover {
         LibraryCover(rawValue: "books/\(bookID)", version: version)
+    }
+
+    /// An author's photo, versioned by the server's `t=` so a new photo
+    /// isn't served from the cache.
+    static func portrait(authorID: Int, imageURL: String) -> LibraryCover {
+        let version = URLComponents(string: imageURL)?.queryItems?.first { $0.name == "t" }?.value
+        return LibraryCover(rawValue: "authors/\(authorID)", version: version)
+    }
+
+    private static func portraitAuthorID(_ cover: LibraryCover) -> Int? {
+        guard cover.rawValue.hasPrefix("authors/") else { return nil }
+        return Int(cover.rawValue.dropFirst("authors/".count))
     }
 
     private static func coverBookID(_ cover: LibraryCover) -> Int? {

@@ -236,7 +236,8 @@ struct BookOrbitSourceTests {
         let server = StubServer { _ in
             .json(#"""
             {"items":[{"id":4,"name":"Jane Austen","sortName":"Austen, Jane","bookCount":1,"coverBookId":4,"imageUrl":null},
-                      {"id":1,"name":"Lewis Carroll","sortName":null,"bookCount":1,"coverBookId":null}],
+                      {"id":1,"name":"Lewis Carroll","sortName":null,"bookCount":1,"coverBookId":null,
+                       "imageUrl":"/api/v1/authors/1/thumbnail?t=1730390400"}],
              "total":5,"page":0,"size":2}
             """#)
         }
@@ -249,6 +250,7 @@ struct BookOrbitSourceTests {
             previewCovers: [LibraryCover(rawValue: "books/4")], link: link(.author(id: 4, page: 0))
         ))
         #expect(feed.entries.last?.previewCovers == [])
+        #expect(feed.entries.last?.portrait == LibraryCover(rawValue: "authors/1", version: "1730390400"))
         #expect(feed.next == link(.authors(page: 1)))
     }
 
@@ -376,6 +378,8 @@ struct BookOrbitSourceTests {
         #expect(try await source.cover(cover, size: .thumbnail) == jpeg)
         #expect(try await source.cover(cover, size: .full) == jpeg)
         #expect(server.requests.map(\.path) == ["/api/v1/books/4/thumbnail", "/api/v1/books/4/cover"])
+        #expect(try await source.cover(LibraryCover(rawValue: "authors/1", version: "7"), size: .thumbnail) == jpeg)
+        #expect(server.requests.last?.path == "/api/v1/authors/1/thumbnail")
         #expect(server.requests.first?.headers["accept"] == "image/*")
         #expect(server.requests.first?.headers["authorization"] == "Bearer access-1")
         #expect(cover.cacheKey == "books/4@v1")
