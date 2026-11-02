@@ -1,13 +1,14 @@
 import OctavoKit
 import SwiftUI
 
-/// The cover's glass sheet (decision 20): at its compact height the strip
-/// (place, Open, progress); swiped up, the same sheet keeps the strip and
-/// adds the details below it. Drag the strip, or tap the grabber, to switch.
+/// The cover's glass sheet, folded: at rest the book's summary (title,
+/// place, Download, Open); pulled up, the same sheet keeps the summary and
+/// adds the details below it. Drag the summary, or tap the grabber, to
+/// switch.
 ///
-/// Drawn by the cover page rather than presented, so unfolded it stays
-/// inside the right-hand pane and a fold never catches it mid-presentation
-/// (`docs/notes/duo-tabbar.md` §6).
+/// Drawn by the cover page rather than presented, so a fold never catches
+/// it mid-presentation (`docs/notes/duo-tabbar.md` §6); unfolded, the right
+/// page shows the same summary and details instead.
 struct BookSheet: View {
     let page: BookPage
     let source: any LibrarySource
@@ -55,7 +56,7 @@ struct BookSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(page.isExpanded ? "Hide details" : "Show details")
-            BookStrip(page: page, source: source)
+            BookSummary(page: page, source: source)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
         }
@@ -82,34 +83,79 @@ struct BookSheet: View {
     }
 }
 
-/// The strip at the top of the sheet: the place and Open, or a download's
-/// progress or problem in Open's place (decision 22).
-struct BookStrip: View {
+/// The top of a book's sheet, and of its right page unfolded: the title
+/// and author, then the place with Download and Open, or a download's
+/// progress or problem in their place (decision 22).
+struct BookSummary: View {
     let page: BookPage
     let source: any LibrarySource
+    var titleFont: Font = .title3.weight(.semibold)
+    var titleLines = 2
     @Environment(ShellModel.self) private var shell
     @Environment(\.openBook) private var openBook
+    @Environment(\.openLibraryEntry) private var openLibraryEntry
 
     var body: some View {
-        if let message {
-            CoverStripStatus(message: message, action: act)
-        } else {
-            let progress = page.progress()
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    // #11 adds the chapter here and a "Synced …" line below.
-                    Text(BookPage.placeLine(progress: progress))
-                        .font(.headline)
-                    Spacer(minLength: 8)
-                    Button("Open") {
-                        if let openBook { openBook(page.current) } else { shell.opener.open(page.current, from: source) }
-                    }
-                        .buttonStyle(.glassProminent)
-                        .disabled(!shell.opener.canOpen(page.current))
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(page.current.title.isEmpty ? "Untitled" : page.current.title)
+                    .font(titleFont)
+                    .lineLimit(titleLines)
+                    .accessibilityAddTraits(.isHeader)
+                author
+            }
+            if let message {
+                CoverStripStatus(message: message, action: act)
+            } else {
+                place
+            }
+        }
+    }
+
+    /// "30%" over the progress bar, then Download and Open.
+    private var place: some View {
+        let progress = page.progress()
+        return HStack(spacing: 10) {
+            // #11 adds the chapter here and a "Synced …" line.
+            VStack(alignment: .leading, spacing: 6) {
+                Text(BookPage.placeLine(progress: progress))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 ProgressView(value: progress ?? 0)
                     .accessibilityHidden(true)
             }
+            .padding(.trailing, 6)
+            BookDownloadButton(page: page, source: source)
+            Button("Open") {
+                if let openBook { openBook(page.current) } else { shell.opener.open(page.current, from: source) }
+            }
+            .buttonStyle(.glassProminent)
+            .disabled(!shell.opener.canOpen(page.current))
+        }
+    }
+
+    /// Tapping the author opens their books, where the screen provides a
+    /// way to open them.
+    @ViewBuilder
+    private var author: some View {
+        let line = page.authorLine
+        if let entry = page.details?.authors.first, let openLibraryEntry {
+            Button {
+                openLibraryEntry(entry)
+            } label: {
+                HStack(spacing: 4) {
+                    Text(line)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.tint)
+        } else if !line.isEmpty {
+            Text(line)
+                .lineLimit(1)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -136,28 +182,14 @@ struct BookStrip: View {
     }
 }
 
-/// Below the strip (decision 20): title and author, Mark as finished and
-/// Download, the description, then Series, Collections, File, From, Added.
+/// Below the summary: the description, then Series, Collections, File,
+/// From and Added.
 struct BookDetails: View {
     let page: BookPage
     let source: any LibrarySource
-    @Environment(\.openLibraryEntry) private var openLibraryEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(page.current.title.isEmpty ? "Untitled" : page.current.title)
-                    .font(.title3.weight(.semibold))
-                author
-            }
-            HStack(spacing: 10) {
-                // Sending it to BookOrbit is #11 (decision 20); until then
-                // the button shows but does nothing.
-                Button("Mark as finished", systemImage: "checkmark") {}
-                    .buttonStyle(.glass)
-                    .disabled(true)
-                BookDownloadButton(page: page, source: source)
-            }
             if let description = page.plainDescription {
                 BookDescription(text: description, isExpanded: Bindable(page).showsFullDescription)
             } else if page.details == nil, !page.detailsFailed {
@@ -184,29 +216,6 @@ struct BookDetails: View {
                 Divider()
                 row("Added", page.addedLine)
             }
-        }
-    }
-
-    /// Tapping the author opens their books (decision 20), once the Library
-    /// provides a way to open them (#13).
-    @ViewBuilder
-    private var author: some View {
-        let line = page.authorLine
-        if let entry = page.details?.authors.first, let openLibraryEntry {
-            Button {
-                openLibraryEntry(entry)
-            } label: {
-                HStack(spacing: 4) {
-                    Text(line)
-                    Image(systemName: "chevron.forward")
-                        .font(.footnote.weight(.semibold))
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.tint)
-        } else if !line.isEmpty {
-            Text(line)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -249,13 +258,22 @@ struct BookDescription: View {
 }
 
 /// Download, its progress as a ring (tap to cancel), then a check once the
-/// book is on the iPhone. Remove download is #10.
+/// book is on the iPhone. Remove download comes with downloads (`docs/PLAN.md`, step 4).
 struct BookDownloadButton: View {
     let page: BookPage
     let source: any LibrarySource
     @Environment(ShellModel.self) private var shell
 
+    /// One size in every state, so the row beside it doesn't move.
+    static let size: CGFloat = 40
+
     var body: some View {
+        control
+            .frame(width: Self.size, height: Self.size)
+    }
+
+    @ViewBuilder
+    private var control: some View {
         let opener = shell.opener
         let book = page.current
         switch opener.status(of: book) {
@@ -272,8 +290,7 @@ struct BookDownloadButton: View {
         case .downloaded:
             Image(systemName: "checkmark")
                 .font(.body.weight(.semibold))
-                .frame(width: 24, height: 24)
-                .padding(10)
+                .frame(width: Self.size, height: Self.size)
                 .glassEffect(in: .circle)
                 .accessibilityLabel("Downloaded")
         case .notDownloaded, .failed:

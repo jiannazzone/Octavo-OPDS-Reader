@@ -23,7 +23,10 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     /// Whether the screen has its two-page layout yet; one that hasn't keeps
     /// to the left page unfolded.
     var fillsSpread: Bool {
-        if case .feed = self { true } else { false }
+        switch self {
+        case .feed, .cover: true
+        case .settings, .settingsPage: false
+        }
     }
 
     /// Drawn as the screen's large title. `nil` for a book's screen.

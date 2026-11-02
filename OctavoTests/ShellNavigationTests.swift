@@ -103,6 +103,14 @@ struct ShellPathTests {
         #expect(path.lastMove == .replace)
     }
 
+    // Cover | Details unfolded; Settings keeps to the left page until it's
+    // designed.
+    @Test func aBooksScreenFillsTheSpread() {
+        #expect(ShellRoute.cover(SampleRoutes.book(1)).fillsSpread)
+        #expect(Self.a.fillsSpread)
+        #expect(!ShellRoute.settings.fillsSpread)
+    }
+
     @Test func replacingDoesntAnimate() {
         var path = ShellPath()
         path.push(Self.a)

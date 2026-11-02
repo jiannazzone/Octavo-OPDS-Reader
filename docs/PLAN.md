@@ -6,7 +6,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 - [x] **1. Shell.** Three tabs, one stack of screens per tab, each screen a spread across both pages; Back and swipe back; Settings button.
 - [x] **2. Library.** Sections as shelves; a section opens over the whole spread (grid of covers, or a list flowing left page → right page).
-- [ ] **3. A book's screen.** Folded: the cover with a sheet (title, progress, Download, Open; pull up for details). Unfolded: Cover | Details. Unfolding opens a downloaded book.
+- [x] **3. A book's screen.** Folded: the cover with a sheet (title, progress, Download, Open; pull up for details). Unfolded: Cover | Details. Unfolding opens a downloaded book.
 - [ ] **4. Downloads.** A check on downloaded covers and a ring while downloading, everywhere covers show; downloads kept where iOS won't clear them; Remove download; nothing downloads in the background.
 - [ ] **5. Home.** The book you're reading, large, with your other books in progress beneath (or on the right page).
 - [ ] **6. Series and authors.** Series in reading order, Authors A–Z. *Needs decisions.*
@@ -24,7 +24,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 ## Phase 3: The rest of v1
 
-- [ ] **13. Sync you can see.** Last synced, "not synced yet", Mark as finished.
+- [ ] **13. Sync you can see.** Last synced, "not synced yet", Mark as finished. The place on a book's screen matches where the book opens (a server percentage without a position opens at the start today), and unfolding opens at once (the server's position is fetched while the cover shows, not after the unfold).
 - [ ] **14. Settings.** Server, Storage (books on iPhone), About, Remove server.
 - [ ] **15. Other ways in.** Import from Files, the bundled sample book, MOBI/AZW3/FB2 check.
 - [ ] **16. Security follow-up.** Confirm whether a server counts as local by its name alone (#9), and fix it if so.
@@ -35,12 +35,12 @@ These screens are still the old ones or stand-ins; the step that replaces them i
 
 | You see | Fixed in |
 |---|---|
-| Tapping a book shows the old cover screen | 3 |
 | Download and loading behaviour on a book | 4 |
 | Home is the old one | 5 |
 | Series and Authors are plain lists | 6 |
 | Search says "Not designed yet" | 7 |
 | Settings is a stand-in; connecting is a debug switch | 8, 14 |
 | Anything in the reader | 9–12 |
+| A book opens somewhere other than the % its screen shows, or after a pause on unfolding | 13 |
 
 Something wrong in a step that's ticked is a bug in that step, fixed before moving on.

@@ -138,10 +138,6 @@ struct ScreenFrame<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.spread) private var spread
 
-    /// Where a title starts: level with the large title the system drew
-    /// folded, so it doesn't jump when the Duo unfolds (measured in #13).
-    static var titleTop: CGFloat { 30 }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
@@ -149,7 +145,7 @@ struct ScreenFrame<Content: View>: View {
                     .font(.largeTitle.bold())
                     .lineLimit(1)
                     .padding(.horizontal, 20)
-                    .padding(.top, Self.titleTop)
+                    .padding(.top, SpreadMetrics.titleTop)
                     .padding(.bottom, 8)
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)

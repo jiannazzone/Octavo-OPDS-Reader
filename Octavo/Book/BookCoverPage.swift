@@ -1,16 +1,18 @@
 import OctavoKit
 import SwiftUI
 
-/// A book's screen: the cover filling the screen, with a glass sheet at the
-/// bottom that expands into the details. Becomes Cover | Details unfolded in
-/// milestone 3.
+/// A book's screen (`docs/design/direction.md`, A book's screen).
 ///
-/// - Folded, the cover runs under the side column and the camera.
+/// - Folded, the cover fills the screen, running under the side column and
+///   the camera, with a glass sheet at the bottom: the title, the place,
+///   Download and Open; pulled up, the details. Tapping the cover while the
+///   details show returns to the strip.
+/// - Unfolded, Cover | Details: the cover fills the left page and the same
+///   summary and details sit on the right page.
 /// - Nothing is drawn behind the side column: the system's own glass
 ///   capsules (clock, Back, tabs) read on any cover.
 /// - Unfolding on this screen opens the book if it's on the iPhone
 ///   (`ShellModel.hingeChanged`).
-/// - Tapping the cover while the details show returns to the strip.
 struct BookCoverPage: View {
     let book: LibraryBook
     let source: any LibrarySource
@@ -19,24 +21,54 @@ struct BookCoverPage: View {
 
     var body: some View {
         let page = shell.pages.page(for: book)
-        ZStack(alignment: .bottom) {
-            BookCoverArt(page: page)
-                // Folded the cover runs under the side column; unfolded it
-                // stops at the column.
-                .ignoresSafeArea(edges: spread.isTwoPages ? .vertical : .all)
-                .onTapGesture {
-                    guard page.isExpanded else { return }
-                    withAnimation(BookSheet.animation) { page.isExpanded = false }
+        Group {
+            if let pages = spread.pages {
+                HStack(spacing: 0) {
+                    BookCoverArt(page: page)
+                        .frame(width: pages.leftWidth)
+                        .ignoresSafeArea(edges: .vertical)
+                    Color.clear
+                        .frame(width: pages.hingeWidth)
+                    BookInfoPage(page: page, source: source)
+                        .frame(width: pages.rightWidth)
                 }
-            // 8 pt from the bottom edge, as in frame 03.
-            BookSheet(page: page, source: source)
-                .padding(8)
-                .ignoresSafeArea(.container, edges: .bottom)
+            } else {
+                ZStack(alignment: .bottom) {
+                    BookCoverArt(page: page)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            guard page.isExpanded else { return }
+                            withAnimation(BookSheet.animation) { page.isExpanded = false }
+                        }
+                    // 8 pt from the bottom edge, as in frame 03.
+                    BookSheet(page: page, source: source)
+                        .padding(8)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
+            }
         }
         .onAppear {
             page.load(from: source)
             shell.opener.clearFailure(book)
             shell.opener.coverAppeared(book, from: source)
+        }
+    }
+}
+
+/// The right page unfolded: what the folded sheet shows, as a page.
+struct BookInfoPage: View {
+    let page: BookPage
+    let source: any LibrarySource
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                BookSummary(page: page, source: source, titleFont: .title2.bold(), titleLines: 4)
+                BookDetails(page: page, source: source)
+            }
+            .padding(.horizontal, SpreadMetrics.margin)
+            .padding(.top, SpreadMetrics.titleTop)
+            .padding(.bottom, 20)
         }
     }
 }

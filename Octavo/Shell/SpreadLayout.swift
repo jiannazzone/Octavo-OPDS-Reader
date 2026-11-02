@@ -19,6 +19,9 @@ enum SpreadMetrics {
     static let margin: CGFloat = 20
     static let spacing: CGFloat = 12
     static let minimumCell: CGFloat = 92
+    /// Where a screen's title starts: level with the large title the system
+    /// drew folded, so it doesn't jump when the Duo unfolds (measured in #13).
+    static let titleTop: CGFloat = 30
 
     static func columns(_ page: CGFloat) -> Int {
         max(1, Int((page - 2 * margin + spacing) / (minimumCell + spacing)))
