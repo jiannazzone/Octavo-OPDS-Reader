@@ -10,6 +10,8 @@ import SwiftUI
 /// outer display (`docs/notes/duo-tabbar.md` §6).
 struct ReaderView: View {
     let book: OpenedBook
+    /// Where the book's bookmarks sync, if anywhere.
+    var bookmarkSync: (any BookmarkSync)?
     let close: () -> Void
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
@@ -26,10 +28,11 @@ struct ReaderView: View {
         }
         .task(id: book.reader) {
             guard model?.book != book.reader else { return }
+            let bookmarks = ReaderBookmarks(bookID: book.reader.id, sync: bookmarkSync)
             #if DEBUG
-            model = ReaderModel(book: book.reader, sync: ReaderRemote.sync(for: book), cfiShape: ReaderRemote.cfiShape)
+            model = ReaderModel(book: book.reader, sync: ReaderRemote.sync(for: book), bookmarks: bookmarks, cfiShape: ReaderRemote.cfiShape)
             #else
-            model = ReaderModel(book: book.reader)
+            model = ReaderModel(book: book.reader, bookmarks: bookmarks)
             #endif
         }
         .onDisappear {
@@ -45,12 +48,23 @@ private struct ReaderScreen: View {
     let close: () -> Void
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
+    @AppStorage(ReaderAppearance.key) private var appearance = ReaderAppearance()
     @Environment(\.layoutDirection) private var layoutDirection
+    /// The iPhone's own, read outside the reader's: the reader takes its
+    /// theme's.
+    @Environment(\.colorScheme) private var systemColorScheme
     @State private var controls = ReaderControls()
+    @State private var panel: ReaderPanel?
+    /// Where the open panel's button is, for the panel to grow out of.
+    @State private var panelButtonFrame: CGRect?
+    /// How far the keyboard comes up over the reader, for Search's panel.
+    @State private var keyboard: Double = 0
 
     var body: some View {
         NavigationStack {
-            ReaderWebView(model: model, showsFooter: !controls.showsBar)
+            // The bars take the footer's place: the progress bar, or the
+            // step bar while stepping through search matches.
+            ReaderWebView(model: model, showsFooter: !controls.showsBar && !(model.search.isStepping && panel == nil))
                 .overlay { status }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
@@ -58,13 +72,56 @@ private struct ReaderScreen: View {
                             .transition(.opacity)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
+                        ReaderRibbon()
+                            .offset(x: geometry.size.width - geometry.safeArea.right - 30)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
+                .overlay(alignment: .bottomLeading) {
+                    if model.search.isStepping, panel == nil, !controls.showsBar, model.phase == .open, let geometry = model.geometry {
+                        // Under the page, or the right page of a spread:
+                        // nothing spans the hinge (decision 9).
+                        let right = Double(geometry.size.width) - geometry.safeArea.right
+                        let left = model.layout.columns == 2 ? (model.layout.fold?.upperBound ?? geometry.safeArea.left) : geometry.safeArea.left
+                        searchBar
+                            .frame(width: max(0, right - left))
+                            .padding(.leading, left)
+                            .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: model.search.isStepping)
+                .overlay(alignment: .topLeading) {
+                    if let panel, model.phase == .open, let geometry = model.geometry {
+                        let fold = model.layout.columns == 2 ? model.layout.fold : nil
+                        ReaderPanelFrame(geometry: geometry, fold: fold, source: panelButtonFrame, fillsSheet: panel != .textAndTheme, keyboard: keyboard) {
+                            switch panel {
+                            case .textAndTheme:
+                                ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
+                            case .contents:
+                                contentsPanel
+                            case .search:
+                                searchPanel
+                            }
+                        }
+                        // Another panel grows out of its own button.
+                        .id(panel)
+                    }
+                }
                 .ignoresSafeArea()
                 .accessibilityAction(named: Text(controls.showsBar ? "Hide Controls" : "Show Controls")) {
                     withAnimation { controls.toggle() }
                 }
                 .toolbar { buttons }
-                .toolbar(buttonsVisible ? .visible : .hidden, for: .navigationBar)
+                .toolbar(buttonsVisible || showsControlsButton ? .visible : .hidden, for: .navigationBar)
         }
+        // The column's buttons, the footer, the bar and the panel in the
+        // page's colours. Here, not for the window, so `systemColorScheme`
+        // stays the iPhone's.
+        .environment(\.colorScheme, appearance.theme(darkMode: darkMode).isDark ? .dark : .light)
         .ignoresSafeArea()
         // Measured outside the stack, so the reader's own toolbar showing or
         // hiding never moves the text, and outside `ignoresSafeArea`, where
@@ -84,17 +141,46 @@ private struct ReaderScreen: View {
         .onChange(of: margins, initial: true) { _, margins in
             model.margins = margins
         }
-        .onChange(of: controls.coversPage, initial: true) { _, covers in
+        .onChange(of: controls.coversPage || panel != nil, initial: true) { _, covers in
             model.coversPage = covers
         }
+        .onChange(of: panel) { _, panel in
+            if panel == .contents { Task { await model.placeOnScreen() } }
+        }
+        .task {
+            // The keyboard's top, as far up the reader as it comes. The
+            // reader ignores the keyboard's safe area (see above), so the
+            // panels move by this instead.
+            for await note in NotificationCenter.default.notifications(named: UIResponder.keyboardWillChangeFrameNotification) {
+                guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+                      let screen = (UIApplication.shared.connectedScenes.first { $0 is UIWindowScene } as? UIWindowScene)?.screen
+                else { continue }
+                let overlap = max(0, screen.bounds.maxY - frame.minY)
+                withAnimation(.easeOut(duration: 0.25)) { keyboard = Double(overlap) }
+            }
+        }
+        .onChange(of: appearance, initial: true) { _, appearance in
+            model.appearance = appearance.script(darkMode: darkMode)
+        }
+        .onChange(of: darkMode) { _, darkMode in
+            model.appearance = appearance.script(darkMode: darkMode)
+        }
+
         .task {
             // A binding, not `self`: the model keeps these closures, and
             // capturing the view would keep the model (and its web page)
             // alive after the reader closes.
             let controls = $controls
+            let panel = $panel
             model.onControlsTap = { zone in
                 withAnimation(.easeOut(duration: 0.2)) {
-                    if zone == "dismiss" { controls.wrappedValue.hide() } else { controls.wrappedValue.toggle() }
+                    if zone == "dismiss" {
+                        // Back to reading in one tap, panel and all.
+                        panel.wrappedValue = nil
+                        controls.wrappedValue.hide()
+                    } else {
+                        controls.wrappedValue.toggle()
+                    }
                 }
             }
             model.onBookModeChange = { _ in
@@ -106,10 +192,21 @@ private struct ReaderScreen: View {
         #endif
     }
 
+    private var darkMode: Bool { systemColorScheme == .dark }
+
     /// A book that couldn't open keeps Back up, so there's a way out.
     private var buttonsVisible: Bool {
         if case .failed = model.phase { return true }
         return controls.buttonsVisible
+    }
+
+    /// Bar hidden: a quiet "…" in the column is the one way to bring the
+    /// controls up, in every posture (Adam, 2026-11-02; a middle tap would
+    /// land on the fold half open). The rest of the column turns the page.
+    /// With Always show controls it sits after the buttons and brings up
+    /// the bar. Not while a panel is open: the bar would run under it.
+    private var showsControlsButton: Bool {
+        model.phase == .open && !controls.showsBar && panel == nil
     }
 
     @ViewBuilder private var status: some View {
@@ -124,20 +221,128 @@ private struct ReaderScreen: View {
         }
     }
 
-    /// The column's buttons (frame 08). Contents, Text and theme, Search in
-    /// book and Bookmark are greyed out until their panels exist (#18).
+    /// The column's buttons (frame 08).
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            Button("Back", systemImage: "chevron.backward", action: close)
-            Button("Contents", systemImage: "list.bullet") {}
-                .disabled(true)
-            Button("Text and Theme", systemImage: "textformat.size") {}
-                .disabled(true)
-            Button("Search in Book", systemImage: "magnifyingglass") {}
-                .disabled(true)
-            Button("Bookmark", systemImage: "bookmark") {}
-                .disabled(true)
+        if showsControlsButton, !buttonsVisible {
+            ToolbarItem(placement: .topBarTrailing) { showControlsButton }
         }
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            if buttonsVisible {
+                Button("Back", systemImage: "chevron.backward", action: close)
+                panelButton(.contents, title: "Contents", systemImage: "list.bullet")
+                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size")
+                panelButton(.search, title: "Search in Book", systemImage: "magnifyingglass")
+                let bookmarked = model.bookmarks.pageIsBookmarked
+                Button(bookmarked ? "Remove Bookmark" : "Bookmark", systemImage: bookmarked ? "bookmark.fill" : "bookmark") {
+                    model.toggleBookmark()
+                }
+                .tint(bookmarked ? ReaderRibbon.color : nil)
+                if showsControlsButton {
+                    showControlsButton
+                }
+            }
+        }
+    }
+
+    /// A column button that opens `selected`, lit while it's open. Another
+    /// panel's button switches to its own.
+    private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String) -> some View {
+        Button(String(localized: title), systemImage: systemImage) {
+            if panel != selected {
+                panelButtonFrame = Self.columnButtonFrame(titled: String(localized: title))
+            }
+            withAnimation(ReaderPanel.animation) {
+                if panel == selected {
+                    panel = nil
+                    controls.panelClosed()
+                } else {
+                    if panel == nil { controls.panelOpened() }
+                    panel = selected
+                }
+            }
+        }
+        .tint(panel == selected ? .accentColor : nil)
+        .accessibilityAddTraits(panel == selected ? .isSelected : [])
+    }
+
+    private var contentsPanel: some View {
+        ReaderContentsPanel(
+            rows: model.contentsRows,
+            current: model.currentContentsRow,
+            bookmarks: model.bookmarks.list,
+            page: { [total = model.location?.total] in ReaderModel.page(at: $0, total: total) },
+            goToRow: { row in
+                model.goTo(row)
+                backToReading()
+            },
+            goToBookmark: { bookmark in
+                model.goTo(bookmark)
+                backToReading()
+            },
+            remove: { model.bookmarks.remove($0) }
+        )
+    }
+
+    private var searchPanel: some View {
+        ReaderSearchPanel(
+            search: model.search,
+            page: { [total = model.location?.total] in ReaderModel.page(at: $0, total: total) },
+            run: { model.runSearch(submitted: $0) },
+            choose: { index in
+                model.showMatch(index)
+                backToReading()
+            }
+        )
+    }
+
+    private var searchBar: some View {
+        ReaderSearchBar(
+            search: model.search,
+            step: { model.showMatch($0) },
+            showList: {
+                withAnimation(ReaderPanel.animation) {
+                    panelButtonFrame = nil
+                    controls.panelOpened()
+                    panel = .search
+                }
+            },
+            end: { model.endSearch() }
+        )
+    }
+
+    /// A choice in a panel made: the panel and the controls go.
+    private func backToReading() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            panel = nil
+            controls.hide()
+        }
+    }
+
+    /// A column button's frame in the window, for its panel to grow out of.
+    /// SwiftUI measures a toolbar item in its own space (about (-15, -10)
+    /// for Aa), so this asks UIKit for the bar button with that title.
+    private static func columnButtonFrame(titled title: String) -> CGRect? {
+        func bars(in view: UIView) -> [UINavigationBar] {
+            (view as? UINavigationBar).map { [$0] } ?? view.subviews.flatMap(bars)
+        }
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter(\.isKeyWindow)
+        for window in windows {
+            for item in bars(in: window).flatMap({ $0.items ?? [] }) {
+                let buttons = (item.rightBarButtonItems ?? []) + item.trailingItemGroups.flatMap(\.barButtonItems)
+                if let frame = buttons.first(where: { $0.title == title })?.frame(in: window) { return frame }
+            }
+        }
+        return nil
+    }
+
+    private var showControlsButton: some View {
+        Button("Show Controls", systemImage: "ellipsis") {
+            withAnimation(.easeOut(duration: 0.2)) { controls.show() }
+        }
+        .tint(.secondary)
     }
 }
 

@@ -14,19 +14,18 @@
 
 import './foliate-js/view.js'
 import * as CFI from './foliate-js/epubcfi.js'
+import { Overlayer } from './foliate-js/overlayer.js'
+import { searchMatcher } from './foliate-js/search.js'
+import { textWalker } from './foliate-js/text-walker.js'
 
 const HANDLER = 'octavo'
 
-// Fraction of the page width that counts as a "previous/next page" tap zone,
-// on each side. Taps in the middle are reported to Swift instead.
-const TAP_ZONE = 0.3
-
-// How taps behave (Swift's `ReaderTapMode`). In book mode (decision 9) each
-// half of the spread turns its way, and a tap in the side column, where the
-// page runs under it, is reported to Swift for the controls. `content` is the
-// page's extent outside the system's areas; `dismisses` means the controls
+// How taps behave (Swift's `ReaderTapMode`). In every posture a tap left of
+// the middle goes back and right of it goes forward, the side column (where
+// the page runs under it) with the right; the controls come up only from the
+// column's own button (Adam, 2026-11-02). `dismisses` means the controls
 // cover the page, so any tap hides them.
-let tapMode = { book: false, columnStart: null, content: null, dismisses: false }
+let tapMode = { dismisses: false }
 
 const post = (type, payload = {}) => {
     const handler = window.webkit?.messageHandlers?.[HANDLER]
@@ -124,6 +123,7 @@ const onRelocate = ({ detail }) => {
         blankPage: isBlankPage(detail.range),
         fraction: finiteOrNull(detail.fraction),
         tocLabel: detail.tocItem?.label?.trim() || null,
+        tocHref: detail.tocItem?.href ?? null,
         sectionIndex: detail.section?.current ?? null,
         sectionCount: detail.section?.total ?? null,
         location: detail.location
@@ -166,40 +166,206 @@ const detectTaps = (doc, onTap) => {
 }
 
 // Left and right turn pages the way the book reads (foliate's goLeft and
-// goRight), so in a right-to-left book the left half goes forward. The side
-// zones are a share of the page outside the system's areas; flat, a tap in
-// the side column counts as the right side.
+// goRight), so in a right-to-left book the left half goes forward. The
+// middle is the middle of foliate's view: the spine of a spread, or the
+// middle of the one page folded.
 const tap = x => {
     if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
-    if (tapMode.book) {
-        if (tapMode.columnStart !== null && x >= tapMode.columnStart) return post('tap', { zone: 'column' })
-        // foliate centres the gap between the pages in its view.
-        const box = view?.getBoundingClientRect()
-        const spine = box ? box.left + box.width / 2 : innerWidth / 2
-        if (x < spine) view?.goLeft()
-        else view?.goRight()
-        return
+    const box = view?.getBoundingClientRect()
+    const middle = box ? box.left + box.width / 2 : innerWidth / 2
+    if (x < middle) view?.goLeft()
+    else view?.goRight()
+}
+
+// A hardware keyboard turns pages (step 10): ← and → the way the book reads,
+// like the halves of the page; ↑, ↓, Page Up, Page Down and Space (Shift-Space
+// back) through the book. Without this the web view scrolls the paginator by
+// a few points and leaves the page between two. Shift with an arrow extends
+// a selection, so it's left alone; while the controls cover the page a key
+// hides them, as a tap does.
+const KEY_TURNS = {
+    ArrowLeft: () => view?.goLeft(),
+    ArrowRight: () => view?.goRight(),
+    ArrowUp: () => view?.prev(),
+    PageUp: () => view?.prev(),
+    ArrowDown: () => view?.next(),
+    PageDown: () => view?.next(),
+}
+const onKeyDown = e => {
+    if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return
+    if (e.shiftKey && e.key !== ' ') return
+    const turn = e.key === ' ' ? (e.shiftKey ? () => view?.prev() : () => view?.next()) : KEY_TURNS[e.key]
+    if (!turn) return
+    e.preventDefault()
+    if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
+    turn()
+}
+
+// A trackpad's two-finger swipe (wheel events) turns one page per swipe, the
+// way it points: sideways like the halves of the page, up and down through
+// the book. A swipe is the run of events until they pause, or until a new
+// push (a jump in speed during the last swipe's momentum) or a change of
+// direction; the paginator's own scrolling would leave the page between
+// two. Pinch (Ctrl) is left alone. While the controls cover the page a swipe
+// hides them, as a tap does.
+const WHEEL_DISTANCE = 30
+const WHEEL_PAUSE_MS = 250
+const WHEEL_PUSH = 1.5
+let wheel = null
+const onWheel = e => {
+    if (e.ctrlKey) return
+    e.preventDefault()
+    const size = Math.hypot(e.deltaX, e.deltaY)
+    const fresh = !wheel || e.timeStamp - wheel.last > WHEEL_PAUSE_MS
+        || (wheel.turned && size > wheel.size * WHEEL_PUSH && size > 4)
+        || (wheel.turned && e.deltaX * wheel.dx + e.deltaY * wheel.dy < 0)
+    if (fresh) wheel = { dx: 0, dy: 0, turned: false, last: 0, size: 0 }
+    wheel.last = e.timeStamp
+    wheel.size = size
+    if (wheel.turned) return
+    wheel.dx += e.deltaX
+    wheel.dy += e.deltaY
+    const sideways = Math.abs(wheel.dx) >= Math.abs(wheel.dy)
+    const distance = sideways ? wheel.dx : wheel.dy
+    if (Math.abs(distance) < WHEEL_DISTANCE) return
+    wheel.turned = true
+    if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
+    if (sideways) distance > 0 ? view?.goRight() : view?.goLeft()
+    else distance > 0 ? view?.next() : view?.prev()
+}
+
+const listenForTurns = doc => {
+    doc.addEventListener('keydown', onKeyDown)
+    doc.addEventListener('wheel', onWheel, { passive: false })
+}
+
+// Forced page breaks that can only make a blank page (Project Gutenberg's
+// chapters start `div.chapter > h2`, both breaking before):
+// - At the very start of a section. foliate starts every section on a new
+//   page already, and WebKit breaks anyway, leaving the first page blank.
+// - Inside another, at its very start: the outer box's top margin moves the
+//   inner one a little way down the new page, so WebKit breaks again.
+// - After empty spacing (Gutenberg's `<div style="height: 4em">` before each
+//   chapter heading): when the page before is full, the spacing spills onto a
+//   page of its own, and the break then leaves that page blank (even spacing
+//   collapsed to nothing lands there). The break moves up to before the
+//   spacing, which then opens the chapter's page, as the book means it to;
+//   an empty `<a id>` the contents point at moves with it.
+// Runs once the section has loaded, before foliate lays it out. Styles only:
+// the DOM, and so every CFI, stays as the book has it.
+const FORCED_BREAKS = new Set(['page', 'column', 'left', 'right', 'recto', 'verso', 'always'])
+const collapseBlankPageBreaks = doc => {
+    const style = el => doc.defaultView?.getComputedStyle(el)
+    const forced = el => FORCED_BREAKS.has(style(el)?.breakBefore) || FORCED_BREAKS.has(style(el)?.pageBreakBefore)
+    // An element's first content: an element, or text with something in it
+    // (not a comment). Stops at the first one, so each parent is cheap.
+    const firstContent = el => {
+        for (const node of el.childNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) return node
+            if ((node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE) && node.textContent.trim()) return node
+        }
+        return null
     }
-    const [left, right] = tapMode.content ?? [0, innerWidth]
-    const zone = (right - left) * TAP_ZONE
-    if (x < left + zone) view?.goLeft()
-    else if (x > right - zone) view?.goRight()
-    else post('tap', { zone: 'middle' })
+    const unbreak = el => {
+        el.style.setProperty('break-before', 'auto', 'important')
+        el.style.setProperty('page-break-before', 'auto', 'important')
+    }
+    // The section's first content, all the way down: a page starts there
+    // already.
+    const sectionStart = new Set()
+    for (let el = doc.body && firstContent(doc.body); el?.nodeType === Node.ELEMENT_NODE; el = firstContent(el)) {
+        sectionStart.add(el)
+        if (forced(el)) unbreak(el)
+    }
+    // Nothing to see: no text, and nothing drawn (a rule or a picture is
+    // something).
+    const VISIBLE = 'img, svg, video, audio, canvas, iframe, object, embed, math, hr, table'
+    const isSpacing = el => !el.textContent.trim() && !el.matches(VISIBLE) && !el.querySelector(VISIBLE)
+    // The first of the spacing just before `el`: its empty previous
+    // siblings, and its parent's while it's the parent's first content.
+    const spacingBefore = el => {
+        let first = null
+        for (let box = el; box && box !== doc.body; box = box.parentElement) {
+            let prev = box.previousElementSibling
+            for (; prev && isSpacing(prev); prev = prev.previousElementSibling) first = prev
+            if (prev || firstContent(box.parentElement) !== box) break
+        }
+        return first
+    }
+    // Each breaking box once, with its own first content: linear in the
+    // section's size, give or take the spacing walked over.
+    for (const parent of doc.body?.querySelectorAll('*') ?? []) {
+        if (!forced(parent)) continue
+        const spacing = spacingBefore(parent)
+        if (spacing) {
+            // The break as the page has it (foliate's columns make a page
+            // break a column break).
+            const value = style(parent)?.breakBefore
+            unbreak(parent)
+            if (!sectionStart.has(spacing)) {
+                // `page-break-before` first: it sets `break-before` too, and
+                // inside columns WebKit only honours a column break.
+                spacing.style.setProperty('page-break-before', 'always', 'important')
+                spacing.style.setProperty('break-before', FORCED_BREAKS.has(value) ? value : 'page', 'important')
+                // An empty box (`<p><a id></a></p>`) collapses to nothing,
+                // and WebKit ignores a break before it.
+                spacing.style.setProperty('min-height', '1px', 'important')
+            }
+        }
+        const first = firstContent(parent)
+        if (first?.nodeType === Node.ELEMENT_NODE && forced(first)) unbreak(first)
+    }
 }
 
 // Section documents live in iframes that are wider than the screen (one
 // column per page) and scrolled by the paginator, so the tap is converted to
 // the top window's coordinates before deciding which side it was on.
 const onSectionLoad = ({ detail: { doc } }) => {
+    collapseBlankPageBreaks(doc)
     detectTaps(doc, e => {
         const frame = doc.defaultView?.frameElement
         if (frame) tap(frame.getBoundingClientRect().left + e.clientX)
     })
+    listenForTurns(doc)
 }
 
 // Taps outside the section's frame: the page's margins, and the side column
 // where the page runs under it.
 detectTaps(document, e => tap(e.clientX))
+listenForTurns(document)
+
+// Styles every book gets (step 11), as foliate's [before, after] pair.
+// Before the book's own, so a book that says otherwise wins: hyphenation in
+// running text, so justified lines don't open wide gaps between words on a
+// narrow page, and long words or web addresses breaking rather than running
+// off it. After the book's own: preformatted text wraps. Project Gutenberg
+// sets verse in <pre>, and a line that doesn't wrap runs out of its column,
+// over the spine and onto the next page (and the page before's overflow
+// shows at this one's edge).
+const BOOK_STYLES = [`
+p, li, blockquote, dd {
+    -webkit-hyphens: auto;
+    hyphens: auto;
+    -webkit-hyphenate-limit-before: 3;
+    -webkit-hyphenate-limit-after: 2;
+    -webkit-hyphenate-limit-lines: 2;
+}
+html {
+    overflow-wrap: break-word;
+}
+`, `
+pre {
+    white-space: pre-wrap !important;
+}
+`]
+
+// The reader's Text and theme choices (Swift's `ReaderAppearance`): CSS that
+// goes after the book's own, and the colour of the page around the text.
+let appearance = { css: '', background: '' }
+const applyAppearance = () => {
+    view?.renderer.setStyles([BOOK_STYLES[0], BOOK_STYLES[1] + appearance.css])
+    document.documentElement.style.background = appearance.background
+}
 
 // Lays pages out the way Swift's `ReaderLayout` says: column count, gap and
 // text width through foliate's own attributes, and the view's insets, which
@@ -391,11 +557,12 @@ const anchorToPage = async () => {
 
 // The table of contents in reading order, each entry with where its section
 // starts in the book (0...1), for naming the chapter at any point of the
-// progress bar. Entries whose target doesn't resolve are left out.
+// progress bar, and its href and depth for the Contents panel. Entries whose
+// target doesn't resolve are left out.
 const tocFractions = () => {
     const fractions = view.getSectionFractions?.() ?? []
     const entries = []
-    const walk = items => {
+    const walk = (items, depth) => {
         for (const item of items ?? []) {
             const label = plainText(item.label)?.trim()
             let index = null
@@ -404,13 +571,193 @@ const tocFractions = () => {
             } catch {
                 index = null
             }
-            if (label && Number.isInteger(index)) entries.push({ label, fraction: finiteOrNull(fractions[index]) })
-            walk(item.subitems)
+            if (label && Number.isInteger(index)) {
+                entries.push({ label, fraction: finiteOrNull(fractions[index]), href: item.href, depth })
+            }
+            walk(item.subitems, depth + 1)
         }
     }
-    walk(view.book.toc)
+    walk(view.book.toc, 0)
     return entries
 }
+
+// Whether `value` is a Range. Not `instanceof`: a section on screen lives in
+// its own frame, whose Range isn't this window's.
+const isRange = value => Boolean(value && typeof value === 'object' && 'startContainer' in value && 'collapsed' in value)
+
+// A Range for whatever a navigation anchor gives (a Range, or a node).
+const toRange = (doc, found) => {
+    if (isRange(found)) return found
+    const range = doc.createRange()
+    range.selectNodeContents(found)
+    return range
+}
+
+// The section on screen, if `index` is it.
+const loadedDoc = index => view?.renderer?.getContents?.()?.find(content => content.index === index)?.doc ?? null
+
+// Where a point falls in the section on screen, by the page it's on in the
+// current layout: the footer's own count (foliate's paginator places a rect
+// on page floor(left / size) + 1, and reports (page - 1) / (pages - 2)).
+// `null` for layouts it doesn't map this way (scrolled, vertical,
+// right-to-left), which then fall back to counting characters.
+const layoutFraction = range => {
+    const renderer = view.renderer
+    if (renderer.scrolled || view.book.dir === 'rtl' || renderer.hasAttribute?.('vertical')) return null
+    const { pages, size } = renderer
+    if (!(pages > 2) || !(size > 0)) return null
+    const rect = range.getClientRects()[0] ?? range.getBoundingClientRect()
+    if (!rect) return null
+    return Math.min(Math.max(Math.floor(rect.left / size) / (pages - 2), 0), 1)
+}
+
+// Where a point falls in its section by characters: a section that isn't
+// laid out has no pages to count.
+const characterFraction = (doc, range) => {
+    const body = doc.body ?? doc.documentElement
+    const before = doc.createRange()
+    before.setStart(body, 0)
+    before.setEnd(range.startContainer, range.startOffset)
+    const length = (body.textContent ?? '').length
+    return length > 0 ? Math.min(before.toString().length / length, 1) : 0
+}
+
+// A section's place in the book: its start, plus `within` of its share.
+const bookFraction = (index, within) => {
+    const fractions = view.getSectionFractions()
+    const start = fractions[index] ?? 0
+    const end = fractions[index + 1] ?? 1
+    return finiteOrNull(Math.min(Math.max(start + within * (end - start), 0), 1))
+}
+
+// Where each contents entry starts. Many books (Project Gutenberg's among
+// them) put several chapters in one section, which alone would give them all
+// the section's start. Entries in the section on screen are placed by its
+// layout, so they match the footer; the rest by characters, each section
+// read once and counted in one pass (`parse`; without it they're left as
+// they are).
+const refineContents = async (entries, parse = true) => {
+    const v = requireView()
+    const bySection = new Map()
+    entries.forEach((entry, i) => {
+        let resolved = null
+        try {
+            resolved = entry.href ? v.resolveNavigation(entry.href) : null
+        } catch {
+            resolved = null
+        }
+        if (!Number.isInteger(resolved?.index) || typeof resolved.anchor !== 'function') return
+        if (!bySection.has(resolved.index)) bySection.set(resolved.index, [])
+        bySection.get(resolved.index).push([i, resolved.anchor])
+    })
+    const refined = entries.map(entry => ({ ...entry }))
+    for (const [index, items] of bySection) {
+        const loaded = loadedDoc(index)
+        if (loaded) {
+            for (const [i, anchor] of items) {
+                try {
+                    const within = layoutFraction(toRange(loaded, anchor(loaded))) ?? characterFraction(loaded, toRange(loaded, anchor(loaded)))
+                    refined[i].fraction = bookFraction(index, within)
+                } catch {
+                    // Left where it was.
+                }
+            }
+            continue
+        }
+        if (!parse) continue
+        let doc
+        try {
+            doc = await v.book.sections[index].createDocument()
+        } catch {
+            continue
+        }
+        const body = doc.body ?? doc.documentElement
+        const targets = new Map()
+        for (const [i, anchor] of items) {
+            let node = null
+            try {
+                node = anchor(doc)
+            } catch {
+                node = null
+            }
+            if (isRange(node)) node = node.startContainer
+            if (!node) continue
+            if (!targets.has(node)) targets.set(node, [])
+            targets.get(node).push(i)
+        }
+        const offsets = new Map()
+        let count = 0
+        const walker = doc.createTreeWalker(body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
+        for (let node = walker.currentNode; node; node = walker.nextNode()) {
+            if (targets.has(node)) offsets.set(node, count)
+            if (node.nodeType === Node.TEXT_NODE) count += node.length
+        }
+        if (count === 0) continue
+        for (const [node, list] of targets) {
+            const offset = offsets.get(node)
+            if (offset === undefined) continue
+            for (const i of list) refined[i].fraction = bookFraction(index, offset / count)
+        }
+    }
+    return refined
+}
+
+// Which of `cfis` fall on the visible page (both pages of a spread), through
+// foliate's own CFI ordering: from the page's start up to, not including, the
+// point where the next page begins.
+const onPage = cfis => {
+    const current = requireView().lastLocation?.cfi
+    const list = Array.isArray(cfis) ? cfis : []
+    if (!current) return list.map(() => false)
+    const start = CFI.collapse(current)
+    const end = CFI.collapse(current, true)
+    return list.map(cfi => {
+        try {
+            const point = CFI.collapse(String(cfi))
+            return CFI.compare(start, point) <= 0 && CFI.compare(point, end) < 0
+        } catch {
+            return false
+        }
+    })
+}
+
+// What a bookmark shows in the Contents panel: where it falls in the book
+// (0...1, placed like the contents), its chapter, and the words it starts
+// at. A section that isn't on screen is read on its own (scripts never run
+// in a parsed document), so this works for any page.
+const describePlace = async cfi => {
+    const v = requireView()
+    const { index, anchor } = v.resolveCFI(String(cfi))
+    const loaded = loadedDoc(index)
+    const doc = loaded ?? await v.book.sections[index].createDocument()
+    const range = toRange(doc, anchor(doc))
+    const within = (loaded ? layoutFraction(range) : null) ?? characterFraction(doc, range)
+    const body = doc.body ?? doc.documentElement
+    const after = doc.createRange()
+    after.setStart(range.startContainer, range.startOffset)
+    after.setEnd(body, body.childNodes.length)
+    const excerpt = after.toString().replace(/\s+/g, ' ').trim().slice(0, 160)
+    const tocItem = await v.getTOCItemOf(String(cfi))
+    return {
+        fraction: bookFraction(index, within),
+        chapter: plainText(tocItem?.label)?.trim() || null,
+        excerpt: excerpt || null,
+    }
+}
+
+// Bookmarks in the section on screen, placed by its layout like the footer
+// (`null` for the rest, which keep their place).
+const placeOnScreen = cfis => (Array.isArray(cfis) ? cfis : []).map(cfi => {
+    try {
+        const { index, anchor } = requireView().resolveCFI(String(cfi))
+        const doc = loadedDoc(index)
+        if (!doc) return null
+        const within = layoutFraction(toRange(doc, anchor(doc)))
+        return within === null ? null : bookFraction(index, within)
+    } catch {
+        return null
+    }
+})
 
 // Try the CFI first, then the fraction, then the start of the book.
 // Fixed-layout books go by fraction first, like BookOrbit does.
@@ -428,7 +775,7 @@ const restore = async (cfi, fraction) => {
     return 'start'
 }
 
-const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined }) => {
+const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined, appearance: initialAppearance = undefined }) => {
     if (view) {
         view.close()
         view.remove()
@@ -436,6 +783,10 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     view = document.createElement('foliate-view')
     view.addEventListener('relocate', onRelocate)
     view.addEventListener('load', onSectionLoad)
+    view.addEventListener('draw-annotation', onDrawAnnotation)
+    view.addEventListener('create-overlay', onCreateOverlay)
+    search = null
+    shownMatch = null
     // foliate would `window.open` external links; hand them to Swift instead.
     view.addEventListener('external-link', e => {
         e.preventDefault()
@@ -453,6 +804,8 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
         if (detail.isScript) detail.allow = false
     })
     view.renderer.setAttribute('flow', 'paginated')
+    if (initialAppearance) appearance = { css: String(initialAppearance.css ?? ''), background: String(initialAppearance.background ?? '') }
+    applyAppearance()
     if (initialLayout !== undefined) layout = initialLayout
     held = null
     // Nothing is rendered yet, so the attributes are all it takes.
@@ -467,12 +820,145 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
         toc: tocFractions(),
     }
     post('opened', result)
+    refineContents(result.toc)
+        .then(toc => post('contents', { toc }))
+        .catch(e => post('error', { phase: 'contents', ...describe(e) }))
     return result
 }
 
 const requireView = () => {
     if (!view) throw new Error('No book is open')
     return view
+}
+
+// Search in book (decision 19). foliate's own `search` groups matches by
+// section, and Project Gutenberg books keep every chapter in one or two, so
+// the bridge walks the book itself with foliate's matcher: each section read
+// once (the one on screen as it's laid out), each match named after the
+// contents entry it falls under and placed in the book like the contents.
+// Matches go to Swift a section at a time, tagged with the search's token; a
+// newer search, or `cancelSearch`, stops the walk at the next section.
+const SEARCH_LIMIT = 1000
+let search = null
+// A match can run over a line break in the source.
+const words = text => String(text ?? '').replace(/\s+/g, ' ')
+const runSearch = async (query, token) => {
+    const v = requireView()
+    search = { token }
+    const current = () => search?.token === token
+    const matcher = searchMatcher(textWalker, { defaultLocale: v.language?.canonical })
+    // The contents' targets by section, in reading order, for naming matches.
+    const entries = tocFractions()
+    const marks = new Map()
+    for (const entry of entries) {
+        let resolved = null
+        try {
+            resolved = entry.href ? v.resolveNavigation(entry.href) : null
+        } catch {
+            resolved = null
+        }
+        if (!Number.isInteger(resolved?.index)) continue
+        if (!marks.has(resolved.index)) marks.set(resolved.index, [])
+        marks.get(resolved.index).push({ label: entry.label, anchor: resolved.anchor })
+    }
+    let chapter = null
+    let count = 0
+    let truncated = false
+    const sections = v.book.sections ?? []
+    for (let index = 0; index < sections.length && !truncated; index++) {
+        const section = sections[index]
+        if (!section?.createDocument || section.linear === 'no') continue
+        const loaded = loadedDoc(index)
+        let doc
+        try {
+            doc = loaded ?? await section.createDocument()
+        } catch {
+            continue
+        }
+        if (!current()) return
+        // Where each text node starts, counted in one pass, for placing
+        // matches in a section that isn't laid out (the one on screen is
+        // placed by its layout).
+        const offsets = new Map()
+        let length = 0
+        if (!loaded) {
+            const walker = doc.createTreeWalker(doc.body ?? doc.documentElement, NodeFilter.SHOW_TEXT)
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                offsets.set(node, length)
+                length += node.length
+            }
+        }
+        // The section's contents entries where they start, in order.
+        const starts = []
+        for (const mark of marks.get(index) ?? []) {
+            let at = null
+            try {
+                at = typeof mark.anchor === 'function' ? mark.anchor(doc) : null
+            } catch {
+                at = null
+            }
+            starts.push({ label: mark.label, range: at ? toRange(doc, at) : null })
+        }
+        let next = 0
+        const matches = []
+        for (const { range, excerpt } of matcher(doc, query)) {
+            // A section's entry with no target in it starts it.
+            while (next < starts.length && (!starts[next].range
+                || range.compareBoundaryPoints(Range.START_TO_START, starts[next].range) >= 0)) {
+                chapter = starts[next].label
+                next++
+            }
+            const within = (loaded ? layoutFraction(range) : null)
+                ?? (loaded ? characterFraction(doc, range)
+                    : length > 0 ? ((offsets.get(range.startContainer) ?? 0) + range.startOffset) / length : 0)
+            matches.push({
+                cfi: v.getCFI(index, range),
+                pre: words(excerpt?.pre),
+                match: words(excerpt?.match),
+                post: words(excerpt?.post),
+                chapter,
+                fraction: bookFraction(index, Math.min(within, 1)),
+            })
+            if (++count >= SEARCH_LIMIT) {
+                truncated = true
+                break
+            }
+        }
+        // Entries after the last match still name what comes next.
+        if (starts.length) chapter = starts[starts.length - 1].label
+        if (!current()) return
+        if (matches.length) post('searchResults', { token, matches, done: false, truncated: false })
+    }
+    if (current()) post('searchResults', { token, matches: [], done: true, truncated })
+}
+
+// The match being shown, highlighted until the next one or the search's end.
+// foliate draws an annotation only in a section that's laid out, so it's
+// drawn again whenever its section is.
+let shownMatch = null
+const HIGHLIGHT = 'rgb(255, 204, 0)'
+const onDrawAnnotation = ({ detail: { draw, annotation } }) => {
+    if (annotation?.value === shownMatch) draw(Overlayer.highlight, { color: HIGHLIGHT })
+}
+const onCreateOverlay = ({ detail: { index } }) => {
+    if (!shownMatch) return
+    try {
+        if (view.resolveCFI(shownMatch).index === index) view.addAnnotation({ value: shownMatch })
+    } catch {
+        // Not a CFI this book has.
+    }
+}
+const showMatch = async cfi => {
+    const v = requireView()
+    if (shownMatch) {
+        await v.deleteAnnotation({ value: shownMatch }).catch(() => {})
+        shownMatch = null
+    }
+    if (!cfi) return true
+    shownMatch = String(cfi)
+    await v.goTo(shownMatch)
+    await v.addAnnotation({ value: shownMatch })
+    return true
 }
 
 // Swift awaits these; a rejection surfaces there as a thrown error, and is
@@ -511,14 +997,13 @@ window.octavo = Object.freeze({
     hold: reported(async function hold_() {
         return hold()
     }),
+    setAppearance: reported(async function setAppearance(next) {
+        appearance = { css: String(next?.css ?? ''), background: String(next?.background ?? '') }
+        applyAppearance()
+        return true
+    }),
     setTapMode: reported(async function setTapMode(mode) {
-        const content = Array.isArray(mode?.content) ? mode.content.map(finiteOrNull) : null
-        tapMode = {
-            book: Boolean(mode?.book),
-            columnStart: finiteOrNull(mode?.columnStart),
-            content: content?.length === 2 && !content.includes(null) ? content : null,
-            dismisses: Boolean(mode?.dismisses),
-        }
+        tapMode = { dismisses: Boolean(mode?.dismisses) }
         return true
     }),
     layoutReport: reported(async function layoutReport_() {
@@ -526,6 +1011,34 @@ window.octavo = Object.freeze({
     }),
     locate: reported(async function locate_(cfi) {
         return locate(cfi)
+    }),
+    // Runs in the background; matches arrive as `searchResults` messages.
+    search: reported(async function search_(query, token) {
+        const text = String(query ?? '').trim()
+        if (!text) return false
+        runSearch(text, token).catch(e => post('error', { phase: 'search', ...describe(e) }))
+        return true
+    }),
+    cancelSearch: reported(async function cancelSearch() {
+        search = null
+        return true
+    }),
+    showMatch: reported(async function showMatch_(cfi) {
+        return showMatch(cfi)
+    }),
+    onPage: reported(async function onPage_(cfis) {
+        return onPage(cfis)
+    }),
+    describe: reported(async function describe_(cfi) {
+        return describePlace(cfi)
+    }),
+    // The contents and bookmarks placed again in the current layout, for the
+    // Contents panel's page numbers.
+    contentsOnScreen: reported(async function contentsOnScreen(entries) {
+        return refineContents(Array.isArray(entries) ? entries : [], false)
+    }),
+    bookmarksOnScreen: reported(async function bookmarksOnScreen(cfis) {
+        return placeOnScreen(cfis)
     }),
     // The text of the visible page, whitespace collapsed, for debugging and
     // for checking positions against another reader.

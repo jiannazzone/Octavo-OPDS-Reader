@@ -50,3 +50,10 @@ Adam, while settling #8's start chip: "we definitely need a nicer empty state th
 - **The scrubber's look.** It's the system slider (round knob); frame 08 draws a thin line with no knob.
 - **Real page numbers.** The numbers are foliate's 1,500-character locations, so a page turn doesn't always change them. Counting real pages for the current layout means paginating the whole book after every fold and text change; the Contents panel (#18, "page numbers for the current layout") meets the same question.
 - **Footer on or off**, as a Customize setting, if anyone wants the page bare.
+
+## Page-turn animations, with opening and closing a book (Adam, 2026-11-02)
+
+Turning a page cuts straight to the next one today (a swipe drags the page and snaps). Animate the turn, and design it together with how a book opens and closes (today the reader fades in over its screen, and folding closes it), so the two feel like one motion: a cover that opens into the spread, pages that turn the same way.
+- To decide with mockups: a slide, a curl or a fade; whether book mode turns differently (each half of the spread turning its own way); speed; and Reduce Motion (a cross-fade or nothing).
+- foliate's paginator already has an `animated` attribute that slides a turn; a curl would be ours, over the web view.
+- Fits Phase 4 (first impressions) or after the panels (step 12).

@@ -16,11 +16,15 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 ## Phase 2: Reading
 
-- [ ] **9. Reader controls.** How controls appear, especially half-open (a middle tap doesn't suit book mode). *Needs decisions.*
-- [ ] **10. Page turning.** Taps, swipes, keyboard and trackpad; book mode; folding and unfolding mid-book.
-- [ ] **11. Rendering.** The rendering problems seen on the Duo.
-- [ ] **12. Panels.** Text and theme, Contents and bookmarks, Search in book. *Needs decisions.*
-- [ ] **Reading on the Duo:** sign-off, pull request.
+- [x] **9. Reader controls.** A quiet "…" in the side column is the one way to bring the controls up, in every posture; every other tap turns (left of the middle back, right of it and the column forward).
+- [x] **10. Page turning.** Taps and swipes in every posture; a hardware keyboard (arrows, Page Up/Down, Space) and a trackpad's two-finger swipe; the place holds through unfolding, half open and flat again (folding closes the book, by design).
+- [x] **11. Rendering.** Verse no longer runs off the page, justified text hyphenates instead of opening wide gaps, and chapters no longer start after a blank page (`docs/notes/reader-page.md`, Book styles).
+- [x] **12. Panels.** Text and theme, Contents and bookmarks, Search in book.
+  - [x] Text and theme: themes, text size, font, line spacing, margins, justify, Match Dark Mode, Book-mode shadow and Always show controls, over the right page unfolded and in a sheet folded.
+  - [ ] The bundled fonts, Atkinson Hyperlegible and OpenDyslexic (downloading them waits for Adam's OK).
+  - [x] Contents and bookmarks: one panel with a Contents | Bookmarks switch, page numbers that match the footer, a ribbon on bookmarked pages, and BookOrbit books' bookmarks synced with BookOrbit.
+  - [x] Search in book: results by chapter as you type, a highlighted match and a ‹ 3 of 252 › bar to step through.
+- [x] **Reading on the Duo:** Adam signed off (2026-11-02), then a pull request to `main` (with Adam's OK).
 
 ## Phase 3: The rest of v1
 
@@ -36,6 +40,10 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 ## To revisit
 
 - The book sheet at rest, folded, is still quite tall; try a smaller resting state (Adam, after step 4).
+- The reader's progress bar sits too close to the screen's bottom-left corner when flat; tidy its placement, with the reader's panels (step 12) or sooner (Adam, after step 9).
+- Page-turn animations, designed together with opening and closing a book (Adam, after step 10; `docs/UI-IDEAS.md`).
+- Should Home and the Library share the reader's colours (its theme: Paper, Sepia, Night), or keep the system's light and dark? (Adam, after step 12.)
+- The empty strip at the reader's left edge, unfolded (the mirror of the side column, about 84 pt, so the pages split on the hinge). Options: keep it as a margin; a quiet progress rail with chapter ticks; or, with Narrow margins and the Duo flat, let the pages spread across the whole width (text then crosses the crease, and going half open re-lays out). (Adam, after step 12.)
 
 ## What you'll see that isn't right yet
 

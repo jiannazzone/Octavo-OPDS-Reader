@@ -11,11 +11,15 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     case ready
     /// A book finished opening and has been moved to its restored position.
     case opened(Opened)
+    /// The contents again, each entry placed to the character (sent after
+    /// `opened`, which places them by section).
+    case contents([TOCEntry])
+    /// Matches for a search in the book, a section at a time.
+    case searchResults(SearchBatch)
     /// The visible page changed.
     case relocate(Relocation)
-    /// The user tapped where the controls show: the `"middle"` of the page,
-    /// or in book mode the side `"column"`; or anywhere while the controls
-    /// cover the page (`"dismiss"`). See `ReaderTapMode`.
+    /// The user tapped while the controls cover the page (`"dismiss"`). See
+    /// `ReaderTapMode`.
     case tap(zone: String)
     /// The page's size in CSS px (= points), sent on load and whenever it
     /// changes.
@@ -39,10 +43,36 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var toc: [TOCEntry]?
     }
 
+    nonisolated struct SearchBatch: Codable, Equatable, Sendable {
+        /// The search these belong to (`ReaderSearch.token`).
+        var token: Int
+        var matches: [SearchMatch]
+        /// The whole book has been searched.
+        var done: Bool
+        /// The search stopped at the limit.
+        var truncated: Bool
+    }
+
+    nonisolated struct SearchMatch: Codable, Equatable, Sendable {
+        var cfi: String
+        /// The words before and after, cut with an ellipsis.
+        var pre: String
+        var match: String
+        var post: String
+        /// The contents entry it falls under.
+        var chapter: String?
+        /// Where it falls in the book, 0...1.
+        var fraction: Double?
+    }
+
     nonisolated struct TOCEntry: Codable, Equatable, Sendable {
         var label: String
         /// Where the entry's section starts, 0...1 of the book.
         var fraction: Double?
+        /// Where the entry goes. `nil` from an older bridge.
+        var href: String?
+        /// How far it's nested, from 0.
+        var depth: Int?
     }
 
     nonisolated struct Relocation: Codable, Equatable, Sendable {
@@ -68,6 +98,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         /// couldn't compute one (JSON has no NaN).
         var fraction: Double?
         var tocLabel: String?
+        /// The contents entry the page is in (`TOCEntry.href`).
+        var tocHref: String?
         var sectionIndex: Int?
         var sectionCount: Int?
         var location: Location?
@@ -118,7 +150,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href, width, height
+        case type, zone, level, message, href, width, height, toc
     }
 
     init(from decoder: any Decoder) throws {
@@ -131,6 +163,10 @@ nonisolated extension ReaderMessage: Decodable {
             self = .opened(try Opened(from: decoder))
         case "relocate":
             self = .relocate(try Relocation(from: decoder))
+        case "contents":
+            self = .contents(try container.decode([TOCEntry].self, forKey: .toc))
+        case "searchResults":
+            self = .searchResults(try SearchBatch(from: decoder))
         case "tap":
             self = .tap(zone: try container.decodeIfPresent(String.self, forKey: .zone) ?? "middle")
         case "viewport":

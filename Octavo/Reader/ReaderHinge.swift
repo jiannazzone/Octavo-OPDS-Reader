@@ -69,27 +69,15 @@ nonisolated struct ReaderHinge: Equatable, Sendable {
     }
 }
 
-/// How taps on the page behave, applied by `bridge.js` `setTapMode`.
+/// How taps on the page behave, applied by `bridge.js` `setTapMode`. In
+/// every posture a tap left of the middle goes back and right of it (the
+/// side column too) goes forward; the controls come up only from the
+/// column's "…" button (Adam, 2026-11-02).
 nonisolated struct ReaderTapMode: Equatable, Sendable {
-    /// Book mode: each half of the spread turns its way. Otherwise the outer
-    /// sides turn pages and the middle shows the controls.
-    var isBook = false
-    /// Where the side column starts, in the page's coordinates. The page
-    /// runs under it (decision 8); in book mode a tap there shows the
-    /// controls, flat it counts as the right side.
-    var columnStart: Double?
-    /// The page's left and right edges outside the system's areas. The side
-    /// zones are measured within it. `nil`: the whole page.
-    var content: ClosedRange<Double>?
     /// The controls cover the page: any tap hides them instead of turning.
     var dismisses = false
 
     var scriptArguments: [String: Any] {
-        [
-            "book": isBook,
-            "columnStart": columnStart ?? NSNull(),
-            "content": content.map { [$0.lowerBound, $0.upperBound] } ?? NSNull(),
-            "dismisses": dismisses,
-        ]
+        ["dismisses": dismisses]
     }
 }

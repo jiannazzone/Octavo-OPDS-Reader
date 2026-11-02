@@ -324,7 +324,6 @@ enum ReaderStateFile {
             posture: model.posture,
             hingeAngle: model.hingeAngle,
             isBookMode: model.isBookMode,
-            tapColumnStart: model.tapMode.columnStart,
             margins: model.margins,
             geometry: model.geometry,
             layout: model.layout,

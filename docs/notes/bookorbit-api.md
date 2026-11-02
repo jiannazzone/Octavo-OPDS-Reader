@@ -26,6 +26,12 @@ Spike 1b (`BookOrbitClient` in OctavoKit) and 2a (sync), measured against the lo
 - **Position format:** the web reader stores a collapsed **point** CFI at the start of the visible page; foliate reports a range. Octavo pushes the start point (`CFI.collapse(range)` in `bridge.js`). Element-start pages differ only in string form (ours `/102[id]`, the web's `/102[id]/1:0`), so compare positions by resolving them, never as strings.
 - Fixed-layout books restore by fraction, not CFI.
 
+## Bookmarks (step 12, measured 2026-11-02)
+
+- `GET books/{bookId}/bookmarks` lists `{id, bookId, cfi, title, note, positionSeconds, createdAt, updatedAt, clientId, origin, chapterId}`; BookOrbit's web reader shows `title`.
+- `POST books/{bookId}/bookmarks` takes only `{cfi, title, bookFileId}`: `cfi` and `title` are required (up to 2,000 and 500 characters), and `note`, `color`, `clientId`, `origin` and anything else are rejected (400). So there's no idempotency key: a retry after a lost answer adds a second bookmark, which `BookmarkReconciliation` matches by CFI instead.
+- `PATCH books/{bookId}/bookmarks/{id} {title}` renames; `DELETE books/{bookId}/bookmarks/{id}` answers 204, and 404 once it's gone (`DELETE bookmarks/{id}` doesn't exist).
+
 ## Library and files
 
 - `GET collections/{id}/books?page=0&size=50[&q=…]` returns `{items, total, page, size}`. Items carry `authors`, `files: [{id, format, role, sizeBytes, mediaOverlay}]`, `readingProgress` (0–100) and a `readStatus` object.

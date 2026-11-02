@@ -75,11 +75,11 @@ nonisolated struct ReaderPlace: Equatable, Sendable {
 /// What the controls show (decision 7, approved 2026-11-01): the column's
 /// buttons, and the progress bar over the page.
 ///
-/// - A tap in the middle (flat) or in the side column (book mode) shows both;
+/// - The column's "…" button shows both (Adam, 2026-11-02, every posture);
 ///   the next tap anywhere on the page hides them.
-/// - With "Always show controls" the buttons stay up and the tap shows and
-///   hides only the bar. The buttons sit in the column, so they never cover
-///   text; the bar does, so it never stays.
+/// - With "Always show controls" the buttons stay up, the "…" after them
+///   bringing up the bar. The buttons sit in the column, so they never
+///   cover text; the bar does, so it never stays.
 /// - Book mode starting hides them (decision 9).
 nonisolated struct ReaderControls: Equatable, Sendable {
     var alwaysShowsButtons = false
@@ -94,7 +94,13 @@ nonisolated struct ReaderControls: Equatable, Sendable {
     /// The bar lies over the page, so a tap should hide it, not turn.
     var coversPage: Bool { showsBar }
 
-    /// A tap in the middle of the page, or in the side column in book mode.
+    /// The column's "…" button.
+    mutating func show() {
+        showsButtons = true
+        showsBar = true
+    }
+
+    /// VoiceOver's Show/Hide Controls.
     mutating func toggle() {
         if alwaysShowsButtons {
             showsBar.toggle()
@@ -108,5 +114,21 @@ nonisolated struct ReaderControls: Equatable, Sendable {
     mutating func hide() {
         showsButtons = false
         showsBar = false
+    }
+
+    private var barBeforePanel = false
+
+    /// A panel opening (#18): the buttons stay, the panel growing out of
+    /// its own (Adam, 2026-11-02); the bar goes, as it would run under the
+    /// panel.
+    mutating func panelOpened() {
+        barBeforePanel = showsBar
+        showsButtons = true
+        showsBar = false
+    }
+
+    /// The panel's own button closing it: the controls as they were.
+    mutating func panelClosed() {
+        showsBar = barBeforePanel
     }
 }

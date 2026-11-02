@@ -67,6 +67,10 @@ final class ReaderModel {
     var coversPage = false {
         didSet { if coversPage != oldValue { sendTapMode() } }
     }
+    /// The Text and theme choices, as the bridge applies them (decision 13).
+    var appearance = ReaderAppearance().script(darkMode: false) {
+        didSet { if appearance != oldValue { sendAppearance() } }
+    }
     /// The page's size as the page reports it.
     @ObservationIgnored private var viewport: CGSize?
     /// The system's areas (the side column, or a band along the top when
@@ -75,10 +79,10 @@ final class ReaderModel {
     @ObservationIgnored private var safeArea = ReaderInsets.zero
     @ObservationIgnored private var lastGeometry: ReaderGeometry?
     @ObservationIgnored private var sentTapMode: ReaderTapMode?
+    @ObservationIgnored private var sentAppearance: ReaderAppearanceScript?
 
-    /// A tap where the controls show: `"middle"` of the page, the side
-    /// `"column"` in book mode, or `"dismiss"` anywhere while they cover the
-    /// page (`coversPage`).
+    /// A tap while the controls cover the page (`coversPage`): `"dismiss"`.
+    /// Otherwise taps turn; the column's "…" button brings the controls up.
     @ObservationIgnored var onControlsTap: ((_ zone: String) -> Void)?
 
     // Folding: one re-layout per fold, under a cross-fade. See `FoldBatch`.
@@ -99,6 +103,11 @@ final class ReaderModel {
     private(set) var openingPosition: OpeningPosition?
     private(set) var syncStatus: String?
     private(set) var lastPushedCFI: String?
+
+    /// The book's bookmarks (decisions 17–18).
+    let bookmarks: ReaderBookmarks
+    /// Search in book (decision 19).
+    let search = ReaderSearch()
 
     @ObservationIgnored private let store: ReadingPositionStore
     @ObservationIgnored private let sync: (any ProgressSync)?
@@ -122,12 +131,14 @@ final class ReaderModel {
         book: ReaderBook,
         store: ReadingPositionStore = ReadingPositionStore(),
         sync: (any ProgressSync)? = nil,
+        bookmarks: ReaderBookmarks? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
         pushDelay: Duration = .seconds(2)
     ) {
         self.book = book
         self.store = store
         self.sync = sync
+        self.bookmarks = bookmarks ?? ReaderBookmarks(bookID: book.id)
         self.cfiShape = cfiShape
 
         var configuration = WebPage.Configuration()
@@ -166,6 +177,8 @@ final class ReaderModel {
     func next() { call("return await window.octavo.next()") }
     func previous() { call("return await window.octavo.prev()") }
     func goTo(cfi: String) { call("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi]) }
+    /// A CFI or an href from the contents.
+    func goTo(target: String) { call("return await window.octavo.goTo(target)", arguments: ["target": target]) }
     func goTo(fraction: Double) { call("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": fraction]) }
 
     /// The hinge changed. `angle` is in degrees. The system repeats
@@ -192,7 +205,6 @@ final class ReaderModel {
         guard isBookMode != reportedBookMode else { return }
         reportedBookMode = isBookMode
         log.debug("book mode \(self.isBookMode)")
-        sendTapMode()
         onBookModeChange?(isBookMode)
     }
 
@@ -219,21 +231,24 @@ final class ReaderModel {
         guard geometry != self.geometry else { return }
         self.geometry = geometry
         relayout()
-        sendTapMode()
     }
 
-    /// Book mode, where the side column starts, and the page outside the
-    /// system's areas.
+    /// Whether a tap hides the controls instead of turning.
     var tapMode: ReaderTapMode {
-        var mode = ReaderTapMode(isBook: isBookMode, dismisses: coversPage)
-        if let width = geometry.map({ Double($0.size.width) }), width > 0 {
-            if safeArea.right > 0 { mode.columnStart = width - safeArea.right }
-            mode.content = safeArea.left...max(safeArea.left, width - safeArea.right)
-        }
-        return mode
+        ReaderTapMode(dismisses: coversPage)
     }
 
-    /// While the book is opening, `.opened` sends it instead.
+    /// While the book is opening, `open` takes it, and `.opened` sends any
+    /// change since.
+    private func sendAppearance() {
+        let appearance = appearance
+        guard phase == .open, appearance != sentAppearance else { return }
+        sentAppearance = appearance
+        call("return await window.octavo.setAppearance(appearance)", arguments: ["appearance": appearance.scriptArguments])
+    }
+
+    /// Sent when `coversPage` changes, and once the book has opened (while
+    /// it opens, `.opened` sends it instead). Posture and size don't affect it.
     private func sendTapMode() {
         let mode = tapMode
         guard phase == .open, mode != sentTapMode else { return }
@@ -336,7 +351,6 @@ final class ReaderModel {
         self.layout = layout
         sentLayout = layout
         bookModeMayHaveChanged()
-        sendTapMode()
         lastFold?.laidOut = FoldReport.milliseconds(since: startedAt)
         do {
             let rendered = try await page.callJavaScript(
@@ -400,7 +414,8 @@ final class ReaderModel {
         await pusher?.flush()
     }
 
-    private func call(_ body: String, arguments: [String: Any] = [:]) {
+    /// Calls the bridge without waiting for its answer.
+    func call(_ body: String, arguments: [String: Any] = [:]) {
         guard phase == .open else { return }
         Task {
             do {
@@ -409,6 +424,12 @@ final class ReaderModel {
                 log.error("Reader call failed: \(error)")
             }
         }
+    }
+
+    /// The contents with each entry placed again (`bridge.js`
+    /// `refineContents`).
+    func contentsPlaced(_ entries: [ReaderMessage.TOCEntry]) {
+        if entries != toc { toc = entries }
     }
 
     // MARK: Messages
@@ -440,6 +461,12 @@ final class ReaderModel {
             didOpen()
             sendLayout()
             sendTapMode()
+            sendAppearance()
+            Task { await refreshBookmarks() }
+        case .contents(let entries):
+            contentsPlaced(entries)
+        case .searchResults(let batch):
+            search.receive(batch)
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             self.relocation = relocation
@@ -448,6 +475,7 @@ final class ReaderModel {
             tocLabel = relocation.tocLabel
             location = relocation.location
             if !isRestoring { moved(to: relocation) }
+            Task { await updateBookmarkedPage() }
         case .tap(let zone):
             onControlsTap?(zone)
         case .viewport(let width, let height):
@@ -486,8 +514,10 @@ final class ReaderModel {
                 "cfi": saved?.cfi ?? NSNull(),
                 "fraction": saved?.fraction ?? NSNull(),
                 "layout": layout.scriptArguments,
+                "appearance": appearance.scriptArguments,
             ]
             sentLayout = layout
+            sentAppearance = appearance
             do {
                 _ = try await page.callJavaScript("return await window.octavo.open(options)", arguments: ["options": options])
             } catch {
