@@ -29,6 +29,10 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [ ] **15. Other ways in.** Import from Files, the bundled sample book, MOBI/AZW3/FB2 check.
 - [ ] **16. Security follow-up.** Confirm whether a server counts as local by its name alone (#9), and fix it if so.
 
+## To revisit
+
+- The book sheet at rest, folded, is still quite tall; try a smaller resting state (Adam, after step 4).
+
 ## What you'll see that isn't right yet
 
 These screens are still the old ones or stand-ins; the step that replaces them is on the right.
