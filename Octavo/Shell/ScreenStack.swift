@@ -17,7 +17,8 @@ struct ScreenStack<Root: View>: View {
     var rootFillsSpread = false
     @ViewBuilder let root: () -> Root
     @Environment(ShellModel.self) private var shell
-    @State private var spread = Spread.onePage
+    /// `nil` until the stack has been laid out once.
+    @State private var measured: Spread?
     /// How far a screen slides: past the side column, which it runs under,
     /// and on a little further, so the slide's slow end happens off screen.
     @State private var travel: CGFloat = 1000
@@ -38,6 +39,7 @@ struct ScreenStack<Root: View>: View {
 
     var body: some View {
         let path = shell[path: tab]
+        let spread = measured ?? shell.lastSpread ?? .onePage
         NavigationStack {
             ZStack(alignment: .topLeading) {
                 ForEach(visibleDepths(path), id: \.self) { id in
@@ -61,8 +63,10 @@ struct ScreenStack<Root: View>: View {
             // A replaced path (a launch argument, closing the reader onto its
             // book) changes at once.
             .animation(path.lastMove == .replace ? nil : Self.slide, value: path)
-            .animation(.easeInOut(duration: 0.3), value: spread)
-            .onGeometryChange(for: Spread.self) { Spread($0) } action: { spread = $0 }
+            .animation(.easeInOut(duration: 0.3), value: measured)
+            .onGeometryChange(for: Spread.self) { Spread($0) } action: { new in
+                spreadChanged(to: new)
+            }
             .onGeometryChange(for: CGFloat.self) { $0.size.width + $0.safeAreaInsets.trailing } action: {
                 travel = $0 + Self.overshoot
             }
@@ -78,6 +82,27 @@ struct ScreenStack<Root: View>: View {
             }
             .toolbarTitleDisplayMode(.inline)
         }
+    }
+
+    /// Only a fold (a new width) re-lays the screens out smoothly. At the
+    /// same width the pages split the same way, so any other change is the
+    /// hinge's region arriving a moment after a stack's first layout: that
+    /// happens at once, from the spread the other tabs measured, since
+    /// animated from one page to two a tab opening for the first time
+    /// visibly rearranged itself.
+    private func spreadChanged(to new: Spread) {
+        if let old = measured, old.width != new.width {
+            measured = new
+            shell.lastSpread = new
+            return
+        }
+        // Before the region arrives, a stack opening at the width the
+        // other tabs have takes their split.
+        let settled = if measured == nil, new.pages == nil, let known = shell.lastSpread, known.width == new.width { known } else { new }
+        shell.lastSpread = settled
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) { measured = settled }
     }
 
     /// Every screen in the stack, each under the next. A screen stays put
@@ -113,7 +138,7 @@ struct ScreenStack<Root: View>: View {
                         swipe = max(0, value.translation.width)
                     }
                     .onEnded { value in
-                        let width = max(spread.width, 1)
+                        let width = max((measured ?? .onePage).width, 1)
                         let goesBack = value.translation.width > width * Self.swipeCommit
                             || value.predictedEndTranslation.width > width * 0.6
                         if goesBack {

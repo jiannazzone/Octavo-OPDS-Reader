@@ -42,6 +42,9 @@ struct SearchView: View {
                 }
                 .scrollDismissesKeyboard(.immediately)
             }
+            // Held to the top left: a screen narrower than the spread
+            // (only placeholders on the left page) would otherwise centre.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             NoLibraryInvitation()
         }
@@ -200,8 +203,9 @@ private struct SearchResultsContent: View {
                         .padding(.top, 40)
                 }
             } else {
+                // The last results stay as they are until the next arrive:
+                // dimming them on every keystroke flickered.
                 sections(results)
-                    .opacity(search.state == .searching ? 0.6 : 1)
             }
         } else {
             placeholders

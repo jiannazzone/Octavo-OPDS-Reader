@@ -36,6 +36,9 @@ final class ShellModel {
     let pages = BookPages()
     /// The Search tab's query and results.
     let search: SearchModel
+    /// The spread a tab measured last, which a tab opening for the first
+    /// time lays out for until it has measured its own (`ScreenStack`).
+    @ObservationIgnored var lastSpread: Spread?
 
     /// A debug override for the cover's strip, to look at its states without
     /// a failing download.
