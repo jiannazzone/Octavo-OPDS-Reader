@@ -82,19 +82,74 @@ struct SetupStart: View {
                 }
             }
         } help: {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Don’t have one yet?")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .accessibilityAddTraits(.isHeader)
-                // Links open in Safari.
-                Text("**BookOrbit** · a self-hosted library with its own reader and apps. [github.com/bookorbit/bookorbit](https://github.com/bookorbit/bookorbit)")
-                Text("**calibre** · manages your books on a Mac or PC. Its Content server, or Calibre-Web, shares them as an OPDS catalog. [calibre-ebook.com](https://calibre-ebook.com)")
-            }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
+            ServerSuggestions()
         }
+    }
+}
+
+/// "Don't have one yet?": where to get a server, as one quiet card beside
+/// the choices (Adam, 2026-11-01). Generic symbols, not the projects' logos
+/// (BookOrbit's assets can't be copied in; calibre's are calibre's). Each
+/// row opens the project's site in Safari.
+private struct ServerSuggestions: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Don’t have one yet?")
+                .font(.subheadline.weight(.semibold))
+                .padding(.top, 12)
+                .padding(.bottom, 2)
+                .accessibilityAddTraits(.isHeader)
+            SuggestionRow(
+                name: "BookOrbit", line: "Self-hosted library, reader and apps", symbol: "server.rack", tint: .purple,
+                site: URL(string: "https://github.com/bookorbit/bookorbit")!
+            )
+            Divider()
+                .padding(.leading, 44)
+            SuggestionRow(
+                name: "calibre", line: "Your books on a Mac or PC, shared over OPDS", symbol: "books.vertical", tint: .green,
+                site: URL(string: "https://calibre-ebook.com")!
+            )
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 4)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 14))
+    }
+}
+
+private struct SuggestionRow: View {
+    let name: String
+    let line: String
+    let symbol: String
+    let tint: Color
+    let site: URL
+
+    var body: some View {
+        Link(destination: site) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(tint)
+                    .frame(width: 32, height: 32)
+                    .background(tint.opacity(0.15), in: .rect(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.subheadline.weight(.semibold))
+                    Text(line)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.up.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 10)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens \(site.host() ?? "its site") in Safari")
     }
 }
 
