@@ -131,6 +131,7 @@ final class ReaderModel {
     @ObservationIgnored private var isJumpingToServer = false
     /// This page's place went to the pusher while the server's was offered.
     @ObservationIgnored private var pushedSinceOffer = false
+    @ObservationIgnored private var isCatchingUp = false
     @ObservationIgnored let cfiShape: ReaderMessage.CFIShape
     @ObservationIgnored private var pusher: DebouncedProgressPusher<ContinuousClock>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -676,6 +677,12 @@ final class ReaderModel {
     /// if another reader moved it, else send this page's if it didn't go.
     /// While the capsule shows, the page waits for Go, ✕ or a turn.
     func catchUp() async {
+        // The app and the connection often come back together. A second
+        // check could find the first one's place already known but not yet
+        // offered, and send this page over it.
+        guard !isCatchingUp else { return }
+        isCatchingUp = true
+        defer { isCatchingUp = false }
         await checkServerPlace()
         if serverPlace == nil { await pusher?.flush() }
     }
