@@ -74,8 +74,13 @@ enum SampleRoutes {
 func makeShell(opener: BookOpener? = nil) -> ShellModel {
     let folder = URL.temporaryDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     return ShellModel(
-        library: LibraryModel(recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json"))),
-        opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books")))
+        library: LibraryModel(
+            recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json")),
+            finished: FinishedBooks(fileURL: folder.appending(path: "FinishedBooks.json")),
+            onIPhone: BooksOnIPhone(fileURL: folder.appending(path: "BooksOnIPhone.json"))
+        ),
+        opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books"))),
+        servers: ServerStore(fileURL: folder.appending(path: "Server.json"))
     )
 }
 

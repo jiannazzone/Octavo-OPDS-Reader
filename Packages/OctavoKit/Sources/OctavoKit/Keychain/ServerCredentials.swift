@@ -47,13 +47,14 @@ public actor InMemoryPasswordStore: PasswordStore {
 }
 
 /// A server's secrets in the Keychain, keyed by the server's ID (its
-/// `LibrarySourceID` in the app): BookOrbit tokens, an OPDS password and the
-/// trusted certificate's pin.
+/// `LibrarySourceID` in the app): BookOrbit tokens, an OPDS password, the
+/// secret a catalog's address carries and the trusted certificate's pin.
 public enum ServerCredentials {
     static let tokenService = "com.ianazzone.ereader.bookorbit-tokens"
     static let passwordService = "com.ianazzone.ereader.server-password"
     static let pinService = "com.ianazzone.ereader.certificate-pin"
-    static let allServices = [tokenService, passwordService, pinService]
+    static let catalogSecretService = "com.ianazzone.ereader.catalog-secret"
+    static let allServices = [tokenService, passwordService, pinService, catalogSecretService]
 
     /// For Sign out and Remove server: deletes everything kept for `serverID`.
     public static func removeAll(serverID: String) throws {
@@ -118,6 +119,30 @@ public struct KeychainPasswordStore: PasswordStore {
     public func save(_ credentials: PasswordCredentials?) async throws {
         if let credentials {
             try item.write(JSONEncoder().encode(credentials))
+        } else {
+            try item.delete()
+        }
+    }
+}
+
+/// The secret an OPDS catalog's address carries (Kavita's API key,
+/// `OPDSURLSecret`), so the address can be saved with the placeholder in its
+/// place.
+public struct KeychainCatalogSecretStore: Sendable {
+    private let item: KeychainItem
+
+    public init(serverID: String) {
+        item = KeychainItem(service: ServerCredentials.catalogSecretService, account: serverID)
+    }
+
+    public func load() throws -> OPDSURLSecret? {
+        try item.decoded(String.self).flatMap(OPDSURLSecret.init)
+    }
+
+    /// `nil` forgets the secret.
+    public func save(_ secret: OPDSURLSecret?) throws {
+        if let secret {
+            try item.write(JSONEncoder().encode(secret.value))
         } else {
             try item.delete()
         }

@@ -72,20 +72,24 @@ struct KeychainTests {
         let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
         let passwords = KeychainPasswordStore(serverID: serverID)
         let pins = KeychainCertificatePinStore(serverID: serverID)
+        let secrets = KeychainCatalogSecretStore(serverID: serverID)
         let neighbour = KeychainPasswordStore(serverID: serverID + "-other")
         try await tokens.save(BookOrbitCredentials(accessToken: "a", refreshToken: "r"))
         try await passwords.save(PasswordCredentials(username: "octavo", password: "secret"))
         try pins.save(CertificatePin(sha256: Data(repeating: 7, count: 32)))
+        try secrets.save(OPDSURLSecret("0123456789abcdef"))
         try await neighbour.save(PasswordCredentials(username: "other", password: "kept"))
 
         #expect(try await passwords.load()?.password == "secret")
         #expect(try pins.load()?.sha256 == Data(repeating: 7, count: 32))
+        #expect(try secrets.load()?.value == "0123456789abcdef")
 
         try ServerCredentials.removeAll(serverID: serverID)
 
         #expect(try await tokens.load() == nil)
         #expect(try await passwords.load() == nil)
         #expect(try pins.load() == nil)
+        #expect(try secrets.load() == nil)
         #expect(try await neighbour.load()?.password == "kept")
         try ServerCredentials.removeAll(serverID: serverID + "-other")
     }

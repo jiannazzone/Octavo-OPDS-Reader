@@ -208,10 +208,8 @@ TEST_RUNNER_OCTAVO_LAN_BOOKORBIT=http://<Mac's Wi-Fi IP>:3300 TEST_RUNNER_OCTAVO
 ## Follow-ups
 
 - **#12, #16:**
-  - Present the trust prompt (after approval).
-  - Normalise typed addresses: lowercase, strip a trailing dot, convert IDNs to punycode, split `user:pass@` into the account fields.
-  - Show the "Not encrypted" note for http servers.
-  - Call `ServerCredentials.removeAll(serverID:)` on Remove server.
+  - Done in setup (step 8, `Octavo/Setup/`): the trust prompt as a setup step; typed addresses normalised (`ServerAddress`: a scheme added, http only for a home address; host lowercased without a trailing dot; IDNs as `xn--`; `user:pass@` moved to the account fields); the "Not encrypted" note under an http address; Kavita's key kept in the Keychain (`KeychainCatalogSecretStore`) and saved as `{key}`; secrets stored under a per-attempt ID, dropped when the address changes, so a certificate trusted for one server never applies to another.
+  - Still to do (step 14): call `ServerCredentials.removeAll(serverID:)` on Remove server (setup's debug Disconnect does already).
 - **#8:**
   - Wire `ServerTransport` and `KeychainPasswordStore`.
   - Keep Kavita's key out of saved URLs.

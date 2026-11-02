@@ -72,6 +72,13 @@ final class LibraryModel {
 
     /// Replaces the server and loads its chips and Home.
     func connect(_ server: LibraryServer) async {
+        use(server)
+        await loadServer()
+    }
+
+    /// Replaces the server at once, without loading anything: at launch, so
+    /// the first frame shows the tabs rather than setup.
+    func use(_ server: LibraryServer) {
         self.server = server
         connection += 1
         serverChanged()
@@ -83,6 +90,10 @@ final class LibraryModel {
         homeLoaded = false
         continueReadingFailed = false
         connectionProblem = nil
+    }
+
+    /// The server's chips, then Home.
+    func loadServer() async {
         await loadRoot()
         await loadHome()
     }

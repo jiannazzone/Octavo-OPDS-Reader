@@ -13,6 +13,7 @@ final class ShellModel {
     private var homePath = ShellPath()
     private var libraryPath = ShellPath()
     private var searchPath = ShellPath()
+    private var setupPath = ShellPath()
 
     /// The books, and where they come from.
     let library: LibraryModel
@@ -36,6 +37,13 @@ final class ShellModel {
     let pages = BookPages()
     /// The Search tab's query and results.
     let search: SearchModel
+    /// Adding the server, before there is one.
+    let setup = SetupModel()
+    /// Where the server is kept between launches.
+    let servers: ServerStore
+    /// A debug launch argument is connecting a server: the tabs show, not
+    /// setup, while it does.
+    private var connectingAtLaunch = false
     /// The spread a tab measured last, which a tab opening for the first
     /// time lays out for until it has measured its own (`ScreenStack`).
     @ObservationIgnored var lastSpread: Spread?
@@ -44,9 +52,10 @@ final class ShellModel {
     /// a failing download.
     var coverStrip: CoverStripMessage?
 
-    init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener()) {
+    init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore()) {
         self.library = library
         self.opener = opener
+        self.servers = servers
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         opener.onOpen = { [weak self] in self?.opened($0) }
         // Another server: its books' pages, the screens opened from them
@@ -55,7 +64,17 @@ final class ShellModel {
             guard let self else { return }
             pages.removeAll()
             search.reset()
+            setup.reset()
             for tab in ShellTab.allCases { self[path: tab].replace([]) }
+        }
+        setup.push = { [weak self] in self?[path: .setup].push(.setup($0)) }
+        setup.pop = { [weak self] in self?[path: .setup].pop() }
+        setup.finished = { [weak self] in self?.serverAdded($0) }
+        // The saved server, at once: the first frame shows the tabs, which
+        // load as it answers.
+        if let saved = servers.load(), let server = saved.libraryServer() {
+            library.use(server)
+            Task { await library.loadServer() }
         }
         #if DEBUG
         applyLaunchArguments()
@@ -68,6 +87,7 @@ final class ShellModel {
             case .home: homePath
             case .library: libraryPath
             case .search: searchPath
+            case .setup: setupPath
             }
         }
         set {
@@ -75,9 +95,73 @@ final class ShellModel {
             case .home: homePath = newValue
             case .library: libraryPath = newValue
             case .search: searchPath = newValue
+            case .setup: setupPath = newValue
             }
         }
     }
+
+    // MARK: Setup
+
+    /// No server yet: setup shows instead of the tabs, with no way past it
+    /// until one is added (decision 6).
+    var needsSetup: Bool {
+        library.server == nil && !connectingAtLaunch
+    }
+
+    /// Setup finished: keep the server and open Home on it.
+    private func serverAdded(_ saved: SavedServer) {
+        guard let server = saved.libraryServer() else { return }
+        do {
+            try servers.save(saved)
+        } catch {
+            // Still usable now; setup asks again next launch.
+        }
+        tab = .home
+        library.use(server)
+        Task { await library.loadServer() }
+    }
+
+    /// Sign in again, after the server signed you out: BookOrbit through the
+    /// server's own client (so its requests pick up the new session), an
+    /// OPDS catalog by keeping the new password and asking again. Then the
+    /// tabs load what failed.
+    func signInAgain(username: String, password: String) async throws {
+        guard var saved = servers.load(), let server = library.server, server.id == saved.id else {
+            throw LibraryError.signedOut
+        }
+        switch saved.kind {
+        case .bookOrbit:
+            guard let source = server.source as? BookOrbitSource else { throw LibraryError.signedOut }
+            try await source.client.login(username: username, password: password)
+        case .opds:
+            guard let source = server.source as? OPDSSource else { throw LibraryError.signedOut }
+            let passwords = KeychainPasswordStore(serverID: saved.id.rawValue)
+            let previous = try? await passwords.load()
+            try await passwords.save(PasswordCredentials(username: username, password: password))
+            guard case .open = try await source.checkAccess() else {
+                try? await passwords.save(previous)
+                throw LibraryError.signedOut
+            }
+        }
+        if saved.username != username {
+            saved.username = username
+            try? servers.save(saved)
+        }
+        await library.retry()
+    }
+
+    #if DEBUG
+    /// Debug Disconnect: forgets the server and its secrets, so the next
+    /// launch (and this one) starts at setup. Remove server, with its
+    /// question about downloads, is step 14.
+    func forgetServer() {
+        if let saved = servers.load() {
+            try? ServerCredentials.removeAll(serverID: saved.id.rawValue)
+        }
+        try? servers.remove()
+        library.disconnect()
+    }
+    #endif
 
     // MARK: Navigation
 
@@ -90,9 +174,14 @@ final class ShellModel {
         }
     }
 
-    /// Opens `route` on top of the current tab.
+    /// Opens `route` on top of the current tab; setup's steps on top of
+    /// setup.
     func push(_ route: ShellRoute) {
-        self[path: tab].push(route)
+        if case .setup = route {
+            self[path: .setup].push(route)
+        } else {
+            self[path: tab].push(route)
+        }
     }
 
     /// Back.
@@ -180,7 +269,9 @@ final class ShellModel {
     /// `-shellCoverStrip failed|offline|downloading`,
     /// `-shellOpen collection|deep|cover|settings` (sample books),
     /// `-shellReading 1` (the first book in Continue reading, once connected)
-    /// and `-searchQuery austen` (typed into Search, once connected).
+    /// `-searchQuery austen` (typed into Search, once connected),
+    /// `-forgetServer 1` (start at setup) and `-setupCatalog <address>`
+    /// (setup's OPDS step, filled in).
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
@@ -203,7 +294,14 @@ final class ShellModel {
         let opens = defaults.string(forKey: "shellOpen")
         let reads = defaults.bool(forKey: "shellReading")
         let query = defaults.string(forKey: "searchQuery")
+        if defaults.bool(forKey: "forgetServer") { forgetServer() }
+        if let catalog = defaults.string(forKey: "setupCatalog") {
+            setup.catalogAddress = catalog
+            self[path: .setup].replace([.setup(.opds)])
+        }
+        connectingAtLaunch = connectsBookOrbit || opds != nil || (sample != nil && sample != "0")
         Task {
+            defer { connectingAtLaunch = false }
             if connectsBookOrbit {
                 await library.connectLocalBookOrbit()
             } else if let opds {

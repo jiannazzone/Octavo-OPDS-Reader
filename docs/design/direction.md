@@ -55,7 +55,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Lists and grids appear at once** with blank cover shapes that fill in; no spinners mid-screen. A server that can't be reached says so in place, with Try again.
 
 ### Still to decide in the library pass
-Adding your server (first run and Settings).
+Nothing: every library step is decided and built (`docs/PLAN.md`).
 
 ## Decisions (2026-10-31, under review)
 
@@ -117,6 +117,11 @@ Adding your server (first run and Settings).
    - **OPDS catalog:** enter the feed address (examples under the field: Calibre-Web `…/opds`, COPS `…/feed.php`, Komga `…/opds/v1.2/catalog`, Kavita: paste the OPDS link from its settings) and tap Connect. The account fields appear only if the server asks for a password ("Found “Calibre-Web”. It asks for a sign-in."); otherwise you land in the Library.
    - **The sync step is skipped for OPDS servers in v1** (only BookOrbit syncs); progress stays on the iPhone. The step returns once iCloud or KOReader sync exists, with iCloud preselected. A BookOrbit server shows it with itself preselected.
    - **No skip on first launch:** the first screen stays until a server is added or a file imported.
+   - **Built (step 8, 2026-11-01):**
+     - **Each step is one screen across the spread** (Adam chose it over list | detail and over one step on the left page): what it is on the left page under the title, what you do on the right. Steps slide in over each other like the app's other screens, with Back in the column; there's no tab column during setup. Folded, one page: the words, the form, then any help (the OPDS address examples).
+     - **Steps:** Add your books (BookOrbit or OPDS catalog) → Sign in to BookOrbit → Reading progress (this BookOrbit server, preselected, or Don't sync) → Home. OPDS: the address → Connect → the account fields only if the catalog asks → Home. "Trust this server?" comes in between when a certificate needs it.
+     - **Signing in again:** the signed-out banner's Sign in opens a "Sign in again" screen in the same style (the server, the account, a new password), then returns to where you were. Settings' server page is step 14.
+     - **Not yet:** Import from Files and the sample book (step 15); BookOrbit's single sign-on (Octavo can't do it yet); the reader follows the sync choice from step 13.
    - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
 25. **Plain http and self-signed certificates.**
     - **Plain `http://` is allowed only for home and VPN addresses;** internet addresses need https ("Use https:// for servers on the internet."). An http address shows "Not encrypted" under it.

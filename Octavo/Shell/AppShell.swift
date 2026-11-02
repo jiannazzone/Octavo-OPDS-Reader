@@ -19,8 +19,17 @@ struct AppShell: View {
 
     var body: some View {
         ZStack {
-            tabs
-                .accessibilityHidden(isCovered)
+            Group {
+                if model.needsSetup {
+                    // No tabs, and nothing to skip to (decision 6).
+                    ScreenStack(tab: .setup, title: "Add your books", rootFillsSpread: true, showsSettings: false) {
+                        SetupStart()
+                    }
+                } else {
+                    tabs
+                }
+            }
+            .accessibilityHidden(isCovered)
             if let book = model.reading {
                 ReaderView(book: book) { model.reading = nil }
                     // Another book is another reader: its own model, hooks

@@ -15,6 +15,8 @@ struct ShellScreen: View {
         case .settings: SettingsPlaceholder()
         case .settingsPage(let name): SettingsPagePlaceholder(name: name)
         case .cover(let book): CoverScreen(book: book)
+        case .setup(let step): SetupScreen(step: step)
+        case .signInAgain: SignInAgainScreen()
         }
     }
 }
@@ -125,8 +127,7 @@ struct ConnectionBannerSlot: View {
                 return
             }
             #endif
-            // Signing in again belongs to Settings.
-            shell.openSettings()
+            shell.push(.signInAgain)
         }
     }
 }

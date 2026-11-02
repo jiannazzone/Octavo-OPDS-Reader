@@ -6,12 +6,13 @@ import SwiftUI
 /// sample library. In the Settings stand-in; debug builds only.
 struct DebugServerSection: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
         Section {
             if let server = library.server {
                 LabeledContent(server.name, value: server.detail)
-                Button("Disconnect", role: .destructive) { library.disconnect() }
+                Button("Disconnect", role: .destructive) { shell.forgetServer() }
             } else {
                 Button {
                     Task { await library.connectLocalBookOrbit() }
@@ -52,7 +53,7 @@ struct DebugServerSection: View {
         } header: {
             Text("Debug server")
         } footer: {
-            Text("Debug builds only. Tokens and passwords are kept in the Keychain; Disconnect forgets them.")
+            Text("Debug builds only. Tokens and passwords are kept in the Keychain; Disconnect forgets them and the saved server, and opens setup.")
         }
     }
 }

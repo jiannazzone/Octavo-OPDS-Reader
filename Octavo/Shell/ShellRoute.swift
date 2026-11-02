@@ -3,8 +3,10 @@ import OctavoKit
 
 /// The tabs in the side column: Home, Library and Search. Settings isn't a
 /// tab; a button at the top of the column opens it (`docs/design/direction.md`).
+/// `setup` isn't a tab either: it's the screens before there's a server,
+/// shown instead of the tabs.
 nonisolated enum ShellTab: String, Hashable, Sendable, CaseIterable {
-    case home, library, search
+    case home, library, search, setup
 }
 
 /// A screen a tab opens. A tab's root isn't a route; everything opened from
@@ -19,12 +21,16 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     case settingsPage(String)
     /// A book's screen. Unfolding on it opens the book if it's on the iPhone.
     case cover(SourcedBook)
+    /// A step in adding the server.
+    case setup(SetupStep)
+    /// The server signed you out (or its password changed): sign in again.
+    case signInAgain
 
     /// Whether the screen has its two-page layout yet; one that hasn't keeps
     /// to the left page unfolded.
     var fillsSpread: Bool {
         switch self {
-        case .feed, .cover: true
+        case .feed, .cover, .setup, .signInAgain: true
         case .settings, .settingsPage: false
         }
     }
@@ -36,6 +42,11 @@ nonisolated enum ShellRoute: Hashable, Sendable {
         case .settings: "Settings"
         case .settingsPage(let name): name
         case .cover: nil
+        case .setup(.bookOrbit): "Sign in to BookOrbit"
+        case .setup(.opds): "Add an OPDS catalog"
+        case .setup(.trust): "Trust this server?"
+        case .setup(.sync): "Reading progress"
+        case .signInAgain: "Sign in again"
         }
     }
 }

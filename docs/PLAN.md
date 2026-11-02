@@ -11,8 +11,8 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] **5. Home.** The book you're reading, large, with your other books in progress beneath (or on the right page).
 - [x] **6. Series and authors.** Series as cover stacks, opening in reading order; Authors first name first, filed by last name, with an A–Z strip on long lists.
 - [x] **7. Search tab.** The field under the title; Recent and Browse before typing; Books, then Series and Authors, as you type, with books on the iPhone included.
-- [ ] **8. Adding your server.** First run, and the server in Settings. *Needs decisions.*
-- [ ] **Library on the Duo:** Adam signs off, then a pull request to `main` (with Adam's OK).
+- [x] **8. Adding your server.** Setup before there's a server: BookOrbit (sign in, then where progress syncs) or an OPDS catalog (its address, a sign-in only if it asks), trusting a self-signed certificate on the way; each step a screen across the spread. Signing in again from the signed-out banner.
+- [ ] **Library on the Duo:** Adam signs off, then a pull request to `main` (with Adam's OK). Setup touches the Keychain and address handling, so it gets a security review that Adam signs off before the merge.
 
 ## Phase 2: Reading
 
@@ -39,7 +39,7 @@ These screens are still the old ones or stand-ins; the step that replaces them i
 
 | You see | Fixed in |
 |---|---|
-| Settings is a stand-in; connecting is a debug switch | 8, 14 |
+| Settings is a stand-in | 14 |
 | Anything in the reader | 9–12 |
 | A book opens somewhere other than the % its screen shows, or after a pause on unfolding | 13 |
 

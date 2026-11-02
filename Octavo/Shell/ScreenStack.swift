@@ -15,6 +15,8 @@ struct ScreenStack<Root: View>: View {
     let title: String
     /// Whether the tab's root has its two-page layout yet.
     var rootFillsSpread = false
+    /// Setup has no Settings to open.
+    var showsSettings = true
     @ViewBuilder let root: () -> Root
     @Environment(ShellModel.self) private var shell
     /// `nil` until the stack has been laid out once.
@@ -74,7 +76,9 @@ struct ScreenStack<Root: View>: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if path.routes.isEmpty {
-                        Button("Settings", systemImage: "gearshape") { shell.openSettings() }
+                        if showsSettings {
+                            Button("Settings", systemImage: "gearshape") { shell.openSettings() }
+                        }
                     } else {
                         Button("Back", systemImage: "chevron.backward") { shell.pop(tab) }
                     }
