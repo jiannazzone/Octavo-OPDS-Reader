@@ -15,6 +15,7 @@ Step 13 of `docs/PLAN.md`, built 2026-11-02. It wires BookOrbit position sync in
 - **`BookPlaces`** (`Octavo/Book/BookPlaces.swift`, owned by `ShellModel.places`) is the one source of truth:
   - `opening(of:)` is `OpeningPosition.choose(local:remote:)`, the reader's own rule. The remote is the last pull or push this session, else the library list's percentage. The book's screen, Home's rows and Search's rows show `progress(of:)`, so they match where the book opens.
   - `refresh(_:)` pulls the server's position. `BookCoverPage` calls it when it appears and when the app comes back to the foreground (not while the reader covers it). If the iPhone's place is unsent and wins under the rule (read offline), it's pushed then.
+  - `refreshRow(_:)` does the same for Home's and Search's rows (Adam, 2026-11-02): only for a book with a place to show, and at most once a minute per book (`rowReuseAge`), so switching tabs doesn't fetch again. Home also fetches when its books change, and fetches again (ignoring the minute) when the app comes back.
   - `readerSync(for:)` gives the reader a `SharedProgressSync`. Its `pull()` reuses a pull up to 5 minutes old (`BookPlaces.reuseAge`), or joins the one in flight. Its `push` reports back, so the screen shows the new place after the reader closes.
   - Each pull gives up after `ReaderModel.pullTimeout` (5 s), so the reader never waits longer than before. A pull that started before a push can't put the older position back (`generations`). Another server clears everything (`reset`).
 - **The reader** (`ReaderModel`) takes `fallback`, the list's percentage. When there's no pull (no sync, or it failed) it opens at `choose(local, fallback)`, which is what the screen showed: the iPhone's place, else that percentage. Opening at a pulled server position records the sync time. `syncStatus` (debug) now says how long the pull took.
@@ -43,6 +44,8 @@ Step 13 of `docs/PLAN.md`, built 2026-11-02. It wires BookOrbit position sync in
 | 06 | `-syncFailsPushes 1`: read to 60%, fold | Folding closes the reader; sheet "60% · Not synced yet, will retry". Server still 25% |
 | 07 | Relaunched online, cover shown | The cover sent it: server 60.15%, sheet "60% · Synced just now" |
 | 08 | Home | Moby-Dick at 60%, as its screen |
+| 10 | Server set back to 25% by another reader; Octavo relaunched, Home | Before rows fetched, Home said 60% (the iPhone's place). Now Moby-Dick shows 25% |
+| 11 | Another reader sets 60%; app to the background and back on Home | Moby-Dick follows to 60% |
 
 **Unfolding no longer waits on the pull.** With `-syncPullDelay 3` (a 3 s server):
 
@@ -53,6 +56,8 @@ Step 13 of `docs/PLAN.md`, built 2026-11-02. It wires BookOrbit position sync in
 From the unfold to the opened page takes about 3.7 s on the simulator. That is the web page loading and foliate opening the book, not sync.
 
 The server was put back to 25% afterwards.
+
+**Running the app tests signs the simulator's app out.** They run inside the app on the same simulator, and `KeychainTests` wipes every BookOrbit token while testing the leftovers-after-install cleanup. So sign in again (or launch with `-connectBookOrbit 1`) after a test run. This was true before step 13.
 
 ## Debug switches
 
@@ -70,4 +75,3 @@ The server was put back to 25% afterwards.
 - **An open reader doesn't re-pull** when the app returns to the foreground. If another device moved on meanwhile, the reader stays put until it's reopened.
 - **Unsent places are retried only** when their book's screen shows or the book opens, not in the background for every book.
 - **If "Don't sync" comes back**, decide whether bookmarks follow it (they sync with BookOrbit regardless today).
-- Home's and Search's rows use a pull only once the book's screen has been seen this session. Before that, they show the iPhone's place, else the list's percentage, as the book's screen does before its pull lands.

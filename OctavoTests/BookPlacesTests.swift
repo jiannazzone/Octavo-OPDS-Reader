@@ -239,6 +239,32 @@ struct BookPlacesTests {
         #expect(places.progress(of: Self.book) == 0.3)
     }
 
+    // Home's and Search's rows fetch a started book's place, at most once a
+    // minute, and leave books not started alone.
+    @Test func rowsFetchStartedBooksAtMostOnceAMinute() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace))
+        let places = places(backend)
+
+        let notStarted = SourcedBook(source: Self.book.source, book: LibraryBook(id: LibraryBookID(rawValue: "3"), title: "Moby-Dick", files: [Self.file]))
+        places.refreshRow(notStarted)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await backend.pulls == 0)
+
+        places.refreshRow(Self.book)
+        #expect(await eventually { places.progress(of: Self.book) == 0.6 })
+        places.refreshRow(Self.book)
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await backend.pulls == 1)
+
+        // Coming back to the app fetches again.
+        places.refreshRow(Self.book, again: true)
+        #expect(await eventuallyAwaiting { await backend.pulls == 2 })
+
+        clock.advance(by: BookPlaces.rowReuseAge + 1)
+        places.refreshRow(Self.book)
+        #expect(await eventuallyAwaiting { await backend.pulls == 3 })
+    }
+
     // MARK: Which books sync
 
     @Test func onlyABookOrbitServerSetToSyncSyncs() {

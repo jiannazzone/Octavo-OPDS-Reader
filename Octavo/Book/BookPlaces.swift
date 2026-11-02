@@ -6,8 +6,9 @@ import OctavoKit
 /// it, and whether that place has reached the server (step 13).
 ///
 /// - A book's screen pulls the server's position when it appears
-///   (`refresh`). The reader reuses a recent pull (`SharedProgressSync`), so
-///   unfolding on the cover opens the book at once.
+///   (`refresh`), and so do Home's and Search's rows for books with a place
+///   (`refreshRow`). The reader reuses a recent pull (`SharedProgressSync`),
+///   so unfolding on the cover opens the book at once.
 /// - Every place line shows where the book opens: `OpeningPosition.choose`
 ///   with the iPhone's record and the server's position, the rule the
 ///   reader opens with. Until a pull lands (or if it fails) the server's
@@ -36,6 +37,9 @@ final class BookPlaces {
     /// A pull this recent is used instead of pulling again: unfolding soon
     /// after the cover appeared opens at once.
     nonisolated static let reuseAge: TimeInterval = 5 * 60
+    /// A pull this recent is used for a row on Home or in Search, so going
+    /// back and forth between tabs doesn't fetch again.
+    nonisolated static let rowReuseAge: TimeInterval = 60
 
     private var remotes: [String: Remote] = [:]
     /// Changes when a saved position changes on disk, which isn't observed.
@@ -97,18 +101,27 @@ final class BookPlaces {
     // MARK: Syncing
 
     /// The book's screen appeared, or the app came back to it: pull the
-    /// server's position, then send the iPhone's if it's newer and unsent.
-    func refresh(_ book: SourcedBook) {
+    /// server's position (unless one younger than `age` is known), then send
+    /// the iPhone's if it's newer and unsent.
+    func refresh(_ book: SourcedBook, reusingWithin age: TimeInterval = 0) {
         guard let backend = backend(book), let key = book.book.readableFile?.storageKey else { return }
         Task {
             let remote: SyncedPosition?
             do {
-                remote = try await pull(key, from: backend, reusingWithin: 0)
+                remote = try await pull(key, from: backend, reusingWithin: age)
             } catch {
                 return
             }
             await pushUnsent(key, to: backend, over: remote)
         }
+    }
+
+    /// A row on Home or in Search shows `book`: `refresh`, for a book with a
+    /// place to show (one not started anywhere has nothing to fetch), and
+    /// reusing a pull from the last minute unless `again`.
+    func refreshRow(_ book: SourcedBook, again: Bool = false) {
+        guard progress(of: book) != nil else { return }
+        refresh(book, reusingWithin: again ? 0 : Self.rowReuseAge)
     }
 
     /// The reader's sync for `book`, through here: it reuses a recent pull

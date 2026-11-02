@@ -364,6 +364,8 @@ private struct SearchBookRow: View {
             .padding(.vertical, 6)
             .accessibilityElement(children: .combine)
         }
+        // Where the book opens, as the server has it (`BookPlaces`).
+        .onAppear { shell.places.refreshRow(book) }
     }
 
     /// "Finished", "42%", or nothing for a book not started.

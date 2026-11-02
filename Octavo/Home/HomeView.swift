@@ -47,9 +47,31 @@ struct HomeView: View {
 struct HomeContent: View {
     let books: [SourcedBook]?
     @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
     @Environment(\.spread) private var spread
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
+        // Each book's place as the server has it, so the rows show where
+        // the books open (`BookPlaces`): when Home shows, when its books
+        // change, and when the app comes back (not under the reader).
+        layout
+            .onAppear { refreshPlaces() }
+            .onChange(of: books?.map(\.id)) { refreshPlaces() }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active, shell.reading == nil else { return }
+                refreshPlaces(again: true)
+            }
+    }
+
+    private func refreshPlaces(again: Bool = false) {
+        for book in books ?? [] {
+            shell.places.refreshRow(book, again: again)
+        }
+    }
+
+    @ViewBuilder
+    private var layout: some View {
         if let pages = spread.pages {
             HStack(alignment: .top, spacing: 0) {
                 ScrollView {
