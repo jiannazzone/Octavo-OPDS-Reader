@@ -17,7 +17,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 ## Phase 2: Reading
 
 - [x] **9. Reader controls.** A quiet "…" in the side column is the one way to bring the controls up, in every posture; every other tap turns (left of the middle back, right of it and the column forward).
-- [ ] **10. Page turning.** Taps, swipes, keyboard and trackpad; book mode; folding and unfolding mid-book.
+- [x] **10. Page turning.** Taps and swipes in every posture; a hardware keyboard (arrows, Page Up/Down, Space) and a trackpad's two-finger swipe; the place holds through unfolding, half open and flat again (folding closes the book, by design).
 - [ ] **11. Rendering.** The rendering problems seen on the Duo.
 - [ ] **12. Panels.** Text and theme, Contents and bookmarks, Search in book. *Needs decisions.*
 - [ ] **Reading on the Duo:** sign-off, pull request.
