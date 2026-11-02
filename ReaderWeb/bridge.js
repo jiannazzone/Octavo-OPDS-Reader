@@ -176,7 +176,9 @@ const tap = x => {
 // A hardware keyboard turns pages (step 10): ← and → the way the book reads,
 // like the halves of the page; ↑, ↓, Page Up, Page Down and Space (Shift-Space
 // back) through the book. Without this the web view scrolls the paginator by
-// a few points and leaves the page between two.
+// a few points and leaves the page between two. Shift with an arrow extends
+// a selection, so it's left alone; while the controls cover the page a key
+// hides them, as a tap does.
 const KEY_TURNS = {
     ArrowLeft: () => view?.goLeft(),
     ArrowRight: () => view?.goRight(),
@@ -187,24 +189,35 @@ const KEY_TURNS = {
 }
 const onKeyDown = e => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return
+    if (e.shiftKey && e.key !== ' ') return
     const turn = e.key === ' ' ? (e.shiftKey ? () => view?.prev() : () => view?.next()) : KEY_TURNS[e.key]
     if (!turn) return
     e.preventDefault()
+    if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
     turn()
 }
 
 // A trackpad's two-finger swipe (wheel events) turns one page per swipe, the
 // way it points: sideways like the halves of the page, up and down through
-// the book. A swipe is the run of events until they pause; the paginator's
-// own scrolling would leave the page between two. Pinch (Ctrl) is left alone.
+// the book. A swipe is the run of events until they pause, or until a new
+// push (a jump in speed during the last swipe's momentum) or a change of
+// direction; the paginator's own scrolling would leave the page between
+// two. Pinch (Ctrl) is left alone. While the controls cover the page a swipe
+// hides them, as a tap does.
 const WHEEL_DISTANCE = 30
 const WHEEL_PAUSE_MS = 250
+const WHEEL_PUSH = 1.5
 let wheel = null
 const onWheel = e => {
     if (e.ctrlKey) return
     e.preventDefault()
-    if (!wheel || e.timeStamp - wheel.last > WHEEL_PAUSE_MS) wheel = { dx: 0, dy: 0, turned: false, last: 0 }
+    const size = Math.hypot(e.deltaX, e.deltaY)
+    const fresh = !wheel || e.timeStamp - wheel.last > WHEEL_PAUSE_MS
+        || (wheel.turned && size > wheel.size * WHEEL_PUSH && size > 4)
+        || (wheel.turned && e.deltaX * wheel.dx + e.deltaY * wheel.dy < 0)
+    if (fresh) wheel = { dx: 0, dy: 0, turned: false, last: 0, size: 0 }
     wheel.last = e.timeStamp
+    wheel.size = size
     if (wheel.turned) return
     wheel.dx += e.deltaX
     wheel.dy += e.deltaY
@@ -212,6 +225,7 @@ const onWheel = e => {
     const distance = sideways ? wheel.dx : wheel.dy
     if (Math.abs(distance) < WHEEL_DISTANCE) return
     wheel.turned = true
+    if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
     if (sideways) distance > 0 ? view?.goRight() : view?.goLeft()
     else distance > 0 ? view?.next() : view?.prev()
 }
@@ -232,8 +246,15 @@ const FORCED_BREAKS = new Set(['page', 'column', 'left', 'right', 'recto', 'vers
 const collapseBlankPageBreaks = doc => {
     const style = el => doc.defaultView?.getComputedStyle(el)
     const forced = el => FORCED_BREAKS.has(style(el)?.breakBefore) || FORCED_BREAKS.has(style(el)?.pageBreakBefore)
-    // An element's first content: an element or text with something in it.
-    const firstContent = el => [...el.childNodes].find(node => node.nodeType === Node.ELEMENT_NODE || node.textContent.trim())
+    // An element's first content: an element, or text with something in it
+    // (not a comment). Stops at the first one, so each parent is cheap.
+    const firstContent = el => {
+        for (const node of el.childNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) return node
+            if ((node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE) && node.textContent.trim()) return node
+        }
+        return null
+    }
     const unbreak = el => {
         el.style.setProperty('break-before', 'auto', 'important')
         el.style.setProperty('page-break-before', 'auto', 'important')
@@ -241,9 +262,12 @@ const collapseBlankPageBreaks = doc => {
     for (let el = doc.body && firstContent(doc.body); el?.nodeType === Node.ELEMENT_NODE; el = firstContent(el)) {
         if (forced(el)) unbreak(el)
     }
-    for (const el of doc.body?.querySelectorAll('*') ?? []) {
-        const parent = el.parentElement
-        if (parent && parent !== doc.body && firstContent(parent) === el && forced(el) && forced(parent)) unbreak(el)
+    // Each breaking box once, with its own first content: linear in the
+    // section's size.
+    for (const parent of doc.body?.querySelectorAll('*') ?? []) {
+        if (!forced(parent)) continue
+        const first = firstContent(parent)
+        if (first?.nodeType === Node.ELEMENT_NODE && forced(first)) unbreak(first)
     }
 }
 

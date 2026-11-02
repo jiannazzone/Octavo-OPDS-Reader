@@ -112,11 +112,13 @@ private struct ReaderScreen: View {
         return controls.buttonsVisible
     }
 
-    /// Controls hidden: a quiet "…" in the column is the one way to bring
-    /// them up, in every posture (Adam, 2026-11-02; a middle tap would land
-    /// on the fold half open). The rest of the column turns the page.
+    /// Bar hidden: a quiet "…" in the column is the one way to bring the
+    /// controls up, in every posture (Adam, 2026-11-02; a middle tap would
+    /// land on the fold half open). The rest of the column turns the page.
+    /// With Always show controls it sits after the buttons and brings up
+    /// the bar.
     private var showsControlsButton: Bool {
-        model.phase == .open && !buttonsVisible
+        model.phase == .open && !controls.showsBar
     }
 
     @ViewBuilder private var status: some View {
@@ -134,13 +136,8 @@ private struct ReaderScreen: View {
     /// The column's buttons (frame 08). Contents, Text and theme, Search in
     /// book and Bookmark are greyed out until their panels exist (#18).
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
-        if showsControlsButton {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Show Controls", systemImage: "ellipsis") {
-                    withAnimation(.easeOut(duration: 0.2)) { controls.show() }
-                }
-                .tint(.secondary)
-            }
+        if showsControlsButton, !buttonsVisible {
+            ToolbarItem(placement: .topBarTrailing) { showControlsButton }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if buttonsVisible {
@@ -153,8 +150,18 @@ private struct ReaderScreen: View {
                     .disabled(true)
                 Button("Bookmark", systemImage: "bookmark") {}
                     .disabled(true)
+                if showsControlsButton {
+                    showControlsButton
+                }
             }
         }
+    }
+
+    private var showControlsButton: some View {
+        Button("Show Controls", systemImage: "ellipsis") {
+            withAnimation(.easeOut(duration: 0.2)) { controls.show() }
+        }
+        .tint(.secondary)
     }
 }
 

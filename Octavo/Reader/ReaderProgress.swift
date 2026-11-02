@@ -77,10 +77,9 @@ nonisolated struct ReaderPlace: Equatable, Sendable {
 ///
 /// - The column's "…" button shows both (Adam, 2026-11-02, every posture);
 ///   the next tap anywhere on the page hides them.
-/// - With "Always show controls" the buttons stay up; how the bar comes up
-///   then is for the Customize panel (step 12), which holds the setting.
-///   The buttons sit in the column, so they never cover text; the bar does,
-///   so it never stays.
+/// - With "Always show controls" the buttons stay up, the "…" after them
+///   bringing up the bar. The buttons sit in the column, so they never
+///   cover text; the bar does, so it never stays.
 /// - Book mode starting hides them (decision 9).
 nonisolated struct ReaderControls: Equatable, Sendable {
     var alwaysShowsButtons = false

@@ -191,7 +191,6 @@ final class ReaderModel {
         guard isBookMode != reportedBookMode else { return }
         reportedBookMode = isBookMode
         log.debug("book mode \(self.isBookMode)")
-        sendTapMode()
         onBookModeChange?(isBookMode)
     }
 
@@ -218,7 +217,6 @@ final class ReaderModel {
         guard geometry != self.geometry else { return }
         self.geometry = geometry
         relayout()
-        sendTapMode()
     }
 
     /// Whether a tap hides the controls instead of turning.
@@ -226,7 +224,8 @@ final class ReaderModel {
         ReaderTapMode(dismisses: coversPage)
     }
 
-    /// While the book is opening, `.opened` sends it instead.
+    /// Sent when `coversPage` changes, and once the book has opened (while
+    /// it opens, `.opened` sends it instead). Posture and size don't affect it.
     private func sendTapMode() {
         let mode = tapMode
         guard phase == .open, mode != sentTapMode else { return }
@@ -329,7 +328,6 @@ final class ReaderModel {
         self.layout = layout
         sentLayout = layout
         bookModeMayHaveChanged()
-        sendTapMode()
         lastFold?.laidOut = FoldReport.milliseconds(since: startedAt)
         do {
             let rendered = try await page.callJavaScript(
