@@ -36,6 +36,17 @@ struct BookOrbitBookmarkSyncTests {
         #expect(added.id == "5")
     }
 
+    // The validator counts UTF-16 units, so an emoji is two.
+    @Test func aLongTitleIsCutByTheServersCount() async throws {
+        let server = StubServer { _ in
+            .json(201, #"{"id":6,"bookId":3,"cfi":"epubcfi(/6/8!/4/2/1:0)","title":"x"}"#)
+        }
+        _ = try await sync(server).add(cfi: "epubcfi(/6/8!/4/2/1:0)", title: String(repeating: "🐋", count: 300))
+        let title = try #require(server.requests.first?.json?["title"] as? String)
+        #expect(title.utf16.count == 500)
+        #expect(title == String(repeating: "🐋", count: 250))
+    }
+
     @Test func removingOneThatsGoneSucceeds() async throws {
         let server = StubServer { _ in .json(404, #"{"statusCode":404,"message":"Not Found"}"#) }
         try await sync(server).remove(id: "5")

@@ -55,6 +55,12 @@ nonisolated struct ReadingPositionStore: Sendable {
     /// Book IDs can be file names or server IDs; percent-encode anything that
     /// isn't safe in a file name.
     func fileURL(forBook bookID: String) -> URL {
+        Self.fileURL(forBook: bookID, in: directory)
+    }
+
+    /// The JSON file for `bookID` in `directory`; `BookmarkStore` names its
+    /// files the same way.
+    static func fileURL(forBook bookID: String, in directory: URL) -> URL {
         let safe = bookID.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_."))) ?? bookID
         return directory.appending(path: safe + ".json", directoryHint: .notDirectory)
     }

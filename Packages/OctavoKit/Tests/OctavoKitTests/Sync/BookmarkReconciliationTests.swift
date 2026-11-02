@@ -12,8 +12,10 @@ struct BookmarkReconciliationTests {
         let result = BookmarkReconciliation.reconcile(local: [], remote: [SyncedBookmark(id: "7", cfi: cfiA, title: "CHAPTER 2.")])
         #expect(result.bookmarks.count == 1)
         #expect(result.bookmarks.first?.remoteID == "7")
-        #expect(result.bookmarks.first?.chapter == "CHAPTER 2.")
-        #expect(result.toAdd.isEmpty && result.toRemove.isEmpty)
+        // Its title is the web reader's, not a chapter.
+        #expect(result.bookmarks.first?.chapter == nil)
+        #expect(!(result.bookmarks.first?.isDescribed ?? true))
+        #expect(result.toAdd.isEmpty)
     }
 
     @Test func aBookmarkRemovedElsewhereGoes() {
@@ -43,16 +45,16 @@ struct BookmarkReconciliationTests {
     @Test func aRemovalHereIsSentAndKeptUntilItLands() {
         let removed = LocalBookmark(cfi: cfiA, remoteID: "7", isRemoved: true)
         let result = BookmarkReconciliation.reconcile(local: [removed], remote: [SyncedBookmark(id: "7", cfi: cfiA)])
-        #expect(result.toRemove == ["7"])
         #expect(result.bookmarks.map(\.isRemoved) == [true])
+        #expect(result.toAdd.isEmpty)
 
         let landed = BookmarkReconciliation.reconcile(local: [removed], remote: [])
-        #expect(landed.bookmarks.isEmpty && landed.toRemove.isEmpty)
+        #expect(landed.bookmarks.isEmpty)
     }
 
     @Test func aBookmarkMadeAndRemovedOfflineIsForgotten() {
         let result = BookmarkReconciliation.reconcile(local: [LocalBookmark(cfi: cfiA, isRemoved: true)], remote: [])
-        #expect(result.bookmarks.isEmpty && result.toAdd.isEmpty && result.toRemove.isEmpty)
+        #expect(result.bookmarks.isEmpty && result.toAdd.isEmpty)
     }
 
     @Test func aMovedBookmarkIsPlacedAgain() {

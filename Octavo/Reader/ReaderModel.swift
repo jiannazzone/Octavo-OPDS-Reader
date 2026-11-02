@@ -414,11 +414,8 @@ final class ReaderModel {
         await pusher?.flush()
     }
 
-    func bridgeCallFailed(_ error: any Error) {
-        log.error("Reader call failed: \(error)")
-    }
-
-    private func call(_ body: String, arguments: [String: Any] = [:]) {
+    /// Calls the bridge without waiting for its answer.
+    func call(_ body: String, arguments: [String: Any] = [:]) {
         guard phase == .open else { return }
         Task {
             do {

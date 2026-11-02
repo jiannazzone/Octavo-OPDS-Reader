@@ -409,7 +409,7 @@ public actor BookOrbitClient {
     /// `POST books/{bookId}/bookmarks {cfi, title, bookFileId}`. The server
     /// takes no client ID, so a retry after a lost answer adds a second one.
     public func addBookmark(cfi: String, title: String, bookID: Int, fileID: Int?) async throws -> BookOrbitBookmark {
-        let body = AddBookmarkRequest(cfi: cfi, title: String(title.prefix(Self.bookmarkTitleLimit)), bookFileId: fileID)
+        let body = AddBookmarkRequest(cfi: cfi, title: Self.bookmarkTitle(title), bookFileId: fileID)
         return try decode(BookOrbitBookmark.self, from: try await send(jsonRequest("books/\(bookID)/bookmarks", method: "POST", body: body)))
     }
 
@@ -425,8 +425,21 @@ public actor BookOrbitClient {
         }
     }
 
-    /// The server's limit on a bookmark's title (v3.6.0).
+    /// The server's limit on a bookmark's title (v3.6.0), in UTF-16 units:
+    /// its validator counts a JavaScript string's length.
     static let bookmarkTitleLimit = 500
+
+    /// `title` cut to the limit, whole characters only.
+    static func bookmarkTitle(_ title: String) -> String {
+        var units = 0
+        var end = title.startIndex
+        for index in title.indices {
+            units += title[index].utf16.count
+            if units > bookmarkTitleLimit { break }
+            end = title.index(after: index)
+        }
+        return String(title[..<end])
+    }
 
     // MARK: - Read status
 

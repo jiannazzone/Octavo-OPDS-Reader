@@ -840,6 +840,8 @@ const requireView = () => {
 // newer search, or `cancelSearch`, stops the walk at the next section.
 const SEARCH_LIMIT = 1000
 let search = null
+// A match can run over a line break in the source.
+const words = text => String(text ?? '').replace(/\s+/g, ' ')
 const runSearch = async (query, token) => {
     const v = requireView()
     search = { token }
@@ -875,14 +877,16 @@ const runSearch = async (query, token) => {
         }
         if (!current()) return
         // Where each text node starts, counted in one pass, for placing
-        // matches in a section that isn't laid out.
-        const body = doc.body ?? doc.documentElement
+        // matches in a section that isn't laid out (the one on screen is
+        // placed by its layout).
         const offsets = new Map()
         let length = 0
-        const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT)
-        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-            offsets.set(node, length)
-            length += node.length
+        if (!loaded) {
+            const walker = doc.createTreeWalker(doc.body ?? doc.documentElement, NodeFilter.SHOW_TEXT)
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                offsets.set(node, length)
+                length += node.length
+            }
         }
         // The section's contents entries where they start, in order.
         const starts = []
@@ -905,9 +909,8 @@ const runSearch = async (query, token) => {
                 next++
             }
             const within = (loaded ? layoutFraction(range) : null)
-                ?? (length > 0 ? ((offsets.get(range.startContainer) ?? 0) + range.startOffset) / length : 0)
-            // A match can run over a line break in the source.
-            const words = text => String(text ?? '').replace(/\s+/g, ' ')
+                ?? (loaded ? characterFraction(doc, range)
+                    : length > 0 ? ((offsets.get(range.startContainer) ?? 0) + range.startOffset) / length : 0)
             matches.push({
                 cfi: v.getCFI(index, range),
                 pre: words(excerpt?.pre),

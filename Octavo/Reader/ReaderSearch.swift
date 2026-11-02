@@ -39,17 +39,21 @@ final class ReaderSearch {
     }
 
     /// Consecutive matches under the same chapter, in the book's order.
-    var groups: [Group] {
-        var groups: [Group] = []
-        var items: [Item] = []
-        for (index, match) in matches.enumerated() {
-            items.append(Item(id: "\(token)-\(index)", index: index, match: match))
-            if index == matches.count - 1 || matches[index + 1].chapter != match.chapter {
-                groups.append(Group(id: "\(token)-\(items[0].index)", chapter: match.chapter, items: items))
-                items = []
+    /// Built as matches arrive, not on every redraw (the field redraws the
+    /// panel with each letter).
+    private(set) var groups: [Group] = []
+
+    private func group(_ new: [Match]) {
+        for match in new {
+            let index = matches.count
+            matches.append(match)
+            let item = Item(id: "\(token)-\(index)", index: index, match: match)
+            if let last = groups.last, last.chapter == match.chapter {
+                groups[groups.count - 1] = Group(id: last.id, chapter: last.chapter, items: last.items + [item])
+            } else {
+                groups.append(Group(id: "\(token)-\(index)", chapter: match.chapter, items: [item]))
             }
         }
-        return groups
     }
 
     var isStepping: Bool { current != nil }
@@ -68,6 +72,7 @@ final class ReaderSearch {
         token += 1
         searched = text
         matches = []
+        groups = []
         current = nil
         isTruncated = false
         isSearching = true
@@ -76,7 +81,7 @@ final class ReaderSearch {
 
     func receive(_ batch: ReaderMessage.SearchBatch) {
         guard batch.token == token, isSearching else { return }
-        matches += batch.matches
+        group(batch.matches)
         if batch.done {
             isSearching = false
             isTruncated = batch.truncated
@@ -94,6 +99,7 @@ final class ReaderSearch {
         query = ""
         searched = nil
         matches = []
+        groups = []
         current = nil
         isSearching = false
         isTruncated = false
@@ -104,6 +110,7 @@ final class ReaderSearch {
         token += 1
         searched = nil
         matches = []
+        groups = []
         current = nil
         isSearching = false
         isTruncated = false

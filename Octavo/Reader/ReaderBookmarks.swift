@@ -23,8 +23,7 @@ nonisolated struct BookmarkStore: Sendable {
     }
 
     func fileURL(forBook bookID: String) -> URL {
-        let safe = bookID.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-_."))) ?? bookID
-        return directory.appending(path: safe + ".json", directoryHint: .notDirectory)
+        ReadingPositionStore.fileURL(forBook: bookID, in: directory)
     }
 }
 
@@ -163,6 +162,9 @@ final class ReaderBookmarks {
                 let synced = try await sync.add(cfi: bookmark.cfi, title: Self.title(for: bookmark))
                 guard let index = all.firstIndex(where: { $0.id == id }) else { return }
                 all[index].remoteID = synced.id
+                // Kept before anything else can fail, so a removal that
+                // doesn't get through is retried rather than forgotten.
+                save()
                 // Removed while the add was on its way.
                 if all[index].isRemoved {
                     try await sync.remove(id: synced.id)

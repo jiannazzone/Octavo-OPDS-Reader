@@ -71,23 +71,20 @@ public struct LocalBookmark: Codable, Hashable, Sendable, Identifiable {
 public enum BookmarkReconciliation {
     public struct Result: Equatable, Sendable {
         public var bookmarks: [LocalBookmark]
-        /// Made here, still to add to the backend.
+        /// Made here, still to add to the backend. Removals still to send
+        /// are the bookmarks kept with `isRemoved`.
         public var toAdd: [LocalBookmark.ID]
-        /// The backend's IDs of bookmarks removed here.
-        public var toRemove: [String]
     }
 
     public static func reconcile(local: [LocalBookmark], remote: [SyncedBookmark]) -> Result {
         var unmatched = Dictionary(remote.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var bookmarks: [LocalBookmark] = []
         var toAdd: [LocalBookmark.ID] = []
-        var toRemove: [String] = []
 
         for var bookmark in local {
             if let remoteID = bookmark.remoteID {
                 guard let synced = unmatched.removeValue(forKey: remoteID) else { continue }
                 if bookmark.isRemoved {
-                    toRemove.append(remoteID)
                     bookmarks.append(bookmark)
                     continue
                 }
@@ -105,9 +102,11 @@ public enum BookmarkReconciliation {
                 bookmarks.append(bookmark)
             }
         }
+        // The server's title is whatever its reader typed, not a chapter: the
+        // reader names the chapter from the book.
         for synced in remote where unmatched[synced.id] != nil {
-            bookmarks.append(LocalBookmark(cfi: synced.cfi, createdAt: synced.createdAt ?? .now, remoteID: synced.id, chapter: synced.title))
+            bookmarks.append(LocalBookmark(cfi: synced.cfi, createdAt: synced.createdAt ?? .now, remoteID: synced.id))
         }
-        return Result(bookmarks: bookmarks, toAdd: toAdd, toRemove: toRemove)
+        return Result(bookmarks: bookmarks, toAdd: toAdd)
     }
 }
