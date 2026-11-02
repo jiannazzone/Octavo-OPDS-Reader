@@ -18,12 +18,19 @@ struct ScreenStack<Root: View>: View {
     @ViewBuilder let root: () -> Root
     @Environment(ShellModel.self) private var shell
     @State private var spread = Spread.onePage
+    /// How far a screen slides: past the side column, which it runs under,
+    /// and on a little further, so the slide's slow end happens off screen.
+    @State private var travel: CGFloat = 1000
     /// How far a swipe from the leading edge has pulled the top screen.
     @State private var swipe: CGFloat?
 
     /// Quick out of the gate and settled at 0.32 s. Not a spring: across the
     /// spread's full width its tail crept for half a second more.
     private static var slide: Animation { .timingCurve(0.25, 0.8, 0.25, 1, duration: 0.32) }
+
+    /// Beyond the screen's edge, so the slide is still quick when a screen
+    /// leaves sight.
+    private static var overshoot: CGFloat { 80 }
 
     /// A swipe this far across, or flicked this fast, goes back.
     private static var swipeCommit: CGFloat { 0.35 }
@@ -44,7 +51,7 @@ struct ScreenStack<Root: View>: View {
                         .offset(x: isTop ? swipe ?? 0 : 0)
                         .allowsHitTesting(isTop)
                         .accessibilityHidden(!isTop)
-                        .transition(.move(edge: .trailing))
+                        .transition(.offset(x: travel))
                 }
                 if !path.routes.isEmpty {
                     edge
@@ -56,6 +63,9 @@ struct ScreenStack<Root: View>: View {
             .animation(path.lastMove == .replace ? nil : Self.slide, value: path)
             .animation(.easeInOut(duration: 0.3), value: spread)
             .onGeometryChange(for: Spread.self) { Spread($0) } action: { spread = $0 }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width + $0.safeAreaInsets.trailing } action: {
+                travel = $0 + Self.overshoot
+            }
             .environment(\.spread, spread)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -108,7 +118,7 @@ struct ScreenStack<Root: View>: View {
                             || value.predictedEndTranslation.width > width * 0.6
                         if goesBack {
                             withAnimation(.easeOut(duration: 0.2)) {
-                                swipe = width
+                                swipe = travel
                             } completion: {
                                 var instant = Transaction()
                                 instant.disablesAnimations = true
