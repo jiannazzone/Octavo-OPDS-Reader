@@ -49,6 +49,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, author, place and progress bar, then **Mark finished | Open**; pull it up for the details.
 - **Unfolded:** Cover | Details, the cover on the left page and the same details on the right.
 - **Open is Download until the book is on the iPhone** (Adam, 2026-11-01): Download, then a ring with Cancel while it downloads, then Open. A problem shows on the place line, with Try again on the button. Downloading doesn't open the book.
+- **The place is where the book opens, with when it last synced beside it** (step 13, Adam 2026-11-02): on the place's own line, at the right ("Synced just now", "Synced 5 minutes ago", "Synced yesterday", "Synced Oct 28"), or "Not synced yet, will retry" while a place waits to be sent. A book whose place doesn't sync (an OPDS catalog, or BookOrbit set to Don't sync) shows nothing there.
 - **Mark finished** goes to BookOrbit as its `read` status (un-marking sends `reading`, which BookOrbit records as `rereading`); an OPDS server keeps no such mark, so the iPhone keeps it. A finished book's place line says Finished.
 
 ### Getting books onto the iPhone
@@ -307,7 +308,7 @@ Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (d
 
 - **Tabs in the trailing column.** Checked (#6, `docs/notes/duo-tabbar.md`): SwiftUI's `TabView` puts the tab bar at the bottom of the trailing column folded, unfolded and half open, over a full-screen cover and below column controls, with Search inside the same capsule (decision 2). The system doesn't split screens at the hinge; the app shell does.
 - **Library chips from an OPDS feed.** Map the root feed's navigation entries and facets to chips, and decide what happens when a feed has many entries or none.
-- **Pull the synced position while the cover shows.** Start the `ProgressSync` pull when the cover page appears, so unfolding opens the reader at once instead of waiting up to the 5 s pull timeout (duo-spreads §6).
+- **Pull the synced position while the cover shows.** Start the `ProgressSync` pull when the cover page appears, so unfolding opens the reader at once instead of waiting up to the 5 s pull timeout (duo-spreads §6). Done in step 13 (`BookPlaces`, `docs/notes/sync-in-app.md`).
 - **Full-screen cover.** The cover runs under the trailing system column and the camera; the tab column and back button sit over the artwork, so they need a material that reads on any cover. Done in #14: nothing is drawn behind the column, because the system's own glass capsules (clock, Back, tabs) read on light, dark and busy covers (Adam chose this over a material strip or a dark scrim, 2026-11-01).
 - **Page area (decision 8).** Lay out the `foliate-view` with the bridge's left/right insets so the page never reaches the column, map the margin setting onto foliate's gap, and keep the hinge gutter at least the reserved region's width. Done in #17 (`docs/notes/reader-page.md`).
 - **Fold cross-fade (decision 11).** Show a `WebView` snapshot over the transition and fade it out once the layout settles; also batch the hinge, resize, layout and fold-region inputs into one re-layout (duo-spreads §5 counts 10–13 today).
