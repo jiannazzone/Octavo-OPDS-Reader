@@ -144,7 +144,7 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
     - **Empty screens** are an invitation with one action ("Nothing in progress · Open Library"; the same for an empty server).
     - **Sign-in errors** appear under the fields ("That username or password didn't work.").
     - **No pop-up alerts**, except to confirm deleting or removing something.
-    - A position that didn't sync shows "Not synced yet, will retry" on the strip's sync line.
+    - A position that didn't sync shows "Not synced yet, will retry" on the strip's sync line. It's retried while the app is open (Adam, 2026-11-02): at launch, when the app comes back and when the connection does. Not in the background.
     - **Another reader moved on while a book was open** (Adam, 2026-11-02): coming back to the app offers the server's place in a capsule where the footer is, "BookOrbit: 62% · Chapter 80", with Go and ✕. Turning the page or ✕ keeps this iPhone's place. Built: `docs/notes/sync-in-app.md`.
     - **Downloading** shows on the strip too: "Downloading · 42%", "Opens when it's done.", a progress bar and Cancel.
 

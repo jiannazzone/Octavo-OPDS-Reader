@@ -107,6 +107,12 @@ enum ReaderRemote {
         case "js":
             guard let script = command.script else { return "js needs script" }
             return await runScript(script)
+        case "offline":
+            DebugProgressSync.offline = command.on ?? true
+            return nil
+        case "connectionReturned":
+            shell.connection.connectionReturned()
+            return nil
         case "keyboard":
             guard reader != nil else { return "no open reader" }
             NotificationCenter.default.post(name: keyboardNotification, object: nil, userInfo: ["on": command.on ?? true])

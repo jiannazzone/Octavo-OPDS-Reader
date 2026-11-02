@@ -672,6 +672,14 @@ final class ReaderModel {
         )
     }
 
+    /// The app came back, or the connection did: offer the server's place
+    /// if another reader moved it, else send this page's if it didn't go.
+    /// While the capsule shows, the page waits for Go, ✕ or a turn.
+    func catchUp() async {
+        await checkServerPlace()
+        if serverPlace == nil { await pusher?.flush() }
+    }
+
     /// Go: to the server's place, which the server keeps.
     func goToServerPlace() {
         guard let place = serverPlace, let cfi = place.position.cfi else { return }

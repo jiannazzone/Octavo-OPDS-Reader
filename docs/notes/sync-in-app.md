@@ -81,19 +81,39 @@ Checked on `iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947), Moby-Dick (file 
 | 13 | Offered folded, then unfolded | Capsule stays, under the right page. The fold sent 47.94%; Go put the server back to its 62% CFI and opened the spread at 61.9% |
 | — | Server place on the visible spread | No capsule |
 
+## Places that didn't go (Adam, 2026-11-02: while the app is open)
+
+A place the reader couldn't send (read offline) used to go only when its book's screen showed or the book opened. Now every one is retried while Octavo is open. Nothing runs in the background, so Octavo doesn't appear under Background App Refresh.
+
+- **When.** A server connecting (so at launch), the app coming back to the foreground (`AppShell` on `scenePhase`), and the connection coming back (`ConnectionMonitor`, `NWPathMonitor`; only a return counts).
+- **Which books.** A saved position knows only its key (a hash of the file ID), so `UnsentPlaces` remembers the book behind each key, in `ReadingPositions/Unsent/places.json`. A book goes in when the reader opens it with sync, and comes out once its place has gone.
+- **How.** `BookPlaces.retryUnsent` does what the book's screen does for each: pull, then send the iPhone's place if it wins under the opening rule. One retry at a time. Books on a server that isn't connected are skipped, not forgotten.
+- **The open book** is left to its reader (`ReaderModel.catchUp`): on the same three moments it first checks the server (the capsule above); if nothing is offered, it sends a page that didn't go. While the capsule shows, the page waits for Go, ✕ or a turn, so a place read offline never silently replaces another reader's.
+
+Checked on `iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947), Moby-Dick, with the debug remote's `offline` (pushes fail) and `connectionReturned` (the simulator shares the Mac's connection, which can't drop for one app):
+
+| What | Server before | After |
+|---|---|---|
+| Read to 30% offline, closed the book, went Home; connection returned | 61.9% | 30.0%, its screen never shown |
+| Read to 40% offline, closed, quit; relaunched and signed in | 30.0% | 40.1% at sign-in |
+| Reader open: 45% offline; connection returned | 40.1% | 45.0% |
+| Reader open: 50% offline; left the app and came back | 45.0% | 50.0%, no capsule (the server held the reader's own place) |
+| Another reader moved the server to 62%; came back | 62% | 62% kept, capsule offered |
+
 ## Debug switches
 
 - `-syncPullDelay <seconds>`: every BookOrbit position pull waits first (a slow server).
 - `-syncFailsPushes 1`: pulls work and pushes fail as if offline (`DebugProgressSync` in `ShellModel.swift`).
 - `docs/notes/sync-spike/tools/bo.sh set <fileId> <cfi> <percentage>` moves the server's place, like another reader.
+- Debug remote: `"cmd":"offline","on":true|false` makes pushes fail from then on, and `"cmd":"connectionReturned"` does what the connection coming back does.
 
 ## Tests
 
 - App: `BookPlacesTests`. These cover the place before and after a pull, a percentage-only server place, an unsent place sent from the screen (and a failed retry), the offline status, books that don't sync, a book not started, redraw on close, the reader reusing a recent pull and sharing a running one, a stale pull not undoing a push, a server change, which books sync, and the line's wording. `ReadingPositionStoreTests` covers `syncedAt` being kept and recorded.
 - OctavoKit: `BookOrbitSourceTests.leavesOutTheServersProgressWhenAsked` and `OpeningPositionTests.aRecordWithoutASyncTimeDecodes`.
-- Coming back with a book open: `BookPlacesTests.theReadersCheckNeverReusesAPull`, `ReaderServerPlaceTests`, and `DebouncedProgressPusherTests.sendsThePositionAgainOnceTheBackendMoved`. The capsule's choices were checked by hand (above); `ReaderModel` needs a loaded book to test.
+- Coming back with a book open: `BookPlacesTests.theReadersCheckNeverReusesAPull`, `ReaderServerPlaceTests`, and `DebouncedProgressPusherTests.sendsThePositionAgainOnceTheBackendMoved`.
+- Places that didn't go: `BookPlacesTests.anUnsentPlaceGoesWithoutItsScreen`, `aRelaunchStillSendsIt` and `theOpenBookIsLeftToItsReader`. The capsule's choices were checked by hand (above); `ReaderModel` needs a loaded book to test.
 
 ## Not done (follow-ups)
 
-- **Unsent places are retried only** when their book's screen shows or the book opens, not in the background for every book.
 - **If "Don't sync" comes back**, decide whether bookmarks follow it (they sync with BookOrbit regardless today).

@@ -14,7 +14,9 @@ import OctavoKit
 ///   reader opens with. Until a pull lands (or if it fails) the server's
 ///   position is the library list's percentage, which the reader also falls
 ///   back to.
-/// - A position the reader couldn't push goes again when its screen shows.
+/// - A position the reader couldn't push goes again when its screen shows,
+///   and with every other unsent place at launch, when the app comes back
+///   and when the connection does (`retryUnsent`, Adam 2026-11-02).
 ///
 /// Keyed by the file's `storageKey`, like `ReadingPositionStore`.
 @Observable
@@ -49,6 +51,10 @@ final class BookPlaces {
     /// older position back.
     @ObservationIgnored private var generations: [String: Int] = [:]
     @ObservationIgnored let store: ReadingPositionStore
+    /// Books whose place may still need sending (`UnsentPlaces`).
+    @ObservationIgnored private var unsent: [String: SourcedBook]
+    @ObservationIgnored private let unsentFile: UnsentPlaces
+    @ObservationIgnored private var isRetrying = false
     @ObservationIgnored private let backend: (SourcedBook) -> (any ProgressSync)?
     @ObservationIgnored private let now: () -> Date
 
@@ -61,6 +67,8 @@ final class BookPlaces {
         self.store = store
         self.now = now
         self.backend = backend
+        unsentFile = UnsentPlaces(directory: store.directory)
+        unsent = unsentFile.load()
     }
 
     // MARK: What screens show
@@ -105,15 +113,42 @@ final class BookPlaces {
     /// the iPhone's if it's newer and unsent.
     func refresh(_ book: SourcedBook, reusingWithin age: TimeInterval = 0) {
         guard let backend = backend(book), let key = book.book.readableFile?.storageKey else { return }
-        Task {
-            let remote: SyncedPosition?
-            do {
-                remote = try await pull(key, from: backend, reusingWithin: age)
-            } catch {
-                return
-            }
-            await pushUnsent(key, to: backend, over: remote)
+        Task { await sync(key, with: backend, reusingWithin: age) }
+    }
+
+    /// Sends every place that didn't reach the server, as each book's
+    /// screen would: pulled first, sent if it wins. At launch, when the app
+    /// comes back and when the connection does (Adam, 2026-11-02: while the
+    /// app is open, not in the background). `open` is the book in the
+    /// reader, whose own pusher sends its place.
+    func retryUnsent(except open: String? = nil) async {
+        guard !isRetrying else { return }
+        isRetrying = true
+        defer { isRetrying = false }
+        forgetSent()
+        for (key, book) in unsent where key != open {
+            guard let backend = backend(book) else { continue }
+            await sync(key, with: backend, reusingWithin: 0)
         }
+        forgetSent()
+    }
+
+    private func sync(_ key: String, with backend: any ProgressSync, reusingWithin age: TimeInterval) async {
+        let remote: SyncedPosition?
+        do {
+            remote = try await pull(key, from: backend, reusingWithin: age)
+        } catch {
+            return
+        }
+        await pushUnsent(key, to: backend, over: remote)
+    }
+
+    /// Drops the books whose place has gone (or isn't kept any more).
+    private func forgetSent() {
+        let sent = unsent.keys.filter { store.progress(forBook: $0)?.needsPush != true }
+        guard !sent.isEmpty else { return }
+        for key in sent { unsent[key] = nil }
+        unsentFile.save(unsent)
     }
 
     /// A row on Home or in Search shows `book`: `refresh`, for a book with a
@@ -128,6 +163,11 @@ final class BookPlaces {
     /// and reports its pushes.
     func readerSync(for book: SourcedBook) -> (any ProgressSync)? {
         guard let backend = backend(book), let key = book.book.readableFile?.storageKey else { return nil }
+        // Reading may leave a place unsent; remember where it goes.
+        if unsent[key] != book {
+            unsent[key] = book
+            unsentFile.save(unsent)
+        }
         return SharedProgressSync(key: key, backend: backend, places: self)
     }
 
