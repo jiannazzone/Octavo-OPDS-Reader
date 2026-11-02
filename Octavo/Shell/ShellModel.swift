@@ -45,6 +45,10 @@ final class ShellModel {
     let setup = SetupModel()
     /// Where the server is kept between launches.
     let servers: ServerStore
+    /// The server Remove server took away, until the next one is added.
+    let removedServers: RemovedServerStore
+    /// Bookmarks, for clearing a removed server's (`RemovedServer`).
+    let bookmarks: BookmarkStore
     /// A debug launch argument is connecting a server: the tabs show, not
     /// setup, while it does.
     private var connectingAtLaunch = false
@@ -56,11 +60,17 @@ final class ShellModel {
     /// a failing download.
     var coverStrip: CoverStripMessage?
 
-    init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore()) {
+    init(
+        library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore(),
+        positions: ReadingPositionStore = ReadingPositionStore(), bookmarks: BookmarkStore = BookmarkStore(),
+        removedServers: RemovedServerStore = RemovedServerStore()
+    ) {
         self.library = library
         self.opener = opener
         self.servers = servers
-        places = BookPlaces { [library] in ShellModel.progressSync(for: $0, on: library.server) }
+        self.bookmarks = bookmarks
+        self.removedServers = removedServers
+        places = BookPlaces(store: positions) { [library] in ShellModel.progressSync(for: $0, on: library.server) }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         opener.onOpen = { [weak self] in self?.opened($0) }
         // Another server: its books' pages, the screens opened from them
@@ -72,6 +82,7 @@ final class ShellModel {
             search.reset()
             setup.reset()
             for tab in ShellTab.allCases { self[path: tab].replace([]) }
+            if library.server != nil { forgetRemovedServer() }
             // A server to send to, at launch too: places that didn't go.
             retryUnsentPlaces()
         }
@@ -162,16 +173,107 @@ final class ShellModel {
             saved.username = username
             try? servers.save(saved)
         }
+        library.signedIn(as: username)
         await library.retry()
+    }
+
+    /// Sign in, from the signed-out banner or the server's page in Settings.
+    func showSignIn() {
+        #if DEBUG
+        if library.server?.id == LibraryModel.localBookOrbitID {
+            Task { await library.connectLocalBookOrbit() }
+            return
+        }
+        #endif
+        push(.signInAgain)
+    }
+
+    // MARK: Settings
+
+    /// Sign out, confirmed on the server's page: its sign-in goes, here and
+    /// (BookOrbit) on the server, and the signed-out banner shows. The
+    /// server stays, and so do its books, which still open.
+    func signOut() {
+        guard let server = library.server, server.signsIn else { return }
+        library.connectionProblem = .signedOut(server: server.name)
+        Task { await Self.endSignIn(on: server) }
+    }
+
+    /// Remove server, confirmed on its page (decision 24). Its sign-in goes
+    /// (here and on BookOrbit), then every secret the Keychain holds for it,
+    /// its saved address, the places waiting to go to it and the records of
+    /// its books that can't open without it. `removingBooks` deletes its
+    /// downloads too (`serverDownloads`); kept, they come back if the same
+    /// server is added again, and Storage still lists them. Imported books
+    /// belong to no server, so they stay. Then setup, as on a new install
+    /// (decision 6).
+    func removeServer(removingBooks: Bool) async {
+        guard let server = library.server else { return }
+        let id = server.id
+        await Self.endSignIn(on: server)
+        try? ServerCredentials.removeAll(serverID: id.rawValue)
+        // Nothing still downloading lands, or opens, afterwards.
+        opener.cancelAll()
+        opening = [:]
+        let downloads = serverDownloads()
+        if removingBooks {
+            for download in downloads { opener.removeDownload(download.book.book) }
+        }
+        // Its books stay listed only while their files do, so Storage
+        // shows the kept ones (some known only from Continue reading,
+        // which goes next).
+        let kept = removingBooks ? [] : downloads.map(\.book)
+        for book in library.onIPhone.books() where book.source != .files && !kept.contains(book) {
+            try? library.onIPhone.remove(book.id)
+        }
+        for book in kept where !library.onIPhone.books().contains(book) {
+            try? library.onIPhone.record(book)
+        }
+        library.forgetBooks(of: id)
+        places.forget(server: id)
+        try? removedServers.save(RemovedServer(identity: server.identity))
+        if servers.load()?.id == id { try? servers.remove() }
+        library.disconnect()
+    }
+
+    /// A server connected after Remove server: if it isn't the one removed
+    /// (another address or account), the removed one's downloads, places,
+    /// bookmarks and records go, so none of them is taken for this server's
+    /// book of the same number (`RemovedServer`). Imported books stay.
+    private func forgetRemovedServer() {
+        guard let removed = removedServers.load(), let server = library.server else { return }
+        removedServers.remove()
+        guard removed.identity != server.identity else { return }
+        let records = library.onIPhone.books() + library.recents.records().map(\.book)
+        let imported = Set(records.filter { $0.source == .files }.compactMap { $0.book.readableFile?.storageKey })
+        opener.removeAllDownloads(keeping: imported)
+        places.store.removeAll(keeping: imported)
+        bookmarks.removeAll(keeping: imported)
+        for book in library.onIPhone.books() where book.source != .files {
+            try? library.onIPhone.remove(book.id)
+        }
+        for source in Set(library.recents.records().map(\.book.source)) where source != .files && source != server.id {
+            try? library.recents.remove(source: source)
+        }
+        places.reset()
+    }
+
+    /// Forgets `server`'s sign-in: BookOrbit's tokens, here and on the
+    /// server (which isn't waited for), or a catalog's password.
+    private static func endSignIn(on server: LibraryServer) async {
+        switch server.source {
+        case let source as BookOrbitSource: _ = try? await source.client.signOutEverywhere()
+        case let source as OPDSSource: try? await source.signOut()
+        default: break
+        }
     }
 
     #if DEBUG
     /// Debug Disconnect: forgets the server and its secrets, so the next
-    /// launch (and this one) starts at setup. Remove server, with its
-    /// question about downloads, is step 14.
+    /// launch (and this one) starts at setup. Downloads stay.
     func forgetServer() {
-        if let saved = servers.load() {
-            try? ServerCredentials.removeAll(serverID: saved.id.rawValue)
+        for id in Set([servers.load()?.id, library.server?.id].compactMap(\.self)) {
+            try? ServerCredentials.removeAll(serverID: id.rawValue)
         }
         try? servers.remove()
         library.disconnect()
@@ -204,6 +306,17 @@ final class ShellModel {
         self[path: tab].pop()
     }
 
+    /// Back, or a swipe from the edge. Unfolded, Settings' list and the page
+    /// beside it are one screen, so they go together.
+    func back(_ tab: ShellTab, twoPages: Bool) {
+        let routes = self[path: tab].routes
+        if twoPages, case .settingsPage? = routes.last, routes.dropLast().last == .settings {
+            self[path: tab].pop(2)
+        } else {
+            self[path: tab].pop()
+        }
+    }
+
     func popToRoot(_ tab: ShellTab) {
         self[path: tab].popToRoot()
     }
@@ -211,6 +324,20 @@ final class ShellModel {
     /// The Settings button at the top of the side column.
     func openSettings() {
         push(.settings)
+    }
+
+    /// A row in Settings' list. Folded, its page slides in over the list.
+    /// Unfolded, the list stays on the left page and the page shows on the
+    /// right at once, in place of the one there (decision 24).
+    func openSettingsPage(_ page: SettingsPage, twoPages: Bool) {
+        guard twoPages else {
+            push(.settingsPage(page))
+            return
+        }
+        var routes = self[path: tab].routes
+        if case .settingsPage? = routes.last { routes.removeLast() }
+        guard routes.last == .settings else { return }
+        self[path: tab].replace(routes + [.settingsPage(page)])
     }
 
     // MARK: Books
@@ -331,7 +458,9 @@ final class ShellModel {
     /// (made-up books; `empty` has nothing in progress), `-shellTab library`,
     /// `-shellConnection unreachable|signedOut`,
     /// `-shellCoverStrip failed|offline|downloading`,
-    /// `-shellOpen collection|deep|cover|settings` (sample books),
+    /// `-shellOpen collection|deep|cover` (sample books),
+    /// `-shellOpen settings|server|storage|licences` (Settings, or one of
+    /// its pages),
     /// `-shellReading 1` (the first book in Continue reading, once connected)
     /// `-searchQuery austen` (typed into Search, once connected),
     /// `-forgetServer 1` (start at setup), `-setupCatalog <address>`
@@ -387,6 +516,9 @@ final class ShellModel {
             case "deep": self[path: .library].replace([classics, .cover(book)])
             case "cover": self[path: .library].replace([.cover(book)])
             case "settings": self[path: tab].replace([.settings])
+            case "server": self[path: tab].replace([.settings, .settingsPage(.server)])
+            case "storage": self[path: tab].replace([.settings, .settingsPage(.storage)])
+            case "licences": self[path: tab].replace([.settings, .settingsPage(.licences)])
             default: break
             }
             if reads, let first = library.continueReading.first {

@@ -457,6 +457,38 @@ struct OPDSSourceTests {
         #expect(await store.loads == 2, "a 401 makes the next request read the store again")
     }
 
+    /// Settings' Sign out: the password leaves the store and memory, so the
+    /// next request goes without it.
+    @Test func signOutForgetsThePassword() async throws {
+        let store = InMemoryPasswordStore(PasswordCredentials(username: "keeper", password: "lamp-oil"))
+        let server = StubServer { request in
+            request.headers["authorization"] == nil ? .atom("", status: 401) : .atom(OPDSFixtures.atomRoot)
+        }
+        let source = source(server, credentials: store)
+        _ = try await source.root()
+        try await source.signOut()
+        #expect(try await store.load() == nil)
+        await #expect(throws: LibraryError.signedOut) { try await source.root() }
+        #expect(server.requests.last?.headers["authorization"] == nil)
+    }
+
+    /// A sign-out while a request is still reading the password: the
+    /// password read before it doesn't come back afterwards.
+    @Test func signOutDuringAPasswordLoadWins() async throws {
+        let store = SlowPasswordStore(PasswordCredentials(username: "keeper", password: "lamp-oil"))
+        let server = StubServer { request in
+            request.headers["authorization"] == nil ? .atom("", status: 401) : .atom(OPDSFixtures.atomRoot)
+        }
+        let source = source(server, credentials: store)
+        let loading = Task { try? await source.root() }
+        try await Task.sleep(for: .milliseconds(50))
+        try await source.signOut()
+        await store.release()
+        _ = await loading.value
+        await #expect(throws: LibraryError.signedOut) { try await source.root() }
+        #expect(server.requests.allSatisfy { $0.headers["authorization"] == nil })
+    }
+
     @Test func aDigestChallengeIsRecordedAsDigest() async throws {
         // Even when the Authentication Document only knows Basic.
         let digest = StubServer { _ in
@@ -676,5 +708,32 @@ struct OPDSSourceTests {
         #expect(OPDSSource.date("2008-06-27T08:08:08Z") == "2008-06-27")
         #expect(OPDSSource.date("2004-10-02T00:00:00+00:00") == "2004-10-02")
         #expect(OPDSSource.date("1998") == "1998")
+    }
+}
+
+/// Its first load waits until released, as a slow Keychain would.
+private actor SlowPasswordStore: PasswordStore {
+    private var credentials: PasswordCredentials?
+    private var held = true
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    init(_ credentials: PasswordCredentials?) {
+        self.credentials = credentials
+    }
+
+    func load() async throws -> PasswordCredentials? {
+        let read = credentials
+        if held { await withCheckedContinuation { waiting.append($0) } }
+        return read
+    }
+
+    func save(_ credentials: PasswordCredentials?) async throws {
+        self.credentials = credentials
+    }
+
+    func release() {
+        held = false
+        for waiter in waiting { waiter.resume() }
+        waiting = []
     }
 }

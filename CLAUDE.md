@@ -66,7 +66,7 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
 ### Network trust (#9, D25; `docs/notes/network-trust.md`)
 - Every server request goes through OctavoKit's `ServerTransport` (one per server), never a bare `URLSession`. It checks the address before every request and redirect: plain http only to home and VPN addresses, with standard address spellings only (ATS alone lets `http://16843009/` out). It also applies the server's certificate pin and redirect hygiene.
 - Self-signed HTTPS: an exact-certificate pin per server host and port. A changed certificate asks again, even if iOS would trust it.
-- Secrets live in the Keychain (`ServerCredentials`, `AfterFirstUnlockThisDeviceOnly`), never in saved URLs or logs. Remove server calls `ServerCredentials.removeAll(serverID:)`.
+- Secrets live in the Keychain (`ServerCredentials`, `AfterFirstUnlockThisDeviceOnly`), never in saved URLs or logs. Remove server calls `ServerCredentials.removeAll(serverID:)`. Sign out and Remove server also end the BookOrbit session on the server (`BookOrbitClient.signOutEverywhere()`, `auth/logout`; `docs/notes/settings.md`).
 - Changes here need a security review that Adam signs off before merge.
 
 ### Parsing and OPDS
@@ -106,6 +106,7 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
   - Sessions: `POST books/files/{fileId}/sessions` with fields `sessionId, startedAt, endedAt, durationSeconds, progressDelta, endProgress, sessionType, source`
   - Annotations/bookmarks: `books/{bookId}/annotations`, `books/{bookId}/bookmarks` (keyed by CFI)
   - Status: `PATCH books/{id}/status`; rating via `books/bulk-set-rating`
+  - Sign out: `POST auth/logout {refreshToken}` ends the session (the access token alone ends nothing)
 - The API shapes change. The Android client mirrors them by hand. Expect breakage between server versions and handle missing fields tolerantly.
 - **CFI compatibility, confirmed by the spike:** BookOrbit v3.6.0's web reader runs foliate-js at the commit we pin, with an identical `epubcfi.js`. Positions matched 31/31 in both directions across four books. Fixed-layout books restore by fraction, not CFI.
 

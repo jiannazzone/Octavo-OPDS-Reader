@@ -181,6 +181,50 @@ struct BookOrbitAuthTests {
         #expect(await store.load() == nil)
         await #expect(throws: BookOrbitError.notSignedIn) { try await client.libraries() }
     }
+
+    /// Settings' Sign out and Remove server end the session on the server
+    /// too, with the refresh token, so a copy of it can't be refreshed.
+    @Test func signOutEverywhereEndsTheSessionOnTheServer() async throws {
+        let server = StubServer { _ in .json("{}") }
+        let store = InMemoryBookOrbitTokenStore(BookOrbitCredentials(accessToken: "access-1", refreshToken: refreshToken1))
+        let client = BookOrbitClient(baseURL: server.baseURL, tokenStore: store, configuration: server.configuration)
+        try await client.signOutEverywhere().value
+        #expect(await store.load() == nil)
+        let logout = try #require(server.requests(to: "/api/v1/auth/logout").first)
+        #expect(logout.method == "POST")
+        #expect(logout.json?["refreshToken"] as? String == refreshToken1)
+        #expect(logout.json?.count == 1, "the server rejects unknown fields")
+        await #expect(throws: BookOrbitError.notSignedIn) { try await client.libraries() }
+    }
+
+    /// Before 3.0 the refresh token is a cookie, and goes as one.
+    @Test func signOutEverywhereSendsACookieTokenAsACookie() async throws {
+        let server = StubServer { _ in .json("{}") }
+        let client = signedIn(server, transport: .cookie)
+        try await client.signOutEverywhere().value
+        let logout = try #require(server.requests(to: "/api/v1/auth/logout").first)
+        #expect(logout.headers["cookie"] == "refresh_token=\(refreshToken1)")
+        #expect(logout.json?.isEmpty == true)
+    }
+
+    /// A server that can't be reached (or has no such endpoint) still leaves
+    /// the iPhone signed out.
+    @Test func signOutEverywhereSignsOutHereWhateverTheServerSays() async throws {
+        let server = StubServer { _ in .json(404, #"{"statusCode":404}"#) }
+        let store = InMemoryBookOrbitTokenStore(BookOrbitCredentials(accessToken: "access-1", refreshToken: refreshToken1))
+        let client = BookOrbitClient(baseURL: server.baseURL, tokenStore: store, configuration: server.configuration)
+        try await client.signOutEverywhere().value
+        #expect(await store.load() == nil)
+        await #expect(throws: BookOrbitError.notSignedIn) { try await client.libraries() }
+    }
+
+    /// Nothing stored, nothing to end: no request.
+    @Test func signOutEverywhereWithoutASessionSendsNothing() async throws {
+        let server = StubServer { _ in .json("{}") }
+        let client = BookOrbitClient(baseURL: server.baseURL, tokenStore: InMemoryBookOrbitTokenStore(), configuration: server.configuration)
+        try await client.signOutEverywhere().value
+        #expect(server.requests.isEmpty)
+    }
 }
 
 struct BookOrbitEndpointTests {

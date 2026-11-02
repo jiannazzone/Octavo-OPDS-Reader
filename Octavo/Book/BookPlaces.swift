@@ -99,6 +99,13 @@ final class BookPlaces {
         return [local?.syncedAt, remotes[key]?.at].compactMap(\.self).max().map(Status.synced)
     }
 
+    /// Settings' "N books pending.": the books on `server` whose place the
+    /// iPhone hasn't sent yet.
+    func pendingCount(on server: LibrarySourceID) -> Int {
+        _ = revision
+        return unsent.filter { key, book in book.source == server && store.progress(forBook: key)?.needsPush == true }.count
+    }
+
     /// The server's place as the library list gives it: a percentage
     /// without a position.
     static func listed(_ book: LibraryBook) -> SyncedPosition? {
@@ -198,6 +205,17 @@ final class BookPlaces {
 
     /// The reader closed, having saved (and maybe pushed) its position.
     func readerClosed() {
+        revision += 1
+    }
+
+    /// Remove server: its books' places no longer go anywhere. The places
+    /// themselves stay on the iPhone, so a book opens where it was if the
+    /// server is added again.
+    func forget(server: LibrarySourceID) {
+        let gone = unsent.filter { $0.value.source == server }.keys
+        guard !gone.isEmpty else { return }
+        for key in gone { unsent[key] = nil }
+        unsentFile.save(unsent)
         revision += 1
     }
 

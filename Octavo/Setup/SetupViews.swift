@@ -524,7 +524,7 @@ struct SignInAgainScreen: View {
         if let saved = shell.servers.load() {
             let name = saved.name
             SetupPage {
-                SetupText("\(name) signed you out. Reading works without it; sign in again to see your library and keep your place in step.")
+                SetupText("Signed out of \(name). Reading works without it; sign in again to see your library and keep your place in step.")
             } form: {
                 VStack(alignment: .leading, spacing: 12) {
                     LabeledContent("Server", value: saved.detail.components(separatedBy: " · ").first ?? name)

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0C7A00000000000000000101 /* OctavoKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0C7A00000000000000000901 /* OctavoKit */; };
 		0C7A00000000000000000102 /* ReaderWeb in Resources */ = {isa = PBXBuildFile; fileRef = 0C7A00000000000000000201 /* ReaderWeb */; };
+		0C7A00000000000000000103 /* THIRD-PARTY-NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = 0C7A00000000000000000205 /* THIRD-PARTY-NOTICES.md */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,6 +27,7 @@
 		0C7A00000000000000000202 /* Octavo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Octavo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C7A00000000000000000203 /* OctavoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OctavoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C7A00000000000000000204 /* Octavo-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "Octavo-Info.plist"; path = "Config/Octavo-Info.plist"; sourceTree = "<group>"; };
+		0C7A00000000000000000205 /* THIRD-PARTY-NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "THIRD-PARTY-NOTICES.md"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -67,6 +69,7 @@
 				0C7A00000000000000000502 /* OctavoTests */,
 				0C7A00000000000000000201 /* ReaderWeb */,
 				0C7A00000000000000000204 /* Octavo-Info.plist */,
+				0C7A00000000000000000205 /* THIRD-PARTY-NOTICES.md */,
 				0C7A00000000000000000702 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -177,6 +180,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0C7A00000000000000000102 /* ReaderWeb in Resources */,
+				0C7A00000000000000000103 /* THIRD-PARTY-NOTICES.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

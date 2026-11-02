@@ -322,9 +322,14 @@ nonisolated enum AuthorIndex {
     /// else made from the name (BookOrbit sends "H. G. Wells" for some).
     static func sortKey(_ entry: LibraryEntry) -> String {
         if let sortName = entry.sortName, sortName.contains(",") { return sortName }
-        if entry.title.contains(",") { return entry.title }
-        let words = entry.title.split(separator: " ")
-        guard words.count > 1, let last = words.last else { return entry.title }
+        return sortKey(name: entry.title)
+    }
+
+    /// "Austen, Jane", from a name as people write it.
+    static func sortKey(name: String) -> String {
+        if name.contains(",") { return name }
+        let words = name.split(separator: " ")
+        guard words.count > 1, let last = words.last else { return name }
         return "\(last), \(words.dropLast().joined(separator: " "))"
     }
 

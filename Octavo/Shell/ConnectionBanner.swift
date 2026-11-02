@@ -5,7 +5,8 @@ nonisolated enum ConnectionProblem: Hashable, Sendable {
     /// The server didn't answer. The app carries on with the books on the
     /// iPhone (the Library switches to On iPhone, #13).
     case unreachable(server: String)
-    /// The server ended the session. Reading still works; sync is paused.
+    /// The server ended the session, or Sign out in Settings did. Reading
+    /// still works; sync is paused.
     case signedOut(server: String)
 }
 
@@ -36,7 +37,7 @@ struct ConnectionBanner: View {
     private var message: String {
         switch problem {
         case .unreachable(let server): "Can’t reach \(server). Showing books on your iPhone."
-        case .signedOut(let server): "\(server) signed you out. Reading still works; sync is paused."
+        case .signedOut(let server): "Signed out of \(server). Reading still works; sync is paused."
         }
     }
 
