@@ -91,6 +91,7 @@ struct ContinueReadingRow: View {
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book, size: 14) }
                     .frame(width: 48)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
@@ -117,6 +118,7 @@ struct NewBooksRow: View {
                 ForEach(books) { book in
                     OpenButton(route: .cover(book)) {
                         BookCover(book: book)
+                            .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book) }
                     }
                     .frame(width: 106)
                     .accessibilityLabel(book.book.title)

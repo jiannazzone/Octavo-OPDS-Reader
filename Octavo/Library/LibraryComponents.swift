@@ -39,11 +39,13 @@ struct BookCover: View {
 struct BookGridCell: View {
     let book: SourcedBook
     var numbered = false
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
         OpenButton(route: .cover(book)) {
             VStack(spacing: 4) {
                 BookCover(book: book)
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book) }
                 if numbered {
                     Text(book.book.series?.position.map(Self.number) ?? "")
                         .font(.subheadline)
@@ -52,6 +54,7 @@ struct BookGridCell: View {
             }
         }
         .accessibilityLabel(Self.accessibilityLabel(book.book, numbered: numbered))
+        .accessibilityValue(DownloadBadge.accessibilityValue(shell.opener.status(of: book.book)))
     }
 
     /// 1, 2, 2.5.
@@ -63,6 +66,49 @@ struct BookGridCell: View {
         let title = book.title.isEmpty ? "Untitled" : book.title
         guard numbered, let position = book.series?.position else { return title }
         return "\(number(position)). \(title)"
+    }
+}
+
+/// On a cover: a check once the book is on the iPhone, a ring while it
+/// downloads, nothing otherwise (`docs/design/direction.md`, Getting books
+/// onto the iPhone). A dark disc, so it reads on any cover.
+struct DownloadBadge: View {
+    let book: LibraryBook
+    var size: CGFloat = 22
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        switch shell.opener.status(of: book) {
+        case .downloaded:
+            Image(systemName: "checkmark")
+                .font(.system(size: size * 0.5, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(.black.opacity(0.6), in: .circle)
+                .padding(size / 4)
+                .transition(.scale.combined(with: .opacity))
+        case .downloading(let fraction, _):
+            Circle()
+                .trim(from: 0, to: max(fraction, 0.02))
+                .stroke(.white, style: StrokeStyle(lineWidth: size / 9, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .padding(size / 5)
+                .background(.black.opacity(0.6), in: .circle)
+                .frame(width: size, height: size)
+                .padding(size / 4)
+                .animation(.linear(duration: 0.2), value: fraction)
+        case .notDownloaded, .failed:
+            EmptyView()
+        }
+    }
+
+    /// For the cover's own label: "Downloaded", "Downloading, 40%".
+    static func accessibilityValue(_ status: BookOpener.Status) -> String {
+        switch status {
+        case .downloaded: "Downloaded"
+        case .downloading(let fraction, _): "Downloading, \(fraction.formatted(.percent.precision(.fractionLength(0))))"
+        case .notDownloaded, .failed: ""
+        }
     }
 }
 

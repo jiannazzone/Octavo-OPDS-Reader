@@ -51,6 +51,17 @@ struct BookOpenerTests {
         #expect(opened.isEmpty)
     }
 
+    @Test func removingADownloadTakesTheBookOffTheIPhone() async throws {
+        let source = StubLibrarySource()
+        let book = try await source.details(for: Self.book).book
+        opener.download(book, from: source)
+        #expect(await eventually { opener.status(of: book) == .downloaded })
+
+        opener.removeDownload(book)
+        #expect(opener.status(of: book) == .notDownloaded)
+        #expect(files.store.localFile(for: source.files[0]) == nil)
+    }
+
     // Open (or an unfold) during a plain download opens it when it's done.
     @Test func openingDuringADownloadOpensWhenDone() async {
         var source = StubLibrarySource()
@@ -135,5 +146,37 @@ struct BookOpenerTests {
     @MainActor
     private final class Recorder {
         var opened: [OpenedBook] = []
+    }
+}
+
+/// Where downloads live: kept until removed, out of the backup.
+struct StoredBookFilesTests {
+    static let file = LibraryFile(id: LibraryFileID(rawValue: "file-1"), format: "epub", isPrimary: true)
+
+    @Test func downloadsStayOutOfTheBackup() async throws {
+        let files = try TemporaryBookFiles()
+        let store = StoredBookFiles(directory: files.directory.appending(path: "Books", directoryHint: .isDirectory))
+        _ = try await store.download(Self.file, from: StubLibrarySource()) { _ in }
+        let values = try store.directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
+        #expect(values.isExcludedFromBackup == true)
+        #expect(store.localFile(for: Self.file) != nil)
+    }
+
+    // Books from before the move (Caches) come along; one already moved wins.
+    @Test func booksMoveInFromCaches() throws {
+        let files = try TemporaryBookFiles()
+        let old = files.directory.appending(path: "Caches-Books", directoryHint: .isDirectory)
+        let store = StoredBookFiles(directory: files.directory.appending(path: "Books", directoryHint: .isDirectory))
+        try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: store.directory, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: old.appending(path: "a.epub"))
+        try Data("old".utf8).write(to: old.appending(path: "b.epub"))
+        try Data("new".utf8).write(to: store.directory.appending(path: "b.epub"))
+
+        store.moveBooks(from: old)
+
+        #expect(try String(contentsOf: store.directory.appending(path: "a.epub"), encoding: .utf8) == "old")
+        #expect(try String(contentsOf: store.directory.appending(path: "b.epub"), encoding: .utf8) == "new")
+        #expect(!FileManager.default.fileExists(atPath: old.path))
     }
 }

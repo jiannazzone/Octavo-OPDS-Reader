@@ -68,15 +68,15 @@ nonisolated final class FinishedMarks: @unchecked Sendable {
     var refuses = false
 }
 
-/// `CachedBookFiles` in a temporary directory of its own.
+/// `StoredBookFiles` in a temporary directory of its own.
 nonisolated struct TemporaryBookFiles {
     let directory: URL
-    let store: CachedBookFiles
+    let store: StoredBookFiles
 
     init() throws {
         directory = FileManager.default.temporaryDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        store = CachedBookFiles(directory: directory)
+        store = StoredBookFiles(directory: directory)
     }
 }
 

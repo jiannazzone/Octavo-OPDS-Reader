@@ -41,8 +41,9 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Mark finished** goes to BookOrbit as its `read` status (un-marking sends `reading`, which BookOrbit records as `rereading`); an OPDS server keeps no such mark, so the iPhone keeps it. A finished book's place line says Finished.
 
 ### Getting books onto the iPhone
-- **A check on downloaded books**, everywhere covers show. A downloading book shows a progress ring on its cover, everywhere.
-- **Opening a book downloads it, and it stays** until you remove it. Downloads live where iOS won't clear them.
+- **A check on downloaded books**, everywhere covers show. A downloading book shows a progress ring on its cover, everywhere. Both sit in a dark disc at the cover's bottom corner.
+- **Remove download is at the end of a book's details** (Adam, 2026-11-01), only while the book is on the iPhone, and asks to confirm. The place in the book is kept.
+- **A downloaded book stays** until you remove it. Downloads live where iOS won't clear them (Application Support), outside the iPhone's backup.
 - **Nothing downloads in the background.**
 - **Lists and grids appear at once** with blank cover shapes that fill in; no spinners mid-screen. A server that can't be reached says so in place, with Try again.
 

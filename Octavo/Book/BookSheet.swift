@@ -260,18 +260,23 @@ struct BookOpenButton: View {
 }
 
 /// Below the summary: the description, then Series, Collections, File,
-/// From and Added.
+/// From and Added, then Remove download once the book is on the iPhone.
 struct BookDetails: View {
     let page: BookPage
     let source: any LibrarySource
+    @Environment(ShellModel.self) private var shell
+    @State private var confirmsRemoval = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let description = page.plainDescription {
                 BookDescription(text: description, isExpanded: Bindable(page).showsFullDescription)
             } else if page.details == nil, !page.detailsFailed {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
+                // Placeholder lines, not a spinner, while the details load.
+                Text(verbatim: String(repeating: "Placeholder description text ", count: 6))
+                    .lineLimit(3)
+                    .redacted(reason: .placeholder)
+                    .accessibilityHidden(true)
             }
             if page.detailsFailed {
                 HStack {
@@ -293,7 +298,29 @@ struct BookDetails: View {
                 Divider()
                 row("Added", page.addedLine)
             }
+            if shell.opener.status(of: page.current) == .downloaded {
+                removeDownload
+            }
         }
+    }
+
+    /// Asks first: the one pop-up the app allows is a confirmation to
+    /// remove something (decision 22).
+    private var removeDownload: some View {
+        Button("Remove download", role: .destructive) { confirmsRemoval = true }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 4)
+            .confirmationDialog(
+                "Remove “\(page.current.title.isEmpty ? "Untitled" : page.current.title)” from this iPhone?",
+                isPresented: $confirmsRemoval,
+                titleVisibility: .visible
+            ) {
+                Button("Remove download", role: .destructive) {
+                    withAnimation { shell.opener.removeDownload(page.current) }
+                }
+            } message: {
+                Text("Your place is kept. You can download it again from \(page.serverName ?? "the server").")
+            }
     }
 
     private func row(_ label: String, _ value: String?) -> some View {

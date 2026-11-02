@@ -75,7 +75,7 @@ func makeShell(opener: BookOpener? = nil) -> ShellModel {
     let folder = URL.temporaryDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     return ShellModel(
         library: LibraryModel(recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json"))),
-        opener: opener ?? BookOpener(files: CachedBookFiles(directory: folder.appending(path: "Books")))
+        opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books")))
     )
 }
 

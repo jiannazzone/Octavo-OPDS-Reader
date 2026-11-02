@@ -15,9 +15,10 @@ nonisolated struct OpenedBook: Hashable, Sendable {
     }
 }
 
-/// Opens books: downloads a book's file the first time (decision 3), with
-/// progress on its cover's strip (decision 22), then hands it to the
-/// reader. Unfolding on a cover and the strip's Open both come here.
+/// Downloads books and opens them: Download on a book's screen, Open, an
+/// unfold on a downloaded book's screen and Home's rows all come here. A
+/// download's progress shows on the book's screen and its covers, and the
+/// book stays on the iPhone until Remove download.
 ///
 /// It lives in `ShellModel`, so a download keeps going, and its progress
 /// keeps showing, while a fold rebuilds the screens.
@@ -40,12 +41,16 @@ final class BookOpener {
     private let files: any BookFiles
     private var statuses: [LibraryBookID: Status] = [:]
     private var tasks: [LibraryBookID: Task<Void, Never>] = [:]
+    /// Files on disk aren't observed; this changes when one is removed, so
+    /// covers and screens look again.
+    private var removals = 0
 
-    init(files: any BookFiles = CachedBookFiles()) {
+    init(files: any BookFiles = StoredBookFiles.moved()) {
         self.files = files
     }
 
     func status(of book: LibraryBook) -> Status {
+        _ = removals
         if let status = statuses[book.id] { return status }
         guard let file = book.readableFile, files.localFile(for: file) != nil else { return .notDownloaded }
         return .downloaded
@@ -95,6 +100,15 @@ final class BookOpener {
         tasks[book.id]?.cancel()
         tasks[book.id] = nil
         statuses[book.id] = nil
+    }
+
+    /// Remove download: deletes the book's file from the iPhone. Its saved
+    /// place stays, so it opens where it was if it's downloaded again.
+    func removeDownload(_ book: LibraryBook) {
+        cancel(book)
+        guard let file = book.readableFile else { return }
+        try? files.remove(file)
+        removals += 1
     }
 
     /// Forgets a failure, so the strip shows Open again.
