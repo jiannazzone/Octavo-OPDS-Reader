@@ -10,6 +10,16 @@ nonisolated struct StubLibrarySource: LibrarySource {
     var downloadError: (any Error & Sendable)?
     /// How long a download takes; a cancelled one throws.
     var downloadTime: Duration = .zero
+    /// Set for a server that keeps the finished mark, as BookOrbit does.
+    var finishedMarks: FinishedMarks?
+
+    var tracksFinished: Bool { finishedMarks != nil }
+
+    func setFinished(_ finished: Bool, for book: LibraryBook) async throws {
+        guard let finishedMarks else { return }
+        if finishedMarks.refuses { throw LibraryError.notFound }
+        finishedMarks.sent.append(finished)
+    }
 
     func root() async throws -> LibraryRoot {
         LibraryRoot(title: "Stub server", chips: [], search: .unavailable)
@@ -52,15 +62,21 @@ nonisolated struct StubLibrarySource: LibrarySource {
     }
 }
 
-/// `CachedBookFiles` in a temporary directory of its own.
+/// What a stub server was sent for Mark finished.
+nonisolated final class FinishedMarks: @unchecked Sendable {
+    var sent: [Bool] = []
+    var refuses = false
+}
+
+/// `StoredBookFiles` in a temporary directory of its own.
 nonisolated struct TemporaryBookFiles {
     let directory: URL
-    let store: CachedBookFiles
+    let store: StoredBookFiles
 
     init() throws {
         directory = FileManager.default.temporaryDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        store = CachedBookFiles(directory: directory)
+        store = StoredBookFiles(directory: directory)
     }
 }
 

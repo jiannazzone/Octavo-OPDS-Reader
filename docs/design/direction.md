@@ -1,6 +1,6 @@
 # Octavo design direction
 
-Status: **direction set** (UI brainstorm with Adam, 2026-10-31). Only decisions Adam approved are recorded as decisions; screens marked "Not designed" below are still to do. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`.
+Status: **being redone, area by area** (from 2026-11-01). Adam set aside the 2026-10-31 decisions and is deciding again, one area at a time, starting with the library. **"Library pass" below is the source of truth; where an older decision disagrees, the library pass wins.** The older decisions stay below for reference until each area is redone. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`. The order the areas are built in is `docs/PLAN.md`.
 
 ## Device frame
 
@@ -10,7 +10,58 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Unfolded (inner display):** 951×669 pt, landscape. The hinge is a 40 pt strip at x 455.5–495.5. App content is 867 pt wide (the same trailing system column). The right half, from the hinge to the system column, is 372 pt wide: almost the folded content width (382 pt).
 - A 2:3 book cover nearly fills the folded display (466×699 against 466×678).
 
-## Decisions
+## Library pass (decided with Adam, 2026-11-01)
+
+### Shell
+- **Apple's tab bar, everything else ours.** The system tab bar stays in the side column; Octavo draws the screens, how they move, and the Back and action buttons at the top of the side column.
+- **Three tabs: Home, Library, Search.** Settings is a button at the top of the side column on a tab's top screen, not a tab.
+- **One screen, two pages.** Every screen is a spread: content flows from the left page onto the right, and nothing sits on the hinge. Folded, you see one page. Folded or unfolded it is the same stack of screens; a fold only lays the top screen out again.
+- **Going deeper replaces the whole spread** (a pushed screen slides in). Back, or a swipe from the left edge, returns.
+
+### The Duo as the book
+- **Unfolding on a book's screen opens the book**, if it's on the iPhone. If it isn't, the screen stays as Cover | Details and nothing downloads until you tap Download or Open.
+- **A book's screen, folded, has Open** (read on one page) **and Download** (when it isn't on the iPhone yet).
+- **Folding while reading closes the book** back to its screen. Default; may become a setting later.
+- Unfolding anywhere else just lays the screen out as two pages.
+
+### Home
+- **Your book first:** the book you're reading as a large cover, with your other books in progress (from the server and this iPhone, most recent first) beneath, or on the right page unfolded.
+- **Only books in progress.** New arrivals live in the Library. A book marked finished leaves Home.
+- Built (step 5): the current book's cover is large (190 pt wide folded, 250 pt unfolded) with its title, author and place under it; the others are rows under "Also reading". Unfolded with nothing else in progress, the right page says so and links to the Library.
+- Unfolding on Home doesn't open anything; tap a book to see its screen.
+
+### Library
+- **Sections as shelves** (All books, Recently added, Collections, Series, Authors, or an OPDS server's own sections): each a heading ("All · 7 ›") that opens the section, over one row of its covers running across both pages, skipping the hinge (three covers folded). A book on a shelf opens its own screen. A section without covers is just its heading. One layout for every server; a chips layout may come later as an option. (Replaced the contents-page rows after seeing them unfolded: the row split at the hinge and the chevron sat mid-screen.)
+- Dividers may run across the whole spread, fold included.
+- **Each section fills the whole spread** (a grid of covers across both pages, or a list flowing from the left page onto the right).
+
+### Series and authors (Adam, 2026-11-01)
+- **Series: cover stacks.** The Series list is a grid across both pages; each series is a small stack of its first covers with its name and book count under it. Opening one shows its books numbered in reading order. On the Library page, a shelf of series (or authors) shows the same tiles, each opening that series. Adam was split between this and rows; built as stacks to judge on the device.
+- **Authors: first name first, filed by last name.** "Jane Austen" under A, "H. G. Wells" under W (made from the name when the server's sort name isn't last name first); no chevrons.
+- **Each author has a picture** (Adam, 2026-11-02, over a cover each and a grid of tiles): their photo when the server has one (BookOrbit keeps author photos and serves them itself), else their initials on a tint that stays with the name, like Contacts. The name sits over the book count.
+- **An A–Z strip** at the trailing edge of the page once an author list reaches 30 names: tap or slide to jump to a letter.
+- Library list rows have no chevron: unfolded it sat mid-screen at the left page's edge.
+
+### Titles under covers (Adam, 2026-11-02)
+- **A Settings switch, off by default:** Settings → Library → Titles under covers puts up to two lines of each book's title beneath its cover, in every grid of books, for covers that don't make the book clear. Kept on the iPhone. It moves into the real Settings in step 14.
+
+### A book's screen
+- **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, author, place and progress bar, then **Mark finished | Open**; pull it up for the details.
+- **Unfolded:** Cover | Details, the cover on the left page and the same details on the right.
+- **Open is Download until the book is on the iPhone** (Adam, 2026-11-01): Download, then a ring with Cancel while it downloads, then Open. A problem shows on the place line, with Try again on the button. Downloading doesn't open the book.
+- **Mark finished** goes to BookOrbit as its `read` status (un-marking sends `reading`, which BookOrbit records as `rereading`); an OPDS server keeps no such mark, so the iPhone keeps it. A finished book's place line says Finished.
+
+### Getting books onto the iPhone
+- **A check on downloaded books**, everywhere covers show. A downloading book shows a progress ring on its cover, everywhere. Both sit in a dark disc at the cover's bottom corner.
+- **Remove download is at the end of a book's details** (Adam, 2026-11-01), only while the book is on the iPhone, and asks to confirm. The place in the book is kept.
+- **A downloaded book stays** until you remove it. Downloads live where iOS won't clear them (Application Support), outside the iPhone's backup.
+- **Nothing downloads in the background.**
+- **Lists and grids appear at once** with blank cover shapes that fill in; no spinners mid-screen. A server that can't be reached says so in place, with Try again.
+
+### Still to decide in the library pass
+Nothing: every library step is decided and built (`docs/PLAN.md`).
+
+## Decisions (2026-10-31, under review)
 
 ### Structure and library (approved 2026-10-31)
 
@@ -57,6 +108,12 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
     - **Results** update as you type: **Books** first, as rows with a small cover, author and your progress or a Downloaded mark, from the server and the iPhone together; then **Series** and **Authors** sections when the server supports them (BookOrbit) and there are matches.
     - **An OPDS server without search** shows a short note ("Calibre-Web doesn't offer search. Showing books on your iPhone."), results from the iPhone, and the feed's own lists as Browse chips.
     - **Unfolded:** results left of the hinge, the selected book's cover page (with its compact sheet) right of it, as in the Library.
+    - **Built (step 7, 2026-11-01), adapted to the shell:**
+      - **The field sits under the title on the left page** (Adam chose it over iOS's own field, which the Duo puts top right unfolded and across the top folded, and which would stay over a book's screen opened from the results). It slides away with the Search screen.
+      - **A result opens its own screen in the Search tab**, as everywhere else, so unfolded shows Books on the left page and Series and Authors on the right; with neither, the books flow down the left page and on down the right. Before typing, Recent sits on the left page and Browse on the right.
+      - **Books show the first 12**, then "All 134 books", which opens every match as a Library list. Series and Authors stay in reach below them folded.
+      - **Search starts at two characters** (BookOrbit's minimum), after a short pause in the typing; Return searches at once. A search is kept in Recent (eight at most) on Return or when a result opens.
+      - **Books on the iPhone** are the ones downloaded here, matched by title, author or series. Offline they're the results, under the connection banner.
 
 ### Connecting (approved 2026-10-31)
 
@@ -64,6 +121,12 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
    - **OPDS catalog:** enter the feed address (examples under the field: Calibre-Web `…/opds`, COPS `…/feed.php`, Komga `…/opds/v1.2/catalog`, Kavita: paste the OPDS link from its settings) and tap Connect. The account fields appear only if the server asks for a password ("Found “Calibre-Web”. It asks for a sign-in."); otherwise you land in the Library.
    - **The sync step is skipped for OPDS servers in v1** (only BookOrbit syncs); progress stays on the iPhone. The step returns once iCloud or KOReader sync exists, with iCloud preselected. A BookOrbit server shows it with itself preselected.
    - **No skip on first launch:** the first screen stays until a server is added or a file imported.
+   - **Built (step 8, 2026-11-01):**
+     - **Each step is one screen across the spread** (Adam chose it over list | detail and over one step on the left page): what it is on the left page under the title, what you do on the right. Steps slide in over each other like the app's other screens, with Back in the column; there's no tab column during setup. Folded, one page: the words, the form, then any help (the OPDS address examples).
+     - **Where to get a server:** Add your books has a "Don’t have one yet?" card on its left page (under the choices folded), one quiet grouped card with a row each (Adam chose it over a card each and over side-by-side tiles): BookOrbit, opening its GitHub (Adam), and calibre, opening calibre-ebook.com. Generic symbols, not the projects' logos. Rows open in Safari.
+     - **Steps:** Add your books (BookOrbit or OPDS catalog) → Sign in to BookOrbit → Reading progress (this BookOrbit server, preselected, or Don't sync) → Home. OPDS: the address → Connect → the account fields only if the catalog asks → Home. "Trust this server?" comes in between when a certificate needs it.
+     - **Signing in again:** the signed-out banner's Sign in opens a "Sign in again" screen in the same style (the server, the account, a new password), then returns to where you were. Settings' server page is step 14.
+     - **Not yet:** Import from Files and the sample book (step 15); BookOrbit's single sign-on (Octavo can't do it yet); the reader follows the sync choice from step 13.
    - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
 25. **Plain http and self-signed certificates.**
     - **Plain `http://` is allowed only for home and VPN addresses;** internet addresses need https ("Use https:// for servers on the internet."). An http address shows "Not encrypted" under it.

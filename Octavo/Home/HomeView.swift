@@ -1,101 +1,212 @@
 import OctavoKit
 import SwiftUI
 
-/// The Home tab (frames 01, 38): Continue reading, from the server and the
-/// iPhone, then the server's newest books in a row that scrolls sideways.
-/// Unfolded, the first book's cover page sits right of the hinge; tapping
-/// another book switches it (decision 26).
+/// The Home tab (`docs/design/direction.md`, Home): the book you're reading
+/// as a large cover, with your other books in progress beneath it folded,
+/// or on the right page unfolded. Only books in progress; new arrivals live
+/// in the Library. A book opens its own screen; unfolding here opens
+/// nothing.
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        Group {
-            if let server = library.server {
-                if !library.homeLoaded {
-                    VStack {
-                        ConnectionBannerSlot()
-                            .padding(.horizontal, 20)
-                        ProgressView()
-                            .frame(maxHeight: .infinity)
-                    }
-                } else if library.continueReading.isEmpty {
-                    VStack(spacing: 0) {
-                        ConnectionBannerSlot()
-                            .padding(.horizontal, 20)
-                        if !library.continueReadingFailed {
-                            // Frame 25.
-                            EmptyInvitation(
-                                symbol: "books.vertical", title: "Nothing in progress",
-                                message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
-                            ) { shell.tab = .library }
-                        } else if library.connectionProblem == nil {
-                            EmptyInvitation(
-                                symbol: "exclamationmark.triangle", title: "Couldn’t load Continue reading",
-                                message: "The server didn’t send it.", actionTitle: "Try again"
-                            ) { Task { await library.loadHome() } }
-                        } else {
-                            // The banner says why, and retries.
-                            Spacer()
-                        }
-                    }
-                } else {
-                    content(server)
-                }
-            } else {
-                NoLibraryInvitation()
-            }
-        }
-        .onChange(of: library.continueReading.first, initial: true) { _, book in
-            shell[path: .home].companion = book.map { .cover($0) }
-        }
-    }
-
-    private func content(_ server: LibraryServer) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        if library.server == nil {
+            NoLibraryInvitation()
+        } else if !library.homeLoaded {
+            HomeContent(books: nil)
+        } else if library.continueReading.isEmpty {
+            VStack(spacing: 0) {
                 ConnectionBannerSlot()
-                    .padding(.horizontal, 20)
-                heading("Continue reading")
-                VStack(spacing: 2) {
-                    // As the cover's strip shows it: the iPhone's position
-                    // if it has one, else the server's (#14). Worked out
-                    // here, so closing the reader (which redraws Home)
-                    // updates it.
-                    ForEach(library.continueReading) { book in
-                        ContinueReadingRow(book: book, progress: BookPage.progress(of: book.book))
-                    }
-                }
-                .padding(.horizontal, 14)
-                if !library.newBooks.isEmpty {
-                    heading("New on \(server.name)")
-                        .padding(.top, 10)
-                    NewBooksRow(books: library.newBooks)
+                    .padding(.horizontal, SpreadMetrics.margin)
+                if !library.continueReadingFailed {
+                    // Frame 25.
+                    EmptyInvitation(
+                        symbol: "books.vertical", title: "Nothing in progress",
+                        message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
+                    ) { shell.select(.library) }
+                } else if library.connectionProblem == nil {
+                    EmptyInvitation(
+                        symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
+                        message: "The server didn’t send them.", actionTitle: "Try again"
+                    ) { Task { await library.loadHome() } }
+                } else {
+                    // The banner says why, and retries.
+                    Spacer()
                 }
             }
-            .padding(.bottom, 20)
+        } else {
+            HomeContent(books: library.continueReading)
         }
-        .refreshable { await library.loadHome() }
-    }
-
-    private func heading(_ title: String) -> some View {
-        Text(title)
-            .font(.title3.weight(.semibold))
-            .padding(.horizontal, 20)
-            .accessibilityAddTraits(.isHeader)
     }
 }
 
-/// A book in progress: its cover, title, place and progress bar. Selected
-/// while the pane beside shows it.
+/// The book you're reading and the others in progress: one column folded,
+/// the current book on the left page and the others on the right unfolded.
+/// `books` is `nil` until Home has loaded, and shows placeholders.
+struct HomeContent: View {
+    let books: [SourcedBook]?
+    @Environment(LibraryModel.self) private var library
+    @Environment(\.spread) private var spread
+
+    var body: some View {
+        if let pages = spread.pages {
+            HStack(alignment: .top, spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ConnectionBannerSlot()
+                        current(coverWidth: 250)
+                    }
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .padding(.bottom, 20)
+                }
+                .frame(width: pages.leftWidth)
+                Color.clear
+                    .frame(width: pages.hingeWidth)
+                ScrollView {
+                    AlsoReading(books: others, fillsPage: true)
+                        .padding(.bottom, 20)
+                }
+                .frame(width: pages.rightWidth)
+            }
+            .refreshable { await library.loadHome() }
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ConnectionBannerSlot()
+                        current(coverWidth: 190)
+                    }
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    AlsoReading(books: others, fillsPage: false)
+                }
+                .padding(.bottom, 20)
+            }
+            .refreshable { await library.loadHome() }
+        }
+    }
+
+    @ViewBuilder
+    private func current(coverWidth: CGFloat) -> some View {
+        if let book = books?.first {
+            CurrentBook(book: book, coverWidth: coverWidth)
+        } else {
+            CurrentBookPlaceholder(coverWidth: coverWidth)
+        }
+    }
+
+    /// `nil` while loading.
+    private var others: [SourcedBook]? {
+        books.map { Array($0.dropFirst()) }
+    }
+}
+
+/// The book you're reading: its cover, large, then its title, author and
+/// place. Opens the book's screen.
+struct CurrentBook: View {
+    let book: SourcedBook
+    let coverWidth: CGFloat
+
+    var body: some View {
+        // As the book's screen shows it: the iPhone's position if it has
+        // one, else the server's. Worked out here, so closing the reader
+        // (which redraws Home) updates it.
+        let progress = BookPage.progress(of: book.book)
+        OpenButton(route: .cover(book)) {
+            VStack(alignment: .leading, spacing: 14) {
+                BookCover(book: book, cornerRadius: 6, size: .full)
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book, size: 26) }
+                    .frame(width: coverWidth)
+                    .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
+                        .font(.title2.bold())
+                        .lineLimit(2)
+                    if !book.book.authors.isEmpty {
+                        Text(book.book.authors.formatted(.list(type: .and)))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(BookPage.placeLine(progress: progress))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    ProgressView(value: progress ?? 0)
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+/// The current book's shapes while Home loads.
+private struct CurrentBookPlaceholder: View {
+    let coverWidth: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.quaternary)
+                .aspectRatio(2 / 3, contentMode: .fit)
+                .frame(width: coverWidth)
+            Text(verbatim: "A book’s title\nIts author")
+                .font(.title2.bold())
+                .redacted(reason: .placeholder)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// Your other books in progress, most recent first. Unfolded it fills the
+/// right page, so with nothing else in progress it points to the Library.
+struct AlsoReading: View {
+    /// `nil` while loading.
+    let books: [SourcedBook]?
+    let fillsPage: Bool
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        if let books, books.isEmpty {
+            if fillsPage {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Nothing else in progress.")
+                        .foregroundStyle(.secondary)
+                    Button("Browse your Library") { shell.select(.library) }
+                }
+                .padding(.horizontal, SpreadMetrics.margin)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Also reading")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(spacing: 2) {
+                    if let books {
+                        ForEach(books) { book in
+                            ContinueReadingRow(book: book, progress: BookPage.progress(of: book.book))
+                        }
+                    } else {
+                        ForEach(0..<3, id: \.self) { _ in ContinueReadingRowPlaceholder() }
+                    }
+                }
+                .padding(.horizontal, 14)
+            }
+        }
+    }
+}
+
+/// A book in progress: its cover, title, place and progress bar.
 struct ContinueReadingRow: View {
     let book: SourcedBook
     let progress: Double?
 
     var body: some View {
-        OpenButton(route: .cover(book)) { isOpen in
+        OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book, size: 14) }
                     .frame(width: 48)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
@@ -108,38 +219,22 @@ struct ContinueReadingRow: View {
                 }
             }
             .padding(6)
-            .background(isOpen ? Color.accentColor.opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
         }
     }
 }
 
-/// The newest books, one row of covers that scrolls sideways.
-struct NewBooksRow: View {
-    let books: [SourcedBook]
-    @Environment(\.pane) private var pane
-
+/// A row's shapes while Home loads.
+private struct ContinueReadingRowPlaceholder: View {
     var body: some View {
-        ScrollView(.horizontal) {
-            LazyHStack(spacing: 12) {
-                ForEach(books) { book in
-                    OpenButton(route: .cover(book)) { isOpen in
-                        BookCover(book: book)
-                            .overlay {
-                                if isOpen {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.accentColor, lineWidth: 3)
-                                }
-                            }
-                    }
-                    .frame(width: pane.level == nil ? 106 : 98)
-                    .accessibilityLabel(book.book.title)
-                }
-            }
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(.quaternary)
+                .frame(width: 48, height: 72)
+            Text(verbatim: "A book’s title\n30%")
+                .redacted(reason: .placeholder)
+            Spacer(minLength: 0)
         }
-        .contentMargins(.horizontal, 20, for: .scrollContent)
-        .scrollIndicators(.hidden)
-        // A sideways scroll view reaches under the side column; stop at the
-        // content's edge, as the vertical lists do.
-        .clipped()
+        .padding(6)
+        .accessibilityHidden(true)
     }
 }

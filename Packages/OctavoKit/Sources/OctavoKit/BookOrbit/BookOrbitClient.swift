@@ -352,6 +352,13 @@ public actor BookOrbitClient {
         return try await send(request)
     }
 
+    /// `GET authors/{id}/thumbnail`: the author's photo, small.
+    public func authorThumbnail(authorID: Int) async throws -> Data {
+        var request = URLRequest(url: apiURL("authors/\(authorID)/thumbnail"))
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        return try await send(request)
+    }
+
     /// `GET books/files/{fileId}/serve`, saved to `destination` (replaced if
     /// it exists). `progress` gets 0...1 as bytes arrive; it stays at 0 if
     /// the server doesn't send a length. Cancelling the task cancels the
@@ -389,6 +396,15 @@ public actor BookOrbitClient {
     /// position (last write wins), CFI included.
     public func saveProgress(_ position: ReadingPosition, fileID: Int) async throws {
         let request = try jsonRequest("books/files/\(fileID)/progress", method: "POST", body: SaveProgressRequest(position))
+        _ = try await send(request)
+    }
+
+    // MARK: - Read status
+
+    /// `PATCH books/{id}/status {status}`, one of `BookOrbitBook.readStatus`'s
+    /// values. The server records `reading` after `read` as `rereading`.
+    public func setReadStatus(_ status: String, bookID: Int) async throws {
+        let request = try jsonRequest("books/\(bookID)/status", method: "PATCH", body: ["status": status])
         _ = try await send(request)
     }
 

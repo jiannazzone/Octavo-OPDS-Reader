@@ -82,7 +82,8 @@ public struct OPDSSource: LibrarySource {
         guard !query.isEmpty, let url = try await searchTemplate()?.url(for: query) else {
             return LibrarySearchResults(query: query)
         }
-        return LibrarySearchResults(query: query, books: try await feed(link(url)))
+        let first = link(url)
+        return LibrarySearchResults(query: query, books: try await feed(first), booksLink: first)
     }
 
     public func details(for book: LibraryBook) async throws -> LibraryBookDetails {

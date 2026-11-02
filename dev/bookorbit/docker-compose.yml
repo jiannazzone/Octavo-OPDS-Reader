@@ -1,5 +1,6 @@
 # Local BookOrbit for Octavo development. Dev only: the secrets below are
-# throwaway values for a server bound to 127.0.0.1. See README.md.
+# throwaway values for a server bound to 127.0.0.1 unless BOOKORBIT_BIND
+# says otherwise. See README.md.
 #
 # Uses BookOrbit's published image (AGPL-3.0); nothing from it is vendored here.
 
@@ -10,7 +11,7 @@ services:
     image: ghcr.io/bookorbit/bookorbit:${BOOKORBIT_TAG:-3.6.0}
     init: true
     ports:
-      - "127.0.0.1:${BOOKORBIT_PORT:-3300}:3000"
+      - "${BOOKORBIT_BIND:-127.0.0.1}:${BOOKORBIT_PORT:-3300}:3000"
     environment:
       NODE_ENV: production
       PORT: 3000

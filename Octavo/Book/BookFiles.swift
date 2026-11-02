@@ -2,13 +2,9 @@ import CryptoKit
 import Foundation
 import OctavoKit
 
-/// Where a book's file lives on the iPhone once it has downloaded
-/// (decision 3: books download on first open).
-///
-/// #14 keeps files in Caches (`CachedBookFiles`): iOS may clear them when
-/// space runs low, and the book downloads again on its next open. #10
-/// replaces this with permanent storage, the On iPhone list and Remove
-/// download.
+/// Where a book's file lives on the iPhone once it has downloaded. A
+/// download stays until it's removed (`docs/design/direction.md`, Getting
+/// books onto the iPhone).
 nonisolated protocol BookFiles: Sendable {
     /// The file on the iPhone, or `nil` if it hasn't downloaded.
     func localFile(for file: LibraryFile) -> URL?
@@ -16,6 +12,9 @@ nonisolated protocol BookFiles: Sendable {
     /// Downloads `file` from `source`, replacing any earlier copy.
     /// Cancelling the calling task cancels the download.
     func download(_ file: LibraryFile, from source: any LibrarySource, progress: @escaping @Sendable (Double) -> Void) async throws -> URL
+
+    /// Deletes the downloaded copy, if there is one.
+    func remove(_ file: LibraryFile) throws
 }
 
 nonisolated extension LibraryBook {
@@ -45,14 +44,16 @@ nonisolated extension LibraryFile {
     }
 }
 
-/// Downloads into `Caches/Books/`, one file per book file.
+/// Downloads into `Application Support/Books/`, one file per book file:
+/// iOS doesn't clear it when space runs low, and it stays out of the
+/// iPhone's backup, since the server has every book.
 ///
 /// Keyed by the file's ID alone: v1 has one server (decision 1). A second
-/// server needs the server in the key (#10).
-nonisolated struct CachedBookFiles: BookFiles {
+/// server needs the server in the key.
+nonisolated struct StoredBookFiles: BookFiles {
     let directory: URL
 
-    init(directory: URL = URL.cachesDirectory.appending(path: "Books", directoryHint: .isDirectory)) {
+    init(directory: URL = URL.applicationSupportDirectory.appending(path: "Books", directoryHint: .isDirectory)) {
         self.directory = directory
     }
 
@@ -68,8 +69,41 @@ nonisolated struct CachedBookFiles: BookFiles {
 
     func download(_ file: LibraryFile, from source: any LibrarySource, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
         guard let destination = url(for: file) else { throw BookFilesError.unreadableFormat }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try makeDirectory()
         return try await source.download(file, to: destination, progress: progress)
+    }
+
+    func remove(_ file: LibraryFile) throws {
+        guard let url = localFile(for: file) else { return }
+        try FileManager.default.removeItem(at: url)
+    }
+
+    /// The app's store, with any books from before it moved in.
+    static func moved() -> StoredBookFiles {
+        let files = StoredBookFiles()
+        files.moveBooks()
+        return files
+    }
+
+    /// Moves books downloaded before this store existed (#14 kept them in
+    /// `Caches/Books/`, which iOS may clear) into it. Leaves a book that's
+    /// already here alone.
+    func moveBooks(from old: URL = URL.cachesDirectory.appending(path: "Books", directoryHint: .isDirectory)) {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: old.path), !names.isEmpty, (try? makeDirectory()) != nil else { return }
+        for name in names where !manager.fileExists(atPath: directory.appending(path: name).path) {
+            try? manager.moveItem(at: old.appending(path: name), to: directory.appending(path: name))
+        }
+        try? manager.removeItem(at: old)
+    }
+
+    private func makeDirectory() throws {
+        guard !FileManager.default.fileExists(atPath: directory.path) else { return }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var folder = directory
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try folder.setResourceValues(values)
     }
 }
 

@@ -131,6 +131,9 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
     /// Up to three covers to show on the row. Empty when the source doesn't
     /// list them (BookOrbit collections): load the entry's first page instead.
     public var previewCovers: [LibraryCover]
+    /// An author's photo, if the server has one (BookOrbit). Loaded like a
+    /// cover, from the same server.
+    public var portrait: LibraryCover?
     public var link: LibraryLink
 
     public var id: LibraryLink { link }
@@ -142,6 +145,7 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
         count: Int? = nil,
         sortName: String? = nil,
         previewCovers: [LibraryCover] = [],
+        portrait: LibraryCover? = nil,
         link: LibraryLink
     ) {
         self.kind = kind
@@ -150,6 +154,7 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
         self.count = count
         self.sortName = sortName
         self.previewCovers = previewCovers
+        self.portrait = portrait
         self.link = link
     }
 }
@@ -169,6 +174,9 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
     /// When the server last saw the book read, for ordering Continue
     /// reading. `nil` if it doesn't say.
     public var lastReadAt: Date?
+    /// Whether the server has the book marked finished. `nil` if it doesn't
+    /// keep such a mark (OPDS); the app keeps one on the iPhone instead.
+    public var isFinished: Bool?
 
     public init(
         id: LibraryBookID,
@@ -178,7 +186,8 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         cover: LibraryCover? = nil,
         files: [LibraryFile] = [],
         progress: Double? = nil,
-        lastReadAt: Date? = nil
+        lastReadAt: Date? = nil,
+        isFinished: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -188,6 +197,7 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         self.files = files
         self.progress = progress
         self.lastReadAt = lastReadAt
+        self.isFinished = isFinished
     }
 
     /// The file the server marks primary, else the first one.
@@ -276,13 +286,19 @@ public struct LibrarySearchResults: Hashable, Codable, Sendable {
     public var query: String
     /// The first page of matching books; `books.next` pages on.
     public var books: LibraryFeed
+    /// The matching books' first page as a list, to show them all.
+    public var booksLink: LibraryLink?
     /// Empty unless the source supports `.booksSeriesAndAuthors`.
     public var series: [LibraryEntry]
     public var authors: [LibraryEntry]
 
-    public init(query: String, books: LibraryFeed = LibraryFeed(), series: [LibraryEntry] = [], authors: [LibraryEntry] = []) {
+    public init(
+        query: String, books: LibraryFeed = LibraryFeed(), booksLink: LibraryLink? = nil,
+        series: [LibraryEntry] = [], authors: [LibraryEntry] = []
+    ) {
         self.query = query
         self.books = books
+        self.booksLink = booksLink
         self.series = series
         self.authors = authors
     }

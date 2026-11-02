@@ -4,7 +4,7 @@ import OctavoKit
 import UIKit
 
 /// One book's cover page: its details, its cover image and whether its
-/// sheet is expanded. A fold rebuilds the screens (`PaneStack`), so this
+/// sheet is expanded. A fold lays the screen out again, so this
 /// lives in `BookPages` rather than in the view, and the sheet stays as it
 /// was.
 @Observable
@@ -20,6 +20,12 @@ final class BookPage {
     private(set) var serverName: String?
     var isExpanded = false
     var showsFullDescription = false
+    /// Finished as last set on this screen, over what the server sent.
+    private(set) var markedFinished: Bool?
+    /// Setting finished didn't reach the server.
+    private(set) var finishedFailed = false
+    /// Where this iPhone keeps the mark for a server that doesn't.
+    @ObservationIgnored private var finishedOnIPhone: (books: FinishedBooks, id: SourcedBook.ID)?
     /// The saved position lives on disk, which isn't observed; this
     /// changes when the reader closes, so the strip reads it again.
     private var positionsChanged = 0
@@ -47,6 +53,41 @@ final class BookPage {
             self.details = fetched
             if book.cover == nil, let cover = fetched?.book.cover { await loadCover(cover, from: source) }
             coverFinished = true
+        }
+    }
+
+    /// Keeps the finished mark in `books` when the server doesn't keep one.
+    func keepFinished(in books: FinishedBooks, as id: SourcedBook.ID) {
+        finishedOnIPhone = (books, id)
+    }
+
+    /// The book and its library, once the screen has said
+    /// (`keepFinished(in:as:)`).
+    var sourcedID: SourcedBook.ID? { finishedOnIPhone?.id }
+
+    var isFinished: Bool {
+        if let markedFinished { return markedFinished }
+        if let server = current.isFinished { return server }
+        guard let finishedOnIPhone else { return false }
+        return finishedOnIPhone.books.contains(finishedOnIPhone.id)
+    }
+
+    /// Marks the book finished, or not: on the server if it keeps the mark
+    /// (BookOrbit), else on this iPhone. Shows the change at once and puts
+    /// it back if the server refuses.
+    func setFinished(_ finished: Bool, from source: any LibrarySource) async {
+        let before = markedFinished
+        markedFinished = finished
+        finishedFailed = false
+        do {
+            if source.tracksFinished {
+                try await source.setFinished(finished, for: current)
+            } else if let finishedOnIPhone {
+                try finishedOnIPhone.books.set(finished, for: finishedOnIPhone.id)
+            }
+        } catch {
+            markedFinished = before
+            finishedFailed = !(error is CancellationError)
         }
     }
 

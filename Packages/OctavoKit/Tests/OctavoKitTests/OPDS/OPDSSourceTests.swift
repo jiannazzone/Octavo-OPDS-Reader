@@ -348,6 +348,8 @@ struct OPDSSourceTests {
         #expect(found.query == "salt & pepper")
         #expect(found.books.books.map(\.title) == ["Salt Roads"])
         #expect(server.requests(to: "/catalog/search").first?.query["q"] == "salt & pepper")
+        let all = try await source.feed(try #require(found.booksLink))
+        #expect(all.books.map(\.title) == ["Salt Roads"], "the link lists the same books")
         _ = try await source.search("again")
         #expect(server.requests(to: "/catalog/opensearch.xml").count == 1, "the template is kept")
         #expect(try await source.search("   ").books.books.isEmpty)

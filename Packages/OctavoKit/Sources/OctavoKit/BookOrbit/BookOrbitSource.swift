@@ -88,10 +88,19 @@ public struct BookOrbitSource: LibrarySource {
             return LibrarySearchResults(
                 query: query,
                 books: try await books,
+                booksLink: BookOrbitRoute.search(query: query, page: 0).link,
                 series: try await matches.series.map(entry),
                 authors: try await matches.authors.map(entry)
             )
         }
+    }
+
+    public var tracksFinished: Bool { true }
+
+    /// Finished is BookOrbit's `read`; not finished goes back to `reading`.
+    public func setFinished(_ finished: Bool, for book: LibraryBook) async throws {
+        guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
+        try await client.setReadStatus(finished ? "read" : "reading", bookID: id)
     }
 
     public func details(for book: LibraryBook) async throws -> LibraryBookDetails {
@@ -129,6 +138,9 @@ public struct BookOrbitSource: LibrarySource {
     }
 
     public func cover(_ cover: LibraryCover, size: LibraryCoverSize) async throws -> Data {
+        if let authorID = Self.portraitAuthorID(cover) {
+            return try await mappingErrors { try await client.authorThumbnail(authorID: authorID) }
+        }
         guard let bookID = Self.coverBookID(cover) else { throw LibraryError.invalidLink }
         return try await mappingErrors { try await client.cover(bookID: bookID, thumbnail: size == .thumbnail) }
     }
@@ -178,7 +190,8 @@ public struct BookOrbitSource: LibrarySource {
                             filename: $0.filename, isPrimary: $0.role == "primary")
             },
             progress: book.readingFraction,
-            lastReadAt: book.readStatusUpdatedAt
+            lastReadAt: book.readStatusUpdatedAt,
+            isFinished: book.readStatus.map { $0 == "read" }
         )
     }
 
@@ -210,12 +223,25 @@ public struct BookOrbitSource: LibrarySource {
             count: author.bookCount,
             sortName: author.sortName,
             previewCovers: author.coverBookID.map { [Self.cover(bookID: $0, version: nil)] } ?? [],
+            portrait: author.imageURL.map { Self.portrait(authorID: author.id, imageURL: $0) },
             link: BookOrbitRoute.author(id: author.id, page: 0).link
         )
     }
 
     private static func cover(bookID: Int, version: String?) -> LibraryCover {
         LibraryCover(rawValue: "books/\(bookID)", version: version)
+    }
+
+    /// An author's photo, versioned by the server's `t=` so a new photo
+    /// isn't served from the cache.
+    static func portrait(authorID: Int, imageURL: String) -> LibraryCover {
+        let version = URLComponents(string: imageURL)?.queryItems?.first { $0.name == "t" }?.value
+        return LibraryCover(rawValue: "authors/\(authorID)", version: version)
+    }
+
+    private static func portraitAuthorID(_ cover: LibraryCover) -> Int? {
+        guard cover.rawValue.hasPrefix("authors/") else { return nil }
+        return Int(cover.rawValue.dropFirst("authors/".count))
     }
 
     private static func coverBookID(_ cover: LibraryCover) -> Int? {

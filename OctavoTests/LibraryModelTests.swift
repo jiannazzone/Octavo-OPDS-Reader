@@ -105,6 +105,32 @@ struct FeedModelTests {
     }
 
     // Folding rebuilds the views; the list they find is the same one.
+    // A server whose next page is one already loaded is looping.
+    @Test func aListThatLoopsEnds() async throws {
+        let authors = [LibraryEntry(kind: .author, title: "Mary Shelley", link: link("authors/2"))]
+        let library = await connected(PagedSource(pages: [
+            "loop": LibraryFeed(entries: authors, next: link("loop?page=1")),
+            "loop?page=1": LibraryFeed(entries: authors, next: link("loop")),
+        ]))
+        let feed = try #require(library.feed(link("loop"), from: server))
+        await feed.loadAll()
+        #expect(feed.entries.count == 2)
+        #expect(!feed.hasMore)
+    }
+
+    // The server decides how many pages there are.
+    @Test func loadAllStopsAtItsLimit() async throws {
+        var pages: [String: LibraryFeed] = [:]
+        for page in 0..<10 {
+            pages["p\(page)"] = LibraryFeed(books: [book("\(page)")], next: link("p\(page + 1)"))
+        }
+        let library = await connected(PagedSource(pages: pages))
+        let feed = try #require(library.feed(link("p0"), from: server))
+        await feed.loadAll(maxPages: 4)
+        #expect(feed.books.count == 4)
+        #expect(feed.hasMore)
+    }
+
     @Test func keepsOneModelPerList() async throws {
         let library = await connected(PagedSource(pages: Self.pages))
         let feed = try #require(library.feed(link("a"), from: server))
@@ -146,23 +172,6 @@ struct FeedModelTests {
         faults.set("a?page=1", nil)
         await feed.retry()
         #expect(feed.books.map(\.title) == ["1", "2", "3"])
-    }
-
-    @Test func firstRouteFollowsWhatShowsFirst() async throws {
-        let authors = [
-            LibraryEntry(kind: .author, title: "Mary Shelley", sortName: "Shelley, Mary", link: link("authors/2")),
-            LibraryEntry(kind: .author, title: "Jane Austen", sortName: "Austen, Jane", link: link("authors/1")),
-        ]
-        let library = await connected(PagedSource(pages: ["authors": LibraryFeed(entries: authors), "a": Self.pages["a"]!]))
-
-        let authorList = try #require(library.feed(link("authors"), from: server))
-        await authorList.load()
-        #expect(authorList.isAuthorList)
-        #expect(authorList.firstRoute == .feed(authors[1], from: server))
-
-        let books = try #require(library.feed(link("a"), from: server))
-        await books.load()
-        #expect(books.firstRoute == .cover(sourced(book("1"))))
     }
 }
 
@@ -224,8 +233,23 @@ struct LibraryModelTests {
 
         #expect(library.homeLoaded)
         #expect(library.continueReading.map(\.book.title) == ["read-1h-ago", "opened-here", "read-2h-ago"])
-        #expect(library.newBooks.count == LibraryModel.newBooksLimit)
-        #expect(library.newBooks.first?.source == server)
+    }
+
+    // Home lists only books in progress: one marked finished leaves, whether
+    // the server listed it or it was opened on this iPhone.
+    @Test func aBookMarkedFinishedLeavesHome() async throws {
+        let recents = temporaryRecents()
+        try recents.record(sourced(book("opened-here")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        try recents.record(sourced(book("read-1h-ago")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        let source = PagedSource(pages: ["reading": LibraryFeed(books: [book("read-1h-ago", hoursAgo: 1)])])
+        let library = await connected(source, recents: recents)
+        #expect(Set(library.continueReading.map(\.book.title)) == ["opened-here", "read-1h-ago"])
+
+        library.markedFinished(sourced(book("read-1h-ago")).id, true)
+        library.markedFinished(sourced(book("opened-here")).id, true)
+
+        #expect(library.continueReading.isEmpty)
+        #expect(recents.records().isEmpty)
     }
 
     @Test func aFailedHomeKeepsWhatItShowed() async {
@@ -324,8 +348,21 @@ struct AuthorIndexTests {
     }
 
     @Test func foldsAccentsAndFilesTheRestUnderHash() {
-        let sections = AuthorIndex.sections([Self.author("Émile Zola"), Self.author("50 Cent"), Self.author(nil, "zed")])
+        let sections = AuthorIndex.sections([Self.author("Éluard, Paul"), Self.author(nil, "1984"), Self.author(nil, "zed")])
         #expect(sections.map(\.letter) == ["E", "Z", "#"])
-        #expect(sections.last?.entries.map(\.title) == ["50 Cent"])
+        #expect(sections.last?.entries.map(\.title) == ["1984"])
+    }
+
+    // BookOrbit sends some sort names first name first.
+    @Test func filesByLastNameWhenTheServerDoesnt() {
+        let wells = Self.author("H. G. Wells")
+        #expect(AuthorIndex.sortKey(wells) == "Wells, H. G.")
+        #expect(AuthorIndex.sections([wells, Self.author("Austen, Jane", "Jane Austen")]).map(\.letter) == ["A", "W"])
+    }
+
+    @Test func namesReadFirstNameFirst() {
+        #expect(AuthorIndex.displayName(Self.author(nil, "Austen, Jane")) == "Jane Austen")
+        #expect(AuthorIndex.displayName(Self.author("Austen, Jane", "Jane Austen")) == "Jane Austen")
+        #expect(AuthorIndex.displayName(Self.author(nil, "Plato")) == "Plato")
     }
 }

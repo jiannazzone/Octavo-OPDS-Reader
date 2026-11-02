@@ -103,7 +103,26 @@ struct BookOrbitSourceTests {
         #expect(feed.books[0].progress == 0.025)
         #expect(feed.books[0].lastReadAt == Date(timeIntervalSinceReferenceDate: 815_234_930.887))
         #expect(feed.books[1].lastReadAt == nil)
+        #expect(feed.books[0].isFinished == false)
+        #expect(feed.books[1].isFinished == nil)
         #expect(feed.next == nil)
+    }
+
+    // Measured on v3.6.0: `read` sets finishedAt; `reading` afterwards is
+    // stored as `rereading`.
+    @Test func marksFinishedAsBookOrbitsReadStatus() async throws {
+        let server = StubServer { _ in .json(#"{"status":"read"}"#) }
+        let source = source(server)
+        #expect(source.tracksFinished)
+        let book = LibraryBook(id: LibraryBookID(rawValue: "4"), title: "Pride and Prejudice")
+
+        try await source.setFinished(true, for: book)
+        try await source.setFinished(false, for: book)
+
+        #expect(server.requests.map(\.method) == ["PATCH", "PATCH"])
+        #expect(server.requests.map(\.path) == ["/api/v1/books/4/status", "/api/v1/books/4/status"])
+        // The server rejects fields it doesn't know, so only the status goes.
+        #expect(server.requests.map { $0.json as? [String: String] } == [["status": "read"], ["status": "reading"]])
     }
 
     @Test func mapsBooksForTheGrid() async throws {
@@ -217,7 +236,8 @@ struct BookOrbitSourceTests {
         let server = StubServer { _ in
             .json(#"""
             {"items":[{"id":4,"name":"Jane Austen","sortName":"Austen, Jane","bookCount":1,"coverBookId":4,"imageUrl":null},
-                      {"id":1,"name":"Lewis Carroll","sortName":null,"bookCount":1,"coverBookId":null}],
+                      {"id":1,"name":"Lewis Carroll","sortName":null,"bookCount":1,"coverBookId":null,
+                       "imageUrl":"/api/v1/authors/1/thumbnail?t=1730390400"}],
              "total":5,"page":0,"size":2}
             """#)
         }
@@ -230,6 +250,7 @@ struct BookOrbitSourceTests {
             previewCovers: [LibraryCover(rawValue: "books/4")], link: link(.author(id: 4, page: 0))
         ))
         #expect(feed.entries.last?.previewCovers == [])
+        #expect(feed.entries.last?.portrait == LibraryCover(rawValue: "authors/1", version: "1730390400"))
         #expect(feed.next == link(.authors(page: 1)))
     }
 
@@ -272,6 +293,7 @@ struct BookOrbitSourceTests {
         #expect(results.query == "holmes")
         #expect(results.books.books.map(\.title) == ["A Study in Scarlet", "Alice's Adventures in Wonderland"])
         #expect(results.books.next == link(.search(query: "holmes", page: 1)))
+        #expect(results.booksLink == link(.search(query: "holmes", page: 0)))
         #expect(results.series.map(\.title) == ["Sherlock Holmes"])
         #expect(results.series.first?.link == link(.series(id: 3, page: 0)))
         #expect(results.authors.map(\.title) == ["Arthur Conan Doyle"])
@@ -356,6 +378,8 @@ struct BookOrbitSourceTests {
         #expect(try await source.cover(cover, size: .thumbnail) == jpeg)
         #expect(try await source.cover(cover, size: .full) == jpeg)
         #expect(server.requests.map(\.path) == ["/api/v1/books/4/thumbnail", "/api/v1/books/4/cover"])
+        #expect(try await source.cover(LibraryCover(rawValue: "authors/1", version: "7"), size: .thumbnail) == jpeg)
+        #expect(server.requests.last?.path == "/api/v1/authors/1/thumbnail")
         #expect(server.requests.first?.headers["accept"] == "image/*")
         #expect(server.requests.first?.headers["authorization"] == "Bearer access-1")
         #expect(cover.cacheKey == "books/4@v1")

@@ -1,41 +1,56 @@
 import CoreGraphics
 import Foundation
 import OctavoKit
+import SwiftUI
 import Testing
 @testable import Octavo
 
-/// The shell's split at the hinge. Geometry from the iPhone Duo simulator
+/// The spread's split at the hinge. Geometry from the iPhone Duo simulator
 /// (iOS 27.1): a tab's content is 867 pt wide unfolded (382 folded) and the
 /// division region is x 455.5–495.5, the full height of the screen.
-struct PaneSplitTests {
+struct SpreadTests {
     static let hinge = CGRect(x: 455.5, y: -82, width: 40, height: 669)
 
-    @Test func unfoldedSplitsAtTheHinge() throws {
-        let split = try #require(PaneSplit(width: 867, divisions: [Self.hinge]))
-        #expect(split.leftWidth == 455.5)
-        #expect(split.hingeWidth == 40)
-        #expect(split.rightWidth == 371.5)
+    @Test func unfoldedIsTwoPagesSplitAtTheHinge() throws {
+        let pages = try #require(Spread(width: 867, divisions: [Self.hinge]).pages)
+        #expect(pages.leftWidth == 455.5)
+        #expect(pages.hingeWidth == 40)
+        #expect(pages.rightWidth == 371.5)
     }
 
-    @Test func foldedIsOnePane() {
-        #expect(PaneSplit(width: 382, divisions: []) == nil)
+    @Test func foldedIsOnePage() {
+        #expect(!Spread(width: 382, divisions: []).isTwoPages)
     }
 
     // Around a fold the region can report for the inner display while the
     // view still has the outer display's width.
     @Test func ignoresAHingePastTheView() {
-        #expect(PaneSplit(width: 382, divisions: [Self.hinge]) == nil)
+        #expect(!Spread(width: 382, divisions: [Self.hinge]).isTwoPages)
     }
 
     // ... or turned across the view (duo-spreads §1).
     @Test func ignoresAHingeAcross() {
         let across = CGRect(x: -42, y: 373.5, width: 669, height: 40)
-        #expect(PaneSplit(width: 867, divisions: [across]) == nil)
+        #expect(!Spread(width: 867, divisions: [across]).isTwoPages)
     }
 
-    @Test func needsRoomForAPaneEachSide() {
+    @Test func needsRoomForAPageEachSide() {
         let nearTheEdge = CGRect(x: 120, y: 0, width: 40, height: 669)
-        #expect(PaneSplit(width: 867, divisions: [nearTheEdge]) == nil)
+        #expect(!Spread(width: 867, divisions: [nearTheEdge]).isTwoPages)
+    }
+
+    // Three covers folded; four on the left page and three on the right.
+    @MainActor @Test func gridColumnsPerPage() {
+        #expect(SpreadMetrics.columns(382) == 3)
+        #expect(SpreadMetrics.columns(455.5) == 4)
+        #expect(SpreadMetrics.columns(371.5) == 3)
+    }
+
+    @MainActor @Test func aListFlowsFromTheLeftPageOntoTheRight() {
+        struct Item: Identifiable { var id: Int }
+        let items = (1...5).map { Item(id: $0) }
+        #expect(SpreadList<Item, EmptyView>.split(items, into: 2).map { $0.map(\.id) } == [[1, 2, 3], [4, 5]])
+        #expect(SpreadList<Item, EmptyView>.split(items, into: 1).map { $0.map(\.id) } == [[1, 2, 3, 4, 5]])
     }
 }
 
@@ -59,91 +74,54 @@ enum SampleRoutes {
 func makeShell(opener: BookOpener? = nil) -> ShellModel {
     let folder = URL.temporaryDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     return ShellModel(
-        library: LibraryModel(recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json"))),
-        opener: opener ?? BookOpener(files: CachedBookFiles(directory: folder.appending(path: "Books")))
+        library: LibraryModel(
+            recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json")),
+            finished: FinishedBooks(fileURL: folder.appending(path: "FinishedBooks.json")),
+            onIPhone: BooksOnIPhone(fileURL: folder.appending(path: "BooksOnIPhone.json"))
+        ),
+        opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books"))),
+        servers: ServerStore(fileURL: folder.appending(path: "Server.json"))
     )
 }
 
-struct ShellRouteTests {
-    // A refreshed list or book still marks the same row.
-    @Test func theSameScreenSurvivesNewDetails() {
-        var entry = LibraryEntry(kind: .collection, title: "Classics", count: 5, link: LibraryLink(rawValue: "collections/classics"))
-        let route = ShellRoute.feed(entry, from: SampleLibrarySource.id)
-        entry.count = 6
-        #expect(route.isSameScreen(as: .feed(entry, from: SampleLibrarySource.id)))
-        #expect(!route.isSameScreen(as: .feed(entry, from: .files)))
-
-        var book = SampleRoutes.book(0)
-        let cover = ShellRoute.cover(book)
-        book.book.progress = 0.9
-        #expect(cover.isSameScreen(as: .cover(book)))
-        #expect(!cover.isSameScreen(as: .cover(SampleRoutes.book(1))))
-        #expect(!cover.isSameScreen(as: nil))
-    }
-}
-
-struct PanePathTests {
+struct ShellPathTests {
     static let a = SampleRoutes.collections
     static let b = SampleRoutes.classics
-    static let c = ShellRoute.cover(SampleRoutes.book(0))
-    static let d = ShellRoute.cover(SampleRoutes.book(1))
 
-    @Test func levelsCountFromTheRoot() {
-        let path = PanePath(routes: [Self.a, Self.b])
-        #expect(path.route(at: 0) == nil)
-        #expect(path.route(at: 1) == Self.a)
-        #expect(path.route(at: 2) == Self.b)
-        #expect(path.route(at: 3) == nil)
-    }
-
-    @Test func openingFromTheLeftPaneReplacesTheRight() {
-        var path = PanePath(routes: [Self.a, Self.b])
-        path.open(Self.c, from: 1)
-        #expect(path.routes == [Self.a, Self.c])
-        #expect(path.pushedPairs == [PaneLevel(value: 1)])
-    }
-
-    @Test func openingFromTheRightPaneShiftsAlong() {
-        var path = PanePath(routes: [Self.a, Self.b])
-        path.open(Self.c, from: 2)
-        #expect(path.routes == [Self.a, Self.b, Self.c])
-        #expect(path.pushedPairs == [PaneLevel(value: 1), PaneLevel(value: 2)])
-        #expect(path.rightOfPair(2) == Self.c)
-    }
-
-    @Test func openingFromTheRootStartsOver() {
-        var path = PanePath(routes: [Self.a, Self.b, Self.c])
-        path.open(Self.d, from: 0)
-        #expect(path.routes == [Self.d])
-        #expect(path.pushedPairs.isEmpty)
-    }
-
-    @Test func theCompanionShowsBesideTheRootUntilSomethingOpens() {
-        var path = PanePath(companion: Self.c)
-        #expect(path.rightOfPair(0) == Self.c)
-        path.open(Self.a, from: 0)
-        #expect(path.rightOfPair(0) == Self.a)
-        #expect(path.rightOfPair(1) == nil)
-    }
-
-    @Test func openingFromTheCompanionKeepsIt() {
-        var path = PanePath(companion: Self.c)
-        path.open(Self.a, from: 1)
-        #expect(path.routes == [Self.c, Self.a])
-    }
-
-    @Test func poppingAPairClosesTheDeepestScreen() {
-        var path = PanePath(routes: [Self.a, Self.b, Self.c])
-        path.pushedPairs = [PaneLevel(value: 1)]
+    @Test func pushingAndPoppingMoveTheTop() {
+        var path = ShellPath()
+        #expect(path.top == nil)
+        path.push(Self.a)
+        path.push(Self.b)
         #expect(path.routes == [Self.a, Self.b])
-        path.pushedPairs = []
-        #expect(path.routes == [Self.a])
+        #expect(path.lastMove == .push)
+        path.pop()
+        #expect(path.top == Self.a)
+        #expect(path.lastMove == .pop)
     }
 
-    @Test func theStackCantPushPairs() {
-        var path = PanePath(routes: [Self.a])
-        path.pushedPairs = [PaneLevel(value: 1)]
-        #expect(path.routes == [Self.a])
+    @Test func poppingTheRootDoesNothing() {
+        var path = ShellPath()
+        path.pop()
+        path.popToRoot()
+        #expect(path.routes.isEmpty)
+        #expect(path.lastMove == .replace)
+    }
+
+    // Cover | Details unfolded; Settings keeps to the left page until it's
+    // designed.
+    @Test func aBooksScreenFillsTheSpread() {
+        #expect(ShellRoute.cover(SampleRoutes.book(1)).fillsSpread)
+        #expect(Self.a.fillsSpread)
+        #expect(!ShellRoute.settings.fillsSpread)
+    }
+
+    @Test func replacingDoesntAnimate() {
+        var path = ShellPath()
+        path.push(Self.a)
+        path.replace([Self.b])
+        #expect(path.routes == [Self.b])
+        #expect(path.lastMove == .replace)
     }
 }
 
@@ -174,59 +152,119 @@ struct HingeTransitionTests {
 struct ShellModelTests {
     static let book = SampleRoutes.book(1)
 
-    // The book isn't on the iPhone yet: it downloads, then opens (#14).
-    @Test func unfoldingOnACoverOpensTheBook() async throws {
-        let files = try TemporaryBookFiles()
+    /// A shell connected to a stub library whose downloads work.
+    private func connectedShell(_ files: TemporaryBookFiles) async -> ShellModel {
         let model = makeShell(opener: BookOpener(files: files.store))
         await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", detail: "", source: StubLibrarySource()))
-        model.tab = .library
-        model[path: .library].routes = [SampleRoutes.collections, .cover(Self.book)]
+        return model
+    }
+
+    @Test func unfoldingOnADownloadedBooksScreenOpensIt() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.opener.download(Self.book.book, from: StubLibrarySource())
+        #expect(await eventually { model.opener.status(of: Self.book.book) == .downloaded })
+        model.select(.library)
+        model[path: .library].replace([SampleRoutes.collections, .cover(Self.book)])
         model.hingeChanged(.unfold)
         #expect(await eventually { model.reading != nil })
         #expect(model.reading?.book.id == Self.book.book.id)
     }
 
+    // Nothing downloads until Download or Open is tapped.
+    @Test func unfoldingOnABookNotOnTheIPhoneStaysOnItsScreen() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.select(.library)
+        model[path: .library].replace([.cover(Self.book)])
+        model.hingeChanged(.unfold)
+        #expect(model.reading == nil)
+        #expect(model.opener.status(of: Self.book.book) == .notDownloaded)
+        #expect(model[path: .library].top == .cover(Self.book))
+    }
+
     @Test func unfoldingElsewhereKeepsTheScreen() {
         let model = makeShell()
-        model.tab = .library
-        model[path: .library].routes = [.cover(Self.book), SampleRoutes.collections]
+        model.select(.library)
+        model[path: .library].replace([.cover(Self.book), SampleRoutes.collections])
         model.hingeChanged(.unfold)
         #expect(model.reading == nil)
         #expect(model[path: .library].routes == [.cover(Self.book), SampleRoutes.collections])
     }
 
-    // Home's companion is a cover, but it isn't on screen folded.
     @Test func unfoldingOnARootDoesNothing() {
         let model = makeShell()
-        model.tab = .home
         model.hingeChanged(.unfold)
         #expect(model.reading == nil)
     }
 
     @Test func onlyTheSelectedTabCounts() {
         let model = makeShell()
-        model.tab = .home
-        model[path: .library].routes = [.cover(Self.book)]
+        model[path: .library].replace([.cover(Self.book)])
         model.hingeChanged(.unfold)
         #expect(model.reading == nil)
     }
 
-    @Test func foldingDoesNothing() {
+    // Opened from Home, so its screen isn't on the stack yet.
+    @Test func foldingWhileReadingClosesTheBookToItsScreen() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.openBook(Self.book)
+        #expect(await eventually { model.reading != nil })
+        model.hingeChanged(.fold)
+        #expect(model.reading == nil)
+        #expect(model[path: .home].top == .cover(Self.book))
+    }
+
+    @Test func foldingWhileReadingFromItsScreenStaysThere() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.select(.library)
+        model[path: .library].replace([.cover(Self.book)])
+        model.openBook(Self.book)
+        #expect(await eventually { model.reading != nil })
+        model.hingeChanged(.fold)
+        #expect(model.reading == nil)
+        #expect(model[path: .library].routes == [.cover(Self.book)])
+    }
+
+    @Test func foldingWithoutABookDoesNothing() {
         let model = makeShell()
-        model.tab = .library
-        model[path: .library].routes = [.cover(Self.book)]
+        model.select(.library)
+        model[path: .library].replace([.cover(Self.book)])
         model.hingeChanged(.fold)
         model.hingeChanged(.none)
         #expect(model.reading == nil)
+        #expect(model[path: .library].routes == [.cover(Self.book)])
     }
 
-    @Test func linksPushFoldedAndShiftUnfolded() {
+    @Test func linksPushOntoTheCurrentTab() {
         let model = makeShell()
-        model.open(SampleRoutes.collections, from: PaneContext(tab: .library))
-        model.open(SampleRoutes.classics, from: PaneContext(tab: .library))
+        model.select(.library)
+        model.push(SampleRoutes.collections)
+        model.push(SampleRoutes.classics)
         #expect(model[path: .library].routes == [SampleRoutes.collections, SampleRoutes.classics])
-        model.open(.cover(Self.book), from: PaneContext(tab: .library, level: 1))
-        #expect(model[path: .library].routes == [SampleRoutes.collections, .cover(Self.book)])
+        model.pop(.library)
+        #expect(model[path: .library].routes == [SampleRoutes.collections])
+        #expect(model[path: .home].routes.isEmpty)
+    }
+
+    @Test func choosingTheShowingTabGoesBackToItsRoot() {
+        let model = makeShell()
+        model.select(.library)
+        model.push(SampleRoutes.collections)
+        model.select(.home)
+        #expect(model[path: .library].routes == [SampleRoutes.collections])
+        model.select(.library)
+        model.select(.library)
+        #expect(model[path: .library].routes.isEmpty)
+    }
+
+    @Test func settingsOpensOnTheCurrentTab() {
+        let model = makeShell()
+        model.select(.library)
+        model.openSettings()
+        #expect(model[path: .library].top == .settings)
     }
 
     @Test func aBookJoinsContinueReadingOnceItOpens() async throws {

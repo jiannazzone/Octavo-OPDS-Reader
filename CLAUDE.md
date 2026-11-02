@@ -28,7 +28,12 @@ cd Packages/OctavoKit && swift test
 Scripts/fetch-sample-books.sh
 # Local BookOrbit v3.6.0 at http://localhost:3300 (Docker; seeding and test accounts in dev/bookorbit/README.md)
 cd dev/bookorbit && docker compose up -d && ./seed.sh
+# A real device (UDID from `xcrun devicectl list devices`; unlocked, on the same Wi-Fi)
+xcodebuild build -project Octavo.xcodeproj -scheme Octavo -destination 'id=<UDID>' -allowProvisioningUpdates
+xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/Debug-iphoneos/Octavo.app
 ```
+
+- Real devices reach the local BookOrbit only when it's started with `BOOKORBIT_BIND=0.0.0.0`, at `http://<LocalHostName>.local:3300` (`dev/bookorbit/README.md`, "From a real iPhone"). Name the device and its UDID whenever you install to one, as with simulators.
 
 - Use the simulator named exactly `iPhone Duo`. The `CalcuSplit …` simulators belong to another project.
 - Plain `xcodebuild test` clones the simulator for parallel testing and shuts the original down. Add `-parallel-testing-enabled NO` while the app is running on it.

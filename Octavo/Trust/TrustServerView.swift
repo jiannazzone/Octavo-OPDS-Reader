@@ -10,6 +10,17 @@ struct TrustQuestion: Identifiable {
     var id: CertificatePin { certificate.pin }
     var changed: Bool { trusted != nil }
 
+    /// Why it's asking, for the person deciding.
+    var message: String {
+        if !changed {
+            return "iOS can’t confirm who runs this server. That’s normal for a server at home with a self-signed certificate. Check that the fingerprint matches the one your server shows."
+        }
+        if certificate.isTrustedBySystem {
+            return "It now has a certificate iOS trusts, as it would after you set one up from a certificate authority. If you didn’t change anything, don’t connect."
+        }
+        return "It isn’t the certificate you trusted. That’s expected if you renewed or replaced it. If you didn’t, someone may be intercepting the connection: don’t connect."
+    }
+
     /// The question a `ServerTransport` refusal asks, if it asks one.
     init?(_ error: any Error, trusted: CertificatePin?) {
         switch error as? NetworkTrustError {
@@ -45,7 +56,7 @@ struct TrustServerView: View {
                         .foregroundStyle(question.changed ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
                     Text(question.changed ? "This server’s certificate changed" : "Trust this server?")
                         .font(.title2.bold())
-                    Text(message)
+                    Text(question.message)
                         .foregroundStyle(.secondary)
                 }
                 .multilineTextAlignment(.center)
@@ -108,19 +119,10 @@ struct TrustServerView: View {
         }
     }
 
-    private var message: String {
-        if !question.changed {
-            return "iOS can’t confirm who runs this server. That’s normal for a server at home with a self-signed certificate. Check that the fingerprint matches the one your server shows."
-        }
-        if certificate.isTrustedBySystem {
-            return "It now has a certificate iOS trusts, as it would after you set one up from a certificate authority. If you didn’t change anything, don’t connect."
-        }
-        return "It isn’t the certificate you trusted. That’s expected if you renewed or replaced it. If you didn’t, someone may be intercepting the connection: don’t connect."
-    }
 }
 
 /// A SHA-256 fingerprint in four rows of eight bytes, easy to compare.
-private struct Fingerprint: View {
+struct Fingerprint: View {
     let sha256: Data
 
     var body: some View {
