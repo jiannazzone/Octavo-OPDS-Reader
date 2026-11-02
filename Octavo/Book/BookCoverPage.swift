@@ -22,10 +22,13 @@ struct BookCoverPage: View {
 
     var body: some View {
         let page = shell.pages.page(for: book)
+        // The shelf's cover, until the full-size one loads: the screen
+        // slides in with a cover on it, not an empty frame.
+        let thumbnail = shell.library.covers.cachedImage(for: SourcedBook(source: sourceID, book: book), size: .thumbnail)
         Group {
             if let pages = spread.pages {
                 HStack(spacing: 0) {
-                    BookCoverArt(page: page)
+                    BookCoverArt(page: page, thumbnail: thumbnail)
                         .frame(width: pages.leftWidth)
                         .ignoresSafeArea(edges: .vertical)
                     Color.clear
@@ -35,7 +38,7 @@ struct BookCoverPage: View {
                 }
             } else {
                 ZStack(alignment: .bottom) {
-                    BookCoverArt(page: page)
+                    BookCoverArt(page: page, thumbnail: thumbnail)
                         .ignoresSafeArea()
                         .onTapGesture {
                             guard page.isExpanded else { return }
@@ -75,20 +78,22 @@ struct BookInfoPage: View {
     }
 }
 
-/// The cover image, filling its space and cropped to it. Before it loads,
-/// a plain background; a book without a cover shows its title.
+/// The cover image, filling its space and cropped to it: the shelf's
+/// small copy until the full one loads, else a plain background. A book
+/// without a cover shows its title from the start.
 struct BookCoverArt: View {
     let page: BookPage
+    var thumbnail: UIImage?
 
     var body: some View {
         Color(.secondarySystemBackground)
             .overlay {
-                if let cover = page.cover {
+                if let cover = page.cover ?? thumbnail {
                     Image(uiImage: cover)
                         .resizable()
                         .scaledToFill()
                         .transition(.opacity)
-                } else if page.coverFinished {
+                } else if page.book.cover == nil || page.coverFinished {
                     BookTitleCover(title: page.current.title, author: page.authorLine)
                 }
             }

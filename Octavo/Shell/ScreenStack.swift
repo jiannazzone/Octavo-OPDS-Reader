@@ -21,6 +21,10 @@ struct ScreenStack<Root: View>: View {
     /// How far a swipe from the leading edge has pulled the top screen.
     @State private var swipe: CGFloat?
 
+    /// Quick out of the gate and settled at 0.32 s. Not a spring: across the
+    /// spread's full width its tail crept for half a second more.
+    private static var slide: Animation { .timingCurve(0.25, 0.8, 0.25, 1, duration: 0.32) }
+
     /// A swipe this far across, or flicked this fast, goes back.
     private static var swipeCommit: CGFloat { 0.35 }
     private static var edgeWidth: CGFloat { 24 }
@@ -32,6 +36,10 @@ struct ScreenStack<Root: View>: View {
                 ForEach(visibleDepths(path), id: \.self) { id in
                     let isTop = id.depth == path.routes.count
                     screen(at: id, in: path)
+                        // Whatever appears on a screen mid-slide (a cover
+                        // that just loaded) moves with it, instead of
+                        // appearing where it will end up.
+                        .geometryGroup()
                         .zIndex(Double(id.depth))
                         .offset(x: isTop ? swipe ?? 0 : 0)
                         .allowsHitTesting(isTop)
@@ -45,7 +53,7 @@ struct ScreenStack<Root: View>: View {
             }
             // A replaced path (a launch argument, closing the reader onto its
             // book) changes at once.
-            .animation(path.lastMove == .replace ? nil : .smooth(duration: 0.35), value: path)
+            .animation(path.lastMove == .replace ? nil : Self.slide, value: path)
             .animation(.easeInOut(duration: 0.3), value: spread)
             .onGeometryChange(for: Spread.self) { Spread($0) } action: { spread = $0 }
             .environment(\.spread, spread)
