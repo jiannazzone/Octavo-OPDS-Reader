@@ -162,7 +162,7 @@ extension ReaderModel {
         bookmarks.setOnPage(Set(zip(list, flags).filter(\.1).map(\.0.id)))
     }
 
-    private func describe(_ cfi: String) async -> BookmarkPlace? {
+    func describe(_ cfi: String) async -> BookmarkPlace? {
         guard let result = try? await page.callJavaScript("return await window.octavo.describe(cfi)", arguments: ["cfi": cfi]) as? [String: Any] else {
             return nil
         }

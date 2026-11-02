@@ -16,6 +16,7 @@ import SwiftUI
 /// empty screen; sign-in errors sit under the fields.
 struct AppShell: View {
     @State private var model = ShellModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -33,7 +34,8 @@ struct AppShell: View {
             if let book = model.reading {
                 ReaderView(
                     book: book, bookmarkSync: model.readingBookmarkSync,
-                    progressSync: model.readingProgressSync, listedPlace: model.readingListedPlace
+                    progressSync: model.readingProgressSync, listedPlace: model.readingListedPlace,
+                    connectionReturns: model.connection.returns
                 ) { model.reading = nil }
                     // Another book is another reader: its own model, hooks
                     // and controls, and the old one closes (flushing its
@@ -50,6 +52,9 @@ struct AppShell: View {
             model.hingeChanged(HingeTransition(from: old, to: new))
         }
         .animation(.default, value: model.reading)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.retryUnsentPlaces() }
+        }
         .environment(model)
         .environment(model.library)
         #if DEBUG

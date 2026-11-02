@@ -104,6 +104,9 @@ final class ReaderModel {
     private(set) var openingPosition: OpeningPosition?
     private(set) var syncStatus: String?
     private(set) var lastPushedCFI: String?
+    /// The server's place, when another reader moved it on while this book
+    /// was open (`checkServerPlace`), until it's taken or left.
+    private(set) var serverPlace: ReaderServerPlace?
 
     /// The book's bookmarks (decisions 17–18).
     let bookmarks: ReaderBookmarks
@@ -119,6 +122,16 @@ final class ReaderModel {
     /// The pull succeeded, so opening at the backend's position means the
     /// iPhone and the backend agree.
     @ObservationIgnored private var pulled = false
+    /// The CFI the server holds as far as this reader knows: pulled to open,
+    /// pushed since, or seen by the last check. Only another is offered.
+    @ObservationIgnored private var serverCFI: String?
+    /// Counts pushes that landed, so a check overtaken by one is dropped.
+    @ObservationIgnored private var pushCount = 0
+    /// `goToServerPlace` is under way: the page it lands on is the server's.
+    @ObservationIgnored private var isJumpingToServer = false
+    /// This page's place went to the pusher while the server's was offered.
+    @ObservationIgnored private var pushedSinceOffer = false
+    @ObservationIgnored private var isCatchingUp = false
     @ObservationIgnored let cfiShape: ReaderMessage.CFIShape
     @ObservationIgnored private var pusher: DebouncedProgressPusher<ContinuousClock>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -485,6 +498,7 @@ final class ReaderModel {
             tocLabel = relocation.tocLabel
             location = relocation.location
             if !isRestoring { moved(to: relocation) }
+            if serverPlace != nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
             onControlsTap?(zone)
@@ -548,6 +562,7 @@ final class ReaderModel {
             let remote = try await Self.withTimeout(Self.pullTimeout) { try await sync.pull() }
             let opening = OpeningPosition.choose(local: local, remote: remote)
             pulled = true
+            serverCFI = remote?.position.cfi
             let waited = FoldReport.milliseconds(since: started)
             syncStatus = "pulled \(remote?.position.cfi ?? "nothing") in \(waited) ms → \(opening.label)"
             return opening
@@ -581,12 +596,24 @@ final class ReaderModel {
             return
         }
         let position = relocation.position(cfiShape)
+        if isJumpingToServer {
+            // As when opening: the server has this place, and pushing the
+            // page's start would move it back a little.
+            isJumpingToServer = false
+            openedCFI = position.cfi
+            hasMoved = false
+            save(position, needsPush: false, syncedAt: .now)
+            return
+        }
         if !hasMoved {
             guard position.cfi != openedCFI else { return }
             hasMoved = true
         }
         save(position, needsPush: sync != nil)
-        if let pusher { Task { await pusher.submit(position) } }
+        if let pusher {
+            if serverPlace != nil { pushedSinceOffer = true }
+            Task { await pusher.submit(position) }
+        }
     }
 
     private func save(_ position: ReadingPosition, needsPush: Bool, syncedAt: Date? = nil) {
@@ -599,6 +626,8 @@ final class ReaderModel {
 
     private func didPush(_ position: ReadingPosition) {
         lastPushedCFI = position.cfi
+        serverCFI = position.cfi
+        pushCount += 1
         syncStatus = "pushed \(Date.now.formatted(date: .omitted, time: .standard))"
         try? store.markPushed(position, forBook: book.id)
     }
@@ -606,6 +635,86 @@ final class ReaderModel {
     private func pushFailed(_ error: any Error) {
         syncStatus = "push failed: \(error.localizedDescription)"
         log.error("Couldn't push progress: \(error)")
+    }
+
+    // MARK: The server's place (Adam, 2026-11-02)
+
+    /// The app came back with the book open: if another reader moved the
+    /// server's place meanwhile, and it isn't on this page, offer it.
+    func checkServerPlace() async {
+        guard let sync, phase == .open, !isRestoring else { return }
+        let pushes = pushCount
+        let remote: SyncedPosition?
+        do {
+            remote = try await Self.withTimeout(Self.pullTimeout) { try await sync.pullLatest() }
+        } catch {
+            log.error("Couldn't check the server's place: \(error)")
+            return
+        }
+        // A push that landed meanwhile may be newer than what the pull saw.
+        guard pushes == pushCount, let remote, let cfi = remote.position.cfi, cfi != serverCFI,
+              let pageStart = relocation?.startCFI ?? relocation?.cfi, phase == .open
+        else { return }
+        let asked = relocationCount
+        let flags = try? await page.callJavaScript("return await window.octavo.onPage(cfis)", arguments: ["cfis": [cfi]]) as? [Bool]
+        guard asked == relocationCount, pushes == pushCount, let onPage = flags?.first else { return }
+        serverCFI = cfi
+        log.debug("server's place \(cfi, privacy: .public) \(onPage ? "is on this page" : "offered")")
+        guard !onPage else { return }
+        let place = await describe(cfi)
+        guard asked == relocationCount else { return }
+        await pusher?.backendMoved()
+        pushedSinceOffer = false
+        serverPlace = ReaderServerPlace(
+            position: remote.position,
+            fraction: remote.position.fraction > 0 ? remote.position.fraction : place?.fraction ?? 0,
+            chapter: place?.chapter,
+            offeredOn: pageStart
+        )
+    }
+
+    /// The app came back, or the connection did: offer the server's place
+    /// if another reader moved it, else send this page's if it didn't go.
+    /// While the capsule shows, the page waits for Go, ✕ or a turn.
+    func catchUp() async {
+        // The app and the connection often come back together. A second
+        // check could find the first one's place already known but not yet
+        // offered, and send this page over it.
+        guard !isCatchingUp else { return }
+        isCatchingUp = true
+        defer { isCatchingUp = false }
+        await checkServerPlace()
+        if serverPlace == nil { await pusher?.flush() }
+    }
+
+    /// Go: to the server's place, which the server keeps.
+    func goToServerPlace() {
+        guard let place = serverPlace, let cfi = place.position.cfi else { return }
+        serverPlace = nil
+        isJumpingToServer = true
+        goTo(cfi: cfi)
+        // A fold or a text change since the offer re-laid out the page and
+        // sent its place; the server's goes back.
+        if pushedSinceOffer, let pusher { Task { await pusher.submit(place.position) } }
+    }
+
+    /// ✕: this page stays, and the server takes it.
+    func keepThisPlace() {
+        guard serverPlace != nil else { return }
+        serverPlace = nil
+        guard let position, let pusher else { return }
+        save(position, needsPush: true)
+        Task { await pusher.submit(position) }
+    }
+
+    /// Reading on from the page it was offered on leaves the server's place
+    /// (the move sent this one). A fold or a text change keeps that page.
+    private func serverPlaceMayBeLeft() async {
+        guard let place = serverPlace else { return }
+        let asked = relocationCount
+        let flags = try? await page.callJavaScript("return await window.octavo.onPage(cfis)", arguments: ["cfis": [place.offeredOn]]) as? [Bool]
+        guard asked == relocationCount, serverPlace == place, flags?.first == false else { return }
+        serverPlace = nil
     }
 
     /// `operation`'s result, or `URLError(.timedOut)` after `timeout`, which

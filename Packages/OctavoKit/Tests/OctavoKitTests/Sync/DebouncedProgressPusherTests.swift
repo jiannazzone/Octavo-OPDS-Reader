@@ -99,6 +99,20 @@ struct DebouncedProgressPusherTests {
         #expect(backend.pushes == [position(1)])
     }
 
+    // Staying on a page after another reader moved the backend sends it again.
+    @Test func sendsThePositionAgainOnceTheBackendMoved() async {
+        let backend = Backend()
+        let pusher = makePusher(backend)
+
+        await pusher.submit(position(1))
+        await pusher.flush()
+        await pusher.backendMoved()
+        await pusher.submit(position(1))
+        await pusher.flush()
+
+        #expect(backend.pushes == [position(1), position(1)])
+    }
+
     @Test func keepsAFailedPositionForTheNextFlush() async {
         let backend = Backend(failures: 1)
         let pusher = makePusher(backend)

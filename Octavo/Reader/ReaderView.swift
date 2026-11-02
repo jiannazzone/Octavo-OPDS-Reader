@@ -16,6 +16,8 @@ struct ReaderView: View {
     /// from the library list for when it can't pull (`ReaderModel.fallback`).
     var progressSync: (any ProgressSync)?
     var listedPlace: SyncedPosition?
+    /// Counts the times the connection came back (`ConnectionMonitor`).
+    var connectionReturns = 0
     let close: () -> Void
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
@@ -24,7 +26,7 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             if let model {
-                ReaderScreen(model: model, close: close)
+                ReaderScreen(model: model, connectionReturns: connectionReturns, close: close)
             } else {
                 Color(.systemBackground)
                     .ignoresSafeArea()
@@ -50,6 +52,7 @@ struct ReaderView: View {
 /// The page, the column's buttons and the progress bar for one open book.
 private struct ReaderScreen: View {
     let model: ReaderModel
+    let connectionReturns: Int
     let close: () -> Void
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
@@ -64,12 +67,13 @@ private struct ReaderScreen: View {
     @State private var panelButtonFrame: CGRect?
     /// How far the keyboard comes up over the reader, for Search's panel.
     @State private var keyboard: Double = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationStack {
-            // The bars take the footer's place: the progress bar, or the
-            // step bar while stepping through search matches.
-            ReaderWebView(model: model, showsFooter: !controls.showsBar && !(model.search.isStepping && panel == nil))
+            // The bars take the footer's place: the progress bar, the step
+            // bar while stepping through search matches, or the server's place.
+            ReaderWebView(model: model, showsFooter: !controls.showsBar && footerBar == nil)
                 .overlay { status }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
@@ -86,19 +90,26 @@ private struct ReaderScreen: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
                 .overlay(alignment: .bottomLeading) {
-                    if model.search.isStepping, panel == nil, !controls.showsBar, model.phase == .open, let geometry = model.geometry {
+                    if let footerBar, let geometry = model.geometry {
                         // Under the page, or the right page of a spread:
                         // nothing spans the hinge (decision 9).
                         let right = Double(geometry.size.width) - geometry.safeArea.right
                         let left = model.layout.columns == 2 ? (model.layout.fold?.upperBound ?? geometry.safeArea.left) : geometry.safeArea.left
-                        searchBar
-                            .frame(width: max(0, right - left))
-                            .padding(.leading, left)
-                            .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        Group {
+                            switch footerBar {
+                            case .search:
+                                searchBar
+                            case .serverPlace(let place):
+                                ReaderServerPlaceBar(place: place, go: model.goToServerPlace, stay: model.keepThisPlace)
+                            }
+                        }
+                        .frame(width: max(0, right - left))
+                        .padding(.leading, left)
+                        .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                .animation(.easeOut(duration: 0.2), value: model.search.isStepping)
+                .animation(.easeOut(duration: 0.2), value: footerBar)
                 .overlay(alignment: .topLeading) {
                     if let panel, model.phase == .open, let geometry = model.geometry {
                         let fold = model.layout.columns == 2 ? model.layout.fold : nil
@@ -151,6 +162,14 @@ private struct ReaderScreen: View {
         }
         .onChange(of: panel) { _, panel in
             if panel == .contents { Task { await model.placeOnScreen() } }
+        }
+        // Another reader may have moved on while the app was away, or a
+        // place may not have gone for want of a connection.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model.catchUp() } }
+        }
+        .onChange(of: connectionReturns) {
+            Task { await model.catchUp() }
         }
         .task {
             // The keyboard's top, as far up the reader as it comes. The
@@ -298,6 +317,18 @@ private struct ReaderScreen: View {
                 backToReading()
             }
         )
+    }
+
+    /// What takes the footer's place while no panel or progress bar is up.
+    private enum FooterBar: Equatable {
+        case search
+        case serverPlace(ReaderServerPlace)
+    }
+
+    private var footerBar: FooterBar? {
+        guard panel == nil, !controls.showsBar, model.phase == .open else { return nil }
+        if model.search.isStepping { return .search }
+        return model.serverPlace.map(FooterBar.serverPlace)
     }
 
     private var searchBar: some View {

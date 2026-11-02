@@ -45,6 +45,12 @@ public actor DebouncedProgressPusher<C: Clock> where C.Duration == Duration {
         }
     }
 
+    /// Another reader moved the backend's position, so it no longer holds
+    /// `lastPushed`: the next position goes even if it's that one again.
+    public func backendMoved() {
+        lastPushed = nil
+    }
+
     /// Pushes the pending position now, and returns once it (and any push
     /// before it) has finished. Call when the book closes.
     public func flush() async {

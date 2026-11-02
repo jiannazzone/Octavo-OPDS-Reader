@@ -39,6 +39,8 @@ final class ShellModel {
     let places: BookPlaces
     /// The Search tab's query and results.
     let search: SearchModel
+    /// When the connection comes back, for places that didn't go.
+    let connection = ConnectionMonitor()
     /// Adding the server, before there is one.
     let setup = SetupModel()
     /// Where the server is kept between launches.
@@ -70,7 +72,10 @@ final class ShellModel {
             search.reset()
             setup.reset()
             for tab in ShellTab.allCases { self[path: tab].replace([]) }
+            // A server to send to, at launch too: places that didn't go.
+            retryUnsentPlaces()
         }
+        connection.onReturn = { [weak self] in self?.retryUnsentPlaces() }
         setup.push = { [weak self] in self?[path: .setup].push(.setup($0)) }
         setup.pop = { [weak self] in self?[path: .setup].pop() }
         setup.finished = { [weak self] in self?.serverAdded($0) }
@@ -237,6 +242,13 @@ final class ShellModel {
         reading = book
     }
 
+    /// Sends the places that didn't reach the server (`BookPlaces.retryUnsent`):
+    /// when a server connects (launch too), when the app comes back and when
+    /// the connection does. The open book's goes through its reader.
+    func retryUnsentPlaces() {
+        Task { await places.retryUnsent(except: reading?.reader.id) }
+    }
+
     /// Where the open book's bookmarks sync (decision 18): BookOrbit's own,
     /// for its books. Anything else keeps them on the iPhone.
     var readingBookmarkSync: (any BookmarkSync)? {
@@ -272,11 +284,11 @@ final class ShellModel {
         let defaults = UserDefaults.standard
         let pullDelay = defaults.double(forKey: "syncPullDelay")
         let failsPushes = defaults.bool(forKey: "syncFailsPushes")
-        if pullDelay > 0 || failsPushes {
-            return DebugProgressSync(wrapping: sync, pullDelay: .seconds(pullDelay), failsPushes: failsPushes)
-        }
-        #endif
+        // Always, so the remote's `offline` can drop pushes mid-run.
+        return DebugProgressSync(wrapping: sync, pullDelay: .seconds(pullDelay), failsPushes: failsPushes)
+        #else
         return sync
+        #endif
     }
 
     /// The Duo as the book:
@@ -388,8 +400,11 @@ final class ShellModel {
 
 #if DEBUG
 /// `-syncPullDelay` and `-syncFailsPushes`: a slow server, or one that
-/// can't be reached to push.
+/// can't be reached to push. The debug remote's `offline` drops pushes
+/// from then on, and its `connectionReturned` stands in for the connection
+/// coming back.
 nonisolated struct DebugProgressSync: ProgressSync {
+    nonisolated(unsafe) static var offline = false
     let wrapping: any ProgressSync
     let pullDelay: Duration
     let failsPushes: Bool
@@ -400,7 +415,7 @@ nonisolated struct DebugProgressSync: ProgressSync {
     }
 
     func push(_ position: ReadingPosition) async throws {
-        if failsPushes { throw URLError(.notConnectedToInternet) }
+        if failsPushes || Self.offline { throw URLError(.notConnectedToInternet) }
         try await wrapping.push(position)
     }
 }

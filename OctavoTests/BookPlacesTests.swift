@@ -167,6 +167,55 @@ struct BookPlacesTests {
         #expect(changed.isSet)
     }
 
+    // MARK: Retrying unsent places (Adam, 2026-11-02: while the app is open)
+
+    // Read offline and closed: the place goes at the next launch, return to
+    // the app or reconnection, though its screen never shows. A failure
+    // leaves it for the next one, and a place that went is forgotten.
+    @Test func anUnsentPlaceGoesWithoutItsScreen() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
+        let places = places(backend)
+        _ = places.readerSync(for: Self.book)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+
+        await backend.set(pushError: URLError(.notConnectedToInternet))
+        await places.retryUnsent()
+        #expect(await backend.pushes.isEmpty)
+        #expect(places.status(of: Self.book) == .notSynced)
+
+        await backend.set(pushError: nil)
+        await places.retryUnsent()
+        #expect(await backend.pushes == [Self.iPhonePlace])
+        #expect(places.status(of: Self.book) == .synced(clock.now))
+
+        let pulls = await backend.pulls
+        await places.retryUnsent()
+        #expect(await backend.pulls == pulls)
+    }
+
+    // The list of unsent places is kept on disk, so a relaunch still sends.
+    @Test func aRelaunchStillSendsIt() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
+        _ = places(backend).readerSync(for: Self.book)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+
+        await places(backend).retryUnsent()
+        #expect(await backend.pushes == [Self.iPhonePlace])
+    }
+
+    // The book in the reader sends its own place (and may be offering the
+    // server's instead).
+    @Test func theOpenBookIsLeftToItsReader() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
+        let places = places(backend)
+        _ = places.readerSync(for: Self.book)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+
+        await places.retryUnsent(except: key)
+        #expect(await backend.pulls == 0)
+        #expect(await backend.pushes.isEmpty)
+    }
+
     // MARK: The reader's pull
 
     // Unfolding soon after the cover appeared opens at once: no second pull.
@@ -184,6 +233,20 @@ struct BookPlacesTests {
         await backend.set(remote: SyncedPosition(position: Self.iPhonePlace))
         #expect(try await reader.pull()?.position == Self.iPhonePlace)
         #expect(await backend.pulls == 2)
+    }
+
+    // An open reader coming back to the app asks the server again, however
+    // recent the last pull (Adam, 2026-11-02).
+    @Test func theReadersCheckNeverReusesAPull() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace))
+        let places = places(backend)
+        let reader = try #require(places.readerSync(for: Self.book))
+        _ = try await reader.pull()
+
+        await backend.set(remote: SyncedPosition(position: Self.iPhonePlace))
+        #expect(try await reader.pullLatest()?.position == Self.iPhonePlace)
+        #expect(await backend.pulls == 2)
+        #expect(places.progress(of: Self.book) == Self.iPhonePlace.fraction)
     }
 
     @Test func aPullAlreadyRunningIsShared() async throws {
@@ -272,8 +335,11 @@ struct BookPlacesTests {
         let id = LibrarySourceID(rawValue: "server")
         var server = LibraryServer(id: id, name: "BookOrbit", detail: "", source: BookOrbitSource(client: client), syncsProgress: true)
         let book = SourcedBook(source: id, book: Self.book.book)
-        #expect(ShellModel.progressSync(for: book, on: server) is BookOrbitProgressSync)
-        #expect((ShellModel.progressSync(for: book, on: server) as? BookOrbitProgressSync)?.fileID == 3)
+        // Debug builds wrap it, for the debug remote's `offline`.
+        let sync = ShellModel.progressSync(for: book, on: server)
+        let bookOrbit = (sync as? DebugProgressSync)?.wrapping ?? sync
+        #expect(bookOrbit is BookOrbitProgressSync)
+        #expect((bookOrbit as? BookOrbitProgressSync)?.fileID == 3)
         // Another library's book.
         #expect(ShellModel.progressSync(for: SourcedBook(source: .files, book: Self.book.book), on: server) == nil)
         // A book without a file the reader opens.
