@@ -29,9 +29,9 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 ## Phase 3: The rest of v1
 
 - [x] **13. Sync you can see.** BookOrbit positions sync in the app (only the debug remote did before). Setup no longer offers "Don't sync" (Adam; the code stays for later). The book's screen, Home and Search show where the book opens, a server percentage without a position included; the place line says when it last synced ("Synced just now", "Not synced yet, will retry"; nothing for books that don't sync). Unfolding opens at once: the server's position is fetched while the cover shows (`docs/notes/sync-in-app.md`).
-- [ ] **14. Settings.** Server, Storage (books on iPhone), About, Remove server.
+- [x] **14. Settings.** The list and the chosen page side by side unfolded (one screen each folded): the server's page (address, account, Synced / Not synced yet / Paused, Sign out and Remove server, each confirmed; Sign out also ends the BookOrbit session), Titles under covers, Books on iPhone (sizes, a sort menu, swipe to remove, Remove all downloads) and About (version, source code, licences). Remove server keeps or removes its books, clears its secrets and unsent places, and opens setup (`docs/notes/settings.md`).
 - [ ] **15. Other ways in.** Import from Files, the bundled sample book, MOBI/AZW3/FB2 check.
-- [ ] **16. Security follow-up.** Confirm whether a server counts as local by its name alone (#9), and fix it if so. From the setup review (2026-11-02, all Low or Info): a Keychain read error at launch builds the server without its pinned certificate (fail closed instead); secrets left by an abandoned setup stay until a reinstall (clear them at launch); in-address secrets other than Kavita's key are saved as typed; the "Not encrypted" note could name the other-network risk (wording is Adam's).
+- [ ] **16. Security follow-up.** Confirm whether a server counts as local by its name alone (#9), and fix it if so. A Keychain error during Remove server leaves that server's secrets (step 14; the launch clean-up below covers it). From the setup review (2026-11-02, all Low or Info): a Keychain read error at launch builds the server without its pinned certificate (fail closed instead); secrets left by an abandoned setup stay until a reinstall (clear them at launch); in-address secrets other than Kavita's key are saved as typed; the "Not encrypted" note could name the other-network risk (wording is Adam's).
 
 ## Phase 4: First impressions
 
@@ -51,7 +51,6 @@ These screens are still the old ones or stand-ins; the step that replaces them i
 
 | You see | Fixed in |
 |---|---|
-| Settings is a stand-in | 14 |
 | Anything in the reader | 9–12 |
 
 Something wrong in a step that's ticked is a bug in that step, fixed before moving on.

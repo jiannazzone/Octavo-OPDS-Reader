@@ -18,6 +18,7 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `opds-source.md` (+ `opds-source/`) | #8 | OPDS 1.2 and 2.0 as a library: why our own parsers, chips, start chip and Home rules, format order, sign-in and the origin rule, Kavita's key in URLs, the four local servers |
 | `network-trust.md` (+ `network-trust/`) | #9 | Plain http only for home and VPN addresses, "Trust this server" and pinning, credentials in the Keychain: threat model, measured iOS 27.1 ATS behaviour (incl. an ATS bypass), decisions, adversarial audit, review checklist |
 | `sync-in-app.md` (+ `sync-in-app/`) | step 13 | Position sync in the app: `BookPlaces` (one rule for every place line, the cover's pull reused by the reader), "Synced …" and "Not synced yet", Don't sync, debug switches, simulator checks in every posture, follow-ups |
+| `settings.md` (+ `settings/`) | step 14 | Settings: the list and its pages folded and unfolded, Sign out (ending the BookOrbit session too) and Remove server (what goes, what stays), Books on iPhone, Licences, simulator checks, follow-ups |
 | `reader-page.md` (+ `reader-page/`) | #17 | The real reader: the page edge to edge with the text kept out of the side column, margins and the hinge gutter, controls and taps, the per-page footer and the scrubber, sideways, the debug remote that replaced the spike's screens for the check tools |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

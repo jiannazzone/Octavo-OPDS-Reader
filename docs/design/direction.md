@@ -43,7 +43,16 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - Library list rows have no chevron: unfolded it sat mid-screen at the left page's edge.
 
 ### Titles under covers (Adam, 2026-11-02)
-- **A Settings switch, off by default:** Settings → Library → Titles under covers puts up to two lines of each book's title beneath its cover, in every grid of books, for covers that don't make the book clear. Kept on the iPhone. It moves into the real Settings in step 14.
+- **A Settings switch, off by default:** Settings → Library → Titles under covers puts up to two lines of each book's title beneath its cover, in every grid of books, for covers that don't make the book clear. Kept on the iPhone. In Settings since step 14.
+
+### Settings (Adam, 2026-11-02; built in step 14)
+- **Unfolded: the list left of the hinge, the chosen page right** (frame 37, kept over "a deeper screen replaces the spread": settings pages are short). It opens with the server's page; a tap on the left changes the right page without a slide. Folded: the list, and a row opens its page.
+- **The list:** Server (name over "address · account"), Library (Titles under covers), Storage (Books on iPhone "12 · 48 MB"), About. **No Reading progress row in the list**; the status is on the server's page.
+- **The server's page** (frame 35): Address, Account, Reading progress, then Sign out and Remove server. Reading progress: Synced; Not synced yet with "N books pending." beneath; Paused with "Sign in again to sync." when signed out, where Sign out becomes Sign in. **An OPDS catalog has no Reading progress row** (Adam's suggestion, as a book's place line shows nothing for it), and no Sign out without a password.
+- **Sign out asks first:** "Sign out of BookOrbit?" / "Your downloaded books stay on this iPhone. Reading progress syncs again once you sign in." · Sign out · Cancel. Then the signed-out banner.
+- **Remove server as frame 36** (decision 24's wording), and without downloads "Remove BookOrbit?" / "You can add it again any time." · Remove · Cancel. Then setup. Kept books aren't listed anywhere until a server is back; they come back downloaded when the same server is added again.
+- **Books on iPhone:** "5 books · 4.4 MB" with a **sort menu** at the header's right (Size, Title, Author, Recently downloaded; remembered, Size first); each book's cover, title, author and size; swipe to remove (the place is kept); Remove all downloads asks first. Empty: "No books on iPhone" / "Books you download show here."
+- **About, flat in the list:** Version "0.1 (1)", Source code ↗ (GitHub in Safari), Licences › (one page, each component with its full text), and "Octavo is free software under the Mozilla Public License 2.0."
 
 ### A book's screen
 - **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, author, place and progress bar, then **Mark finished | Open**; pull it up for the details.
@@ -127,7 +136,7 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
      - **Each step is one screen across the spread** (Adam chose it over list | detail and over one step on the left page): what it is on the left page under the title, what you do on the right. Steps slide in over each other like the app's other screens, with Back in the column; there's no tab column during setup. Folded, one page: the words, the form, then any help (the OPDS address examples).
      - **Where to get a server:** Add your books has a "Don’t have one yet?" card on its left page (under the choices folded), one quiet grouped card with a row each (Adam chose it over a card each and over side-by-side tiles): BookOrbit, opening its GitHub (Adam), and calibre, opening calibre-ebook.com. Generic symbols, not the projects' logos. Rows open in Safari.
      - **Steps:** Add your books (BookOrbit or OPDS catalog) → Sign in to BookOrbit → Home (the Reading progress step, this BookOrbit server or Don't sync, is off for now; see above). OPDS: the address → Connect → the account fields only if the catalog asks → Home. "Trust this server?" comes in between when a certificate needs it.
-     - **Signing in again:** the signed-out banner's Sign in opens a "Sign in again" screen in the same style (the server, the account, a new password), then returns to where you were. Settings' server page is step 14.
+     - **Signing in again:** the signed-out banner's Sign in opens a "Sign in again" screen in the same style (the server, the account, a new password), then returns to where you were. The server's page in Settings has the same Sign in when signed out (step 14).
      - **Not yet:** Import from Files and the sample book (step 15); BookOrbit's single sign-on (Octavo can't do it yet); the reader syncs with BookOrbit from step 13.
    - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
 25. **Plain http and self-signed certificates.**
@@ -139,7 +148,7 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
 ### Empty and error states (approved 2026-10-31)
 
 22. **One pattern:**
-    - **Connection problems** show a banner at the top of the tab: server unreachable ("Can't reach BookOrbit. Showing books on your iPhone." · Retry; the Library switches to On iPhone) and signed out ("BookOrbit signed you out. Reading still works; sync is paused." · Sign in).
+    - **Connection problems** show a banner at the top of the tab: server unreachable ("Can't reach BookOrbit. Showing books on your iPhone." · Retry; the Library switches to On iPhone) and signed out ("Signed out of BookOrbit. Reading still works; sync is paused." · Sign in; worded for both a server's sign-out and Settings' Sign out, Adam 2026-11-02).
     - **Problems with one book** show on the cover's strip, where Open would be: "Couldn't download · Try again"; offline and not downloaded: "Needs a connection to download." (no queueing).
     - **Empty screens** are an invitation with one action ("Nothing in progress · Open Library"; the same for an empty server).
     - **Sign-in errors** appear under the fields ("That username or password didn't work.").
@@ -192,7 +201,7 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 
 ### Settings (approved 2026-10-31)
 
-24. **A lean Settings tab:**
+24. **A lean Settings tab** (redone with Adam on 2026-11-02, under Settings in the library pass above; Settings is a button, not a tab):
     - **Server:** the server (address, account), reading-progress status; its page has Sign out and Remove server.
     - **Storage:** Books on iPhone (count and size), where downloads can be removed.
     - **About:** version, source code and licences.
@@ -231,7 +240,7 @@ The goal for v1: read your server's books well on the Duo.
 | Contents and bookmarks | Designed (frames 12, 40) |
 | Text and theme panel (font, size, spacing, margins, theme, Always show controls) | Designed (frames 10, 11) |
 | Search in book | Designed (frames 13, 41) |
-| Settings tab | Designed (frames 34–37) |
+| Settings | Designed (frames 34–37), built in step 14 |
 | Empty and error states (no server yet, server unreachable, signed out, sign-in failed, download failed, offline) | Designed (frames 21–26, 42; sample-book row on frame 05) |
 
 Import from Files uses the system document picker; no screen of our own.
