@@ -130,4 +130,9 @@ extension FeedModel {
     var isAuthorList: Bool {
         books.isEmpty && !entries.isEmpty && entries.allSatisfy { $0.kind == .author }
     }
+
+    /// Only series: shown as a grid of cover stacks.
+    var isSeriesList: Bool {
+        books.isEmpty && !entries.isEmpty && entries.allSatisfy { $0.kind == .series }
+    }
 }

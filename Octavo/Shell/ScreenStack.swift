@@ -167,11 +167,15 @@ struct ScreenFrame<Content: View>: View {
 /// unfolded.
 struct ShellLink<Label: View>: View {
     let route: ShellRoute
+    /// Off for the Library's lists: unfolded, a row's chevron would sit
+    /// mid-screen at the left page's edge.
+    var showsChevron = true
     @ViewBuilder let label: () -> Label
     @Environment(ShellModel.self) private var shell
 
-    init(_ route: ShellRoute, @ViewBuilder label: @escaping () -> Label) {
+    init(_ route: ShellRoute, showsChevron: Bool = true, @ViewBuilder label: @escaping () -> Label) {
         self.route = route
+        self.showsChevron = showsChevron
         self.label = label
     }
 
@@ -182,9 +186,11 @@ struct ShellLink<Label: View>: View {
             HStack {
                 label()
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.forward")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                if showsChevron {
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .contentShape(.rect)
         }

@@ -32,7 +32,7 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     /// Drawn as the screen's large title. `nil` for a book's screen.
     var title: String? {
         switch self {
-        case .feed(let entry, _): entry.title
+        case .feed(let entry, _): entry.kind == .author ? AuthorIndex.displayName(entry) : entry.title
         case .settings: "Settings"
         case .settingsPage(let name): name
         case .cover: nil

@@ -115,32 +115,41 @@ struct DownloadBadge: View {
 }
 
 /// A row for a list entry: a collection, smart scope or series with three of
-/// its covers (frame 29), an author or an OPDS entry with its count.
+/// its covers (frame 29), an author or an OPDS entry with its count right
+/// after its name. No chevron: unfolded it would sit mid-screen.
 struct EntryRow: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
-        ShellLink(.feed(entry, from: source)) {
+        ShellLink(.feed(entry, from: source), showsChevron: false) {
             HStack(spacing: 12) {
                 if showsCovers {
                     covers
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.kind == .author ? entry.sortName ?? entry.title : entry.title)
-                        .lineLimit(1)
-                    if let detail {
-                        Text(detail)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                if entry.kind == .author {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(AuthorIndex.displayName(entry))
                             .lineLimit(1)
+                        if let detail = entry.listDetail {
+                            Text(detail)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize()
+                        }
                     }
-                }
-                if entry.kind == .author, let count = entry.count {
-                    Spacer(minLength: 8)
-                    Text(count, format: .number)
-                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.title)
+                            .lineLimit(1)
+                        if let detail = entry.listDetail {
+                            Text(detail)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
                 }
             }
         }
@@ -150,23 +159,8 @@ struct EntryRow: View {
         [.collection, .smartCollection, .series].contains(entry.kind)
     }
 
-    /// "42 books", "9 books · smart scope", "Arthur Conan Doyle · 3 books".
-    private var detail: String? {
-        let count = entry.count.map { $0 == 1 ? "1 book" : "\($0) books" }
-        switch entry.kind {
-        case .author: return nil
-        case .smartCollection: return [count, "smart scope"].compactMap(\.self).joined(separator: " · ")
-        case .series: return [entry.subtitle, count].compactMap(\.self).joined(separator: " · ")
-        case .collection: return count
-        case .feed: return entry.subtitle
-        }
-    }
-
-    /// The entry's own covers where the library lists them; otherwise the
-    /// first books of its list, loaded as the row appears
-    /// (`LibraryModel.preview`).
     private var covers: some View {
-        let books = previewBooks
+        let books = entry.previewBooks(from: source, library: library)
         return HStack(spacing: 2) {
             ForEach(0..<3, id: \.self) { index in
                 Group {
@@ -181,26 +175,119 @@ struct EntryRow: View {
                 .frame(width: 22)
             }
         }
-        .task(id: entry.link) {
-            guard entry.previewCovers.isEmpty else { return }
-            await library.preview(entry.link, from: source)?.load()
+        .loadsPreview(of: entry, from: source)
+    }
+}
+
+/// A series (or any list of books) as a small stack of its first covers,
+/// with its name and count under it: the Series list and the shelves of
+/// lists. Opens the entry.
+struct EntryTile: View {
+    let entry: LibraryEntry
+    let source: LibrarySourceID
+    @Environment(LibraryModel.self) private var library
+
+    var body: some View {
+        OpenButton(route: .feed(entry, from: source)) {
+            VStack(alignment: .leading, spacing: 6) {
+                CoverStack(books: entry.previewBooks(from: source, library: library))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(entry.kind == .author ? AuthorIndex.displayName(entry) : entry.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(2)
+                    // The count alone: a tile is too narrow for the
+                    // series' author as well.
+                    if let count = entry.count {
+                        Text(count == 1 ? "1 book" : "\(count) books")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+        .loadsPreview(of: entry, from: source)
+    }
+}
+
+/// Up to three covers, the first in front and the others peeking out
+/// behind it, up and to the right.
+struct CoverStack: View {
+    let books: [SourcedBook]
+    static let step: CGFloat = 5
+
+    var body: some View {
+        let shown = Array(books.prefix(3))
+        ZStack(alignment: .bottomLeading) {
+            if shown.isEmpty {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.quaternary)
+                    .aspectRatio(2 / 3, contentMode: .fit)
+            }
+            ForEach(shown.indices.reversed(), id: \.self) { index in
+                BookCover(book: shown[index], cornerRadius: 3)
+                    .shadow(color: .black.opacity(0.18), radius: 1.5, x: -1)
+                    .offset(x: CGFloat(index) * Self.step, y: -CGFloat(index) * Self.step)
+            }
+        }
+        .padding(.top, 2 * Self.step)
+        .padding(.trailing, 2 * Self.step)
+        .accessibilityHidden(true)
+    }
+}
+
+extension LibraryEntry {
+    /// "42 books", "9 books · smart scope", "Arthur Conan Doyle · 3 books",
+    /// an author's "1 book".
+    var listDetail: String? {
+        let count = count.map { $0 == 1 ? "1 book" : "\($0) books" }
+        switch kind {
+        case .author, .collection: return count
+        case .smartCollection: return [count, "smart scope"].compactMap(\.self).joined(separator: " · ")
+        case .series: return [subtitle, count].compactMap(\.self).joined(separator: " · ")
+        case .feed: return subtitle
         }
     }
 
-    private var previewBooks: [SourcedBook] {
-        if !entry.previewCovers.isEmpty {
-            return entry.previewCovers.prefix(3).enumerated().map { index, cover in
-                SourcedBook(source: source, book: LibraryBook(id: LibraryBookID(rawValue: "\(entry.link.rawValue)#\(index)"),
-                                                              title: "", cover: cover))
+    /// The entry's own covers where the library lists them; otherwise the
+    /// first books of its list, once loaded (`loadsPreview`). A cover the
+    /// server hasn't got shows the entry's name on the front one.
+    @MainActor
+    func previewBooks(from source: LibrarySourceID, library: LibraryModel) -> [SourcedBook] {
+        if !previewCovers.isEmpty {
+            return previewCovers.prefix(3).enumerated().map { index, cover in
+                SourcedBook(source: source, book: LibraryBook(id: LibraryBookID(rawValue: "\(link.rawValue)#\(index)"),
+                                                              title: index == 0 ? title : "", cover: cover))
             }
         }
-        let books = library.preview(entry.link, from: source)?.books.prefix(3) ?? []
+        let books = library.preview(link, from: source)?.books.prefix(3) ?? []
         return books.map { SourcedBook(source: source, book: $0) }
     }
 }
 
-/// Authors A–Z (frame 31): sections by the first letter of the sort name,
-/// with anything that isn't a letter under #.
+extension View {
+    /// Loads the first books of `entry`'s list when the server doesn't list
+    /// its covers.
+    func loadsPreview(of entry: LibraryEntry, from source: LibrarySourceID) -> some View {
+        modifier(PreviewLoader(entry: entry, source: source))
+    }
+}
+
+private struct PreviewLoader: ViewModifier {
+    let entry: LibraryEntry
+    let source: LibrarySourceID
+    @Environment(LibraryModel.self) private var library
+
+    func body(content: Content) -> some View {
+        content.task(id: entry.link) {
+            guard entry.previewCovers.isEmpty else { return }
+            await library.preview(entry.link, from: source)?.load()
+        }
+    }
+}
+
+/// Authors A–Z: names as people write them ("Jane Austen"), filed by last
+/// name ("H. G. Wells" under W), with anything that isn't a letter under #.
 nonisolated enum AuthorIndex {
     struct Section: Identifiable, Equatable {
         var letter: String
@@ -209,14 +296,31 @@ nonisolated enum AuthorIndex {
     }
 
     static func sections(_ entries: [LibraryEntry]) -> [Section] {
-        let grouped = Dictionary(grouping: entries) { letter(of: $0.sortName ?? $0.title) }
+        let grouped = Dictionary(grouping: entries) { letter(of: sortKey($0)) }
         return grouped.keys
             .sorted { a, b in a == "#" ? false : b == "#" ? true : a < b }
             .map { letter in
                 Section(letter: letter, entries: grouped[letter]!.sorted {
-                    ($0.sortName ?? $0.title).localizedStandardCompare($1.sortName ?? $1.title) == .orderedAscending
+                    sortKey($0).localizedStandardCompare(sortKey($1)) == .orderedAscending
                 })
             }
+    }
+
+    /// "Austen, Jane": the server's sort name when it's last name first,
+    /// else made from the name (BookOrbit sends "H. G. Wells" for some).
+    static func sortKey(_ entry: LibraryEntry) -> String {
+        if let sortName = entry.sortName, sortName.contains(",") { return sortName }
+        if entry.title.contains(",") { return entry.title }
+        let words = entry.title.split(separator: " ")
+        guard words.count > 1, let last = words.last else { return entry.title }
+        return "\(last), \(words.dropLast().joined(separator: " "))"
+    }
+
+    /// "Jane Austen", turning a name sent last name first around.
+    static func displayName(_ entry: LibraryEntry) -> String {
+        let parts = entry.title.split(separator: ",", omittingEmptySubsequences: true)
+        guard parts.count == 2 else { return entry.title }
+        return "\(parts[1].trimmingCharacters(in: .whitespaces)) \(parts[0].trimmingCharacters(in: .whitespaces))"
     }
 
     /// "Émile" files under E.

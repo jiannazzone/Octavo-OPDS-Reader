@@ -348,8 +348,21 @@ struct AuthorIndexTests {
     }
 
     @Test func foldsAccentsAndFilesTheRestUnderHash() {
-        let sections = AuthorIndex.sections([Self.author("Émile Zola"), Self.author("50 Cent"), Self.author(nil, "zed")])
+        let sections = AuthorIndex.sections([Self.author("Éluard, Paul"), Self.author(nil, "1984"), Self.author(nil, "zed")])
         #expect(sections.map(\.letter) == ["E", "Z", "#"])
-        #expect(sections.last?.entries.map(\.title) == ["50 Cent"])
+        #expect(sections.last?.entries.map(\.title) == ["1984"])
+    }
+
+    // BookOrbit sends some sort names first name first.
+    @Test func filesByLastNameWhenTheServerDoesnt() {
+        let wells = Self.author("H. G. Wells")
+        #expect(AuthorIndex.sortKey(wells) == "Wells, H. G.")
+        #expect(AuthorIndex.sections([wells, Self.author("Austen, Jane", "Jane Austen")]).map(\.letter) == ["A", "W"])
+    }
+
+    @Test func namesReadFirstNameFirst() {
+        #expect(AuthorIndex.displayName(Self.author(nil, "Austen, Jane")) == "Jane Austen")
+        #expect(AuthorIndex.displayName(Self.author("Austen, Jane", "Jane Austen")) == "Jane Austen")
+        #expect(AuthorIndex.displayName(Self.author(nil, "Plato")) == "Plato")
     }
 }

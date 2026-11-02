@@ -9,7 +9,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] **3. A book's screen.** Folded: the cover with a sheet (title, progress, Mark finished, Open or Download; pull up for details). Unfolded: Cover | Details. Unfolding opens a downloaded book.
 - [x] **4. Downloads.** A check on downloaded covers and a ring while downloading, everywhere covers show; downloads kept where iOS won't clear them; Remove download; nothing downloads in the background.
 - [x] **5. Home.** The book you're reading, large, with your other books in progress beneath (or on the right page).
-- [ ] **6. Series and authors.** Series in reading order, Authors A–Z. *Needs decisions.*
+- [x] **6. Series and authors.** Series as cover stacks, opening in reading order; Authors first name first, filed by last name, with an A–Z strip on long lists.
 - [ ] **7. Search tab.** *Needs decisions.*
 - [ ] **8. Adding your server.** First run, and the server in Settings. *Needs decisions.*
 - [ ] **Library on the Duo:** Adam signs off, then a pull request to `main` (with Adam's OK).
@@ -39,7 +39,6 @@ These screens are still the old ones or stand-ins; the step that replaces them i
 
 | You see | Fixed in |
 |---|---|
-| Series and Authors are plain lists | 6 |
 | Search says "Not designed yet" | 7 |
 | Settings is a stand-in; connecting is a debug switch | 8, 14 |
 | Anything in the reader | 9–12 |

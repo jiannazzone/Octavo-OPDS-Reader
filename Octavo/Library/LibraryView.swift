@@ -68,8 +68,10 @@ struct LibraryContents: View {
 
 /// One section as a shelf: a heading ("All · 7 ›") that opens the section
 /// over the whole spread, over one row of its covers running across both
-/// pages (three folded). A book on the shelf opens its own screen; the
-/// covers of a list of lists (series, authors) open the section.
+/// pages (three folded). A book on the shelf opens its own screen; a list
+/// of lists (series, authors) shows a tile for each that opens it. A list
+/// whose entries list no covers (BookOrbit collections) is just its
+/// heading.
 struct LibraryShelf: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
@@ -120,32 +122,16 @@ struct LibraryShelf: View {
             SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }, maxRows: 1, cell: { book in
                 BookGridCell(book: book)
             })
-        } else if let feed, !listCovers(feed).isEmpty {
-            SpreadGrid(items: listCovers(feed), maxRows: 1, cell: { book in
-                Button {
-                    shell.push(.feed(entry, from: source))
-                } label: {
-                    BookCover(book: book)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHidden(true)
+        } else if let feed, !feed.entries.isEmpty, feed.entries.contains(where: { !$0.previewCovers.isEmpty }) {
+            // A list of lists (series, authors): each a tile that opens it.
+            SpreadGrid(items: feed.entries, maxRows: 1, cell: { entry in
+                EntryTile(entry: entry, source: source)
             })
         } else if feed.map({ $0.state == .idle || $0.state == .loading }) ?? false {
             SpreadGrid(items: (0..<8).map { ShelfPlaceholder(id: $0) }, maxRows: 1, cell: { _ in
                 ShelfPlaceholder.shape
             })
             .accessibilityHidden(true)
-        }
-    }
-
-    /// For a list of lists (series, authors): the first cover each entry
-    /// lists. Empty when the server doesn't list them (BookOrbit
-    /// collections): the shelf is then just its heading.
-    private func listCovers(_ feed: FeedModel) -> [SourcedBook] {
-        feed.entries.compactMap(\.previewCovers.first).enumerated().map { index, cover in
-            SourcedBook(source: source, book: LibraryBook(
-                id: LibraryBookID(rawValue: "\(entry.link.rawValue)#\(index)"), title: "", cover: cover
-            ))
         }
     }
 
@@ -233,6 +219,33 @@ struct FeedContent<Header: View>: View {
     @Environment(\.spread) private var spread
 
     var body: some View {
+        ScrollViewReader { scroller in
+            list
+                .overlay(alignment: .trailing) {
+                    if showsIndex {
+                        LetterIndex(letters: feed.authorSections.map(\.letter)) { letter in
+                            scroller.scrollTo(ListItem.letter(letter).id, anchor: .top)
+                        }
+                    }
+                }
+        }
+        .task(id: ObjectIdentifier(feed)) {
+            await feed.load()
+            // A list flows down one page and on down the next, so it loads
+            // in full; a grid loads page by page as it scrolls.
+            if feed.books.isEmpty, !feed.entries.isEmpty { await feed.loadAll() }
+        }
+        .refreshable { await feed.reload() }
+    }
+
+    /// An A–Z strip once the authors run past a couple of screens.
+    private var showsIndex: Bool {
+        feed.isAuthorList && feed.entries.count >= Self.indexMinimum && feed.authorSections.count > 1
+    }
+
+    static var indexMinimum: Int { 30 }
+
+    private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header()
@@ -245,7 +258,11 @@ struct FeedContent<Header: View>: View {
                     })
                     .accessibilityHidden(true)
                 }
-                if !feed.entries.isEmpty {
+                if feed.isSeriesList {
+                    SpreadGrid(items: feed.entries, cell: { entry in
+                        EntryTile(entry: entry, source: feed.source)
+                    })
+                } else if !feed.entries.isEmpty {
                     SpreadList(items: listItems) { item in
                         listRow(item)
                     }
@@ -262,13 +279,6 @@ struct FeedContent<Header: View>: View {
             }
             .padding(.bottom, 20)
         }
-        .task(id: ObjectIdentifier(feed)) {
-            await feed.load()
-            // A list flows down one page and on down the next, so it loads
-            // in full; a grid loads page by page as it scrolls.
-            if feed.books.isEmpty, !feed.entries.isEmpty { await feed.loadAll() }
-        }
-        .refreshable { await feed.reload() }
     }
 
     private var isEmpty: Bool { feed.books.isEmpty && feed.entries.isEmpty }
@@ -288,6 +298,7 @@ struct FeedContent<Header: View>: View {
                 .padding(.top, 12)
                 .padding(.bottom, 2)
                 .accessibilityAddTraits(.isHeader)
+                .id(item.id)
         case .entry(let entry):
             VStack(spacing: 0) {
                 EntryRow(entry: entry, source: feed.source)
@@ -334,6 +345,55 @@ struct FeedContent<Header: View>: View {
 
     private struct Placeholder: Identifiable {
         var id: Int
+    }
+}
+
+/// The A–Z strip at the trailing edge of a long author list: tap or slide
+/// along it to jump to a letter.
+struct LetterIndex: View {
+    let letters: [String]
+    let jump: (String) -> Void
+    @State private var current: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(letters, id: \.self) { letter in
+                Text(letter)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 18)
+                    .frame(maxHeight: 16)
+            }
+        }
+        .padding(.vertical, 6)
+        .contentShape(.rect)
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in select(at: value.location.y) }
+                .onEnded { _ in current = nil }
+        )
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        .padding(.trailing, 2)
+        .accessibilityElement()
+        .accessibilityLabel("Index")
+        .accessibilityAdjustableAction { direction in
+            let index = current.flatMap(letters.firstIndex) ?? -1
+            let next = direction == .increment ? index + 1 : index - 1
+            guard letters.indices.contains(next) else { return }
+            current = letters[next]
+            jump(letters[next])
+        }
+    }
+
+    @State private var height: CGFloat = 0
+
+    private func select(at y: CGFloat) {
+        guard !letters.isEmpty, height > 12 else { return }
+        let fraction = min(max((y - 6) / (height - 12), 0), 0.999)
+        let letter = letters[Int(fraction * CGFloat(letters.count))]
+        guard letter != current else { return }
+        current = letter
+        jump(letter)
     }
 }
 

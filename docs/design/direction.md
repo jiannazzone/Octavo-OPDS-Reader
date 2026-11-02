@@ -35,6 +35,12 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - Dividers may run across the whole spread, fold included.
 - **Each section fills the whole spread** (a grid of covers across both pages, or a list flowing from the left page onto the right).
 
+### Series and authors (Adam, 2026-11-01)
+- **Series: cover stacks.** The Series list is a grid across both pages; each series is a small stack of its first covers with its name and book count under it. Opening one shows its books numbered in reading order. On the Library page, a shelf of series (or authors) shows the same tiles, each opening that series. Adam was split between this and rows; built as stacks to judge on the device.
+- **Authors: first name first, filed by last name.** "Jane Austen 1 book" under A, "H. G. Wells" under W (made from the name when the server's sort name isn't last name first). The count follows the name; no chevrons.
+- **An A–Z strip** at the trailing edge of the page once an author list reaches 30 names: tap or slide to jump to a letter.
+- Library list rows have no chevron: unfolded it sat mid-screen at the left page's edge.
+
 ### A book's screen
 - **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, author, place and progress bar, then **Mark finished | Open**; pull it up for the details.
 - **Unfolded:** Cover | Details, the cover on the left page and the same details on the right.
@@ -49,7 +55,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Lists and grids appear at once** with blank cover shapes that fill in; no spinners mid-screen. A server that can't be reached says so in place, with Try again.
 
 ### Still to decide in the library pass
-Adding your server (first run and Settings), Search, series in reading order, Authors A–Z.
+Adding your server (first run and Settings), Search.
 
 ## Decisions (2026-10-31, under review)
 
