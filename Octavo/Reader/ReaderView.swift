@@ -45,8 +45,13 @@ private struct ReaderScreen: View {
     let close: () -> Void
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
+    @AppStorage(ReaderAppearance.key) private var appearance = ReaderAppearance()
     @Environment(\.layoutDirection) private var layoutDirection
+    /// The iPhone's own, read outside the reader's: the reader takes its
+    /// theme's.
+    @Environment(\.colorScheme) private var systemColorScheme
     @State private var controls = ReaderControls()
+    @State private var panel: ReaderPanel?
 
     var body: some View {
         NavigationStack {
@@ -58,6 +63,14 @@ private struct ReaderScreen: View {
                             .transition(.opacity)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if panel == .textAndTheme, model.phase == .open, let geometry = model.geometry {
+                        let fold = model.layout.columns == 2 ? model.layout.fold : nil
+                        ReaderPanelFrame(geometry: geometry, fold: fold) {
+                            ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
+                        }
+                    }
+                }
                 .ignoresSafeArea()
                 .accessibilityAction(named: Text(controls.showsBar ? "Hide Controls" : "Show Controls")) {
                     withAnimation { controls.toggle() }
@@ -65,6 +78,10 @@ private struct ReaderScreen: View {
                 .toolbar { buttons }
                 .toolbar(buttonsVisible || showsControlsButton ? .visible : .hidden, for: .navigationBar)
         }
+        // The column's buttons, the footer, the bar and the panel in the
+        // page's colours. Here, not for the window, so `systemColorScheme`
+        // stays the iPhone's.
+        .environment(\.colorScheme, appearance.theme(darkMode: darkMode).isDark ? .dark : .light)
         .ignoresSafeArea()
         // Measured outside the stack, so the reader's own toolbar showing or
         // hiding never moves the text, and outside `ignoresSafeArea`, where
@@ -84,17 +101,30 @@ private struct ReaderScreen: View {
         .onChange(of: margins, initial: true) { _, margins in
             model.margins = margins
         }
-        .onChange(of: controls.coversPage, initial: true) { _, covers in
+        .onChange(of: controls.coversPage || panel != nil, initial: true) { _, covers in
             model.coversPage = covers
         }
+        .onChange(of: appearance, initial: true) { _, appearance in
+            model.appearance = appearance.script(darkMode: darkMode)
+        }
+        .onChange(of: darkMode) { _, darkMode in
+            model.appearance = appearance.script(darkMode: darkMode)
+        }
+
         .task {
             // A binding, not `self`: the model keeps these closures, and
             // capturing the view would keep the model (and its web page)
             // alive after the reader closes.
             let controls = $controls
+            let panel = $panel
             model.onControlsTap = { zone in
                 withAnimation(.easeOut(duration: 0.2)) {
-                    if zone == "dismiss" { controls.wrappedValue.hide() } else { controls.wrappedValue.toggle() }
+                    if zone == "dismiss" {
+                        // A panel closes first; the controls with the next tap.
+                        if panel.wrappedValue != nil { panel.wrappedValue = nil } else { controls.wrappedValue.hide() }
+                    } else {
+                        controls.wrappedValue.toggle()
+                    }
                 }
             }
             model.onBookModeChange = { _ in
@@ -105,6 +135,8 @@ private struct ReaderScreen: View {
         .readerRemote(model)
         #endif
     }
+
+    private var darkMode: Bool { systemColorScheme == .dark }
 
     /// A book that couldn't open keeps Back up, so there's a way out.
     private var buttonsVisible: Bool {
@@ -144,8 +176,12 @@ private struct ReaderScreen: View {
                 Button("Back", systemImage: "chevron.backward", action: close)
                 Button("Contents", systemImage: "list.bullet") {}
                     .disabled(true)
-                Button("Text and Theme", systemImage: "textformat.size") {}
-                    .disabled(true)
+                Button("Text and Theme", systemImage: "textformat.size") {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        controls.hide()
+                        panel = panel == .textAndTheme ? nil : .textAndTheme
+                    }
+                }
                 Button("Search in Book", systemImage: "magnifyingglass") {}
                     .disabled(true)
                 Button("Bookmark", systemImage: "bookmark") {}

@@ -313,6 +313,14 @@ pre {
 }
 `]
 
+// The reader's Text and theme choices (Swift's `ReaderAppearance`): CSS that
+// goes after the book's own, and the colour of the page around the text.
+let appearance = { css: '', background: '' }
+const applyAppearance = () => {
+    view?.renderer.setStyles([BOOK_STYLES[0], BOOK_STYLES[1] + appearance.css])
+    document.documentElement.style.background = appearance.background
+}
+
 // Lays pages out the way Swift's `ReaderLayout` says: column count, gap and
 // text width through foliate's own attributes, and the view's insets, which
 // keep it out of the system's areas (the page itself runs edge to edge) and
@@ -540,7 +548,7 @@ const restore = async (cfi, fraction) => {
     return 'start'
 }
 
-const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined }) => {
+const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined, appearance: initialAppearance = undefined }) => {
     if (view) {
         view.close()
         view.remove()
@@ -565,7 +573,8 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
         if (detail.isScript) detail.allow = false
     })
     view.renderer.setAttribute('flow', 'paginated')
-    view.renderer.setStyles(BOOK_STYLES)
+    if (initialAppearance) appearance = { css: String(initialAppearance.css ?? ''), background: String(initialAppearance.background ?? '') }
+    applyAppearance()
     if (initialLayout !== undefined) layout = initialLayout
     held = null
     // Nothing is rendered yet, so the attributes are all it takes.
@@ -623,6 +632,11 @@ window.octavo = Object.freeze({
     }),
     hold: reported(async function hold_() {
         return hold()
+    }),
+    setAppearance: reported(async function setAppearance(next) {
+        appearance = { css: String(next?.css ?? ''), background: String(next?.background ?? '') }
+        applyAppearance()
+        return true
     }),
     setTapMode: reported(async function setTapMode(mode) {
         tapMode = { dismisses: Boolean(mode?.dismisses) }

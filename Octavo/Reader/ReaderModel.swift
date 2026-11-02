@@ -67,6 +67,10 @@ final class ReaderModel {
     var coversPage = false {
         didSet { if coversPage != oldValue { sendTapMode() } }
     }
+    /// The Text and theme choices, as the bridge applies them (decision 13).
+    var appearance = ReaderAppearance().script(darkMode: false) {
+        didSet { if appearance != oldValue { sendAppearance() } }
+    }
     /// The page's size as the page reports it.
     @ObservationIgnored private var viewport: CGSize?
     /// The system's areas (the side column, or a band along the top when
@@ -75,6 +79,7 @@ final class ReaderModel {
     @ObservationIgnored private var safeArea = ReaderInsets.zero
     @ObservationIgnored private var lastGeometry: ReaderGeometry?
     @ObservationIgnored private var sentTapMode: ReaderTapMode?
+    @ObservationIgnored private var sentAppearance: ReaderAppearanceScript?
 
     /// A tap while the controls cover the page (`coversPage`): `"dismiss"`.
     /// Otherwise taps turn; the column's "…" button brings the controls up.
@@ -222,6 +227,15 @@ final class ReaderModel {
     /// Whether a tap hides the controls instead of turning.
     var tapMode: ReaderTapMode {
         ReaderTapMode(dismisses: coversPage)
+    }
+
+    /// While the book is opening, `open` takes it, and `.opened` sends any
+    /// change since.
+    private func sendAppearance() {
+        let appearance = appearance
+        guard phase == .open, appearance != sentAppearance else { return }
+        sentAppearance = appearance
+        call("return await window.octavo.setAppearance(appearance)", arguments: ["appearance": appearance.scriptArguments])
     }
 
     /// Sent when `coversPage` changes, and once the book has opened (while
@@ -431,6 +445,7 @@ final class ReaderModel {
             didOpen()
             sendLayout()
             sendTapMode()
+            sendAppearance()
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             self.relocation = relocation
@@ -477,8 +492,10 @@ final class ReaderModel {
                 "cfi": saved?.cfi ?? NSNull(),
                 "fraction": saved?.fraction ?? NSNull(),
                 "layout": layout.scriptArguments,
+                "appearance": appearance.scriptArguments,
             ]
             sentLayout = layout
+            sentAppearance = appearance
             do {
                 _ = try await page.callJavaScript("return await window.octavo.open(options)", arguments: ["options": options])
             } catch {
