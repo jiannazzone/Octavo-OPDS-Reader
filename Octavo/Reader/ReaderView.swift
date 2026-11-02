@@ -52,6 +52,8 @@ private struct ReaderScreen: View {
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var controls = ReaderControls()
     @State private var panel: ReaderPanel?
+    /// Where Text and Theme's button is, for its panel to grow out of.
+    @State private var textButtonFrame: CGRect?
 
     var body: some View {
         NavigationStack {
@@ -66,7 +68,7 @@ private struct ReaderScreen: View {
                 .overlay(alignment: .topLeading) {
                     if panel == .textAndTheme, model.phase == .open, let geometry = model.geometry {
                         let fold = model.layout.columns == 2 ? model.layout.fold : nil
-                        ReaderPanelFrame(geometry: geometry, fold: fold) {
+                        ReaderPanelFrame(geometry: geometry, fold: fold, source: textButtonFrame) {
                             ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
                         }
                     }
@@ -120,8 +122,9 @@ private struct ReaderScreen: View {
             model.onControlsTap = { zone in
                 withAnimation(.easeOut(duration: 0.2)) {
                     if zone == "dismiss" {
-                        // A panel closes first; the controls with the next tap.
-                        if panel.wrappedValue != nil { panel.wrappedValue = nil } else { controls.wrappedValue.hide() }
+                        // Back to reading in one tap, panel and all.
+                        panel.wrappedValue = nil
+                        controls.wrappedValue.hide()
                     } else {
                         controls.wrappedValue.toggle()
                     }
@@ -148,9 +151,9 @@ private struct ReaderScreen: View {
     /// controls up, in every posture (Adam, 2026-11-02; a middle tap would
     /// land on the fold half open). The rest of the column turns the page.
     /// With Always show controls it sits after the buttons and brings up
-    /// the bar.
+    /// the bar. Not while a panel is open: the bar would run under it.
     private var showsControlsButton: Bool {
-        model.phase == .open && !controls.showsBar
+        model.phase == .open && !controls.showsBar && panel == nil
     }
 
     @ViewBuilder private var status: some View {
@@ -177,11 +180,21 @@ private struct ReaderScreen: View {
                 Button("Contents", systemImage: "list.bullet") {}
                     .disabled(true)
                 Button("Text and Theme", systemImage: "textformat.size") {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        controls.hide()
-                        panel = panel == .textAndTheme ? nil : .textAndTheme
+                    if panel != .textAndTheme {
+                        textButtonFrame = Self.columnButtonFrame(titled: String(localized: "Text and Theme"))
+                    }
+                    withAnimation(ReaderPanel.animation) {
+                        if panel == .textAndTheme {
+                            panel = nil
+                            controls.panelClosed()
+                        } else {
+                            panel = .textAndTheme
+                            controls.panelOpened()
+                        }
                     }
                 }
+                .tint(panel == .textAndTheme ? .accentColor : nil)
+                .accessibilityAddTraits(panel == .textAndTheme ? .isSelected : [])
                 Button("Search in Book", systemImage: "magnifyingglass") {}
                     .disabled(true)
                 Button("Bookmark", systemImage: "bookmark") {}
@@ -191,6 +204,26 @@ private struct ReaderScreen: View {
                 }
             }
         }
+    }
+
+    /// A column button's frame in the window, for its panel to grow out of.
+    /// SwiftUI measures a toolbar item in its own space (about (-15, -10)
+    /// for Aa), so this asks UIKit for the bar button with that title.
+    private static func columnButtonFrame(titled title: String) -> CGRect? {
+        func bars(in view: UIView) -> [UINavigationBar] {
+            (view as? UINavigationBar).map { [$0] } ?? view.subviews.flatMap(bars)
+        }
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter(\.isKeyWindow)
+        for window in windows {
+            for item in bars(in: window).flatMap({ $0.items ?? [] }) {
+                let buttons = (item.rightBarButtonItems ?? []) + item.trailingItemGroups.flatMap(\.barButtonItems)
+                if let frame = buttons.first(where: { $0.title == title })?.frame(in: window) { return frame }
+            }
+        }
+        return nil
     }
 
     private var showControlsButton: some View {

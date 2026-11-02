@@ -41,6 +41,28 @@ struct ReaderControlsTests {
         #expect(!controls.buttonsVisible)
     }
 
+    // A panel grows out of its button, so the buttons stay; the bar would
+    // run under the panel, so it goes, and comes back when the button
+    // closes the panel.
+    @Test func aPanelKeepsTheButtonsAndHidesTheBarUntilItsButtonClosesIt() {
+        var controls = ReaderControls()
+        controls.show()
+        controls.panelOpened()
+        #expect(controls.buttonsVisible)
+        #expect(!controls.showsBar)
+        controls.panelClosed()
+        #expect(controls.buttonsVisible)
+        #expect(controls.showsBar)
+    }
+
+    @Test func withAlwaysShowControlsThePanelsButtonLeavesTheBarDown() {
+        var controls = ReaderControls(alwaysShowsButtons: true)
+        controls.panelOpened()
+        controls.panelClosed()
+        #expect(controls.buttonsVisible)
+        #expect(!controls.showsBar)
+    }
+
     // MARK: Place
 
     static let location = ReaderMessage.Relocation.Location(current: 290, next: 291, total: 974)

@@ -4,16 +4,27 @@ import SwiftUI
 /// time; a tap on the page closes it.
 enum ReaderPanel: Equatable {
     case textAndTheme
+
+    /// Opening and closing: a little spring as it grows out of its button.
+    static let animation = Animation.spring(duration: 0.35, bounce: 0.15)
 }
 
 /// Where a panel sits (decision 13): over the right page of a spread, the
 /// left page showing each change as it's made; on one page, a sheet along
 /// the bottom. Glass, so the page shows through.
+///
+/// On a spread it grows out of its button in the column and shrinks back
+/// into it; the sheet slides up from the bottom (Adam, 2026-11-02). With
+/// Reduce Motion, both fade.
 struct ReaderPanelFrame<Content: View>: View {
     let geometry: ReaderGeometry
     /// The spread's fold, if there are two pages.
     let fold: ClosedRange<Double>?
+    /// The panel's button, in the window's coordinates (the page's, edge to
+    /// edge).
+    let source: CGRect?
     @ViewBuilder let content: () -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static var inset: Double { 12 }
 
@@ -22,25 +33,46 @@ struct ReaderPanelFrame<Content: View>: View {
         let width = Double(geometry.size.width)
         let height = Double(geometry.size.height)
         let bottom = height - safe.bottom - Self.inset
-        if let fold {
-            let left = fold.upperBound + Self.inset
-            let top = safe.top + Self.inset
-            content()
-                .frame(width: max(0, width - safe.right - Self.inset - left), height: max(0, bottom - top), alignment: .top)
-                .glassEffect(.regular, in: .rect(cornerRadius: 26))
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                .offset(x: left, y: top)
-        } else {
-            // The sheet is only as tall as what it shows, up to its most.
-            let left = safe.left + Self.inset
-            let maxHeight = min(560, (height - safe.top - safe.bottom) * 0.62)
-            content()
-                .frame(width: max(0, width - safe.right - Self.inset - left))
-                .glassEffect(.regular, in: .rect(cornerRadius: 26))
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                .frame(height: max(0, maxHeight), alignment: .bottom)
-                .offset(x: left, y: bottom - maxHeight)
+        // Placed by padding in a layer the size of the page, which is what
+        // the transition scales or moves: it attaches to the outermost view,
+        // so an offset panel would scale about a point measured from the
+        // screen's corner.
+        Group {
+            if let fold {
+                let left = fold.upperBound + Self.inset
+                let top = safe.top + Self.inset
+                content()
+                    .frame(width: max(0, width - safe.right - Self.inset - left), height: max(0, bottom - top), alignment: .top)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 26))
+                    .padding(.leading, left)
+                    .padding(.top, top)
+            } else {
+                // The sheet is only as tall as what it shows, up to its most.
+                let left = safe.left + Self.inset
+                let maxHeight = min(560, (height - safe.top - safe.bottom) * 0.62)
+                content()
+                    .frame(width: max(0, width - safe.right - Self.inset - left))
+                    .glassEffect(.regular, in: .rect(cornerRadius: 26))
+                    .frame(height: max(0, maxHeight), alignment: .bottom)
+                    .padding(.leading, left)
+                    .padding(.top, bottom - maxHeight)
+            }
         }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .transition(transition)
+    }
+
+    /// On a spread, out of the button's centre (or the column's top if it
+    /// wasn't found); on one page, up from the bottom.
+    private var transition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        guard fold != nil else { return .move(edge: .bottom).combined(with: .opacity) }
+        let size = geometry.size
+        var anchor = UnitPoint.topTrailing
+        if let source, size.width > 0, size.height > 0 {
+            anchor = UnitPoint(x: source.midX / size.width, y: source.midY / size.height)
+        }
+        return .scale(scale: 0.05, anchor: anchor).combined(with: .opacity)
     }
 }
 
@@ -147,6 +179,7 @@ struct ReaderTextPanel: View {
                     }
                 }
                 .pickerStyle(.menu)
+                .fixedSize()
             }
             LabeledContent("Line Spacing") {
                 HStack(spacing: 10) {

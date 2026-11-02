@@ -115,4 +115,20 @@ nonisolated struct ReaderControls: Equatable, Sendable {
         showsButtons = false
         showsBar = false
     }
+
+    private var barBeforePanel = false
+
+    /// A panel opening (#18): the buttons stay, the panel growing out of
+    /// its own (Adam, 2026-11-02); the bar goes, as it would run under the
+    /// panel.
+    mutating func panelOpened() {
+        barBeforePanel = showsBar
+        showsButtons = true
+        showsBar = false
+    }
+
+    /// The panel's own button closing it: the controls as they were.
+    mutating func panelClosed() {
+        showsBar = barBeforePanel
+    }
 }
