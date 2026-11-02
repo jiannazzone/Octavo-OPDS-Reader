@@ -233,6 +233,15 @@ final class ShellModel {
         reading = book
     }
 
+    /// Where the open book's bookmarks sync (decision 18): BookOrbit's own,
+    /// for its books. Anything else keeps them on the iPhone.
+    var readingBookmarkSync: (any BookmarkSync)? {
+        guard let book = reading, let readingSource, let source = library.source(for: readingSource) as? BookOrbitSource,
+              let bookID = Int(book.book.id.rawValue)
+        else { return nil }
+        return BookOrbitBookmarkSync(client: source.client, bookID: bookID, fileID: Int(book.file.id.rawValue))
+    }
+
     /// The Duo as the book:
     /// - Unfolding on a book's screen opens the book, if it's on the iPhone.
     ///   If it isn't, the screen stays, as Cover | Details, and nothing

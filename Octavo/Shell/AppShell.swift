@@ -31,7 +31,7 @@ struct AppShell: View {
             }
             .accessibilityHidden(isCovered)
             if let book = model.reading {
-                ReaderView(book: book) { model.reading = nil }
+                ReaderView(book: book, bookmarkSync: model.readingBookmarkSync) { model.reading = nil }
                     // Another book is another reader: its own model, hooks
                     // and controls, and the old one closes (flushing its
                     // position).

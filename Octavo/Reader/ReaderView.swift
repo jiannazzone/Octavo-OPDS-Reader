@@ -10,6 +10,8 @@ import SwiftUI
 /// outer display (`docs/notes/duo-tabbar.md` §6).
 struct ReaderView: View {
     let book: OpenedBook
+    /// Where the book's bookmarks sync, if anywhere.
+    var bookmarkSync: (any BookmarkSync)?
     let close: () -> Void
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
@@ -26,10 +28,11 @@ struct ReaderView: View {
         }
         .task(id: book.reader) {
             guard model?.book != book.reader else { return }
+            let bookmarks = ReaderBookmarks(bookID: book.reader.id, sync: bookmarkSync)
             #if DEBUG
-            model = ReaderModel(book: book.reader, sync: ReaderRemote.sync(for: book), cfiShape: ReaderRemote.cfiShape)
+            model = ReaderModel(book: book.reader, sync: ReaderRemote.sync(for: book), bookmarks: bookmarks, cfiShape: ReaderRemote.cfiShape)
             #else
-            model = ReaderModel(book: book.reader)
+            model = ReaderModel(book: book.reader, bookmarks: bookmarks)
             #endif
         }
         .onDisappear {
@@ -52,8 +55,8 @@ private struct ReaderScreen: View {
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var controls = ReaderControls()
     @State private var panel: ReaderPanel?
-    /// Where Text and Theme's button is, for its panel to grow out of.
-    @State private var textButtonFrame: CGRect?
+    /// Where the open panel's button is, for the panel to grow out of.
+    @State private var panelButtonFrame: CGRect?
 
     var body: some View {
         NavigationStack {
@@ -66,11 +69,26 @@ private struct ReaderScreen: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
-                    if panel == .textAndTheme, model.phase == .open, let geometry = model.geometry {
+                    if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
+                        ReaderRibbon()
+                            .offset(x: geometry.size.width - geometry.safeArea.right - 30)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
+                .overlay(alignment: .topLeading) {
+                    if let panel, model.phase == .open, let geometry = model.geometry {
                         let fold = model.layout.columns == 2 ? model.layout.fold : nil
-                        ReaderPanelFrame(geometry: geometry, fold: fold, source: textButtonFrame) {
-                            ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
+                        ReaderPanelFrame(geometry: geometry, fold: fold, source: panelButtonFrame, fillsSheet: panel == .contents) {
+                            switch panel {
+                            case .textAndTheme:
+                                ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
+                            case .contents:
+                                contentsPanel
+                            }
                         }
+                        // Another panel grows out of its own button.
+                        .id(panel)
                     }
                 }
                 .ignoresSafeArea()
@@ -105,6 +123,9 @@ private struct ReaderScreen: View {
         }
         .onChange(of: controls.coversPage || panel != nil, initial: true) { _, covers in
             model.coversPage = covers
+        }
+        .onChange(of: panel) { _, panel in
+            if panel == .contents { Task { await model.placeOnScreen() } }
         }
         .onChange(of: appearance, initial: true) { _, appearance in
             model.appearance = appearance.script(darkMode: darkMode)
@@ -168,8 +189,8 @@ private struct ReaderScreen: View {
         }
     }
 
-    /// The column's buttons (frame 08). Contents, Text and theme, Search in
-    /// book and Bookmark are greyed out until their panels exist (#18).
+    /// The column's buttons (frame 08). Search in book is greyed out until
+    /// its panel exists (#18).
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
         if showsControlsButton, !buttonsVisible {
             ToolbarItem(placement: .topBarTrailing) { showControlsButton }
@@ -177,32 +198,66 @@ private struct ReaderScreen: View {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if buttonsVisible {
                 Button("Back", systemImage: "chevron.backward", action: close)
-                Button("Contents", systemImage: "list.bullet") {}
-                    .disabled(true)
-                Button("Text and Theme", systemImage: "textformat.size") {
-                    if panel != .textAndTheme {
-                        textButtonFrame = Self.columnButtonFrame(titled: String(localized: "Text and Theme"))
-                    }
-                    withAnimation(ReaderPanel.animation) {
-                        if panel == .textAndTheme {
-                            panel = nil
-                            controls.panelClosed()
-                        } else {
-                            panel = .textAndTheme
-                            controls.panelOpened()
-                        }
-                    }
-                }
-                .tint(panel == .textAndTheme ? .accentColor : nil)
-                .accessibilityAddTraits(panel == .textAndTheme ? .isSelected : [])
+                panelButton(.contents, title: "Contents", systemImage: "list.bullet")
+                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size")
                 Button("Search in Book", systemImage: "magnifyingglass") {}
                     .disabled(true)
-                Button("Bookmark", systemImage: "bookmark") {}
-                    .disabled(true)
+                let bookmarked = model.bookmarks.pageIsBookmarked
+                Button(bookmarked ? "Remove Bookmark" : "Bookmark", systemImage: bookmarked ? "bookmark.fill" : "bookmark") {
+                    model.toggleBookmark()
+                }
+                .tint(bookmarked ? ReaderRibbon.color : nil)
                 if showsControlsButton {
                     showControlsButton
                 }
             }
+        }
+    }
+
+    /// A column button that opens `selected`, lit while it's open. Another
+    /// panel's button switches to its own.
+    private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String) -> some View {
+        Button(String(localized: title), systemImage: systemImage) {
+            if panel != selected {
+                panelButtonFrame = Self.columnButtonFrame(titled: String(localized: title))
+            }
+            withAnimation(ReaderPanel.animation) {
+                if panel == selected {
+                    panel = nil
+                    controls.panelClosed()
+                } else {
+                    if panel == nil { controls.panelOpened() }
+                    panel = selected
+                }
+            }
+        }
+        .tint(panel == selected ? .accentColor : nil)
+        .accessibilityAddTraits(panel == selected ? .isSelected : [])
+    }
+
+    private var contentsPanel: some View {
+        ReaderContentsPanel(
+            rows: model.contentsRows,
+            current: model.currentContentsRow,
+            bookmarks: model.bookmarks.list,
+            page: { [total = model.location?.total] in ReaderModel.page(at: $0, total: total) },
+            goToRow: { row in
+                model.goTo(row)
+                backToReading()
+            },
+            goToBookmark: { bookmark in
+                model.goTo(bookmark)
+                backToReading()
+            },
+            remove: { model.bookmarks.remove($0) }
+        )
+    }
+
+    /// A choice in a panel made: the panel and the controls go.
+    private func backToReading() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            panel = nil
+            controls.hide()
         }
     }
 

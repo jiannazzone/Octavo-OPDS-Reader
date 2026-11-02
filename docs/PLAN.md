@@ -22,7 +22,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [ ] **12. Panels.** Text and theme, Contents and bookmarks, Search in book. *Needs decisions.*
   - [x] Text and theme: themes, text size, font, line spacing, margins, justify, Match Dark Mode, Book-mode shadow and Always show controls, over the right page unfolded and in a sheet folded.
   - [ ] The bundled fonts, Atkinson Hyperlegible and OpenDyslexic (downloading them waits for Adam's OK).
-  - [ ] Contents and bookmarks.
+  - [x] Contents and bookmarks: one panel with a Contents | Bookmarks switch, page numbers that match the footer, a ribbon on bookmarked pages, and BookOrbit books' bookmarks synced with BookOrbit.
   - [ ] Search in book.
 - [ ] **Reading on the Duo:** sign-off, pull request.
 

@@ -350,6 +350,15 @@ public struct BookOrbitProgress: Hashable, Sendable {
     }
 }
 
+/// A bookmark as BookOrbit keeps it (`books/{bookId}/bookmarks`), keyed by
+/// CFI like positions. Its web reader lists `title`.
+public struct BookOrbitBookmark: Decodable, Hashable, Sendable {
+    public var id: Int
+    public var cfi: String
+    public var title: String?
+    public var createdAt: Date?
+}
+
 // MARK: - Wire types
 
 struct LoginResponse: Decodable {
@@ -446,4 +455,11 @@ extension KeyedDecodingContainer {
         let value = lenient(Double.self, key) ?? lenient(String.self, key).flatMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         return value?.isFinite == true ? value : nil
     }
+}
+
+/// `POST books/{bookId}/bookmarks`. v3.6.0 rejects any other field.
+struct AddBookmarkRequest: Encodable {
+    var cfi: String
+    var title: String
+    var bookFileId: Int?
 }

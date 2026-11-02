@@ -120,6 +120,7 @@ const onRelocate = ({ detail }) => {
         blankPage: isBlankPage(detail.range),
         fraction: finiteOrNull(detail.fraction),
         tocLabel: detail.tocItem?.label?.trim() || null,
+        tocHref: detail.tocItem?.href ?? null,
         sectionIndex: detail.section?.current ?? null,
         sectionCount: detail.section?.total ?? null,
         location: detail.location
@@ -241,7 +242,14 @@ const listenForTurns = doc => {
 //   page already, and WebKit breaks anyway, leaving the first page blank.
 // - Inside another, at its very start: the outer box's top margin moves the
 //   inner one a little way down the new page, so WebKit breaks again.
-// Runs once the section has loaded, before foliate lays it out.
+// - After empty spacing (Gutenberg's `<div style="height: 4em">` before each
+//   chapter heading): when the page before is full, the spacing spills onto a
+//   page of its own, and the break then leaves that page blank (even spacing
+//   collapsed to nothing lands there). The break moves up to before the
+//   spacing, which then opens the chapter's page, as the book means it to;
+//   an empty `<a id>` the contents point at moves with it.
+// Runs once the section has loaded, before foliate lays it out. Styles only:
+// the DOM, and so every CFI, stays as the book has it.
 const FORCED_BREAKS = new Set(['page', 'column', 'left', 'right', 'recto', 'verso', 'always'])
 const collapseBlankPageBreaks = doc => {
     const style = el => doc.defaultView?.getComputedStyle(el)
@@ -259,13 +267,48 @@ const collapseBlankPageBreaks = doc => {
         el.style.setProperty('break-before', 'auto', 'important')
         el.style.setProperty('page-break-before', 'auto', 'important')
     }
+    // The section's first content, all the way down: a page starts there
+    // already.
+    const sectionStart = new Set()
     for (let el = doc.body && firstContent(doc.body); el?.nodeType === Node.ELEMENT_NODE; el = firstContent(el)) {
+        sectionStart.add(el)
         if (forced(el)) unbreak(el)
     }
+    // Nothing to see: no text, and nothing drawn (a rule or a picture is
+    // something).
+    const VISIBLE = 'img, svg, video, audio, canvas, iframe, object, embed, math, hr, table'
+    const isSpacing = el => !el.textContent.trim() && !el.matches(VISIBLE) && !el.querySelector(VISIBLE)
+    // The first of the spacing just before `el`: its empty previous
+    // siblings, and its parent's while it's the parent's first content.
+    const spacingBefore = el => {
+        let first = null
+        for (let box = el; box && box !== doc.body; box = box.parentElement) {
+            let prev = box.previousElementSibling
+            for (; prev && isSpacing(prev); prev = prev.previousElementSibling) first = prev
+            if (prev || firstContent(box.parentElement) !== box) break
+        }
+        return first
+    }
     // Each breaking box once, with its own first content: linear in the
-    // section's size.
+    // section's size, give or take the spacing walked over.
     for (const parent of doc.body?.querySelectorAll('*') ?? []) {
         if (!forced(parent)) continue
+        const spacing = spacingBefore(parent)
+        if (spacing) {
+            // The break as the page has it (foliate's columns make a page
+            // break a column break).
+            const value = style(parent)?.breakBefore
+            unbreak(parent)
+            if (!sectionStart.has(spacing)) {
+                // `page-break-before` first: it sets `break-before` too, and
+                // inside columns WebKit only honours a column break.
+                spacing.style.setProperty('page-break-before', 'always', 'important')
+                spacing.style.setProperty('break-before', FORCED_BREAKS.has(value) ? value : 'page', 'important')
+                // An empty box (`<p><a id></a></p>`) collapses to nothing,
+                // and WebKit ignores a break before it.
+                spacing.style.setProperty('min-height', '1px', 'important')
+            }
+        }
         const first = firstContent(parent)
         if (first?.nodeType === Node.ELEMENT_NODE && forced(first)) unbreak(first)
     }
@@ -511,11 +554,12 @@ const anchorToPage = async () => {
 
 // The table of contents in reading order, each entry with where its section
 // starts in the book (0...1), for naming the chapter at any point of the
-// progress bar. Entries whose target doesn't resolve are left out.
+// progress bar, and its href and depth for the Contents panel. Entries whose
+// target doesn't resolve are left out.
 const tocFractions = () => {
     const fractions = view.getSectionFractions?.() ?? []
     const entries = []
-    const walk = items => {
+    const walk = (items, depth) => {
         for (const item of items ?? []) {
             const label = plainText(item.label)?.trim()
             let index = null
@@ -524,13 +568,193 @@ const tocFractions = () => {
             } catch {
                 index = null
             }
-            if (label && Number.isInteger(index)) entries.push({ label, fraction: finiteOrNull(fractions[index]) })
-            walk(item.subitems)
+            if (label && Number.isInteger(index)) {
+                entries.push({ label, fraction: finiteOrNull(fractions[index]), href: item.href, depth })
+            }
+            walk(item.subitems, depth + 1)
         }
     }
-    walk(view.book.toc)
+    walk(view.book.toc, 0)
     return entries
 }
+
+// Whether `value` is a Range. Not `instanceof`: a section on screen lives in
+// its own frame, whose Range isn't this window's.
+const isRange = value => Boolean(value && typeof value === 'object' && 'startContainer' in value && 'collapsed' in value)
+
+// A Range for whatever a navigation anchor gives (a Range, or a node).
+const toRange = (doc, found) => {
+    if (isRange(found)) return found
+    const range = doc.createRange()
+    range.selectNodeContents(found)
+    return range
+}
+
+// The section on screen, if `index` is it.
+const loadedDoc = index => view?.renderer?.getContents?.()?.find(content => content.index === index)?.doc ?? null
+
+// Where a point falls in the section on screen, by the page it's on in the
+// current layout: the footer's own count (foliate's paginator places a rect
+// on page floor(left / size) + 1, and reports (page - 1) / (pages - 2)).
+// `null` for layouts it doesn't map this way (scrolled, vertical,
+// right-to-left), which then fall back to counting characters.
+const layoutFraction = range => {
+    const renderer = view.renderer
+    if (renderer.scrolled || view.book.dir === 'rtl' || renderer.hasAttribute?.('vertical')) return null
+    const { pages, size } = renderer
+    if (!(pages > 2) || !(size > 0)) return null
+    const rect = range.getClientRects()[0] ?? range.getBoundingClientRect()
+    if (!rect) return null
+    return Math.min(Math.max(Math.floor(rect.left / size) / (pages - 2), 0), 1)
+}
+
+// Where a point falls in its section by characters: a section that isn't
+// laid out has no pages to count.
+const characterFraction = (doc, range) => {
+    const body = doc.body ?? doc.documentElement
+    const before = doc.createRange()
+    before.setStart(body, 0)
+    before.setEnd(range.startContainer, range.startOffset)
+    const length = (body.textContent ?? '').length
+    return length > 0 ? Math.min(before.toString().length / length, 1) : 0
+}
+
+// A section's place in the book: its start, plus `within` of its share.
+const bookFraction = (index, within) => {
+    const fractions = view.getSectionFractions()
+    const start = fractions[index] ?? 0
+    const end = fractions[index + 1] ?? 1
+    return finiteOrNull(Math.min(Math.max(start + within * (end - start), 0), 1))
+}
+
+// Where each contents entry starts. Many books (Project Gutenberg's among
+// them) put several chapters in one section, which alone would give them all
+// the section's start. Entries in the section on screen are placed by its
+// layout, so they match the footer; the rest by characters, each section
+// read once and counted in one pass (`parse`; without it they're left as
+// they are).
+const refineContents = async (entries, parse = true) => {
+    const v = requireView()
+    const bySection = new Map()
+    entries.forEach((entry, i) => {
+        let resolved = null
+        try {
+            resolved = entry.href ? v.resolveNavigation(entry.href) : null
+        } catch {
+            resolved = null
+        }
+        if (!Number.isInteger(resolved?.index) || typeof resolved.anchor !== 'function') return
+        if (!bySection.has(resolved.index)) bySection.set(resolved.index, [])
+        bySection.get(resolved.index).push([i, resolved.anchor])
+    })
+    const refined = entries.map(entry => ({ ...entry }))
+    for (const [index, items] of bySection) {
+        const loaded = loadedDoc(index)
+        if (loaded) {
+            for (const [i, anchor] of items) {
+                try {
+                    const within = layoutFraction(toRange(loaded, anchor(loaded))) ?? characterFraction(loaded, toRange(loaded, anchor(loaded)))
+                    refined[i].fraction = bookFraction(index, within)
+                } catch {
+                    // Left where it was.
+                }
+            }
+            continue
+        }
+        if (!parse) continue
+        let doc
+        try {
+            doc = await v.book.sections[index].createDocument()
+        } catch {
+            continue
+        }
+        const body = doc.body ?? doc.documentElement
+        const targets = new Map()
+        for (const [i, anchor] of items) {
+            let node = null
+            try {
+                node = anchor(doc)
+            } catch {
+                node = null
+            }
+            if (isRange(node)) node = node.startContainer
+            if (!node) continue
+            if (!targets.has(node)) targets.set(node, [])
+            targets.get(node).push(i)
+        }
+        const offsets = new Map()
+        let count = 0
+        const walker = doc.createTreeWalker(body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT)
+        for (let node = walker.currentNode; node; node = walker.nextNode()) {
+            if (targets.has(node)) offsets.set(node, count)
+            if (node.nodeType === Node.TEXT_NODE) count += node.length
+        }
+        if (count === 0) continue
+        for (const [node, list] of targets) {
+            const offset = offsets.get(node)
+            if (offset === undefined) continue
+            for (const i of list) refined[i].fraction = bookFraction(index, offset / count)
+        }
+    }
+    return refined
+}
+
+// Which of `cfis` fall on the visible page (both pages of a spread), through
+// foliate's own CFI ordering: from the page's start up to, not including, the
+// point where the next page begins.
+const onPage = cfis => {
+    const current = requireView().lastLocation?.cfi
+    const list = Array.isArray(cfis) ? cfis : []
+    if (!current) return list.map(() => false)
+    const start = CFI.collapse(current)
+    const end = CFI.collapse(current, true)
+    return list.map(cfi => {
+        try {
+            const point = CFI.collapse(String(cfi))
+            return CFI.compare(start, point) <= 0 && CFI.compare(point, end) < 0
+        } catch {
+            return false
+        }
+    })
+}
+
+// What a bookmark shows in the Contents panel: where it falls in the book
+// (0...1, placed like the contents), its chapter, and the words it starts
+// at. A section that isn't on screen is read on its own (scripts never run
+// in a parsed document), so this works for any page.
+const describePlace = async cfi => {
+    const v = requireView()
+    const { index, anchor } = v.resolveCFI(String(cfi))
+    const loaded = loadedDoc(index)
+    const doc = loaded ?? await v.book.sections[index].createDocument()
+    const range = toRange(doc, anchor(doc))
+    const within = (loaded ? layoutFraction(range) : null) ?? characterFraction(doc, range)
+    const body = doc.body ?? doc.documentElement
+    const after = doc.createRange()
+    after.setStart(range.startContainer, range.startOffset)
+    after.setEnd(body, body.childNodes.length)
+    const excerpt = after.toString().replace(/\s+/g, ' ').trim().slice(0, 160)
+    const tocItem = await v.getTOCItemOf(String(cfi))
+    return {
+        fraction: bookFraction(index, within),
+        chapter: plainText(tocItem?.label)?.trim() || null,
+        excerpt: excerpt || null,
+    }
+}
+
+// Bookmarks in the section on screen, placed by its layout like the footer
+// (`null` for the rest, which keep their place).
+const placeOnScreen = cfis => (Array.isArray(cfis) ? cfis : []).map(cfi => {
+    try {
+        const { index, anchor } = requireView().resolveCFI(String(cfi))
+        const doc = loadedDoc(index)
+        if (!doc) return null
+        const within = layoutFraction(toRange(doc, anchor(doc)))
+        return within === null ? null : bookFraction(index, within)
+    } catch {
+        return null
+    }
+})
 
 // Try the CFI first, then the fraction, then the start of the book.
 // Fixed-layout books go by fraction first, like BookOrbit does.
@@ -589,6 +813,9 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
         toc: tocFractions(),
     }
     post('opened', result)
+    refineContents(result.toc)
+        .then(toc => post('contents', { toc }))
+        .catch(e => post('error', { phase: 'contents', ...describe(e) }))
     return result
 }
 
@@ -647,6 +874,20 @@ window.octavo = Object.freeze({
     }),
     locate: reported(async function locate_(cfi) {
         return locate(cfi)
+    }),
+    onPage: reported(async function onPage_(cfis) {
+        return onPage(cfis)
+    }),
+    describe: reported(async function describe_(cfi) {
+        return describePlace(cfi)
+    }),
+    // The contents and bookmarks placed again in the current layout, for the
+    // Contents panel's page numbers.
+    contentsOnScreen: reported(async function contentsOnScreen(entries) {
+        return refineContents(Array.isArray(entries) ? entries : [], false)
+    }),
+    bookmarksOnScreen: reported(async function bookmarksOnScreen(cfis) {
+        return placeOnScreen(cfis)
     }),
     // The text of the visible page, whitespace collapsed, for debugging and
     // for checking positions against another reader.

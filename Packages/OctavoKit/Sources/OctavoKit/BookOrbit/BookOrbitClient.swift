@@ -399,6 +399,35 @@ public actor BookOrbitClient {
         _ = try await send(request)
     }
 
+    // MARK: - Bookmarks
+
+    /// `GET books/{bookId}/bookmarks`.
+    public func bookmarks(bookID: Int) async throws -> [BookOrbitBookmark] {
+        try await get("books/\(bookID)/bookmarks", as: [BookOrbitBookmark].self)
+    }
+
+    /// `POST books/{bookId}/bookmarks {cfi, title, bookFileId}`. The server
+    /// takes no client ID, so a retry after a lost answer adds a second one.
+    public func addBookmark(cfi: String, title: String, bookID: Int, fileID: Int?) async throws -> BookOrbitBookmark {
+        let body = AddBookmarkRequest(cfi: cfi, title: String(title.prefix(Self.bookmarkTitleLimit)), bookFileId: fileID)
+        return try decode(BookOrbitBookmark.self, from: try await send(jsonRequest("books/\(bookID)/bookmarks", method: "POST", body: body)))
+    }
+
+    /// `DELETE books/{bookId}/bookmarks/{id}`. One that's already gone (404)
+    /// counts as removed.
+    public func deleteBookmark(id: Int, bookID: Int) async throws {
+        var request = URLRequest(url: apiURL("books/\(bookID)/bookmarks/\(id)"))
+        request.httpMethod = "DELETE"
+        do {
+            _ = try await send(request)
+        } catch BookOrbitError.http(status: 404, _) {
+            return
+        }
+    }
+
+    /// The server's limit on a bookmark's title (v3.6.0).
+    static let bookmarkTitleLimit = 500
+
     // MARK: - Read status
 
     /// `PATCH books/{id}/status {status}`, one of `BookOrbitBook.readStatus`'s

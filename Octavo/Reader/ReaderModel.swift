@@ -104,6 +104,9 @@ final class ReaderModel {
     private(set) var syncStatus: String?
     private(set) var lastPushedCFI: String?
 
+    /// The book's bookmarks (decisions 17–18).
+    let bookmarks: ReaderBookmarks
+
     @ObservationIgnored private let store: ReadingPositionStore
     @ObservationIgnored private let sync: (any ProgressSync)?
     @ObservationIgnored let cfiShape: ReaderMessage.CFIShape
@@ -126,12 +129,14 @@ final class ReaderModel {
         book: ReaderBook,
         store: ReadingPositionStore = ReadingPositionStore(),
         sync: (any ProgressSync)? = nil,
+        bookmarks: ReaderBookmarks? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
         pushDelay: Duration = .seconds(2)
     ) {
         self.book = book
         self.store = store
         self.sync = sync
+        self.bookmarks = bookmarks ?? ReaderBookmarks(bookID: book.id)
         self.cfiShape = cfiShape
 
         var configuration = WebPage.Configuration()
@@ -170,6 +175,8 @@ final class ReaderModel {
     func next() { call("return await window.octavo.next()") }
     func previous() { call("return await window.octavo.prev()") }
     func goTo(cfi: String) { call("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi]) }
+    /// A CFI or an href from the contents.
+    func goTo(target: String) { call("return await window.octavo.goTo(target)", arguments: ["target": target]) }
     func goTo(fraction: Double) { call("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": fraction]) }
 
     /// The hinge changed. `angle` is in degrees. The system repeats
@@ -416,6 +423,12 @@ final class ReaderModel {
         }
     }
 
+    /// The contents with each entry placed again (`bridge.js`
+    /// `refineContents`).
+    func contentsPlaced(_ entries: [ReaderMessage.TOCEntry]) {
+        if entries != toc { toc = entries }
+    }
+
     // MARK: Messages
 
     func receive(_ body: Any) {
@@ -446,6 +459,9 @@ final class ReaderModel {
             sendLayout()
             sendTapMode()
             sendAppearance()
+            Task { await refreshBookmarks() }
+        case .contents(let entries):
+            contentsPlaced(entries)
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             self.relocation = relocation
@@ -454,6 +470,7 @@ final class ReaderModel {
             tocLabel = relocation.tocLabel
             location = relocation.location
             if !isRestoring { moved(to: relocation) }
+            Task { await updateBookmarkedPage() }
         case .tap(let zone):
             onControlsTap?(zone)
         case .viewport(let width, let height):

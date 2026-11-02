@@ -11,6 +11,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     case ready
     /// A book finished opening and has been moved to its restored position.
     case opened(Opened)
+    /// The contents again, each entry placed to the character (sent after
+    /// `opened`, which places them by section).
+    case contents([TOCEntry])
     /// The visible page changed.
     case relocate(Relocation)
     /// The user tapped while the controls cover the page (`"dismiss"`). See
@@ -42,6 +45,10 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var label: String
         /// Where the entry's section starts, 0...1 of the book.
         var fraction: Double?
+        /// Where the entry goes. `nil` from an older bridge.
+        var href: String?
+        /// How far it's nested, from 0.
+        var depth: Int?
     }
 
     nonisolated struct Relocation: Codable, Equatable, Sendable {
@@ -67,6 +74,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         /// couldn't compute one (JSON has no NaN).
         var fraction: Double?
         var tocLabel: String?
+        /// The contents entry the page is in (`TOCEntry.href`).
+        var tocHref: String?
         var sectionIndex: Int?
         var sectionCount: Int?
         var location: Location?
@@ -117,7 +126,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href, width, height
+        case type, zone, level, message, href, width, height, toc
     }
 
     init(from decoder: any Decoder) throws {
@@ -130,6 +139,8 @@ nonisolated extension ReaderMessage: Decodable {
             self = .opened(try Opened(from: decoder))
         case "relocate":
             self = .relocate(try Relocation(from: decoder))
+        case "contents":
+            self = .contents(try container.decode([TOCEntry].self, forKey: .toc))
         case "tap":
             self = .tap(zone: try container.decodeIfPresent(String.self, forKey: .zone) ?? "middle")
         case "viewport":
