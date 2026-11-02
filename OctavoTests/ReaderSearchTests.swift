@@ -43,7 +43,24 @@ struct ReaderSearchTests {
         search.receive(.init(token: token, matches: [match(nil), match("3."), match("3."), match("4."), match("3.")], done: true, truncated: false))
         let groups = search.groups
         #expect(groups.map(\.chapter) == [nil, "3.", "4.", "3."])
-        #expect(groups.map(\.matches) == [0..<1, 1..<3, 3..<4, 4..<5])
+        #expect(groups.map { $0.items.map(\.index) } == [[0], [1, 2], [3], [4]])
+    }
+
+    // The crash Adam hit (2026-11-02): a second search emptied the matches
+    // while rows from the first were still being drawn, and they looked
+    // their match up by index. Rows now hold their match, and a new search's
+    // rows have new IDs.
+    @Test func rowsKeepTheirMatchAndANewSearchGetsNewRows() {
+        let search = ReaderSearch()
+        let first = search.begin("eat")
+        search.receive(.init(token: first, matches: [match("I."), match("II.")], done: true, truncated: false))
+        let old = search.groups.flatMap(\.items)
+
+        let second = search.begin("scientific")
+        #expect(search.groups.isEmpty)
+        #expect(old.map(\.match.match) == ["whale", "whale"])
+        search.receive(.init(token: second, matches: [match("I.")], done: true, truncated: false))
+        #expect(Set(search.groups.flatMap(\.items).map(\.id)).isDisjoint(with: old.map(\.id)))
     }
 
     @Test func steppingStopsAtEachEnd() {

@@ -88,9 +88,9 @@ struct ReaderSearchPanel: View {
         List {
             ForEach(search.groups) { group in
                 Section {
-                    ForEach(group.matches, id: \.self) { index in
-                        row(index)
-                            .id(index)
+                    ForEach(group.items) { item in
+                        row(item)
+                            .id(item.index)
                     }
                 } header: {
                     if let chapter = group.chapter {
@@ -109,11 +109,11 @@ struct ReaderSearchPanel: View {
         .scrollDismissesKeyboard(.immediately)
     }
 
-    private func row(_ index: Int) -> some View {
-        let match = search.matches[index]
+    private func row(_ item: ReaderSearch.Item) -> some View {
+        let match = item.match
         return Button {
             focused = false
-            choose(index)
+            choose(item.index)
         } label: {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(match.pre)\(Text(match.match).bold().foregroundStyle(.tint))\(match.post)")
@@ -130,7 +130,7 @@ struct ReaderSearchPanel: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .listRowBackground(Rectangle().fill(index == search.current ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.clear)))
+        .listRowBackground(Rectangle().fill(item.index == search.current ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.clear)))
         .listRowInsets(EdgeInsets(top: 8, leading: 18, bottom: 8, trailing: 18))
     }
 }

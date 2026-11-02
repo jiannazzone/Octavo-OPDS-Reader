@@ -20,21 +20,34 @@ final class ReaderSearch {
     /// Tags a search's results; a newer search ignores an older one's.
     private(set) var token = 0
 
+    /// A match in the list. It carries the match itself, so a row drawn
+    /// while a newer search replaces the matches never looks one up that's
+    /// gone; the token in its ID keeps one search's rows from being taken
+    /// for another's.
+    struct Item: Identifiable, Equatable {
+        let id: String
+        /// Its place in `matches`, for stepping.
+        let index: Int
+        let match: Match
+    }
+
     /// A section of the results: matches under one contents entry.
     struct Group: Identifiable, Equatable {
-        let id: Int
+        let id: String
         let chapter: String?
-        /// Indexes into `matches`.
-        let matches: Range<Int>
+        let items: [Item]
     }
 
     /// Consecutive matches under the same chapter, in the book's order.
     var groups: [Group] {
         var groups: [Group] = []
-        var start = 0
-        for index in matches.indices where index == matches.count - 1 || matches[index + 1].chapter != matches[index].chapter {
-            groups.append(Group(id: start, chapter: matches[start].chapter, matches: start..<(index + 1)))
-            start = index + 1
+        var items: [Item] = []
+        for (index, match) in matches.enumerated() {
+            items.append(Item(id: "\(token)-\(index)", index: index, match: match))
+            if index == matches.count - 1 || matches[index + 1].chapter != match.chapter {
+                groups.append(Group(id: "\(token)-\(items[0].index)", chapter: match.chapter, items: items))
+                items = []
+            }
         }
         return groups
     }
