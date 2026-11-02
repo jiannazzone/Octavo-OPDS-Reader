@@ -53,6 +53,22 @@ struct ReadingPositionStoreTests {
         #expect(store.position(forBook: "a.epub") == second)
     }
 
+    // "Synced 2 minutes ago" is the last push, kept as the reader moves on.
+    @Test func keepsTheLastSyncAsThePositionMoves() throws {
+        let first = ReadingPositionFixture.prideAndPrejudice
+        let second = ReadingPosition(cfi: "epubcfi(/6/8!/4/2/1:0)", fraction: 0.05)
+        let pushed = Date(timeIntervalSince1970: 1_793_620_800)
+        try store.save(first, forBook: "a.epub", needsPush: true)
+        #expect(store.progress(forBook: "a.epub")?.syncedAt == nil)
+
+        try store.markPushed(first, forBook: "a.epub", at: pushed)
+        #expect(store.progress(forBook: "a.epub")?.syncedAt == pushed)
+
+        try store.save(second, forBook: "a.epub", needsPush: true)
+        #expect(store.progress(forBook: "a.epub")?.syncedAt == pushed)
+        #expect(store.progress(forBook: "a.epub")?.needsPush == true)
+    }
+
     @Test func removesAPosition() throws {
         try store.save(ReadingPositionFixture.prideAndPrejudice, forBook: "a.epub")
         store.removePosition(forBook: "a.epub")

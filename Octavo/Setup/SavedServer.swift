@@ -21,9 +21,18 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
     /// How an OPDS catalog asked for its password, recorded when it was
     /// added so a later answer can't ask for a weaker one.
     var authScheme: HTTPAuthScheme?
-    /// Reading progress syncs with this BookOrbit server (decision 6). The
-    /// reader follows it from step 13.
+    /// Reading progress syncs with this BookOrbit server (decision 6). Off,
+    /// the iPhone keeps its own place and ignores the server's. Only counts
+    /// while setup offers the choice (`offersSyncChoice`).
     var syncsProgress = false
+
+    /// Setup doesn't offer "Don't sync" for now (Adam, 2026-11-02): it skips
+    /// the Reading progress step and every BookOrbit server syncs, whatever
+    /// an earlier setup saved. Set to bring the step and the choice back.
+    static let offersSyncChoice = false
+
+    /// Whether this server's reading progress syncs.
+    var progressSyncs: Bool { syncsProgress || !Self.offersSyncChoice }
 
     /// A new server's ID, before anything is stored under it.
     static func newID() -> LibrarySourceID {
@@ -46,8 +55,9 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
             guard let url = URL(string: address) else { return nil }
             let client = Self.bookOrbitClient(id: id, url: url)
             return LibraryServer(
-                id: id, name: name, detail: detail, source: BookOrbitSource(client: client),
-                previewSource: BookOrbitSource(client: client, pageSize: 3)
+                id: id, name: name, detail: detail, source: BookOrbitSource(client: client, includesProgress: progressSyncs),
+                previewSource: BookOrbitSource(client: client, pageSize: 3, includesProgress: progressSyncs),
+                syncsProgress: progressSyncs
             )
         case .opds:
             let secret = try? KeychainCatalogSecretStore(serverID: id.rawValue).load()

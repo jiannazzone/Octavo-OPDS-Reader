@@ -66,6 +66,15 @@ struct SavedServerTests {
         #expect(SavedServer(id: id, kind: .opds, address: "http://localhost:3340/api/opds/{key}", name: "Kavita").detail == "localhost:3340")
     }
 
+    // Setup doesn't offer "Don't sync" for now (Adam, 2026-11-02), so a
+    // server an earlier setup saved without sync syncs anyway.
+    @Test func everyBookOrbitServerSyncsWhileTheChoiceIsntOffered() {
+        #expect(!SavedServer.offersSyncChoice)
+        let server = SavedServer(id: SavedServer.newID(), kind: .bookOrbit, address: "https://books.example.com", name: "BookOrbit")
+        #expect(!server.syncsProgress)
+        #expect(server.progressSyncs)
+    }
+
     @Test func aCatalogWhoseKeyIsGoneStartsSetupAgain() throws {
         let id = SavedServer.newID()
         let kavita = SavedServer(id: id, kind: .opds, address: "http://localhost:3340/api/opds/{key}", name: "Kavita")

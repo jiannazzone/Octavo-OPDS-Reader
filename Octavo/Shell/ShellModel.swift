@@ -21,7 +21,7 @@ final class ShellModel {
     var reading: OpenedBook? {
         didSet {
             if let closed = oldValue, closed != reading {
-                pages.existingPage(for: closed.book.id)?.readerClosed()
+                places.readerClosed()
                 library.mergeContinueReading()
             }
         }
@@ -35,6 +35,8 @@ final class ShellModel {
     private var opening: [LibraryBookID: LibrarySourceID] = [:]
     /// The book screens' state, kept across folds.
     let pages = BookPages()
+    /// Where each book opens, and whether its place has synced (step 13).
+    let places: BookPlaces
     /// The Search tab's query and results.
     let search: SearchModel
     /// Adding the server, before there is one.
@@ -56,6 +58,7 @@ final class ShellModel {
         self.library = library
         self.opener = opener
         self.servers = servers
+        places = BookPlaces { [library] in ShellModel.progressSync(for: $0, on: library.server) }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         opener.onOpen = { [weak self] in self?.opened($0) }
         // Another server: its books' pages, the screens opened from them
@@ -63,6 +66,7 @@ final class ShellModel {
         library.serverChanged = { [weak self] in
             guard let self else { return }
             pages.removeAll()
+            places.reset()
             search.reset()
             setup.reset()
             for tab in ShellTab.allCases { self[path: tab].replace([]) }
@@ -242,6 +246,39 @@ final class ShellModel {
         return BookOrbitBookmarkSync(client: source.client, bookID: bookID, fileID: Int(book.file.id.rawValue))
     }
 
+    /// Where the open book's place syncs (decision 6), through `places`, so
+    /// the reader reuses the pull its screen just made.
+    var readingProgressSync: (any ProgressSync)? {
+        guard let book = reading, let readingSource else { return nil }
+        return places.readerSync(for: SourcedBook(source: readingSource, book: book.book))
+    }
+
+    /// The server's place for the open book as the library list gave it,
+    /// where the reader opens if it can't pull.
+    var readingListedPlace: SyncedPosition? {
+        reading.flatMap { BookPlaces.listed($0.book) }
+    }
+
+    /// Where `book`'s place syncs: its BookOrbit server, if setup chose to
+    /// sync there. Books from an OPDS catalog or Files keep their place on
+    /// the iPhone.
+    static func progressSync(for book: SourcedBook, on server: LibraryServer?) -> (any ProgressSync)? {
+        guard let server, server.id == book.source, server.syncsProgress,
+              let source = server.source as? BookOrbitSource,
+              let file = book.book.readableFile, let fileID = BookOrbitSource.fileID(of: file)
+        else { return nil }
+        let sync = BookOrbitProgressSync(client: source.client, fileID: fileID)
+        #if DEBUG
+        let defaults = UserDefaults.standard
+        let pullDelay = defaults.double(forKey: "syncPullDelay")
+        let failsPushes = defaults.bool(forKey: "syncFailsPushes")
+        if pullDelay > 0 || failsPushes {
+            return DebugProgressSync(wrapping: sync, pullDelay: .seconds(pullDelay), failsPushes: failsPushes)
+        }
+        #endif
+        return sync
+    }
+
     /// The Duo as the book:
     /// - Unfolding on a book's screen opens the book, if it's on the iPhone.
     ///   If it isn't, the screen stays, as Cover | Details, and nothing
@@ -285,8 +322,10 @@ final class ShellModel {
     /// `-shellOpen collection|deep|cover|settings` (sample books),
     /// `-shellReading 1` (the first book in Continue reading, once connected)
     /// `-searchQuery austen` (typed into Search, once connected),
-    /// `-forgetServer 1` (start at setup) and `-setupCatalog <address>`
-    /// (setup's OPDS step, filled in).
+    /// `-forgetServer 1` (start at setup), `-setupCatalog <address>`
+    /// (setup's OPDS step, filled in), and for BookOrbit's position sync
+    /// `-syncPullDelay <seconds>` (a slow server) and `-syncFailsPushes 1`
+    /// (pushes fail as if offline: "Not synced yet").
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
@@ -346,3 +385,23 @@ final class ShellModel {
     }
     #endif
 }
+
+#if DEBUG
+/// `-syncPullDelay` and `-syncFailsPushes`: a slow server, or one that
+/// can't be reached to push.
+nonisolated struct DebugProgressSync: ProgressSync {
+    let wrapping: any ProgressSync
+    let pullDelay: Duration
+    let failsPushes: Bool
+
+    func pull() async throws -> SyncedPosition? {
+        try await Task.sleep(for: pullDelay)
+        return try await wrapping.pull()
+    }
+
+    func push(_ position: ReadingPosition) async throws {
+        if failsPushes { throw URLError(.notConnectedToInternet) }
+        try await wrapping.push(position)
+    }
+}
+#endif

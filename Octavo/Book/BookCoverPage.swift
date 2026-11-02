@@ -12,13 +12,15 @@ import SwiftUI
 /// - Nothing is drawn behind the side column: the system's own glass
 ///   capsules (clock, Back, tabs) read on any cover.
 /// - Unfolding on this screen opens the book if it's on the iPhone
-///   (`ShellModel.hingeChanged`).
+///   (`ShellModel.hingeChanged`), at once: the server's place is pulled when
+///   the screen appears and when the app comes back to it (`BookPlaces`).
 struct BookCoverPage: View {
     let book: LibraryBook
     let sourceID: LibrarySourceID
     let source: any LibrarySource
     @Environment(ShellModel.self) private var shell
     @Environment(\.spread) private var spread
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         let page = shell.pages.page(for: book)
@@ -33,7 +35,7 @@ struct BookCoverPage: View {
                         .ignoresSafeArea(edges: .vertical)
                     Color.clear
                         .frame(width: pages.hingeWidth)
-                    BookInfoPage(page: page, source: source)
+                    BookInfoPage(page: page, source: source, sourceID: sourceID)
                         .frame(width: pages.rightWidth)
                 }
             } else {
@@ -45,7 +47,7 @@ struct BookCoverPage: View {
                             withAnimation(BookSheet.animation) { page.isExpanded = false }
                         }
                     // 8 pt from the bottom edge, as in frame 03.
-                    BookSheet(page: page, source: source)
+                    BookSheet(page: page, source: source, sourceID: sourceID)
                         .padding(8)
                         .ignoresSafeArea(.container, edges: .bottom)
                 }
@@ -55,7 +57,12 @@ struct BookCoverPage: View {
             page.load(from: source)
             page.keepFinished(in: shell.library.finished, as: SourcedBook.ID(source: sourceID, book: book.id))
             shell.opener.clearFailure(book)
-            shell.opener.coverAppeared(book, from: source)
+            shell.places.refresh(SourcedBook(source: sourceID, book: book))
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Not under the reader: its own pushes keep the place current.
+            guard phase == .active, shell.reading == nil else { return }
+            shell.places.refresh(SourcedBook(source: sourceID, book: book))
         }
     }
 }
@@ -64,11 +71,12 @@ struct BookCoverPage: View {
 struct BookInfoPage: View {
     let page: BookPage
     let source: any LibrarySource
+    let sourceID: LibrarySourceID
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                BookSummary(page: page, source: source, titleFont: .title2.bold(), titleLines: 4)
+                BookSummary(page: page, source: source, sourceID: sourceID, titleFont: .title2.bold(), titleLines: 4)
                 BookDetails(page: page, source: source)
             }
             .padding(.horizontal, SpreadMetrics.margin)

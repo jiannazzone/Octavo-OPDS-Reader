@@ -324,8 +324,10 @@ private struct TrustRow: View {
     }
 }
 
-/// Where reading progress syncs, after a BookOrbit sign-in (frame 39). v1
-/// offers BookOrbit itself or nothing; iCloud and KOReader sync come later.
+/// Where reading progress syncs, after a BookOrbit sign-in (frame 39):
+/// BookOrbit itself or nothing. Not shown for now
+/// (`SavedServer.offersSyncChoice`); it returns with a real choice, such as
+/// iCloud or KOReader sync.
 private struct SyncSetup: View {
     @Environment(ShellModel.self) private var shell
 

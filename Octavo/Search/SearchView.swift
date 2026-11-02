@@ -335,9 +335,10 @@ private struct SearchResultsContent: View {
 /// author and your place in it.
 private struct SearchBookRow: View {
     let book: SourcedBook
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        let progress = BookPage.progress(of: book.book)
+        let progress = shell.places.progress(of: book)
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
@@ -363,6 +364,8 @@ private struct SearchBookRow: View {
             .padding(.vertical, 6)
             .accessibilityElement(children: .combine)
         }
+        // Where the book opens, as the server has it (`BookPlaces`).
+        .onAppear { shell.places.refreshRow(book) }
     }
 
     /// "Finished", "42%", or nothing for a book not started.

@@ -60,18 +60,11 @@ enum ReaderRemote {
     static var watchedCFI: String?
     /// The CFI shape the next reader saves and syncs.
     static var cfiShape = ReaderMessage.CFIShape.point
-    /// Progress sync for books opened with `open`, by file. Positions sync
-    /// only for books a script opened; the app's own sync is #11.
-    private static var syncs: [LibraryFileID: any ProgressSync] = [:]
 
     static let commandURL = URL.documentsDirectory.appending(path: "spike-command.json")
     static let ackURL = URL.documentsDirectory.appending(path: "spike-ack.json")
     static let scriptResultURL = URL.documentsDirectory.appending(path: "spike-js.json")
     static let keyboardNotification = Notification.Name("ReaderRemote.keyboard")
-
-    static func sync(for book: OpenedBook) -> (any ProgressSync)? {
-        syncs[book.file.id]
-    }
 
     /// Runs commands until the task is cancelled.
     static func run(shell: ShellModel) async {
@@ -135,8 +128,8 @@ enum ReaderRemote {
         return nil
     }
 
-    /// A file on the local BookOrbit: in the reader (with sync), or its
-    /// cover page.
+    /// A file on the local BookOrbit: in the reader, or its cover page. Its
+    /// place syncs as any BookOrbit book's does (`ShellModel.progressSync`).
     private static func openBookOrbit(_ fileID: Int?, shell: ShellModel, cover: Bool) async -> String? {
         guard let fileID else { return "needs fileID" }
         guard let server = shell.library.server, let source = server.source as? BookOrbitSource else {
@@ -154,7 +147,6 @@ enum ReaderRemote {
             shell.select(.library)
             shell[path: .library].replace([.cover(sourced)])
         } else {
-            syncs[id] = BookOrbitProgressSync(client: source.client, fileID: fileID)
             shell.openBook(sourced)
         }
         return nil

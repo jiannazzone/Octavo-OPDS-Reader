@@ -49,35 +49,6 @@ struct BookPageTests {
         #expect(BookPage.placeLine(progress: progress) == expected)
     }
 
-    // The iPhone's own position wins over the server's list progress until
-    // #11 reconciles them.
-    @Test func progressPrefersTheSavedPosition() async throws {
-        let directory = FileManager.default.temporaryDirectory.appending(path: "BookPageTests-\(UUID().uuidString)")
-        let positions = ReadingPositionStore(directory: directory)
-        let page = BookPage(book: Self.book)
-        #expect(page.progress(positions: positions) == 0.3)
-        page.load(from: StubLibrarySource())
-        #expect(await eventually { page.details != nil })
-        let file = try #require(page.current.readableFile)
-        try positions.save(ReadingPosition(fraction: 0.5), forBook: file.storageKey)
-        #expect(page.progress(positions: positions) == 0.5)
-    }
-
-    // The strip reads the saved position again once the reader closes.
-    @Test func closingTheReaderRefreshesTheProgress() async throws {
-        let directory = FileManager.default.temporaryDirectory.appending(path: "BookPageTests-\(UUID().uuidString)")
-        let positions = ReadingPositionStore(directory: directory)
-        let page = BookPage(book: Self.book)
-        page.load(from: StubLibrarySource())
-        #expect(await eventually { page.details != nil })
-        let file = try #require(page.current.readableFile)
-        let changed = Flag()
-        withObservationTracking { _ = page.progress(positions: positions) } onChange: { changed.isSet = true }
-        try positions.save(ReadingPosition(fraction: 0.5), forBook: file.storageKey)
-        page.readerClosed()
-        #expect(changed.isSet)
-    }
-
     @Test func unnumberedSeries() {
         var book = Self.book
         book.series = LibrarySeriesPosition(name: "Sea Stories")
@@ -163,8 +134,4 @@ struct BookPageTests {
         }
         #expect(pages.page(for: Self.book) !== first)
     }
-}
-
-private final class Flag: @unchecked Sendable {
-    var isSet = false
 }
