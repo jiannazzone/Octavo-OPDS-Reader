@@ -26,11 +26,13 @@ struct OpenButton<Label: View>: View {
 struct BookCover: View {
     let book: SourcedBook
     var cornerRadius: CGFloat = 4
+    /// `.full` for a cover shown large, such as Home's current book.
+    var size: LibraryCoverSize = .thumbnail
 
     var body: some View {
         Color.clear
             .aspectRatio(2 / 3, contentMode: .fit)
-            .overlay { CoverImage(book: book) }
+            .overlay { CoverImage(book: book, size: size) }
             .clipShape(.rect(cornerRadius: cornerRadius))
     }
 }

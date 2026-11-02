@@ -53,7 +53,7 @@ struct AppShell: View {
     private var tabs: some View {
         TabView(selection: Binding(get: { model.tab }, set: { model.select($0) })) {
             Tab("Home", systemImage: "house", value: .home) {
-                ScreenStack(tab: .home, title: "Home") { HomeView() }
+                ScreenStack(tab: .home, title: "Home", rootFillsSpread: true) { HomeView() }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
                 ScreenStack(tab: .library, title: "Library", rootFillsSpread: true) { LibraryView() }

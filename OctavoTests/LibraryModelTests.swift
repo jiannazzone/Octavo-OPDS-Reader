@@ -233,8 +233,23 @@ struct LibraryModelTests {
 
         #expect(library.homeLoaded)
         #expect(library.continueReading.map(\.book.title) == ["read-1h-ago", "opened-here", "read-2h-ago"])
-        #expect(library.newBooks.count == LibraryModel.newBooksLimit)
-        #expect(library.newBooks.first?.source == server)
+    }
+
+    // Home lists only books in progress: one marked finished leaves, whether
+    // the server listed it or it was opened on this iPhone.
+    @Test func aBookMarkedFinishedLeavesHome() async throws {
+        let recents = temporaryRecents()
+        try recents.record(sourced(book("opened-here")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        try recents.record(sourced(book("read-1h-ago")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        let source = PagedSource(pages: ["reading": LibraryFeed(books: [book("read-1h-ago", hoursAgo: 1)])])
+        let library = await connected(source, recents: recents)
+        #expect(Set(library.continueReading.map(\.book.title)) == ["opened-here", "read-1h-ago"])
+
+        library.markedFinished(sourced(book("read-1h-ago")).id, true)
+        library.markedFinished(sourced(book("opened-here")).id, true)
+
+        #expect(library.continueReading.isEmpty)
+        #expect(recents.records().isEmpty)
     }
 
     @Test func aFailedHomeKeepsWhatItShowed() async {

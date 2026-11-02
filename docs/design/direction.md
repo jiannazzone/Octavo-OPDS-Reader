@@ -26,7 +26,8 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 
 ### Home
 - **Your book first:** the book you're reading as a large cover, with your other books in progress (from the server and this iPhone, most recent first) beneath, or on the right page unfolded.
-- **Only books in progress.** New arrivals live in the Library.
+- **Only books in progress.** New arrivals live in the Library. A book marked finished leaves Home.
+- Built (step 5): the current book's cover is large (190 pt wide folded, 250 pt unfolded) with its title, author and place under it; the others are rows under "Also reading". Unfolded with nothing else in progress, the right page says so and links to the Library.
 - Unfolding on Home doesn't open anything; tap a book to see its screen.
 
 ### Library

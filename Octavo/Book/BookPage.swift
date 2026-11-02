@@ -61,6 +61,10 @@ final class BookPage {
         finishedOnIPhone = (books, id)
     }
 
+    /// The book and its library, once the screen has said
+    /// (`keepFinished(in:as:)`).
+    var sourcedID: SourcedBook.ID? { finishedOnIPhone?.id }
+
     var isFinished: Bool {
         if let markedFinished { return markedFinished }
         if let server = current.isFinished { return server }

@@ -30,11 +30,11 @@ final class LibraryModel {
     /// The Library tab's chip.
     var chip: LibraryLink?
 
-    /// Home: at most five, server and iPhone together, newest first.
+    /// Home: the books in progress, server and iPhone together, newest
+    /// first. The first is the book you're reading.
     private(set) var continueReading: [SourcedBook] = []
-    /// Home: the server's newest books.
-    private(set) var newBooks: [SourcedBook] = []
-    /// Home has loaded once; until then it shows a spinner, not the empty state.
+    /// Home has loaded once; until then it shows placeholders, not the empty
+    /// state.
     private(set) var homeLoaded = false
     /// The server's Continue reading didn't load, so an empty list doesn't
     /// mean nothing is in progress.
@@ -55,8 +55,8 @@ final class LibraryModel {
     @ObservationIgnored private var previews: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var serverContinueReading: [SourcedBook] = []
 
-    /// How many new books Home's row scrolls through.
-    static let newBooksLimit = 20
+    /// The book you're reading and the others in progress Home shows.
+    static let continueReadingLimit = 8
 
     init(recents: RecentBooks = RecentBooks(), finished: FinishedBooks = FinishedBooks()) {
         self.recents = recents
@@ -78,7 +78,6 @@ final class LibraryModel {
         feeds = [:]
         previews = [:]
         serverContinueReading = []
-        newBooks = []
         homeLoaded = false
         continueReadingFailed = false
         connectionProblem = nil
@@ -102,7 +101,6 @@ final class LibraryModel {
         previews = [:]
         serverContinueReading = []
         continueReading = []
-        newBooks = []
         homeLoaded = false
         continueReadingFailed = false
         rootFailed = false
@@ -172,19 +170,27 @@ final class LibraryModel {
 
     // MARK: Home
 
-    /// Continue reading and the newest books, from the server and the iPhone.
+    /// The books in progress, from the server and the iPhone. New arrivals
+    /// live in the Library, not here.
     func loadHome() async {
         guard let server else { return }
         if root == nil { await loadRoot() }
-        async let reading = books(at: root?.continueReading, from: server)
-        async let new = books(at: root?.recentlyAdded, from: server)
-        let (readingBooks, newestBooks) = await (reading, new)
+        let readingBooks = await books(at: root?.continueReading, from: server)
         // A failed list keeps what it showed.
         if let readingBooks { serverContinueReading = readingBooks }
         continueReadingFailed = readingBooks == nil
-        if let newestBooks { newBooks = Array(newestBooks.prefix(Self.newBooksLimit)) }
         mergeContinueReading()
         homeLoaded = true
+    }
+
+    /// A book marked finished leaves Home: BookOrbit drops it from its own
+    /// list, and this takes it off the iPhone's. Marked unfinished, it comes
+    /// back once it's read again.
+    func markedFinished(_ book: SourcedBook.ID, _ finished: Bool) {
+        guard finished else { return }
+        try? recents.remove(book)
+        serverContinueReading.removeAll { $0.id == book }
+        mergeContinueReading()
     }
 
     /// Opening a book puts it first in Continue reading.
@@ -197,7 +203,7 @@ final class LibraryModel {
     func mergeContinueReading() {
         // Records from a server that's gone can't be opened.
         let iPhone = recents.records().filter { source(for: $0.book.source) != nil }
-        continueReading = ContinueReading.merge(server: serverContinueReading, iPhone: iPhone)
+        continueReading = ContinueReading.merge(server: serverContinueReading, iPhone: iPhone, limit: Self.continueReadingLimit)
     }
 
     /// `[]` with no list to load; `nil` if it failed.

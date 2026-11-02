@@ -166,11 +166,18 @@ struct BookSummary: View {
 struct BookFinishedButton: View {
     let page: BookPage
     let source: any LibrarySource
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
         let finished = page.isFinished
         Button {
-            Task { await page.setFinished(!finished, from: source) }
+            Task {
+                await page.setFinished(!finished, from: source)
+                // Home lists only books in progress.
+                if page.isFinished != finished, let id = page.sourcedID {
+                    shell.library.markedFinished(id, !finished)
+                }
+            }
         } label: {
             Label(finished ? "Finished" : "Mark finished", systemImage: finished ? "checkmark.circle.fill" : "checkmark")
                 .lineLimit(1)
