@@ -76,9 +76,8 @@ final class ReaderModel {
     @ObservationIgnored private var lastGeometry: ReaderGeometry?
     @ObservationIgnored private var sentTapMode: ReaderTapMode?
 
-    /// A tap where the controls show: the `"middle"` of the page (not in
-    /// book mode, where the column's button brings them up), or
-    /// `"dismiss"` anywhere while they cover the page (`coversPage`).
+    /// A tap while the controls cover the page (`coversPage`): `"dismiss"`.
+    /// Otherwise taps turn; the column's "…" button brings the controls up.
     @ObservationIgnored var onControlsTap: ((_ zone: String) -> Void)?
 
     // Folding: one re-layout per fold, under a cross-fade. See `FoldBatch`.
@@ -222,13 +221,9 @@ final class ReaderModel {
         sendTapMode()
     }
 
-    /// Book mode, and the page outside the system's areas.
+    /// Whether a tap hides the controls instead of turning.
     var tapMode: ReaderTapMode {
-        var mode = ReaderTapMode(isBook: isBookMode, dismisses: coversPage)
-        if let width = geometry.map({ Double($0.size.width) }), width > 0 {
-            mode.content = safeArea.left...max(safeArea.left, width - safeArea.right)
-        }
-        return mode
+        ReaderTapMode(dismisses: coversPage)
     }
 
     /// While the book is opening, `.opened` sends it instead.

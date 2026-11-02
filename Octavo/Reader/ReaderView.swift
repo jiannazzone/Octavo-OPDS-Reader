@@ -112,11 +112,11 @@ private struct ReaderScreen: View {
         return controls.buttonsVisible
     }
 
-    /// Book mode, controls hidden: a quiet button in the column brings them
-    /// up, since a tap in the middle would land on the fold (Adam,
-    /// 2026-11-02). The rest of the column turns the page.
+    /// Controls hidden: a quiet "…" in the column is the one way to bring
+    /// them up, in every posture (Adam, 2026-11-02; a middle tap would land
+    /// on the fold half open). The rest of the column turns the page.
     private var showsControlsButton: Bool {
-        model.isBookMode && model.phase == .open && !buttonsVisible
+        model.phase == .open && !buttonsVisible
     }
 
     @ViewBuilder private var status: some View {

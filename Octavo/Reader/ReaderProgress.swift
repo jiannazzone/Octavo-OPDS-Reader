@@ -75,11 +75,12 @@ nonisolated struct ReaderPlace: Equatable, Sendable {
 /// What the controls show (decision 7, approved 2026-11-01): the column's
 /// buttons, and the progress bar over the page.
 ///
-/// - A tap in the middle (flat) or in the side column (book mode) shows both;
+/// - The column's "…" button shows both (Adam, 2026-11-02, every posture);
 ///   the next tap anywhere on the page hides them.
-/// - With "Always show controls" the buttons stay up and the tap shows and
-///   hides only the bar. The buttons sit in the column, so they never cover
-///   text; the bar does, so it never stays.
+/// - With "Always show controls" the buttons stay up; how the bar comes up
+///   then is for the Customize panel (step 12), which holds the setting.
+///   The buttons sit in the column, so they never cover text; the bar does,
+///   so it never stays.
 /// - Book mode starting hides them (decision 9).
 nonisolated struct ReaderControls: Equatable, Sendable {
     var alwaysShowsButtons = false
@@ -94,13 +95,13 @@ nonisolated struct ReaderControls: Equatable, Sendable {
     /// The bar lies over the page, so a tap should hide it, not turn.
     var coversPage: Bool { showsBar }
 
-    /// The column's button in book mode.
+    /// The column's "…" button.
     mutating func show() {
         showsButtons = true
         showsBar = true
     }
 
-    /// A tap in the middle of the page.
+    /// VoiceOver's Show/Hide Controls.
     mutating func toggle() {
         if alwaysShowsButtons {
             showsBar.toggle()

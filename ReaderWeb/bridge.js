@@ -17,16 +17,12 @@ import * as CFI from './foliate-js/epubcfi.js'
 
 const HANDLER = 'octavo'
 
-// Fraction of the page width that counts as a "previous/next page" tap zone,
-// on each side. Taps in the middle are reported to Swift instead.
-const TAP_ZONE = 0.3
-
-// How taps behave (Swift's `ReaderTapMode`). In book mode (decision 9) each
-// half of the spread turns its way, and the side column, where the page runs
-// under it, turns with the right page (the controls come up from the
-// column's own button). `content` is the page's extent outside the system's
-// areas; `dismisses` means the controls cover the page, so any tap hides them.
-let tapMode = { book: false, content: null, dismisses: false }
+// How taps behave (Swift's `ReaderTapMode`). In every posture a tap left of
+// the middle goes back and right of it goes forward, the side column (where
+// the page runs under it) with the right; the controls come up only from the
+// column's own button (Adam, 2026-11-02). `dismisses` means the controls
+// cover the page, so any tap hides them.
+let tapMode = { dismisses: false }
 
 const post = (type, payload = {}) => {
     const handler = window.webkit?.messageHandlers?.[HANDLER]
@@ -166,25 +162,15 @@ const detectTaps = (doc, onTap) => {
 }
 
 // Left and right turn pages the way the book reads (foliate's goLeft and
-// goRight), so in a right-to-left book the left half goes forward. The side
-// zones are a share of the page outside the system's areas; flat, a tap in
-// the side column counts as the right side.
+// goRight), so in a right-to-left book the left half goes forward. The
+// middle is the middle of foliate's view: the spine of a spread, or the
+// middle of the one page folded.
 const tap = x => {
     if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
-    if (tapMode.book) {
-        // foliate centres the gap between the pages in its view. The side
-        // column lies right of it, so it turns with the right page.
-        const box = view?.getBoundingClientRect()
-        const spine = box ? box.left + box.width / 2 : innerWidth / 2
-        if (x < spine) view?.goLeft()
-        else view?.goRight()
-        return
-    }
-    const [left, right] = tapMode.content ?? [0, innerWidth]
-    const zone = (right - left) * TAP_ZONE
-    if (x < left + zone) view?.goLeft()
-    else if (x > right - zone) view?.goRight()
-    else post('tap', { zone: 'middle' })
+    const box = view?.getBoundingClientRect()
+    const middle = box ? box.left + box.width / 2 : innerWidth / 2
+    if (x < middle) view?.goLeft()
+    else view?.goRight()
 }
 
 // Section documents live in iframes that are wider than the screen (one
@@ -512,12 +498,7 @@ window.octavo = Object.freeze({
         return hold()
     }),
     setTapMode: reported(async function setTapMode(mode) {
-        const content = Array.isArray(mode?.content) ? mode.content.map(finiteOrNull) : null
-        tapMode = {
-            book: Boolean(mode?.book),
-            content: content?.length === 2 && !content.includes(null) ? content : null,
-            dismisses: Boolean(mode?.dismisses),
-        }
+        tapMode = { dismisses: Boolean(mode?.dismisses) }
         return true
     }),
     layoutReport: reported(async function layoutReport_() {
