@@ -221,10 +221,37 @@ const listenForTurns = doc => {
     doc.addEventListener('wheel', onWheel, { passive: false })
 }
 
+// Forced page breaks that can only make a blank page (Project Gutenberg's
+// chapters start `div.chapter > h2`, both breaking before):
+// - At the very start of a section. foliate starts every section on a new
+//   page already, and WebKit breaks anyway, leaving the first page blank.
+// - Inside another, at its very start: the outer box's top margin moves the
+//   inner one a little way down the new page, so WebKit breaks again.
+// Runs once the section has loaded, before foliate lays it out.
+const FORCED_BREAKS = new Set(['page', 'column', 'left', 'right', 'recto', 'verso', 'always'])
+const collapseBlankPageBreaks = doc => {
+    const style = el => doc.defaultView?.getComputedStyle(el)
+    const forced = el => FORCED_BREAKS.has(style(el)?.breakBefore) || FORCED_BREAKS.has(style(el)?.pageBreakBefore)
+    // An element's first content: an element or text with something in it.
+    const firstContent = el => [...el.childNodes].find(node => node.nodeType === Node.ELEMENT_NODE || node.textContent.trim())
+    const unbreak = el => {
+        el.style.setProperty('break-before', 'auto', 'important')
+        el.style.setProperty('page-break-before', 'auto', 'important')
+    }
+    for (let el = doc.body && firstContent(doc.body); el?.nodeType === Node.ELEMENT_NODE; el = firstContent(el)) {
+        if (forced(el)) unbreak(el)
+    }
+    for (const el of doc.body?.querySelectorAll('*') ?? []) {
+        const parent = el.parentElement
+        if (parent && parent !== doc.body && firstContent(parent) === el && forced(el) && forced(parent)) unbreak(el)
+    }
+}
+
 // Section documents live in iframes that are wider than the screen (one
 // column per page) and scrolled by the paginator, so the tap is converted to
 // the top window's coordinates before deciding which side it was on.
 const onSectionLoad = ({ detail: { doc } }) => {
+    collapseBlankPageBreaks(doc)
     detectTaps(doc, e => {
         const frame = doc.defaultView?.frameElement
         if (frame) tap(frame.getBoundingClientRect().left + e.clientX)
@@ -236,6 +263,31 @@ const onSectionLoad = ({ detail: { doc } }) => {
 // where the page runs under it.
 detectTaps(document, e => tap(e.clientX))
 listenForTurns(document)
+
+// Styles every book gets (step 11), as foliate's [before, after] pair.
+// Before the book's own, so a book that says otherwise wins: hyphenation in
+// running text, so justified lines don't open wide gaps between words on a
+// narrow page, and long words or web addresses breaking rather than running
+// off it. After the book's own: preformatted text wraps. Project Gutenberg
+// sets verse in <pre>, and a line that doesn't wrap runs out of its column,
+// over the spine and onto the next page (and the page before's overflow
+// shows at this one's edge).
+const BOOK_STYLES = [`
+p, li, blockquote, dd {
+    -webkit-hyphens: auto;
+    hyphens: auto;
+    -webkit-hyphenate-limit-before: 3;
+    -webkit-hyphenate-limit-after: 2;
+    -webkit-hyphenate-limit-lines: 2;
+}
+html {
+    overflow-wrap: break-word;
+}
+`, `
+pre {
+    white-space: pre-wrap !important;
+}
+`]
 
 // Lays pages out the way Swift's `ReaderLayout` says: column count, gap and
 // text width through foliate's own attributes, and the view's insets, which
@@ -489,6 +541,7 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
         if (detail.isScript) detail.allow = false
     })
     view.renderer.setAttribute('flow', 'paginated')
+    view.renderer.setStyles(BOOK_STYLES)
     if (initialLayout !== undefined) layout = initialLayout
     held = null
     // Nothing is rendered yet, so the attributes are all it takes.

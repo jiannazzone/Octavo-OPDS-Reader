@@ -147,3 +147,12 @@ docs/notes/duo-spreads/tools/fold-run.py moby-mid moby-dick.epub --fraction 0.3 
 ```
 
 Launch arguments for looking at the settings: `-reader.margins narrow|medium|wide`, `-reader.alwaysShowControls 1`.
+
+## Book styles (step 11, 2026-11-02)
+
+Until step 11 the bridge gave books no styles of their own, so each showed only its own CSS, and Project Gutenberg's EPUBs (most of the dev library) rendered badly on the Duo's narrow pages. `bridge.js` now sets `BOOK_STYLES` through foliate's `setStyles` ([before, after] the book's own) and runs `collapseBlankPageBreaks` on each section before foliate lays it out:
+- **Verse ran off the page.** Gutenberg sets verse in `<pre>`, which never wraps, so long lines ran out of their column, over the spine and onto the next page, and the page before's overflow showed at the next one's edge (Moby Dick's Extracts, Adam's screenshot). `pre { white-space: pre-wrap !important }`, after the book's styles.
+- **Wide gaps between words.** Justified text without hyphenation on a ~330 pt page. Hyphenation for running text (`p, li, blockquote, dd`, with WebKit's 3/2/2 limits) and `overflow-wrap: break-word`, before the book's styles so a book that says otherwise wins.
+- **A blank page before a chapter.** Gutenberg's chapters are `div.chapter > h2`, both `page-break-before: always`. At a section's start WebKit breaks anyway (foliate already starts each section on a new page), and the inner break, pushed down by the outer box's top margin, breaks again. Forced breaks along a section's first-content chain, and an inner forced break at the start of an outer one, are set to `auto`.
+
+Checked in the simulator on every book in `dev/bookorbit` (five EPUBs, MOBI, AZW3, FB2). Not changed: links keep the book's colours (Gutenberg's contents are blue), and the cover page sits on the left page with the right one empty.

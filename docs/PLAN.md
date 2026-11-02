@@ -18,7 +18,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 - [x] **9. Reader controls.** A quiet "…" in the side column is the one way to bring the controls up, in every posture; every other tap turns (left of the middle back, right of it and the column forward).
 - [x] **10. Page turning.** Taps and swipes in every posture; a hardware keyboard (arrows, Page Up/Down, Space) and a trackpad's two-finger swipe; the place holds through unfolding, half open and flat again (folding closes the book, by design).
-- [ ] **11. Rendering.** The rendering problems seen on the Duo.
+- [x] **11. Rendering.** Verse no longer runs off the page, justified text hyphenates instead of opening wide gaps, and chapters no longer start after a blank page (`docs/notes/reader-page.md`, Book styles).
 - [ ] **12. Panels.** Text and theme, Contents and bookmarks, Search in book. *Needs decisions.*
 - [ ] **Reading on the Duo:** sign-off, pull request.
 
