@@ -33,9 +33,20 @@ public protocol LibrarySource: Sendable {
     /// cancels the download and leaves `destination` as it was.
     @discardableResult
     func download(_ file: LibraryFile, to destination: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL
+
+    /// Whether the server keeps a finished mark (BookOrbit's read status).
+    /// Where it doesn't (OPDS), the app keeps the mark on the iPhone.
+    var tracksFinished: Bool { get }
+
+    /// Marks `book` finished, or not, on the server.
+    func setFinished(_ finished: Bool, for book: LibraryBook) async throws
 }
 
 extension LibrarySource {
+    public var tracksFinished: Bool { false }
+
+    public func setFinished(_ finished: Bool, for book: LibraryBook) async throws {}
+
     @discardableResult
     public func download(_ file: LibraryFile, to destination: URL) async throws -> URL {
         try await download(file, to: destination, progress: { _ in })

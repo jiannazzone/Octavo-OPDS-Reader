@@ -169,6 +169,9 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
     /// When the server last saw the book read, for ordering Continue
     /// reading. `nil` if it doesn't say.
     public var lastReadAt: Date?
+    /// Whether the server has the book marked finished. `nil` if it doesn't
+    /// keep such a mark (OPDS); the app keeps one on the iPhone instead.
+    public var isFinished: Bool?
 
     public init(
         id: LibraryBookID,
@@ -178,7 +181,8 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         cover: LibraryCover? = nil,
         files: [LibraryFile] = [],
         progress: Double? = nil,
-        lastReadAt: Date? = nil
+        lastReadAt: Date? = nil,
+        isFinished: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -188,6 +192,7 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         self.files = files
         self.progress = progress
         self.lastReadAt = lastReadAt
+        self.isFinished = isFinished
     }
 
     /// The file the server marks primary, else the first one.

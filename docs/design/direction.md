@@ -35,8 +35,10 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Each section fills the whole spread** (a grid of covers across both pages, or a list flowing from the left page onto the right).
 
 ### A book's screen
-- **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, progress, Download and Open; pull it up for the details.
+- **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, author, place and progress bar, then **Mark finished | Open**; pull it up for the details.
 - **Unfolded:** Cover | Details, the cover on the left page and the same details on the right.
+- **Open is Download until the book is on the iPhone** (Adam, 2026-11-01): Download, then a ring with Cancel while it downloads, then Open. A problem shows on the place line, with Try again on the button. Downloading doesn't open the book.
+- **Mark finished** goes to BookOrbit as its `read` status (un-marking sends `reading`, which BookOrbit records as `rereading`); an OPDS server keeps no such mark, so the iPhone keeps it. A finished book's place line says Finished.
 
 ### Getting books onto the iPhone
 - **A check on downloaded books**, everywhere covers show. A downloading book shows a progress ring on its cover, everywhere.

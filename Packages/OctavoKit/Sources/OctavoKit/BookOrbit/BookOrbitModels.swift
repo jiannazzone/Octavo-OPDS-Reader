@@ -217,6 +217,9 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     /// When the read status last changed (`readStatus.updatedAt`); reading
     /// moves it. Lists only.
     public var readStatusUpdatedAt: Date?
+    /// `readStatus.status`: `unread`, `want_to_read`, `reading`, `on_hold`,
+    /// `rereading`, `read`, `skimmed` or `abandoned` (v3.6.0).
+    public var readStatus: String?
 
     /// The file BookOrbit marks primary, else the first one.
     public var primaryFile: BookOrbitFile? {
@@ -230,6 +233,7 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     }
 
     private struct ReadStatus: Decodable {
+        var status: String?
         var updatedAt: Date?
     }
 
@@ -257,7 +261,9 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
         hasCover = c.lenient(Bool.self, .hasCover)
         coverVersion = c.lenient(String.self, .coverVersion)
         readingFraction = c.lenient(Double.self, .readingProgress).map(BookOrbitProgress.fraction(fromPercentage:))
-        readStatusUpdatedAt = c.lenient(ReadStatus.self, .readStatus)?.updatedAt
+        let status = c.lenient(ReadStatus.self, .readStatus)
+        readStatusUpdatedAt = status?.updatedAt
+        readStatus = status?.status
     }
 }
 

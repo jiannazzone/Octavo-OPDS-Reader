@@ -92,7 +92,7 @@ struct CoverScreen: View {
 
     var body: some View {
         if let source = library.source(for: book.source) {
-            BookCoverPage(book: book.book, source: source)
+            BookCoverPage(book: book.book, sourceID: book.source, source: source)
                 .id(library.connection)
                 .environment(\.openLibraryEntry) { entry in
                     shell.push(.feed(entry, from: book.source))

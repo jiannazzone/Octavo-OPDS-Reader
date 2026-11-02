@@ -21,7 +21,7 @@ nonisolated struct SourcedBook: Hashable, Codable, Sendable, Identifiable {
     var source: LibrarySourceID
     var book: LibraryBook
 
-    struct ID: Hashable, Sendable {
+    struct ID: Hashable, Codable, Sendable {
         var source: LibrarySourceID
         var book: LibraryBookID
     }

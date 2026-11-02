@@ -15,6 +15,7 @@ import SwiftUI
 ///   (`ShellModel.hingeChanged`).
 struct BookCoverPage: View {
     let book: LibraryBook
+    let sourceID: LibrarySourceID
     let source: any LibrarySource
     @Environment(ShellModel.self) private var shell
     @Environment(\.spread) private var spread
@@ -49,6 +50,7 @@ struct BookCoverPage: View {
         }
         .onAppear {
             page.load(from: source)
+            page.keepFinished(in: shell.library.finished, as: SourcedBook.ID(source: sourceID, book: book.id))
             shell.opener.clearFailure(book)
             shell.opener.coverAppeared(book, from: source)
         }
@@ -124,7 +126,7 @@ struct BookTitleCover: View {
 #Preview("Cover page") {
     let shell = ShellModel()
     NavigationStack {
-        BookCoverPage(book: SampleLibrarySource.books[0], source: SampleLibrarySource())
+        BookCoverPage(book: SampleLibrarySource.books[0], sourceID: SampleLibrarySource.id, source: SampleLibrarySource())
     }
     .environment(shell)
 }

@@ -50,6 +50,7 @@ final class LibraryModel {
 
     let covers = CoverCache()
     @ObservationIgnored let recents: RecentBooks
+    @ObservationIgnored let finished: FinishedBooks
     @ObservationIgnored private var feeds: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var previews: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var serverContinueReading: [SourcedBook] = []
@@ -57,8 +58,9 @@ final class LibraryModel {
     /// How many new books Home's row scrolls through.
     static let newBooksLimit = 20
 
-    init(recents: RecentBooks = RecentBooks()) {
+    init(recents: RecentBooks = RecentBooks(), finished: FinishedBooks = FinishedBooks()) {
         self.recents = recents
+        self.finished = finished
     }
 
     /// The library `id` names, if it's connected.

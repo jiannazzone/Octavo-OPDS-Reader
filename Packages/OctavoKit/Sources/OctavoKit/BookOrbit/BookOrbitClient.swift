@@ -392,6 +392,15 @@ public actor BookOrbitClient {
         _ = try await send(request)
     }
 
+    // MARK: - Read status
+
+    /// `PATCH books/{id}/status {status}`, one of `BookOrbitBook.readStatus`'s
+    /// values. The server records `reading` after `read` as `rereading`.
+    public func setReadStatus(_ status: String, bookID: Int) async throws {
+        let request = try jsonRequest("books/\(bookID)/status", method: "PATCH", body: ["status": status])
+        _ = try await send(request)
+    }
+
     // MARK: - Plumbing
 
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = [], as type: T.Type = T.self) async throws -> T {

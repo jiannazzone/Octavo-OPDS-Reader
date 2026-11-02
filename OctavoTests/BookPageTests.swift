@@ -86,6 +86,68 @@ struct BookPageTests {
         #expect(BookPage(book: book).seriesLine == "Sea Stories · 2.5")
     }
 
+    // MARK: Mark finished
+
+    private static func finishedBooks() -> FinishedBooks {
+        FinishedBooks(fileURL: URL.temporaryDirectory.appending(path: "FinishedBooks-\(UUID().uuidString).json"))
+    }
+
+    private static let id = SourcedBook.ID(source: LibrarySourceID(rawValue: "server"), book: book.id)
+
+    @Test func finishedStaysOnTheIPhoneWhenTheServerDoesntKeepIt() async {
+        let books = Self.finishedBooks()
+        let page = BookPage(book: Self.book)
+        page.keepFinished(in: books, as: Self.id)
+        #expect(!page.isFinished)
+
+        await page.setFinished(true, from: StubLibrarySource())
+        #expect(page.isFinished)
+        let later = BookPage(book: Self.book)
+        later.keepFinished(in: books, as: Self.id)
+        #expect(later.isFinished)
+
+        await later.setFinished(false, from: StubLibrarySource())
+        #expect(!books.contains(Self.id))
+    }
+
+    @Test func finishedGoesToAServerThatKeepsIt() async {
+        let books = Self.finishedBooks()
+        let marks = FinishedMarks()
+        let page = BookPage(book: Self.book)
+        page.keepFinished(in: books, as: Self.id)
+
+        await page.setFinished(true, from: StubLibrarySource(finishedMarks: marks))
+        #expect(page.isFinished)
+        #expect(marks.sent == [true])
+        #expect(!books.contains(Self.id))
+    }
+
+    @Test func aMarkTheServerRefusesIsTakenBack() async {
+        let marks = FinishedMarks()
+        marks.refuses = true
+        let page = BookPage(book: Self.book)
+
+        await page.setFinished(true, from: StubLibrarySource(finishedMarks: marks))
+        #expect(!page.isFinished)
+        #expect(page.finishedFailed)
+    }
+
+    @Test func showsTheServersMark() {
+        var book = Self.book
+        book.isFinished = true
+        #expect(BookPage(book: book).isFinished)
+    }
+
+    // Open is Download until the book is on the iPhone.
+    @Test func openIsDownloadUntilTheBookIsOnTheIPhone() async throws {
+        let files = try TemporaryBookFiles()
+        let shell = makeShell(opener: BookOpener(files: files.store))
+        let book = SampleRoutes.book(1).book
+        #expect(BookOpenButton.state(of: book, in: shell) == .download)
+        shell.opener.download(book, from: StubLibrarySource())
+        #expect(await eventually { BookOpenButton.state(of: book, in: shell) == .open })
+    }
+
     @Test func pagesAreKeptAcrossRedraws() {
         let pages = BookPages(limit: 2)
         let first = pages.page(for: Self.book)

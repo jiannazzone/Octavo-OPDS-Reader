@@ -103,7 +103,26 @@ struct BookOrbitSourceTests {
         #expect(feed.books[0].progress == 0.025)
         #expect(feed.books[0].lastReadAt == Date(timeIntervalSinceReferenceDate: 815_234_930.887))
         #expect(feed.books[1].lastReadAt == nil)
+        #expect(feed.books[0].isFinished == false)
+        #expect(feed.books[1].isFinished == nil)
         #expect(feed.next == nil)
+    }
+
+    // Measured on v3.6.0: `read` sets finishedAt; `reading` afterwards is
+    // stored as `rereading`.
+    @Test func marksFinishedAsBookOrbitsReadStatus() async throws {
+        let server = StubServer { _ in .json(#"{"status":"read"}"#) }
+        let source = source(server)
+        #expect(source.tracksFinished)
+        let book = LibraryBook(id: LibraryBookID(rawValue: "4"), title: "Pride and Prejudice")
+
+        try await source.setFinished(true, for: book)
+        try await source.setFinished(false, for: book)
+
+        #expect(server.requests.map(\.method) == ["PATCH", "PATCH"])
+        #expect(server.requests.map(\.path) == ["/api/v1/books/4/status", "/api/v1/books/4/status"])
+        // The server rejects fields it doesn't know, so only the status goes.
+        #expect(server.requests.map { $0.json as? [String: String] } == [["status": "read"], ["status": "reading"]])
     }
 
     @Test func mapsBooksForTheGrid() async throws {

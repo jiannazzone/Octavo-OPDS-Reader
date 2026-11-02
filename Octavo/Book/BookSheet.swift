@@ -84,15 +84,15 @@ struct BookSheet: View {
 }
 
 /// The top of a book's sheet, and of its right page unfolded: the title
-/// and author, then the place with Download and Open, or a download's
-/// progress or problem in their place (decision 22).
+/// and author, the place over the progress bar, then Mark finished and
+/// Open. Until the book is on the iPhone, Open is Download; a download's
+/// progress and problems show in its place (decision 22).
 struct BookSummary: View {
     let page: BookPage
     let source: any LibrarySource
     var titleFont: Font = .title3.weight(.semibold)
     var titleLines = 2
     @Environment(ShellModel.self) private var shell
-    @Environment(\.openBook) private var openBook
     @Environment(\.openLibraryEntry) private var openLibraryEntry
 
     var body: some View {
@@ -104,34 +104,36 @@ struct BookSummary: View {
                     .accessibilityAddTraits(.isHeader)
                 author
             }
-            if let message {
-                CoverStripStatus(message: message, action: act)
-            } else {
-                place
+            place
+            HStack(spacing: 10) {
+                BookFinishedButton(page: page, source: source)
+                BookOpenButton(page: page, source: source)
             }
         }
     }
 
-    /// "30%" over the progress bar, then Download and Open.
+    /// "30%", "Finished", or a problem, over the progress bar.
     private var place: some View {
-        let progress = page.progress()
-        return HStack(spacing: 10) {
+        let progress = page.isFinished ? 1 : page.progress()
+        return VStack(alignment: .leading, spacing: 6) {
             // #11 adds the chapter here and a "Synced …" line.
-            VStack(alignment: .leading, spacing: 6) {
-                Text(BookPage.placeLine(progress: progress))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                ProgressView(value: progress ?? 0)
-                    .accessibilityHidden(true)
-            }
-            .padding(.trailing, 6)
-            BookDownloadButton(page: page, source: source)
-            Button("Open") {
-                if let openBook { openBook(page.current) } else { shell.opener.open(page.current, from: source) }
-            }
-            .buttonStyle(.glassProminent)
-            .disabled(!shell.opener.canOpen(page.current))
+            Text(placeLine(progress: progress))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            ProgressView(value: progress ?? 0)
+                .accessibilityHidden(true)
         }
+    }
+
+    private func placeLine(progress: Double?) -> String {
+        switch BookOpenButton.state(of: page.current, in: shell) {
+        case .failed(offline: true): return "Needs a connection to download."
+        case .failed(offline: false): return "Couldn’t download. Check your connection."
+        default: break
+        }
+        if page.finishedFailed { return "Couldn’t mark it finished. Check your connection." }
+        if page.isFinished { return "Finished" }
+        return BookPage.placeLine(progress: progress)
     }
 
     /// Tapping the author opens their books, where the screen provides a
@@ -158,26 +160,101 @@ struct BookSummary: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
 
-    private var message: CoverStripMessage? {
-        if let standIn = shell.coverStrip { return standIn }
-        return switch shell.opener.status(of: page.current) {
-        case .downloading(let fraction, opensWhenDone: true): .downloading(fraction: fraction)
-        case .failed(offline: true, _): .needsConnection
-        case .failed(offline: false, _): .downloadFailed
-        default: nil
+/// Mark finished, or Finished once it is; tapping again takes the mark off.
+struct BookFinishedButton: View {
+    let page: BookPage
+    let source: any LibrarySource
+
+    var body: some View {
+        let finished = page.isFinished
+        Button {
+            Task { await page.setFinished(!finished, from: source) }
+        } label: {
+            Label(finished ? "Finished" : "Mark finished", systemImage: finished ? "checkmark.circle.fill" : "checkmark")
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.glass)
+        .accessibilityLabel("Finished")
+        .accessibilityValue(finished ? "On" : "Off")
+    }
+}
+
+/// Open once the book is on the iPhone; before that Download, then its
+/// progress (tap to cancel), or Try again after a problem.
+struct BookOpenButton: View {
+    let page: BookPage
+    let source: any LibrarySource
+    @Environment(ShellModel.self) private var shell
+    @Environment(\.openBook) private var openBook
+
+    enum State: Equatable {
+        case open, download
+        case downloading(fraction: Double)
+        case failed(offline: Bool)
+    }
+
+    /// The opener's state, or the debug stand-in (`-shellCoverStrip`).
+    static func state(of book: LibraryBook, in shell: ShellModel) -> State {
+        switch shell.coverStrip {
+        case .downloadFailed: return .failed(offline: false)
+        case .needsConnection: return .failed(offline: true)
+        case .downloading(let fraction): return .downloading(fraction: fraction)
+        case nil: break
+        }
+        return switch shell.opener.status(of: book) {
+        case .downloaded: .open
+        case .notDownloaded: .download
+        case .downloading(let fraction, _): .downloading(fraction: fraction)
+        case .failed(let offline, _): .failed(offline: offline)
         }
     }
 
-    private func act() {
-        if shell.coverStrip != nil {
-            shell.coverStrip = nil
-            return
-        }
-        switch shell.opener.status(of: page.current) {
-        case .downloading: shell.opener.cancel(page.current)
-        case .failed: shell.opener.retry(page.current, from: source)
-        default: break
+    var body: some View {
+        let book = page.current
+        let opener = shell.opener
+        switch Self.state(of: book, in: shell) {
+        case .open:
+            Button {
+                if let openBook { openBook(book) } else { opener.open(book, from: source) }
+            } label: {
+                Text("Open")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .disabled(!opener.canOpen(book))
+        case .download:
+            Button {
+                opener.download(book, from: source)
+            } label: {
+                Label("Download", systemImage: "arrow.down")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .disabled(!opener.canOpen(book))
+        case .downloading(let fraction):
+            Button {
+                if shell.coverStrip != nil { shell.coverStrip = nil } else { opener.cancel(book) }
+            } label: {
+                HStack(spacing: 8) {
+                    DownloadRing(fraction: fraction)
+                    Text("Cancel")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+            .accessibilityLabel("Cancel download")
+            .accessibilityValue(fraction.formatted(.percent.precision(.fractionLength(0))))
+        case .failed:
+            Button {
+                if shell.coverStrip != nil { shell.coverStrip = nil } else { opener.retry(book, from: source) }
+            } label: {
+                Text("Try again")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
         }
     }
 }
@@ -253,58 +330,6 @@ struct BookDescription: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(.tint)
             }
-        }
-    }
-}
-
-/// Download, its progress as a ring (tap to cancel), then a check once the
-/// book is on the iPhone. Remove download comes with downloads (`docs/PLAN.md`, step 4).
-struct BookDownloadButton: View {
-    let page: BookPage
-    let source: any LibrarySource
-    @Environment(ShellModel.self) private var shell
-
-    /// One size in every state, so the row beside it doesn't move.
-    static let size: CGFloat = 40
-
-    var body: some View {
-        control
-            .frame(width: Self.size, height: Self.size)
-    }
-
-    @ViewBuilder
-    private var control: some View {
-        let opener = shell.opener
-        let book = page.current
-        switch opener.status(of: book) {
-        case .downloading(let fraction, _):
-            Button {
-                opener.cancel(book)
-            } label: {
-                DownloadRing(fraction: fraction)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .accessibilityLabel("Cancel download")
-            .accessibilityValue(fraction.formatted(.percent.precision(.fractionLength(0))))
-        case .downloaded:
-            Image(systemName: "checkmark")
-                .font(.body.weight(.semibold))
-                .frame(width: Self.size, height: Self.size)
-                .glassEffect(in: .circle)
-                .accessibilityLabel("Downloaded")
-        case .notDownloaded, .failed:
-            Button {
-                opener.download(book, from: source)
-            } label: {
-                Image(systemName: "arrow.down")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .disabled(!opener.canOpen(book))
-            .accessibilityLabel("Download")
         }
     }
 }

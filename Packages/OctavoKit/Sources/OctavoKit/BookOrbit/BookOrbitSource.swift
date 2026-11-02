@@ -94,6 +94,14 @@ public struct BookOrbitSource: LibrarySource {
         }
     }
 
+    public var tracksFinished: Bool { true }
+
+    /// Finished is BookOrbit's `read`; not finished goes back to `reading`.
+    public func setFinished(_ finished: Bool, for book: LibraryBook) async throws {
+        guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
+        try await client.setReadStatus(finished ? "read" : "reading", bookID: id)
+    }
+
     public func details(for book: LibraryBook) async throws -> LibraryBookDetails {
         guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
         let detail = try await mappingErrors { try await client.book(id: id) }
@@ -178,7 +186,8 @@ public struct BookOrbitSource: LibrarySource {
                             filename: $0.filename, isPrimary: $0.role == "primary")
             },
             progress: book.readingFraction,
-            lastReadAt: book.readStatusUpdatedAt
+            lastReadAt: book.readStatusUpdatedAt,
+            isFinished: book.readStatus.map { $0 == "read" }
         )
     }
 
