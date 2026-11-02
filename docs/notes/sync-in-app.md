@@ -10,8 +10,8 @@ Step 13 of `docs/PLAN.md`, built 2026-11-02. It wires BookOrbit position sync in
 
 ## How it works now
 
-- **Which books sync.** BookOrbit books sync only if setup chose "This BookOrbit server" (`SavedServer.syncsProgress` → `LibraryServer.syncsProgress`; the debug connection syncs). `ShellModel.progressSync(for:on:)` hands back a `BookOrbitProgressSync` for the book's readable file. OPDS catalogs and Files keep their place on the iPhone.
-- **Don't sync ignores the server's place entirely.** `BookOrbitSource(includesProgress: false)` leaves `progress` out of every list, so no screen shows a percentage the book won't open at. Home still lists the server's books in progress (BookOrbit decides that list).
+- **Which books sync.** Every BookOrbit server's books (`LibraryServer.syncsProgress`; the debug connection syncs). `ShellModel.progressSync(for:on:)` hands back a `BookOrbitProgressSync` for the book's readable file. OPDS catalogs and Files keep their place on the iPhone.
+- **"Don't sync" isn't offered for now** (Adam, 2026-11-02). Setup skips its Reading progress step and saves the server as syncing; `SavedServer.progressSyncs` also overrides a "Don't sync" an earlier setup saved. The door stays open: set `SavedServer.offersSyncChoice` and the step returns. "Don't sync" then ignores the server's place entirely: `BookOrbitSource(includesProgress: false)` leaves `progress` out of every list, so no screen shows a percentage the book won't open at.
 - **`BookPlaces`** (`Octavo/Book/BookPlaces.swift`, owned by `ShellModel.places`) is the one source of truth:
   - `opening(of:)` is `OpeningPosition.choose(local:remote:)`, the reader's own rule. The remote is the last pull or push this session, else the library list's percentage. The book's screen, Home's rows and Search's rows show `progress(of:)`, so they match where the book opens.
   - `refresh(_:)` pulls the server's position. `BookCoverPage` calls it when it appears and when the app comes back to the foreground (not while the reader covers it). If the iPhone's place is unsent and wins under the rule (read offline), it's pushed then.
@@ -27,7 +27,7 @@ Step 13 of `docs/PLAN.md`, built 2026-11-02. It wires BookOrbit position sync in
 
 - **On the place's own line, at the right:** "50%" on the left, "Synced just now" on the right. The sheet gets no taller. Unfolded, the right page shows the same.
 - Wording: "Synced just now" (under a minute), "Synced 5 minutes ago" or "Synced 3 hours ago" (same day, `RelativeDateTimeFormatter`, full units), "Synced yesterday", then "Synced Oct 28" (locale's day and month). "Not synced yet, will retry" while a place waits (decision 22). A `TimelineView(.everyMinute)` moves "just now" on.
-- **Nothing** for a book whose place doesn't sync (OPDS, Don't sync), or when the place line shows a problem or Finished.
+- **Nothing** for a book whose place doesn't sync (OPDS), or when the place line shows a problem or Finished.
 
 ## Checked on the simulator
 
@@ -69,5 +69,5 @@ The server was put back to 25% afterwards.
 
 - **An open reader doesn't re-pull** when the app returns to the foreground. If another device moved on meanwhile, the reader stays put until it's reopened.
 - **Unsent places are retried only** when their book's screen shows or the book opens, not in the background for every book.
-- **Bookmarks still sync with BookOrbit under "Don't sync".** That setting is for reading progress (decision 6); whether bookmarks should follow it is Adam's call.
+- **If "Don't sync" comes back**, decide whether bookmarks follow it (they sync with BookOrbit regardless today).
 - Home's and Search's rows use a pull only once the book's screen has been seen this session. Before that, they show the iPhone's place, else the list's percentage, as the book's screen does before its pull lands.

@@ -8,8 +8,8 @@ nonisolated enum SetupStep: Hashable, Sendable {
 }
 
 /// Adding the server on first launch (`docs/design/direction.md`,
-/// Connecting, decisions 6 and 25): BookOrbit (sign in, then where reading
-/// progress syncs) or an OPDS catalog (its address, then a sign-in only if
+/// Connecting, decisions 6 and 25): BookOrbit (sign in; where reading
+/// progress syncs only while `SavedServer.offersSyncChoice`) or an OPDS catalog (its address, then a sign-in only if
 /// it asks), with "Trust this server" between when a certificate needs it.
 /// Lives in the shell, so a fold keeps what's typed.
 @Observable
@@ -70,7 +70,7 @@ final class SetupModel {
 
     // MARK: BookOrbit
 
-    /// Sign in: on to the sync step.
+    /// Sign in: done, or on to the sync step while it's offered.
     func signInToBookOrbit() {
         guard let parsed = parse(bookOrbitAddress) else { return }
         // An account in the address moves to the fields, and nothing is sent
@@ -99,8 +99,12 @@ final class SetupModel {
                     username: username, syncsProgress: true
                 )
                 syncsProgress = true
-                push(.sync)
                 bookOrbitPassword = ""
+                if SavedServer.offersSyncChoice {
+                    push(.sync)
+                } else {
+                    finishBookOrbit()
+                }
             } catch {
                 guard isCurrent() else { return }
                 self?.failed(error, server: "BookOrbit") { [weak self] in self?.signInToBookOrbit() }
