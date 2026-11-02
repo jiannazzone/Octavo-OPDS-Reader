@@ -9,10 +9,15 @@ public struct BookOrbitSource: LibrarySource {
     public let client: BookOrbitClient
     /// Items per page, 1–100 (BookOrbit's limit for series and authors).
     public let pageSize: Int
+    /// Whether books carry the server's reading progress. Off when the
+    /// iPhone keeps its own place (setup's "Don't sync"), so no screen shows
+    /// a place the book won't open at.
+    public let includesProgress: Bool
 
-    public init(client: BookOrbitClient, pageSize: Int = 50) {
+    public init(client: BookOrbitClient, pageSize: Int = 50, includesProgress: Bool = true) {
         self.client = client
         self.pageSize = min(max(pageSize, 1), 100)
+        self.includesProgress = includesProgress
     }
 
     /// The BookOrbit file id behind `file`, for `BookOrbitProgressSync`.
@@ -46,7 +51,7 @@ public struct BookOrbitSource: LibrarySource {
             case .continueReading:
                 // One page: BookOrbit caps the list (its own home shows 20)
                 // rather than paging it.
-                let books = try await client.continueReading(limit: 20).map(Self.book)
+                let books = try await client.continueReading(limit: 20).map(listed)
                 return LibraryFeed(title: "Continue reading", books: books, total: books.count)
             case .collections:
                 async let collections = client.collections()
@@ -106,7 +111,7 @@ public struct BookOrbitSource: LibrarySource {
     public func details(for book: LibraryBook) async throws -> LibraryBookDetails {
         guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
         let detail = try await mappingErrors { try await client.book(id: id) }
-        var summary = Self.book(detail)
+        var summary = listed(detail)
         // The detail has no reading progress; keep the list's.
         summary.progress = summary.progress ?? book.progress
         let authors = detail.authorRefs.map { author in
@@ -163,7 +168,7 @@ public struct BookOrbitSource: LibrarySource {
         _ page: BookOrbitPage<BookOrbitBook>, title: String? = nil, page number: Int,
         route: (Int) -> BookOrbitRoute
     ) -> LibraryFeed {
-        LibraryFeed(title: title, books: page.items.map(Self.book), total: page.total, next: next(after: number, of: page, route))
+        LibraryFeed(title: title, books: page.items.map(listed), total: page.total, next: next(after: number, of: page, route))
     }
 
     /// The next page's link, or `nil` on the last page.
@@ -174,6 +179,14 @@ public struct BookOrbitSource: LibrarySource {
             result.items.count < pageSize
         }
         return isLast || result.items.isEmpty ? nil : route(page + 1).link
+    }
+
+    /// `book` as this source lists it: without the server's progress unless
+    /// `includesProgress`.
+    private func listed(_ book: BookOrbitBook) -> LibraryBook {
+        var listed = Self.book(book)
+        if !includesProgress { listed.progress = nil }
+        return listed
     }
 
     static func book(_ book: BookOrbitBook) -> LibraryBook {

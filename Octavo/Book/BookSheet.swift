@@ -12,6 +12,7 @@ import SwiftUI
 struct BookSheet: View {
     let page: BookPage
     let source: any LibrarySource
+    let sourceID: LibrarySourceID
     @Environment(ShellModel.self) private var shell
     @GestureState private var drag: CGFloat = 0
 
@@ -56,7 +57,7 @@ struct BookSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(page.isExpanded ? "Hide details" : "Show details")
-            BookSummary(page: page, source: source)
+            BookSummary(page: page, source: source, sourceID: sourceID)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
         }
@@ -84,12 +85,14 @@ struct BookSheet: View {
 }
 
 /// The top of a book's sheet, and of its right page unfolded: the title
-/// and author, the place over the progress bar, then Mark finished and
-/// Open. Until the book is on the iPhone, Open is Download; a download's
-/// progress and problems show in its place (decision 22).
+/// and author, the place (with when it last synced) over the progress bar,
+/// then Mark finished and Open. Until the book is on the iPhone, Open is
+/// Download; a download's progress and problems show in its place
+/// (decision 22).
 struct BookSummary: View {
     let page: BookPage
     let source: any LibrarySource
+    let sourceID: LibrarySourceID
     var titleFont: Font = .title3.weight(.semibold)
     var titleLines = 2
     @Environment(ShellModel.self) private var shell
@@ -112,28 +115,42 @@ struct BookSummary: View {
         }
     }
 
-    /// "30%", "Finished", or a problem, over the progress bar.
+    /// "30%", "Finished", or a problem, over the progress bar. Beside the
+    /// place, when it last synced (step 13, Adam: on the same line, and
+    /// nothing for a book that doesn't sync).
     private var place: some View {
-        let progress = page.isFinished ? 1 : page.progress()
+        let book = SourcedBook(source: sourceID, book: page.current)
+        let progress = page.isFinished ? 1 : shell.places.progress(of: book)
+        let problem = problem
+        let status = problem == nil && !page.isFinished ? shell.places.status(of: book) : nil
         return VStack(alignment: .leading, spacing: 6) {
-            // #11 adds the chapter here and a "Synced …" line.
-            Text(placeLine(progress: progress))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(problem ?? (page.isFinished ? "Finished" : BookPage.placeLine(progress: progress)))
+                if let status {
+                    Spacer(minLength: 12)
+                    // Redrawn each minute, so "just now" moves on.
+                    TimelineView(.everyMinute) { context in
+                        Text(status.text(now: context.date))
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
             ProgressView(value: progress ?? 0)
                 .accessibilityHidden(true)
         }
     }
 
-    private func placeLine(progress: Double?) -> String {
+    /// A download or Mark finished that went wrong, in the place's stead.
+    private var problem: String? {
         switch BookOpenButton.state(of: page.current, in: shell) {
         case .failed(offline: true): return "Needs a connection to download."
         case .failed(offline: false): return "Couldn’t download. Check your connection."
         default: break
         }
         if page.finishedFailed { return "Couldn’t mark it finished. Check your connection." }
-        if page.isFinished { return "Finished" }
-        return BookPage.placeLine(progress: progress)
+        return nil
     }
 
     /// Tapping the author opens their books, where the screen provides a

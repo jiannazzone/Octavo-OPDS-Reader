@@ -32,8 +32,14 @@ nonisolated struct ReadingPositionStore: Sendable {
         progress(forBook: bookID)?.chapter
     }
 
-    func save(_ position: ReadingPosition, forBook bookID: String, needsPush: Bool = false, chapter: String? = nil) throws {
-        try save(LocalReadingProgress(position: position, modifiedAt: .now, needsPush: needsPush, chapter: chapter), forBook: bookID)
+    /// `syncedAt` defaults to the saved record's: moving on keeps the time of
+    /// the last sync.
+    func save(
+        _ position: ReadingPosition, forBook bookID: String, needsPush: Bool = false, chapter: String? = nil, syncedAt: Date? = nil
+    ) throws {
+        let syncedAt = syncedAt ?? progress(forBook: bookID)?.syncedAt
+        let progress = LocalReadingProgress(position: position, modifiedAt: .now, needsPush: needsPush, chapter: chapter, syncedAt: syncedAt)
+        try save(progress, forBook: bookID)
     }
 
     func save(_ progress: LocalReadingProgress, forBook bookID: String) throws {
@@ -41,10 +47,12 @@ nonisolated struct ReadingPositionStore: Sendable {
         try JSONEncoder().encode(progress).write(to: fileURL(forBook: bookID), options: .atomic)
     }
 
-    /// Clears `needsPush` if `position` is still the saved one.
-    func markPushed(_ position: ReadingPosition, forBook bookID: String) throws {
-        guard var progress = progress(forBook: bookID), progress.position == position, progress.needsPush else { return }
+    /// `position` reached the backend at `date`: clears `needsPush` and
+    /// records the sync, if `position` is still the saved one.
+    func markPushed(_ position: ReadingPosition, forBook bookID: String, at date: Date = .now) throws {
+        guard var progress = progress(forBook: bookID), progress.position == position else { return }
         progress.needsPush = false
+        progress.syncedAt = date
         try save(progress, forBook: bookID)
     }
 

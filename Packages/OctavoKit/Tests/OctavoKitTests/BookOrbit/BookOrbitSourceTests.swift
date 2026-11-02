@@ -3,10 +3,10 @@ import Foundation
 import Synchronization
 import Testing
 
-private func source(_ server: StubServer, pageSize: Int = 2) -> BookOrbitSource {
+private func source(_ server: StubServer, pageSize: Int = 2, includesProgress: Bool = true) -> BookOrbitSource {
     let store = InMemoryBookOrbitTokenStore(BookOrbitCredentials(accessToken: "access-1", refreshToken: String(repeating: "a", count: 64)))
     let client = BookOrbitClient(baseURL: server.baseURL, tokenStore: store, configuration: server.configuration)
-    return BookOrbitSource(client: client, pageSize: pageSize)
+    return BookOrbitSource(client: client, pageSize: pageSize, includesProgress: includesProgress)
 }
 
 private func link(_ route: BookOrbitRoute) -> LibraryLink { route.link }
@@ -106,6 +106,19 @@ struct BookOrbitSourceTests {
         #expect(feed.books[0].isFinished == false)
         #expect(feed.books[1].isFinished == nil)
         #expect(feed.next == nil)
+    }
+
+    // Setup's "Don't sync": the iPhone keeps its own place, so no list
+    // shows the server's.
+    @Test func leavesOutTheServersProgressWhenAsked() async throws {
+        let reading = #"{"id":4,"title":"Pride and Prejudice","authors":["Jane Austen"],"files":[{"id":4,"format":"epub","role":"primary"}],"readingProgress":2.5,"readStatus":{"status":"reading","source":"auto","startedAt":"2026-10-31T00:00:00.000Z","finishedAt":null,"updatedAt":"2026-11-01T14:08:50.887Z"}}"#
+        let server = StubServer { _ in .json(#"{"books":[\#(reading)],"total":1}"#) }
+
+        let feed = try await source(server, includesProgress: false).feed(link(.continueReading))
+
+        #expect(feed.books[0].progress == nil)
+        #expect(feed.books[0].isFinished == false)
+        #expect(feed.books[0].lastReadAt != nil)
     }
 
     // Measured on v3.6.0: `read` sets finishedAt; `reading` afterwards is

@@ -13,6 +13,14 @@ struct OpeningPositionTests {
         LocalReadingProgress(position: deviceCFI, modifiedAt: date, needsPush: needsPush)
     }
 
+    // Records saved before sync times existed read back as never synced.
+    @Test func aRecordWithoutASyncTimeDecodes() throws {
+        let json = #"{"position":{"cfi":"epubcfi(/6/4!/4)","fraction":0.1},"modifiedAt":0,"needsPush":false}"#
+        let record = try JSONDecoder().decode(LocalReadingProgress.self, from: Data(json.utf8))
+        #expect(record.syncedAt == nil)
+        #expect(record.position.fraction == 0.1)
+    }
+
     @Test func serverCFIWinsWhenTheDeviceHasNothingUnpushed() {
         let remote = SyncedPosition(position: serverCFI, updatedAt: earlier)
         // Even if the device's clock says it moved later: it already pushed that.

@@ -26,9 +26,6 @@ final class BookPage {
     private(set) var finishedFailed = false
     /// Where this iPhone keeps the mark for a server that doesn't.
     @ObservationIgnored private var finishedOnIPhone: (books: FinishedBooks, id: SourcedBook.ID)?
-    /// The saved position lives on disk, which isn't observed; this
-    /// changes when the reader closes, so the strip reads it again.
-    private var positionsChanged = 0
     @ObservationIgnored private var loadTask: Task<Void, Never>?
 
     init(book: LibraryBook) {
@@ -91,11 +88,6 @@ final class BookPage {
         }
     }
 
-    /// The reader closed this book, having saved its position.
-    func readerClosed() {
-        positionsChanged += 1
-    }
-
     func retryDetails(from source: any LibrarySource) async {
         guard detailsFailed else { return }
         detailsFailed = false
@@ -124,24 +116,8 @@ final class BookPage {
 
     // MARK: What the sheet shows
 
-    /// Progress through the book, 0...1: the iPhone's saved position if
-    /// there is one, else the server's (decision on #14; #11 reconciles the
-    /// two). `nil` if neither knows.
-    func progress(positions: ReadingPositionStore = ReadingPositionStore()) -> Double? {
-        _ = positionsChanged
-        return Self.progress(of: current, positions: positions)
-    }
-
-    /// The same for any book, such as a Home row (#13).
-    nonisolated static func progress(of book: LibraryBook, positions: ReadingPositionStore = ReadingPositionStore()) -> Double? {
-        if let file = book.readableFile, let position = positions.position(forBook: file.storageKey) {
-            return position.fraction
-        }
-        return book.progress
-    }
-
-    /// The strip's place line: "30%" or "Not started". #11 adds the
-    /// chapter.
+    /// The strip's place line: "30%" or "Not started", from where the book
+    /// opens (`BookPlaces.progress(of:)`).
     static func placeLine(progress: Double?) -> String {
         guard let progress, progress > 0 else { return "Not started" }
         return progress.formatted(.percent.precision(.fractionLength(0)))

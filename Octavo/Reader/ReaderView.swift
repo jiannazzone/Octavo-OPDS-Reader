@@ -12,6 +12,10 @@ struct ReaderView: View {
     let book: OpenedBook
     /// Where the book's bookmarks sync, if anywhere.
     var bookmarkSync: (any BookmarkSync)?
+    /// Where the book's place syncs, if anywhere, and the server's place
+    /// from the library list for when it can't pull (`ReaderModel.fallback`).
+    var progressSync: (any ProgressSync)?
+    var listedPlace: SyncedPosition?
     let close: () -> Void
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
@@ -30,10 +34,11 @@ struct ReaderView: View {
             guard model?.book != book.reader else { return }
             let bookmarks = ReaderBookmarks(bookID: book.reader.id, sync: bookmarkSync)
             #if DEBUG
-            model = ReaderModel(book: book.reader, sync: ReaderRemote.sync(for: book), bookmarks: bookmarks, cfiShape: ReaderRemote.cfiShape)
+            let cfiShape = ReaderRemote.cfiShape
             #else
-            model = ReaderModel(book: book.reader, bookmarks: bookmarks)
+            let cfiShape = ReaderMessage.CFIShape.point
             #endif
+            model = ReaderModel(book: book.reader, sync: progressSync, fallback: listedPlace, bookmarks: bookmarks, cfiShape: cfiShape)
         }
         .onDisappear {
             guard let model else { return }

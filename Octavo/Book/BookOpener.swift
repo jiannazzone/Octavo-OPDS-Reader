@@ -116,11 +116,6 @@ final class BookOpener {
         if case .failed = statuses[book.id] { statuses[book.id] = nil }
     }
 
-    /// The cover page appeared. #11 starts pulling the synced position here,
-    /// so an unfold opens the reader at once instead of waiting for the pull
-    /// (direction.md, Needs engineering; duo-spreads §6).
-    func coverAppeared(_ book: LibraryBook, from source: any LibrarySource) {}
-
     private func start(_ book: LibraryBook, from source: any LibrarySource, opensWhenDone: Bool) {
         tasks[book.id]?.cancel()
         statuses[book.id] = .downloading(fraction: 0, opensWhenDone: opensWhenDone)

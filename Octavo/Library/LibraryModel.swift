@@ -15,6 +15,8 @@ struct LibraryServer {
     /// collection's row. `nil`: rows load the list's first full page (which
     /// is then ready when the row is tapped).
     var previewSource: (any LibrarySource)? = nil
+    /// Reading progress syncs with this server (setup's choice, decision 6).
+    var syncsProgress = false
 }
 
 /// The app-wide library state: the connected server, its chips, Home's
@@ -307,7 +309,7 @@ final class LibraryModel {
             await connect(LibraryServer(
                 id: Self.localBookOrbitID, name: "BookOrbit",
                 detail: "localhost:3300 · octavo", source: BookOrbitSource(client: client),
-                previewSource: BookOrbitSource(client: client, pageSize: 3)
+                previewSource: BookOrbitSource(client: client, pageSize: 3), syncsProgress: true
             ))
         } catch {
             debugConnection = .failed(String(describing: error))

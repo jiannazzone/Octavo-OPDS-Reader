@@ -35,12 +35,17 @@ public struct LocalReadingProgress: Codable, Hashable, Sendable {
     /// The chapter the position is in, as the book's contents name it, for
     /// showing the place without opening the book. Never synced.
     public var chapter: String?
+    /// When the iPhone and the backend last agreed on the position (a push
+    /// landed, or the book opened at the backend's), for "Synced 2 min ago".
+    /// `nil` if they never have.
+    public var syncedAt: Date?
 
-    public init(position: ReadingPosition, modifiedAt: Date, needsPush: Bool, chapter: String? = nil) {
+    public init(position: ReadingPosition, modifiedAt: Date, needsPush: Bool, chapter: String? = nil, syncedAt: Date? = nil) {
         self.position = position
         self.modifiedAt = modifiedAt
         self.needsPush = needsPush
         self.chapter = chapter
+        self.syncedAt = syncedAt
     }
 }
 

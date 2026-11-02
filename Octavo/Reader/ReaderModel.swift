@@ -9,10 +9,11 @@ import os
 /// at its saved position, and keeps that position up to date as pages turn.
 ///
 /// With a `ProgressSync`, the book opens where `OpeningPosition` says (pulled
-/// from the backend before opening), and every move the reader makes after
-/// that is pushed, debounced. Opening itself pushes nothing: the page we land
-/// on starts at or before the backend's position, so pushing it back would
-/// creep the position backwards a little on every open.
+/// from the backend before opening, or from `fallback` if the pull fails),
+/// and every move the reader makes after that is pushed, debounced. Opening
+/// itself pushes nothing: the page we land on starts at or before the
+/// backend's position, so pushing it back would creep the position
+/// backwards a little on every open.
 @Observable
 final class ReaderModel {
     enum Phase: Equatable {
@@ -111,6 +112,13 @@ final class ReaderModel {
 
     @ObservationIgnored private let store: ReadingPositionStore
     @ObservationIgnored private let sync: (any ProgressSync)?
+    /// The backend's position as the library list gave it (a percentage),
+    /// for when there's no pull: the book's screen showed it, so the book
+    /// opens there.
+    @ObservationIgnored private let fallback: SyncedPosition?
+    /// The pull succeeded, so opening at the backend's position means the
+    /// iPhone and the backend agree.
+    @ObservationIgnored private var pulled = false
     @ObservationIgnored let cfiShape: ReaderMessage.CFIShape
     @ObservationIgnored private var pusher: DebouncedProgressPusher<ContinuousClock>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -131,6 +139,7 @@ final class ReaderModel {
         book: ReaderBook,
         store: ReadingPositionStore = ReadingPositionStore(),
         sync: (any ProgressSync)? = nil,
+        fallback: SyncedPosition? = nil,
         bookmarks: ReaderBookmarks? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
         pushDelay: Duration = .seconds(2)
@@ -138,6 +147,7 @@ final class ReaderModel {
         self.book = book
         self.store = store
         self.sync = sync
+        self.fallback = fallback
         self.bookmarks = bookmarks ?? ReaderBookmarks(bookID: book.id)
         self.cfiShape = cfiShape
 
@@ -526,19 +536,23 @@ final class ReaderModel {
         }
     }
 
-    /// The local position, or the rule's pick between it and the backend's.
-    /// If the pull fails or takes too long, the local position wins.
+    /// The rule's pick between the local position and the backend's. If the
+    /// pull fails or takes too long, the local position wins, else
+    /// `fallback`'s percentage.
     private func chooseOpeningPosition() async -> OpeningPosition {
         let local = store.progress(forBook: book.id)
-        let fallback = local.map { OpeningPosition.local($0.position) } ?? .start
+        let fallback = OpeningPosition.choose(local: local, remote: self.fallback)
         guard let sync else { return fallback }
+        let started = ContinuousClock.now
         do {
             let remote = try await Self.withTimeout(Self.pullTimeout) { try await sync.pull() }
             let opening = OpeningPosition.choose(local: local, remote: remote)
-            syncStatus = "pulled \(remote?.position.cfi ?? "nothing") → \(opening.label)"
+            pulled = true
+            let waited = FoldReport.milliseconds(since: started)
+            syncStatus = "pulled \(remote?.position.cfi ?? "nothing") in \(waited) ms → \(opening.label)"
             return opening
         } catch {
-            syncStatus = "pull failed (\(error.localizedDescription)) → local"
+            syncStatus = "pull failed (\(error.localizedDescription)) → \(fallback.label)"
             log.error("Couldn't pull progress: \(error)")
             return fallback
         }
@@ -554,7 +568,7 @@ final class ReaderModel {
             Task { await pusher?.submit(position) }
         case .remote:
             // The backend already has this spot.
-            save(position, needsPush: false)
+            save(position, needsPush: false, syncedAt: pulled ? .now : nil)
         default:
             save(position, needsPush: local?.needsPush ?? false)
         }
@@ -575,9 +589,9 @@ final class ReaderModel {
         if let pusher { Task { await pusher.submit(position) } }
     }
 
-    private func save(_ position: ReadingPosition, needsPush: Bool) {
+    private func save(_ position: ReadingPosition, needsPush: Bool, syncedAt: Date? = nil) {
         do {
-            try store.save(position, forBook: book.id, needsPush: needsPush, chapter: tocLabel)
+            try store.save(position, forBook: book.id, needsPush: needsPush, chapter: tocLabel, syncedAt: syncedAt)
         } catch {
             log.error("Couldn't save reading position: \(error)")
         }
@@ -594,7 +608,9 @@ final class ReaderModel {
         log.error("Couldn't push progress: \(error)")
     }
 
-    private nonisolated static func withTimeout<T: Sendable>(
+    /// `operation`'s result, or `URLError(.timedOut)` after `timeout`, which
+    /// cancels it.
+    nonisolated static func withTimeout<T: Sendable>(
         _ timeout: Duration,
         _ operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {

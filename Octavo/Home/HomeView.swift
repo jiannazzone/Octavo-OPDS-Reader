@@ -106,12 +106,11 @@ struct HomeContent: View {
 struct CurrentBook: View {
     let book: SourcedBook
     let coverWidth: CGFloat
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        // As the book's screen shows it: the iPhone's position if it has
-        // one, else the server's. Worked out here, so closing the reader
-        // (which redraws Home) updates it.
-        let progress = BookPage.progress(of: book.book)
+        // Where the book opens, as its screen shows it (`BookPlaces`).
+        let progress = shell.places.progress(of: book)
         OpenButton(route: .cover(book)) {
             VStack(alignment: .leading, spacing: 14) {
                 BookCover(book: book, cornerRadius: 6, size: .full)
@@ -185,7 +184,7 @@ struct AlsoReading: View {
                 VStack(spacing: 2) {
                     if let books {
                         ForEach(books) { book in
-                            ContinueReadingRow(book: book, progress: BookPage.progress(of: book.book))
+                            ContinueReadingRow(book: book, progress: shell.places.progress(of: book))
                         }
                     } else {
                         ForEach(0..<3, id: \.self) { _ in ContinueReadingRowPlaceholder() }

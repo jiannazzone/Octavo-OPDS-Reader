@@ -21,8 +21,8 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
     /// How an OPDS catalog asked for its password, recorded when it was
     /// added so a later answer can't ask for a weaker one.
     var authScheme: HTTPAuthScheme?
-    /// Reading progress syncs with this BookOrbit server (decision 6). The
-    /// reader follows it from step 13.
+    /// Reading progress syncs with this BookOrbit server (decision 6). Off,
+    /// the iPhone keeps its own place and ignores the server's.
     var syncsProgress = false
 
     /// A new server's ID, before anything is stored under it.
@@ -46,8 +46,9 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
             guard let url = URL(string: address) else { return nil }
             let client = Self.bookOrbitClient(id: id, url: url)
             return LibraryServer(
-                id: id, name: name, detail: detail, source: BookOrbitSource(client: client),
-                previewSource: BookOrbitSource(client: client, pageSize: 3)
+                id: id, name: name, detail: detail, source: BookOrbitSource(client: client, includesProgress: syncsProgress),
+                previewSource: BookOrbitSource(client: client, pageSize: 3, includesProgress: syncsProgress),
+                syncsProgress: syncsProgress
             )
         case .opds:
             let secret = try? KeychainCatalogSecretStore(serverID: id.rawValue).load()
