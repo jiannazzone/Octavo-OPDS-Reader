@@ -20,6 +20,12 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     /// A book's screen. Unfolding on it opens the book if it's on the iPhone.
     case cover(SourcedBook)
 
+    /// Whether the screen has its two-page layout yet; one that hasn't keeps
+    /// to the left page unfolded.
+    var fillsSpread: Bool {
+        if case .feed = self { true } else { false }
+    }
+
     /// Drawn as the screen's large title. `nil` for a book's screen.
     var title: String? {
         switch self {

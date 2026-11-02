@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import OctavoKit
+import SwiftUI
 import Testing
 @testable import Octavo
 
@@ -36,6 +37,20 @@ struct SpreadTests {
     @Test func needsRoomForAPageEachSide() {
         let nearTheEdge = CGRect(x: 120, y: 0, width: 40, height: 669)
         #expect(!Spread(width: 867, divisions: [nearTheEdge]).isTwoPages)
+    }
+
+    // Three covers folded; four on the left page and three on the right.
+    @MainActor @Test func gridColumnsPerPage() {
+        #expect(SpreadMetrics.columns(382) == 3)
+        #expect(SpreadMetrics.columns(455.5) == 4)
+        #expect(SpreadMetrics.columns(371.5) == 3)
+    }
+
+    @MainActor @Test func aListFlowsFromTheLeftPageOntoTheRight() {
+        struct Item: Identifiable { var id: Int }
+        let items = (1...5).map { Item(id: $0) }
+        #expect(SpreadList<Item, EmptyView>.split(items, into: 2).map { $0.map(\.id) } == [[1, 2, 3], [4, 5]])
+        #expect(SpreadList<Item, EmptyView>.split(items, into: 1).map { $0.map(\.id) } == [[1, 2, 3, 4, 5]])
     }
 }
 

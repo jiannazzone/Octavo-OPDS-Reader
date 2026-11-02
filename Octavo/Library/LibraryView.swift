@@ -1,58 +1,198 @@
 import OctavoKit
 import SwiftUI
 
-/// The Library tab's root (frames 02, 04): the chips, and the chosen chip's
-/// list under them. Unfolded, the right pane starts on the list's first
-/// item, selected: a book's cover page, or a collection's books.
+/// The Library tab's top screen: the library's sections as shelves
+/// (`docs/design/direction.md`, Library), each a heading over one row of
+/// covers across both pages; the same layout for every server.
 struct LibraryView: View {
     @Environment(LibraryModel.self) private var library
-    @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        Group {
-            if let server = library.server {
-                if let root = library.root, let chip = library.chip, let feed = library.feed(chip, from: server.id) {
-                    FeedContent(feed: feed) { header(root) }
-                } else {
-                    VStack {
-                        ConnectionBannerSlot()
-                            .padding(.horizontal, 20)
-                        if library.connectionProblem != nil {
-                            // The banner says why, and retries.
-                            Spacer(minLength: 0)
-                        } else if library.rootFailed {
-                            EmptyInvitation(
-                                symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
-                                message: "The server didn’t send its lists.", actionTitle: "Try again"
-                            ) { Task { await library.retry() } }
-                        } else {
-                            ProgressView()
-                                .frame(maxHeight: .infinity)
-                        }
+        if let server = library.server {
+            if let root = library.root {
+                LibraryContents(source: server.id, sections: Self.sections(root))
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    ConnectionBannerSlot()
+                        .padding(.horizontal, 20)
+                    if library.connectionProblem != nil {
+                        // The banner says why, and retries.
+                        Spacer(minLength: 0)
+                    } else if library.rootFailed {
+                        EmptyInvitation(
+                            symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
+                            message: "The server didn’t send its lists.", actionTitle: "Try again"
+                        ) { Task { await library.retry() } }
+                    } else {
+                        LibraryContentsPlaceholder()
                     }
                 }
-            } else {
-                NoLibraryInvitation()
             }
+        } else {
+            NoLibraryInvitation()
         }
     }
 
-    private func header(_ root: LibraryRoot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ConnectionBannerSlot()
-                .padding(.horizontal, 20)
-            ChipBar(chips: root.chips, selected: library.chip) { link in
-                guard link != library.chip else { return }
-                library.chip = link
-                // The screens opened from the old chip go with it.
-                shell[path: .library].replace([])
+    /// The server's own sections, with Recently added second when the server
+    /// has such a list and doesn't already show it.
+    static func sections(_ root: LibraryRoot) -> [LibraryEntry] {
+        var sections = root.chips
+        if let recent = root.recentlyAdded, !sections.contains(where: { $0.link == recent }) {
+            sections.insert(LibraryEntry(kind: .feed, title: "Recently added", link: recent), at: min(1, sections.count))
+        }
+        return sections
+    }
+}
+
+/// The sections as shelves, one under another.
+struct LibraryContents: View {
+    let source: LibrarySourceID
+    let sections: [LibraryEntry]
+    @Environment(\.spread) private var spread
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                ConnectionBannerSlot()
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                ForEach(sections) { section in
+                    LibraryShelf(entry: section, source: source)
+                }
             }
+            .padding(.top, 8)
+            .padding(.bottom, 20)
         }
     }
 }
 
-/// A list opened from the Library (frames 30, 32, 33): a collection's,
-/// series' or author's books, or an OPDS feed's entries.
+/// One section as a shelf: a heading ("All · 7 ›") that opens the section
+/// over the whole spread, over one row of its covers running across both
+/// pages (three folded). A book on the shelf opens its own screen; the
+/// covers of a list of lists (series, authors) open the section.
+struct LibraryShelf: View {
+    let entry: LibraryEntry
+    let source: LibrarySourceID
+    @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
+    @Environment(\.spread) private var spread
+
+    var body: some View {
+        // The section's own list, so its first page is ready when the shelf
+        // is opened.
+        let feed = library.feed(entry.link, from: source)
+        VStack(alignment: .leading, spacing: 10) {
+            heading(feed)
+                .padding(.horizontal, SpreadMetrics.margin)
+                .frame(width: spread.pages?.leftWidth, alignment: .leading)
+            shelf(feed)
+        }
+        .task(id: entry.link) { await feed?.load() }
+    }
+
+    private func heading(_ feed: FeedModel?) -> some View {
+        Button {
+            shell.push(.feed(entry, from: source))
+        } label: {
+            HStack(spacing: 6) {
+                Text(entry.title)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+                if let count = count(feed) {
+                    Text(count, format: .number)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.forward")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel(feed))
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder
+    private func shelf(_ feed: FeedModel?) -> some View {
+        if let feed, !feed.books.isEmpty {
+            SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }, maxRows: 1, cell: { book in
+                BookGridCell(book: book)
+            })
+        } else if let feed, !listCovers(feed).isEmpty {
+            SpreadGrid(items: listCovers(feed), maxRows: 1, cell: { book in
+                Button {
+                    shell.push(.feed(entry, from: source))
+                } label: {
+                    BookCover(book: book)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+            })
+        } else if feed.map({ $0.state == .idle || $0.state == .loading }) ?? false {
+            SpreadGrid(items: (0..<8).map { ShelfPlaceholder(id: $0) }, maxRows: 1, cell: { _ in
+                ShelfPlaceholder.shape
+            })
+            .accessibilityHidden(true)
+        }
+    }
+
+    /// For a list of lists (series, authors): the first cover each entry
+    /// lists. Empty when the server doesn't list them (BookOrbit
+    /// collections): the shelf is then just its heading.
+    private func listCovers(_ feed: FeedModel) -> [SourcedBook] {
+        feed.entries.compactMap(\.previewCovers.first).enumerated().map { index, cover in
+            SourcedBook(source: source, book: LibraryBook(
+                id: LibraryBookID(rawValue: "\(entry.link.rawValue)#\(index)"), title: "", cover: cover
+            ))
+        }
+    }
+
+    private func count(_ feed: FeedModel?) -> Int? {
+        entry.count ?? feed?.total
+    }
+
+    private func accessibilityLabel(_ feed: FeedModel?) -> String {
+        guard let count = count(feed) else { return entry.title }
+        return "\(entry.title), \(count)"
+    }
+}
+
+/// A blank cover shape, while a shelf's books load.
+private struct ShelfPlaceholder: Identifiable {
+    var id: Int
+
+    static var shape: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(.quaternary)
+            .aspectRatio(2 / 3, contentMode: .fit)
+    }
+}
+
+/// The shelves before the server has sent its sections.
+struct LibraryContentsPlaceholder: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 10) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(.quaternary)
+                        .frame(width: 140, height: 20)
+                        .padding(.horizontal, SpreadMetrics.margin)
+                    SpreadGrid(items: (0..<8).map { ShelfPlaceholder(id: $0) }, maxRows: 1, cell: { _ in
+                        ShelfPlaceholder.shape
+                    })
+                }
+            }
+        }
+        .padding(.top, 8)
+        .accessibilityHidden(true)
+    }
+}
+
+/// A list opened from the Library: a section, a collection's, series' or
+/// author's books, or an OPDS feed's entries. Fills the spread.
 struct FeedScreen: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
@@ -81,116 +221,89 @@ struct FeedScreen: View {
     }
 }
 
-/// One list from a library, shown by what it holds (decision 23): entries
-/// as rows (authors A–Z with an index strip), books as a cover grid, or rows
-/// above a grid when an OPDS feed mixes them. `header` scrolls with it.
+/// One list from a library across the spread: entries flowing down the left
+/// page and on down the right (authors under their letters), books as a
+/// grid across both pages, or both when an OPDS feed mixes them. `header`
+/// sits on the left page and scrolls with it.
 struct FeedContent<Header: View>: View {
     let feed: FeedModel
     var numbered = false
     @ViewBuilder let header: () -> Header
     @Environment(LibraryModel.self) private var library
+    @Environment(\.spread) private var spread
 
     var body: some View {
-        Group {
-            if feed.books.isEmpty, !feed.entries.isEmpty {
-                list
-            } else {
-                grid
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                header()
+                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                if isEmpty, feed.state == .idle || feed.state == .loading {
+                    SpreadGrid(items: (0..<9).map { Placeholder(id: $0) }, cell: { _ in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(.quaternary)
+                            .aspectRatio(2 / 3, contentMode: .fit)
+                    })
+                    .accessibilityHidden(true)
+                }
+                if !feed.entries.isEmpty {
+                    SpreadList(items: listItems) { item in
+                        listRow(item)
+                    }
+                }
+                if !feed.books.isEmpty {
+                    SpreadGrid(items: feed.books.map { SourcedBook(source: feed.source, book: $0) }) {
+                        Task { await feed.loadMore() }
+                    } cell: { book in
+                        BookGridCell(book: book, numbered: numbered)
+                    }
+                }
+                status
+                    .frame(width: spread.pages?.leftWidth)
             }
+            .padding(.bottom, 20)
         }
-        // Keyed on the list too: switching chips keeps this view and hands
-        // it another list.
-        .task(id: LoadKey(feed: ObjectIdentifier(feed), isAuthorList: feed.isAuthorList)) {
-            // The index strip jumps anywhere, so authors load in full.
-            if feed.isAuthorList { await feed.loadAll() } else { await feed.load() }
+        .task(id: ObjectIdentifier(feed)) {
+            await feed.load()
+            // A list flows down one page and on down the next, so it loads
+            // in full; a grid loads page by page as it scrolls.
+            if feed.books.isEmpty, !feed.entries.isEmpty { await feed.loadAll() }
         }
         .refreshable { await feed.reload() }
     }
 
-    private struct LoadKey: Hashable {
-        var feed: ObjectIdentifier
-        var isAuthorList: Bool
+    private var isEmpty: Bool { feed.books.isEmpty && feed.entries.isEmpty }
+
+    private var listItems: [ListItem] {
+        guard feed.isAuthorList else { return feed.entries.map(ListItem.entry) }
+        return feed.authorSections.flatMap { [ListItem.letter($0.letter)] + $0.entries.map(ListItem.entry) }
     }
 
-    private var list: some View {
-        List {
-            header()
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
-            if feed.isAuthorList {
-                ForEach(feed.authorSections) { section in
-                    // The letter as a row, not a section header: plain
-                    // lists space headers far apart (frame 31 is compact).
-                    Section {
-                        Text(section.letter)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 0, trailing: 20))
-                            .listRowSeparator(.hidden)
-                            .accessibilityAddTraits(.isHeader)
-                        ForEach(section.entries) { row($0) }
-                    }
-                    .sectionIndexLabel(section.letter)
-                }
-            } else {
-                ForEach(feed.entries) { entry in
-                    row(entry)
-                        .onAppear {
-                            if entry.id == feed.entries.last?.id { Task { await feed.loadMore() } }
-                        }
-                }
+    @ViewBuilder
+    private func listRow(_ item: ListItem) -> some View {
+        switch item {
+        case .letter(let letter):
+            Text(letter)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.top, 12)
+                .padding(.bottom, 2)
+                .accessibilityAddTraits(.isHeader)
+        case .entry(let entry):
+            VStack(spacing: 0) {
+                EntryRow(entry: entry, source: feed.source)
+                    .padding(.vertical, 10)
+                Divider()
             }
-            if feed.state == .failed, library.connectionProblem == nil {
-                Button("Couldn’t load the rest · Try again") { Task { await feed.retry() } }
-            }
-        }
-        .listStyle(.plain)
-        // Level with the grid's header, so the chips don't move when a chip
-        // switches between a list and a grid.
-        .contentMargins(.top, 0, for: .scrollContent)
-        .environment(\.defaultMinListRowHeight, 0)
-        .listSectionIndexVisibility(feed.isAuthorList ? .visible : .hidden)
-    }
-
-    private func row(_ entry: LibraryEntry) -> some View {
-        EntryRow(entry: entry, source: feed.source)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-    }
-
-    private var grid: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                header()
-                if !feed.entries.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(feed.entries) { entry in
-                            EntryRow(entry: entry, source: feed.source)
-                                .padding(.vertical, 10)
-                            Divider()
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-                if !feed.books.isEmpty {
-                    BookGrid(books: feed.books.map { SourcedBook(source: feed.source, book: $0) }, numbered: numbered) {
-                        await feed.loadMore()
-                    }
-                    .padding(.horizontal, 20)
-                }
-                status
-            }
-            .padding(.bottom, 20)
         }
     }
 
     @ViewBuilder
     private var status: some View {
-        let isEmpty = feed.books.isEmpty && feed.entries.isEmpty
         switch feed.state {
-        case .idle, .loading:
+        case .loading where !isEmpty:
+            // The next page of a grid.
             ProgressView()
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, isEmpty ? 80 : 12)
+                .padding(.vertical, 12)
         case .failed where library.connectionProblem == nil:
             if isEmpty {
                 EmptyInvitation(
@@ -199,13 +312,28 @@ struct FeedContent<Header: View>: View {
                 ) { Task { await feed.retry() } }
             } else {
                 Button("Couldn’t load the rest · Try again") { Task { await feed.retry() } }
-                    .frame(maxWidth: .infinity)
             }
         case .loaded where isEmpty:
             ContentUnavailableView("Nothing here yet", systemImage: "books.vertical")
         default:
             EmptyView()
         }
+    }
+
+    private enum ListItem: Identifiable {
+        case letter(String)
+        case entry(LibraryEntry)
+
+        var id: String {
+            switch self {
+            case .letter(let letter): "letter:\(letter)"
+            case .entry(let entry): "entry:\(entry.link.rawValue)"
+            }
+        }
+    }
+
+    private struct Placeholder: Identifiable {
+        var id: Int
     }
 }
 
@@ -223,8 +351,8 @@ struct LibraryNotConnected: View {
     }
 }
 
-/// No server yet. First run (#12) will make this impossible; until then a
-/// debug build connects one from Settings.
+/// No server yet. First run will make this impossible; until then a debug
+/// build connects one from Settings.
 struct NoLibraryInvitation: View {
     @Environment(ShellModel.self) private var shell
 

@@ -30,7 +30,8 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - Unfolding on Home doesn't open anything; tap a book to see its screen.
 
 ### Library
-- **A list of sections** (All books, Recently added, Collections, Series, Authors, or an OPDS server's own sections), laid out like a contents page: each section's name and count, with a peek of its first covers (on the right page unfolded). One layout for every server; a chips layout may come later as an option.
+- **Sections as shelves** (All books, Recently added, Collections, Series, Authors, or an OPDS server's own sections): each a heading ("All · 7 ›") that opens the section, over one row of its covers running across both pages, skipping the hinge (three covers folded). A book on a shelf opens its own screen. A section without covers is just its heading. One layout for every server; a chips layout may come later as an option. (Replaced the contents-page rows after seeing them unfolded: the row split at the hinge and the chevron sat mid-screen.)
+- Dividers may run across the whole spread, fold included.
 - **Each section fills the whole spread** (a grid of covers across both pages, or a list flowing from the left page onto the right).
 
 ### A book's screen

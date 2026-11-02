@@ -12,6 +12,8 @@ import SwiftUI
 struct ScreenStack<Root: View>: View {
     let tab: ShellTab
     let title: String
+    /// Whether the tab's root has its two-page layout yet.
+    var rootFillsSpread = false
     @ViewBuilder let root: () -> Root
     @Environment(ShellModel.self) private var shell
     @State private var spread = Spread.onePage
@@ -62,7 +64,7 @@ struct ScreenStack<Root: View>: View {
     }
 
     private func screen(at id: ScreenID, in path: ShellPath) -> some View {
-        ScreenFrame(title: id.route.map(\.title) ?? title) {
+        ScreenFrame(title: id.route.map(\.title) ?? title, fillsSpread: id.route?.fillsSpread ?? rootFillsSpread) {
             if let route = id.route {
                 ShellScreen(route: route)
             } else {
@@ -127,11 +129,12 @@ private struct ScreenID: Hashable {
 /// A screen's title and content on an opaque page, so a pushed screen covers
 /// the one beneath.
 ///
-/// Unfolded, a screen that hasn't got its two-page layout yet keeps to the
-/// left page; the Library (milestone 2), a book's screen (3) and Home (5)
-/// take the whole spread as they're redone.
+/// The title sits on the left page. Unfolded, a screen that hasn't got its
+/// two-page layout yet keeps to the left page altogether; a book's screen
+/// and Home take the whole spread as they're redone.
 struct ScreenFrame<Content: View>: View {
     let title: String?
+    var fillsSpread = false
     @ViewBuilder let content: () -> Content
     @Environment(\.spread) private var spread
 
@@ -148,12 +151,13 @@ struct ScreenFrame<Content: View>: View {
                     .padding(.horizontal, 20)
                     .padding(.top, Self.titleTop)
                     .padding(.bottom, 8)
+                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
             }
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: spread.pages?.leftWidth)
+        .frame(width: fillsSpread ? nil : spread.pages?.leftWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // The bar's height changes as Back comes and goes, which would move
         // the title; the Duo keeps the bar's buttons in the side column, so

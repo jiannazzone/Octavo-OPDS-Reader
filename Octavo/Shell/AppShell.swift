@@ -56,7 +56,7 @@ struct AppShell: View {
                 ScreenStack(tab: .home, title: "Home") { HomeView() }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                ScreenStack(tab: .library, title: "Library") { LibraryView() }
+                ScreenStack(tab: .library, title: "Library", rootFillsSpread: true) { LibraryView() }
             }
             Tab(value: .search, role: .search) {
                 ScreenStack(tab: .search, title: "Search") { SearchPlaceholder() }

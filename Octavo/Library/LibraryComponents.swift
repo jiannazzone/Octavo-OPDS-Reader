@@ -2,7 +2,7 @@ import OctavoKit
 import SwiftUI
 
 // The pieces Home and the Library are built from: covers that open a book,
-// grids, list rows and the chips.
+// grid cells and list rows.
 
 /// Opens `route` like `ShellLink`, for things that aren't list rows: a cover
 /// in a grid, a Home row.
@@ -35,35 +35,23 @@ struct BookCover: View {
     }
 }
 
-/// Covers in a grid (frames 02, 30, 32), each opening the book's cover page;
-/// a series numbers them. Loads the next page as the end scrolls into view.
-struct BookGrid: View {
-    let books: [SourcedBook]
+/// A cover in a grid, opening the book's screen; a series numbers it.
+struct BookGridCell: View {
+    let book: SourcedBook
     var numbered = false
-    var loadMore: () async -> Void = {}
-
-    /// Three across folded, four left of the hinge, three right of it.
-    private let columns = [GridItem(.adaptive(minimum: 92, maximum: 120), spacing: 12, alignment: .top)]
 
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
-            ForEach(books) { book in
-                OpenButton(route: .cover(book)) {
-                    VStack(spacing: 4) {
-                        BookCover(book: book)
-                        if numbered {
-                            Text(book.book.series?.position.map(Self.number) ?? "")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .accessibilityLabel(Self.accessibilityLabel(book.book, numbered: numbered))
-                .onAppear {
-                    if book.id == books.last?.id { Task { await loadMore() } }
+        OpenButton(route: .cover(book)) {
+            VStack(spacing: 4) {
+                BookCover(book: book)
+                if numbered {
+                    Text(book.book.series?.position.map(Self.number) ?? "")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
+        .accessibilityLabel(Self.accessibilityLabel(book.book, numbered: numbered))
     }
 
     /// 1, 2, 2.5.
@@ -160,43 +148,6 @@ struct EntryRow: View {
         }
         let books = library.preview(entry.link, from: source)?.books.prefix(3) ?? []
         return books.map { SourcedBook(source: source, book: $0) }
-    }
-}
-
-/// The Library's chips (frame 02): All, Collections, Series, Authors for
-/// BookOrbit, the feed's own entries for OPDS. They switch the Library in
-/// place (decision 23).
-struct ChipBar: View {
-    let chips: [LibraryEntry]
-    let selected: LibraryLink?
-    let select: (LibraryLink) -> Void
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(chips) { chip in
-                        let isSelected = chip.link == selected
-                        Button(chip.title) { select(chip.link) }
-                            .font(.subheadline)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .foregroundStyle(isSelected ? Color.white : Color.primary)
-                            .background(isSelected ? Color.accentColor : Color(.secondarySystemFill), in: .capsule)
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(isSelected ? .isSelected : [])
-                            .id(chip.link)
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-            .scrollIndicators(.hidden)
-            .scrollClipDisabled()
-            // An OPDS library can open on a chip far along the bar.
-            .onAppear {
-                if let selected, selected != chips.first?.link { proxy.scrollTo(selected, anchor: .center) }
-            }
-        }
     }
 }
 
