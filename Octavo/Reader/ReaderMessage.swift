@@ -14,6 +14,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The contents again, each entry placed to the character (sent after
     /// `opened`, which places them by section).
     case contents([TOCEntry])
+    /// Matches for a search in the book, a section at a time.
+    case searchResults(SearchBatch)
     /// The visible page changed.
     case relocate(Relocation)
     /// The user tapped while the controls cover the page (`"dismiss"`). See
@@ -39,6 +41,28 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         /// The table of contents, flattened in reading order, each entry with
         /// where its section starts in the book. `nil` from an older bridge.
         var toc: [TOCEntry]?
+    }
+
+    nonisolated struct SearchBatch: Codable, Equatable, Sendable {
+        /// The search these belong to (`ReaderSearch.token`).
+        var token: Int
+        var matches: [SearchMatch]
+        /// The whole book has been searched.
+        var done: Bool
+        /// The search stopped at the limit.
+        var truncated: Bool
+    }
+
+    nonisolated struct SearchMatch: Codable, Equatable, Sendable {
+        var cfi: String
+        /// The words before and after, cut with an ellipsis.
+        var pre: String
+        var match: String
+        var post: String
+        /// The contents entry it falls under.
+        var chapter: String?
+        /// Where it falls in the book, 0...1.
+        var fraction: Double?
     }
 
     nonisolated struct TOCEntry: Codable, Equatable, Sendable {
@@ -141,6 +165,8 @@ nonisolated extension ReaderMessage: Decodable {
             self = .relocate(try Relocation(from: decoder))
         case "contents":
             self = .contents(try container.decode([TOCEntry].self, forKey: .toc))
+        case "searchResults":
+            self = .searchResults(try SearchBatch(from: decoder))
         case "tap":
             self = .tap(zone: try container.decodeIfPresent(String.self, forKey: .zone) ?? "middle")
         case "viewport":

@@ -153,7 +153,7 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
    - **Progress, amended 2026-11-01 (#17)**, following the usual e-reader pattern (Apple Books, Kindle): **each page's bottom margin always shows its chapter and page** ("CHAPTER 36. The Quarter-Deck. · 291 of 974 · 30%"; a spread puts the chapter under the left page and the numbers under the right), so it never covers text and needs nothing special half-open. **The glass bar is a scrubber** that comes and goes with the tap, the same in every posture: over the page flat and folded, and half-open split at the hinge (chapter and scrubber on the left page, numbers on the right).
    - **Always show controls keeps only the column's buttons** (they never cover text); the middle tap still shows and hides the bar. The toggle lives in the Customize panel (decision 13, #18).
    - While the controls show, a tap anywhere on the page hides them (frame 08's hotspot) instead of turning.
-   - Until its panel exists (#18), Search in book shows greyed out (Text and theme, Contents and Bookmark are built, step 12).
+   - The column's panels and Bookmark are built (step 12).
    - **Amended 2026-11-02 (step 9, Adam): the column's "…" is the one way to bring the controls up, in every posture**, folded, flat and half open; the middle tap no longer shows them. Every page tap turns: left of the middle goes back, right of it (and the rest of the column) goes forward, the same in every posture. With Always show controls the "…" sits after the buttons and brings up the bar.
    - **A keyboard and a trackpad turn pages too** (step 10): ← and → the way the book reads, like the halves of the page; ↑, ↓, Page Up, Page Down and Space (Shift-Space back) through the book; a trackpad's two-finger swipe turns one page, sideways or up and down. A swipe on the page turns as foliate's paginator does.
    - Page numbers are foliate's locations (1,500 characters each, the same 974 the frames use): they stay put across folds and devices, though a page turn doesn't always change the number.
@@ -185,6 +185,7 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 ### Search in book (approved 2026-10-31)
 
 19. **Results by chapter, then step through.** The Search button opens a glass sheet: the search field, the match count and results grouped by chapter with their surrounding words. Tapping a result shows the page with the match highlighted and a small bar: ‹ 3 of 128 ›; tapping the count returns to the list, ✕ ends the search. foliate's built-in search supplies the matches, their excerpts and CFIs.
+    - **Built (step 12, 2026-11-02).** The panel opens like the others: out of its button unfolded, a sheet folded, staying above the keyboard. It searches once typing pauses (two letters or more, or anything on Return), ignoring case and accents, and results arrive a chapter at a time, each with its page; it stops at 1,000 matches ("1,000+"). Reopening Search keeps the last search, scrolled to the match shown. The step bar sits under the page (under the right page of a spread, off the hinge) in the footer's place; ✕ clears the search. The matches come from foliate's matcher, but the bridge walks the book itself, so a match is named after its chapter, not its file (`docs/notes/reader-page.md`).
 
 ### Settings (approved 2026-10-31)
 

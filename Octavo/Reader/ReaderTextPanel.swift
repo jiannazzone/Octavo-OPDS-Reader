@@ -5,6 +5,7 @@ import SwiftUI
 enum ReaderPanel: Equatable {
     case textAndTheme
     case contents
+    case search
 
     /// Opening and closing: a little spring as it grows out of its button.
     static let animation = Animation.spring(duration: 0.35, bounce: 0.15)
@@ -27,6 +28,9 @@ struct ReaderPanelFrame<Content: View>: View {
     /// The sheet keeps its full height (a list that scrolls) rather than
     /// fitting what it shows.
     var fillsSheet = false
+    /// How far the keyboard comes up from the bottom; the panel stays above
+    /// it.
+    var keyboard: Double = 0
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -36,7 +40,7 @@ struct ReaderPanelFrame<Content: View>: View {
         let safe = geometry.safeArea
         let width = Double(geometry.size.width)
         let height = Double(geometry.size.height)
-        let bottom = height - safe.bottom - Self.inset
+        let bottom = min(height - safe.bottom, height - keyboard) - Self.inset
         // Placed by padding in a layer the size of the page, which is what
         // the transition scales or moves: it attaches to the outermost view,
         // so an offset panel would scale about a point measured from the
@@ -55,7 +59,8 @@ struct ReaderPanelFrame<Content: View>: View {
                 // unless it holds a list.
                 let left = safe.left + Self.inset
                 let usable = height - safe.top - safe.bottom
-                let maxHeight = fillsSheet ? min(640, usable * 0.68) : min(560, usable * 0.62)
+                let room = bottom - safe.top - Self.inset
+                let maxHeight = min(fillsSheet ? min(640, usable * 0.68) : min(560, usable * 0.62), room)
                 content()
                     .frame(width: max(0, width - safe.right - Self.inset - left), height: fillsSheet ? max(0, maxHeight) : nil)
                     .glassEffect(.regular, in: .rect(cornerRadius: 26))

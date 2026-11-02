@@ -79,6 +79,57 @@ extension ReaderModel {
         bookmarks.place(placed)
     }
 
+    // MARK: Search
+
+    /// Searches for what's typed, if it's worth searching.
+    func runSearch(submitted: Bool) {
+        guard phase == .open else { return }
+        guard let text = search.searchable(submitted: submitted) else {
+            if search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { clearSearch() }
+            return
+        }
+        guard text != search.searched || submitted && !search.isSearching && search.matches.isEmpty else { return }
+        hideMatch()
+        let token = search.begin(text)
+        callBridge("return await window.octavo.search(query, token)", arguments: ["query": text, "token": token])
+    }
+
+    /// The field emptied.
+    func clearSearch() {
+        hideMatch()
+        search.clear()
+        callBridge("return await window.octavo.cancelSearch()")
+    }
+
+    /// Goes to a match and highlights it.
+    func showMatch(_ index: Int) {
+        guard search.matches.indices.contains(index) else { return }
+        search.show(index)
+        callBridge("return await window.octavo.showMatch(cfi)", arguments: ["cfi": search.matches[index].cfi])
+    }
+
+    /// ✕ on the step bar: the highlight goes and the search with it.
+    func endSearch() {
+        hideMatch()
+        search.end()
+        callBridge("return await window.octavo.cancelSearch()")
+    }
+
+    private func hideMatch() {
+        guard search.isStepping else { return }
+        callBridge("return await window.octavo.showMatch(null)")
+    }
+
+    private func callBridge(_ body: String, arguments: [String: Any] = [:]) {
+        Task {
+            do {
+                _ = try await page.callJavaScript(body, arguments: arguments)
+            } catch {
+                bridgeCallFailed(error)
+            }
+        }
+    }
+
     // MARK: Bookmarks
 
     /// The page's Bookmark button.

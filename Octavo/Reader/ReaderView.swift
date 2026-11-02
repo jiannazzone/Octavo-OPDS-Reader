@@ -57,10 +57,14 @@ private struct ReaderScreen: View {
     @State private var panel: ReaderPanel?
     /// Where the open panel's button is, for the panel to grow out of.
     @State private var panelButtonFrame: CGRect?
+    /// How far the keyboard comes up over the reader, for Search's panel.
+    @State private var keyboard: Double = 0
 
     var body: some View {
         NavigationStack {
-            ReaderWebView(model: model, showsFooter: !controls.showsBar)
+            // The bars take the footer's place: the progress bar, or the
+            // step bar while stepping through search matches.
+            ReaderWebView(model: model, showsFooter: !controls.showsBar && !(model.search.isStepping && panel == nil))
                 .overlay { status }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
@@ -76,15 +80,31 @@ private struct ReaderScreen: View {
                     }
                 }
                 .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
+                .overlay(alignment: .bottomLeading) {
+                    if model.search.isStepping, panel == nil, !controls.showsBar, model.phase == .open, let geometry = model.geometry {
+                        // Under the page, or the right page of a spread:
+                        // nothing spans the hinge (decision 9).
+                        let right = Double(geometry.size.width) - geometry.safeArea.right
+                        let left = model.layout.columns == 2 ? (model.layout.fold?.upperBound ?? geometry.safeArea.left) : geometry.safeArea.left
+                        searchBar
+                            .frame(width: max(0, right - left))
+                            .padding(.leading, left)
+                            .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: model.search.isStepping)
                 .overlay(alignment: .topLeading) {
                     if let panel, model.phase == .open, let geometry = model.geometry {
                         let fold = model.layout.columns == 2 ? model.layout.fold : nil
-                        ReaderPanelFrame(geometry: geometry, fold: fold, source: panelButtonFrame, fillsSheet: panel == .contents) {
+                        ReaderPanelFrame(geometry: geometry, fold: fold, source: panelButtonFrame, fillsSheet: panel != .textAndTheme, keyboard: keyboard) {
                             switch panel {
                             case .textAndTheme:
                                 ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
                             case .contents:
                                 contentsPanel
+                            case .search:
+                                searchPanel
                             }
                         }
                         // Another panel grows out of its own button.
@@ -126,6 +146,18 @@ private struct ReaderScreen: View {
         }
         .onChange(of: panel) { _, panel in
             if panel == .contents { Task { await model.placeOnScreen() } }
+        }
+        .task {
+            // The keyboard's top, as far up the reader as it comes. The
+            // reader ignores the keyboard's safe area (see above), so the
+            // panels move by this instead.
+            for await note in NotificationCenter.default.notifications(named: UIResponder.keyboardWillChangeFrameNotification) {
+                guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
+                      let screen = (UIApplication.shared.connectedScenes.first { $0 is UIWindowScene } as? UIWindowScene)?.screen
+                else { continue }
+                let overlap = max(0, screen.bounds.maxY - frame.minY)
+                withAnimation(.easeOut(duration: 0.25)) { keyboard = Double(overlap) }
+            }
         }
         .onChange(of: appearance, initial: true) { _, appearance in
             model.appearance = appearance.script(darkMode: darkMode)
@@ -189,8 +221,7 @@ private struct ReaderScreen: View {
         }
     }
 
-    /// The column's buttons (frame 08). Search in book is greyed out until
-    /// its panel exists (#18).
+    /// The column's buttons (frame 08).
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
         if showsControlsButton, !buttonsVisible {
             ToolbarItem(placement: .topBarTrailing) { showControlsButton }
@@ -200,8 +231,7 @@ private struct ReaderScreen: View {
                 Button("Back", systemImage: "chevron.backward", action: close)
                 panelButton(.contents, title: "Contents", systemImage: "list.bullet")
                 panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size")
-                Button("Search in Book", systemImage: "magnifyingglass") {}
-                    .disabled(true)
+                panelButton(.search, title: "Search in Book", systemImage: "magnifyingglass")
                 let bookmarked = model.bookmarks.pageIsBookmarked
                 Button(bookmarked ? "Remove Bookmark" : "Bookmark", systemImage: bookmarked ? "bookmark.fill" : "bookmark") {
                     model.toggleBookmark()
@@ -250,6 +280,33 @@ private struct ReaderScreen: View {
                 backToReading()
             },
             remove: { model.bookmarks.remove($0) }
+        )
+    }
+
+    private var searchPanel: some View {
+        ReaderSearchPanel(
+            search: model.search,
+            page: { [total = model.location?.total] in ReaderModel.page(at: $0, total: total) },
+            run: { model.runSearch(submitted: $0) },
+            choose: { index in
+                model.showMatch(index)
+                backToReading()
+            }
+        )
+    }
+
+    private var searchBar: some View {
+        ReaderSearchBar(
+            search: model.search,
+            step: { model.showMatch($0) },
+            showList: {
+                withAnimation(ReaderPanel.animation) {
+                    panelButtonFrame = nil
+                    controls.panelOpened()
+                    panel = .search
+                }
+            },
+            end: { model.endSearch() }
         )
     }
 

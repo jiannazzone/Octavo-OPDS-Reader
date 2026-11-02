@@ -14,6 +14,9 @@
 
 import './foliate-js/view.js'
 import * as CFI from './foliate-js/epubcfi.js'
+import { Overlayer } from './foliate-js/overlayer.js'
+import { searchMatcher } from './foliate-js/search.js'
+import { textWalker } from './foliate-js/text-walker.js'
 
 const HANDLER = 'octavo'
 
@@ -780,6 +783,10 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     view = document.createElement('foliate-view')
     view.addEventListener('relocate', onRelocate)
     view.addEventListener('load', onSectionLoad)
+    view.addEventListener('draw-annotation', onDrawAnnotation)
+    view.addEventListener('create-overlay', onCreateOverlay)
+    search = null
+    shownMatch = null
     // foliate would `window.open` external links; hand them to Swift instead.
     view.addEventListener('external-link', e => {
         e.preventDefault()
@@ -822,6 +829,133 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
 const requireView = () => {
     if (!view) throw new Error('No book is open')
     return view
+}
+
+// Search in book (decision 19). foliate's own `search` groups matches by
+// section, and Project Gutenberg books keep every chapter in one or two, so
+// the bridge walks the book itself with foliate's matcher: each section read
+// once (the one on screen as it's laid out), each match named after the
+// contents entry it falls under and placed in the book like the contents.
+// Matches go to Swift a section at a time, tagged with the search's token; a
+// newer search, or `cancelSearch`, stops the walk at the next section.
+const SEARCH_LIMIT = 1000
+let search = null
+const runSearch = async (query, token) => {
+    const v = requireView()
+    search = { token }
+    const current = () => search?.token === token
+    const matcher = searchMatcher(textWalker, { defaultLocale: v.language?.canonical })
+    // The contents' targets by section, in reading order, for naming matches.
+    const entries = tocFractions()
+    const marks = new Map()
+    for (const entry of entries) {
+        let resolved = null
+        try {
+            resolved = entry.href ? v.resolveNavigation(entry.href) : null
+        } catch {
+            resolved = null
+        }
+        if (!Number.isInteger(resolved?.index)) continue
+        if (!marks.has(resolved.index)) marks.set(resolved.index, [])
+        marks.get(resolved.index).push({ label: entry.label, anchor: resolved.anchor })
+    }
+    let chapter = null
+    let count = 0
+    let truncated = false
+    const sections = v.book.sections ?? []
+    for (let index = 0; index < sections.length && !truncated; index++) {
+        const section = sections[index]
+        if (!section?.createDocument || section.linear === 'no') continue
+        const loaded = loadedDoc(index)
+        let doc
+        try {
+            doc = loaded ?? await section.createDocument()
+        } catch {
+            continue
+        }
+        if (!current()) return
+        // Where each text node starts, counted in one pass, for placing
+        // matches in a section that isn't laid out.
+        const body = doc.body ?? doc.documentElement
+        const offsets = new Map()
+        let length = 0
+        const walker = doc.createTreeWalker(body, NodeFilter.SHOW_TEXT)
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            offsets.set(node, length)
+            length += node.length
+        }
+        // The section's contents entries where they start, in order.
+        const starts = []
+        for (const mark of marks.get(index) ?? []) {
+            let at = null
+            try {
+                at = typeof mark.anchor === 'function' ? mark.anchor(doc) : null
+            } catch {
+                at = null
+            }
+            starts.push({ label: mark.label, range: at ? toRange(doc, at) : null })
+        }
+        let next = 0
+        const matches = []
+        for (const { range, excerpt } of matcher(doc, query)) {
+            // A section's entry with no target in it starts it.
+            while (next < starts.length && (!starts[next].range
+                || range.compareBoundaryPoints(Range.START_TO_START, starts[next].range) >= 0)) {
+                chapter = starts[next].label
+                next++
+            }
+            const within = (loaded ? layoutFraction(range) : null)
+                ?? (length > 0 ? ((offsets.get(range.startContainer) ?? 0) + range.startOffset) / length : 0)
+            // A match can run over a line break in the source.
+            const words = text => String(text ?? '').replace(/\s+/g, ' ')
+            matches.push({
+                cfi: v.getCFI(index, range),
+                pre: words(excerpt?.pre),
+                match: words(excerpt?.match),
+                post: words(excerpt?.post),
+                chapter,
+                fraction: bookFraction(index, Math.min(within, 1)),
+            })
+            if (++count >= SEARCH_LIMIT) {
+                truncated = true
+                break
+            }
+        }
+        // Entries after the last match still name what comes next.
+        if (starts.length) chapter = starts[starts.length - 1].label
+        if (!current()) return
+        if (matches.length) post('searchResults', { token, matches, done: false, truncated: false })
+    }
+    if (current()) post('searchResults', { token, matches: [], done: true, truncated })
+}
+
+// The match being shown, highlighted until the next one or the search's end.
+// foliate draws an annotation only in a section that's laid out, so it's
+// drawn again whenever its section is.
+let shownMatch = null
+const HIGHLIGHT = 'rgb(255, 204, 0)'
+const onDrawAnnotation = ({ detail: { draw, annotation } }) => {
+    if (annotation?.value === shownMatch) draw(Overlayer.highlight, { color: HIGHLIGHT })
+}
+const onCreateOverlay = ({ detail: { index } }) => {
+    if (!shownMatch) return
+    try {
+        if (view.resolveCFI(shownMatch).index === index) view.addAnnotation({ value: shownMatch })
+    } catch {
+        // Not a CFI this book has.
+    }
+}
+const showMatch = async cfi => {
+    const v = requireView()
+    if (shownMatch) {
+        await v.deleteAnnotation({ value: shownMatch }).catch(() => {})
+        shownMatch = null
+    }
+    if (!cfi) return true
+    shownMatch = String(cfi)
+    await v.goTo(shownMatch)
+    await v.addAnnotation({ value: shownMatch })
+    return true
 }
 
 // Swift awaits these; a rejection surfaces there as a thrown error, and is
@@ -874,6 +1008,20 @@ window.octavo = Object.freeze({
     }),
     locate: reported(async function locate_(cfi) {
         return locate(cfi)
+    }),
+    // Runs in the background; matches arrive as `searchResults` messages.
+    search: reported(async function search_(query, token) {
+        const text = String(query ?? '').trim()
+        if (!text) return false
+        runSearch(text, token).catch(e => post('error', { phase: 'search', ...describe(e) }))
+        return true
+    }),
+    cancelSearch: reported(async function cancelSearch() {
+        search = null
+        return true
+    }),
+    showMatch: reported(async function showMatch_(cfi) {
+        return showMatch(cfi)
     }),
     onPage: reported(async function onPage_(cfis) {
         return onPage(cfis)

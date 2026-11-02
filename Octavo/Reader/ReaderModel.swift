@@ -106,6 +106,8 @@ final class ReaderModel {
 
     /// The book's bookmarks (decisions 17–18).
     let bookmarks: ReaderBookmarks
+    /// Search in book (decision 19).
+    let search = ReaderSearch()
 
     @ObservationIgnored private let store: ReadingPositionStore
     @ObservationIgnored private let sync: (any ProgressSync)?
@@ -412,6 +414,10 @@ final class ReaderModel {
         await pusher?.flush()
     }
 
+    func bridgeCallFailed(_ error: any Error) {
+        log.error("Reader call failed: \(error)")
+    }
+
     private func call(_ body: String, arguments: [String: Any] = [:]) {
         guard phase == .open else { return }
         Task {
@@ -462,6 +468,8 @@ final class ReaderModel {
             Task { await refreshBookmarks() }
         case .contents(let entries):
             contentsPlaced(entries)
+        case .searchResults(let batch):
+            search.receive(batch)
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             self.relocation = relocation
