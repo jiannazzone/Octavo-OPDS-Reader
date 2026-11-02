@@ -4,8 +4,9 @@ import SwiftUI
 /// the deepest screen fills the spread, folded or unfolded, and a fold only
 /// lays it out again (`docs/design/direction.md`).
 ///
-/// - A pushed screen slides in from the trailing edge; Back, or a swipe from
-///   the leading edge, slides it out.
+/// - A pushed screen slides in from the trailing edge over the one before,
+///   which stays as it was; Back, or a swipe from the leading edge, slides
+///   it out.
 /// - Back (or, at the root, Settings) sits in the side column: the
 ///   `NavigationStack` here never pushes and exists only so the system puts
 ///   those buttons there, as it does the reader's.
@@ -29,17 +30,22 @@ struct ScreenStack<Root: View>: View {
         NavigationStack {
             ZStack(alignment: .topLeading) {
                 ForEach(visibleDepths(path), id: \.self) { id in
+                    let isTop = id.depth == path.routes.count
                     screen(at: id, in: path)
                         .zIndex(Double(id.depth))
-                        .offset(x: id.depth == path.routes.count ? swipe ?? 0 : 0)
-                        .transition(Self.transition(path.lastMove))
+                        .offset(x: isTop ? swipe ?? 0 : 0)
+                        .allowsHitTesting(isTop)
+                        .accessibilityHidden(!isTop)
+                        .transition(.move(edge: .trailing))
                 }
                 if !path.routes.isEmpty {
                     edge
                         .zIndex(Double(path.routes.count + 1))
                 }
             }
-            .animation(.smooth(duration: 0.35), value: path)
+            // A replaced path (a launch argument, closing the reader onto its
+            // book) changes at once.
+            .animation(path.lastMove == .replace ? nil : .smooth(duration: 0.35), value: path)
             .animation(.easeInOut(duration: 0.3), value: spread)
             .onGeometryChange(for: Spread.self) { Spread($0) } action: { spread = $0 }
             .environment(\.spread, spread)
@@ -56,11 +62,15 @@ struct ScreenStack<Root: View>: View {
         }
     }
 
-    /// The top screen, and while a swipe is under way the one it uncovers.
+    /// Every screen in the stack, each under the next. A screen stays put
+    /// (and keeps its scroll position) while others cover it: a pushed screen
+    /// slides in over it, and Back or a swipe slides the top one off to
+    /// uncover it. Only the top screen comes and goes, always the same way,
+    /// so none leaves with a transition left over from the move before
+    /// (SwiftUI animates a removal with the transition from the view's last
+    /// update).
     private func visibleDepths(_ path: ShellPath) -> [ScreenID] {
-        let top = path.routes.count
-        let depths = swipe != nil && top > 0 ? [top - 1, top] : [top]
-        return depths.map { ScreenID(depth: $0, route: $0 == 0 ? nil : path.routes[$0 - 1]) }
+        (0...path.routes.count).map { ScreenID(depth: $0, route: $0 == 0 ? nil : path.routes[$0 - 1]) }
     }
 
     private func screen(at id: ScreenID, in path: ShellPath) -> some View {
@@ -70,14 +80,6 @@ struct ScreenStack<Root: View>: View {
             } else {
                 root()
             }
-        }
-    }
-
-    private static func transition(_ move: ShellPath.Move) -> AnyTransition {
-        switch move {
-        case .push: .asymmetric(insertion: .move(edge: .trailing), removal: .opacity)
-        case .pop: .asymmetric(insertion: .identity, removal: .move(edge: .trailing))
-        case .replace: .identity
         }
     }
 
