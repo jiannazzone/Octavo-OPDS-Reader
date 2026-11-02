@@ -63,23 +63,37 @@ struct SetupScreen: View {
     }
 }
 
-/// "Add your books": the kinds of server (frame 05). Import from Files and
-/// the sample book join them in step 15.
+/// "Add your books": the kinds of server (frame 05), and where to get one
+/// (Adam, 2026-11-01). Import from Files and the sample book join them in
+/// step 15.
 struct SetupStart: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
         SetupPage {
-            SetupText("Octavo reads the books on your own server, a page each side of the fold. Choose the kind of server you have.")
+            SetupText("Octavo reads the books on your own server. Choose the kind of server you have.")
         } form: {
             VStack(spacing: 10) {
-                SetupChoice(title: "BookOrbit", detail: "Your library, and your place in each book") {
+                SetupChoice(title: "BookOrbit", detail: "Your Reading Space") {
                     shell.push(.setup(.bookOrbit))
                 }
                 SetupChoice(title: "OPDS catalog", detail: "Calibre-Web, COPS, Kavita, Komga…") {
                     shell.push(.setup(.opds))
                 }
             }
+        } help: {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Don’t have one yet?")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
+                // Links open in Safari.
+                Text("**BookOrbit** · a self-hosted library with its own reader and apps. [github.com/bookorbit/bookorbit](https://github.com/bookorbit/bookorbit)")
+                Text("**calibre** · manages your books on a Mac or PC. Its Content server, or Calibre-Web, shares them as an OPDS catalog. [calibre-ebook.com](https://calibre-ebook.com)")
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -91,7 +105,7 @@ private struct BookOrbitSetup: View {
     var body: some View {
         @Bindable var setup = shell.setup
         SetupPage {
-            SetupText("Your BookOrbit library, with your place in each book kept in step with BookOrbit’s own reader and apps.")
+            SetupText("Your BookOrbit library, with your place in each book synced with BookOrbit’s own reader and apps.")
         } form: {
             VStack(alignment: .leading, spacing: 12) {
                 AddressField(prompt: "books.example.com", address: $setup.bookOrbitAddress) {
@@ -122,14 +136,14 @@ private struct CatalogSetup: View {
     var body: some View {
         @Bindable var setup = shell.setup
         SetupPage {
-            SetupText("Paste your catalog’s address. If it asks for a password, Octavo asks you next.")
+            SetupText("Paste your catalog’s address. If it asks for a password, you will be automatically prompted.")
         } form: {
             VStack(alignment: .leading, spacing: 12) {
                 AddressField(prompt: "https://books.example.com/opds", address: $setup.catalogAddress) {
                     Task { await setup.connectToCatalog() }
                 }
                 if let signIn = setup.signIn {
-                    Text(signIn.title.map { "Found “\($0)”. It asks for a sign-in." } ?? "The catalog asks for a sign-in.")
+                    Text(signIn.title.map { "Found “\($0)”. Sign-in required." } ?? "The catalog asks for a sign-in.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     SetupField(signIn.usernameLabel ?? "Username", text: $setup.catalogUsername)
@@ -148,6 +162,7 @@ private struct CatalogSetup: View {
                 Text("Where to find it")
                     .font(.subheadline.weight(.semibold))
                 Group {
+                    Text("**calibre** (Content server) · …/opds")
                     Text("**Calibre-Web** · …/opds")
                     Text("**COPS** · …/feed.php")
                     Text("**Komga** · …/opds/v1.2/catalog")
