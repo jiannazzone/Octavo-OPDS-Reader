@@ -80,7 +80,10 @@ func makeShell(opener: BookOpener? = nil) -> ShellModel {
             onIPhone: BooksOnIPhone(fileURL: folder.appending(path: "BooksOnIPhone.json"))
         ),
         opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books"))),
-        servers: ServerStore(fileURL: folder.appending(path: "Server.json"))
+        servers: ServerStore(fileURL: folder.appending(path: "Server.json")),
+        positions: ReadingPositionStore(directory: folder.appending(path: "ReadingPositions")),
+        bookmarks: BookmarkStore(directory: folder.appending(path: "Bookmarks")),
+        removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServer.json"))
     )
 }
 

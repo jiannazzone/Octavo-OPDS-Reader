@@ -45,6 +45,10 @@ final class ShellModel {
     let setup = SetupModel()
     /// Where the server is kept between launches.
     let servers: ServerStore
+    /// The server Remove server took away, until the next one is added.
+    let removedServers: RemovedServerStore
+    /// Bookmarks, for clearing a removed server's (`RemovedServer`).
+    let bookmarks: BookmarkStore
     /// A debug launch argument is connecting a server: the tabs show, not
     /// setup, while it does.
     private var connectingAtLaunch = false
@@ -56,11 +60,17 @@ final class ShellModel {
     /// a failing download.
     var coverStrip: CoverStripMessage?
 
-    init(library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore()) {
+    init(
+        library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore(),
+        positions: ReadingPositionStore = ReadingPositionStore(), bookmarks: BookmarkStore = BookmarkStore(),
+        removedServers: RemovedServerStore = RemovedServerStore()
+    ) {
         self.library = library
         self.opener = opener
         self.servers = servers
-        places = BookPlaces { [library] in ShellModel.progressSync(for: $0, on: library.server) }
+        self.bookmarks = bookmarks
+        self.removedServers = removedServers
+        places = BookPlaces(store: positions) { [library] in ShellModel.progressSync(for: $0, on: library.server) }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         opener.onOpen = { [weak self] in self?.opened($0) }
         // Another server: its books' pages, the screens opened from them
@@ -72,6 +82,7 @@ final class ShellModel {
             search.reset()
             setup.reset()
             for tab in ShellTab.allCases { self[path: tab].replace([]) }
+            if library.server != nil { forgetRemovedServer() }
             // A server to send to, at launch too: places that didn't go.
             retryUnsentPlaces()
         }
@@ -201,20 +212,50 @@ final class ShellModel {
         let id = server.id
         await Self.endSignIn(on: server)
         try? ServerCredentials.removeAll(serverID: id.rawValue)
-        for download in serverDownloads() {
-            if removingBooks {
-                opener.removeDownload(download.book.book)
-                try? library.onIPhone.remove(download.book.id)
-            } else if !library.onIPhone.books().contains(download.book) {
-                // Known only from Continue reading, which forgets it next:
-                // listed here, Storage still shows it.
-                try? library.onIPhone.record(download.book)
-            }
+        // Nothing still downloading lands, or opens, afterwards.
+        opener.cancelAll()
+        opening = [:]
+        let downloads = serverDownloads()
+        if removingBooks {
+            for download in downloads { opener.removeDownload(download.book.book) }
+        }
+        // Its books stay listed only while their files do, so Storage
+        // shows the kept ones (some known only from Continue reading,
+        // which goes next).
+        let kept = removingBooks ? [] : downloads.map(\.book)
+        for book in library.onIPhone.books() where book.source != .files && !kept.contains(book) {
+            try? library.onIPhone.remove(book.id)
+        }
+        for book in kept where !library.onIPhone.books().contains(book) {
+            try? library.onIPhone.record(book)
         }
         library.forgetBooks(of: id)
         places.forget(server: id)
+        try? removedServers.save(RemovedServer(identity: server.identity))
         if servers.load()?.id == id { try? servers.remove() }
         library.disconnect()
+    }
+
+    /// A server connected after Remove server: if it isn't the one removed
+    /// (another address or account), the removed one's downloads, places,
+    /// bookmarks and records go, so none of them is taken for this server's
+    /// book of the same number (`RemovedServer`). Imported books stay.
+    private func forgetRemovedServer() {
+        guard let removed = removedServers.load(), let server = library.server else { return }
+        removedServers.remove()
+        guard removed.identity != server.identity else { return }
+        let records = library.onIPhone.books() + library.recents.records().map(\.book)
+        let imported = Set(records.filter { $0.source == .files }.compactMap { $0.book.readableFile?.storageKey })
+        opener.removeAllDownloads(keeping: imported)
+        places.store.removeAll(keeping: imported)
+        bookmarks.removeAll(keeping: imported)
+        for book in library.onIPhone.books() where book.source != .files {
+            try? library.onIPhone.remove(book.id)
+        }
+        for source in Set(library.recents.records().map(\.book.source)) where source != .files && source != server.id {
+            try? library.recents.remove(source: source)
+        }
+        places.reset()
     }
 
     /// Forgets `server`'s sign-in: BookOrbit's tokens, here and on the

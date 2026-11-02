@@ -111,12 +111,22 @@ final class BookOpener {
         removals += 1
     }
 
-    /// Storage's Remove all downloads: every book's file, including any
-    /// whose book the iPhone no longer knows. Downloads still running carry
-    /// on.
-    func removeAllDownloads() {
-        try? files.removeAll()
+    /// Storage's Remove all downloads: every book's file but `keeping`'s
+    /// storage keys, including any whose book the iPhone no longer knows.
+    /// Downloads still running carry on.
+    func removeAllDownloads(keeping keys: Set<String> = []) {
+        try? files.removeAll(keeping: keys)
         removals += 1
+    }
+
+    /// Remove server: every download still running stops, and leaves no
+    /// file.
+    func cancelAll() {
+        for task in tasks.values { task.cancel() }
+        tasks = [:]
+        statuses = statuses.filter { _, status in
+            if case .downloading = status { false } else { true }
+        }
     }
 
     /// The downloaded file of `book`, for Storage's sizes.
@@ -144,7 +154,11 @@ final class BookOpener {
                 let url = try await files.download(file, from: source) { fraction in
                     Task { @MainActor [weak self] in self?.progressed(id, to: fraction) }
                 }
-                try Task.checkCancellation()
+                // Cancelled as the file landed: it goes too.
+                if Task.isCancelled {
+                    try? files.remove(file)
+                    throw CancellationError()
+                }
                 finished(full, file: file, url: url)
             } catch {
                 failed(book, error)

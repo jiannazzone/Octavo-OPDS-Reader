@@ -76,10 +76,16 @@ struct OPDSClient: Sendable {
     // MARK: Sign-in
 
     /// Sign out: forgets the password, in the store and in memory. Requests
-    /// from then on go without it, so the catalog asks again.
+    /// from then on go without it, so the catalog asks again. Memory is
+    /// cleared even if the store can't be.
     func signOut() async throws {
         await cache.clear()
-        try await credentials.save(nil)
+        do {
+            try await credentials.save(nil)
+        } catch {
+            await cache.clear()
+            throw error
+        }
         await cache.clear()
     }
 

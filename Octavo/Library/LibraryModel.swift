@@ -219,6 +219,7 @@ final class LibraryModel {
         guard let server else { return }
         let connection = connection
         if root == nil { await loadRoot() }
+        guard connection == self.connection else { return }
         let readingBooks = await books(at: root?.continueReading, from: server)
         guard connection == self.connection else { return }
         // A failed list keeps what it showed.

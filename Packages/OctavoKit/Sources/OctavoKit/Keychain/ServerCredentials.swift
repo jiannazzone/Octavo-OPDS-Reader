@@ -56,11 +56,19 @@ public enum ServerCredentials {
     static let catalogSecretService = "com.ianazzone.ereader.catalog-secret"
     static let allServices = [tokenService, passwordService, pinService, catalogSecretService]
 
-    /// For Sign out and Remove server: deletes everything kept for `serverID`.
+    /// Remove server: deletes everything kept for `serverID`. Every item is
+    /// tried, so one that can't be deleted doesn't keep the others; the
+    /// first failure is thrown once they all have been.
     public static func removeAll(serverID: String) throws {
+        var failure: (any Error)?
         for service in allServices {
-            try KeychainItem(service: service, account: serverID).delete()
+            do {
+                try KeychainItem(service: service, account: serverID).delete()
+            } catch {
+                failure = failure ?? error
+            }
         }
+        if let failure { throw failure }
     }
 
     static let installedKey = "ServerCredentials.installed"

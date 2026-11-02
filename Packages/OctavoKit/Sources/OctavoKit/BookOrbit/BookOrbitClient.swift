@@ -123,11 +123,14 @@ public actor BookOrbitClient {
 
     /// Sign out and Remove server: signs out here, as `signOut()` does, then
     /// asks the server to end the session (`POST auth/logout` with the
-    /// refresh token, measured against v3.6.0), so a copy of the token is no
-    /// use to anyone. That request goes on after this returns (the returned
-    /// task) and its answer is ignored: offline, or on a server without the
-    /// endpoint, the session lapses there on its own. It's sent even if the
-    /// token couldn't be removed from `tokenStore`, which is then rethrown.
+    /// refresh token, measured against v3.6.0: it ends the session even
+    /// with a token a refresh has just replaced), so a copy of the token is
+    /// no use to anyone. That request goes on after this returns (the
+    /// returned task), carries on briefly if the app leaves the foreground,
+    /// gives up after `logoutTimeout` all told, and its answer is ignored:
+    /// offline, or on a server without the endpoint, the session lapses
+    /// there on its own. It's sent even if the token couldn't be removed
+    /// from `tokenStore`, which is then rethrown.
     @discardableResult
     public func signOutEverywhere() async throws -> Task<Void, Never> {
         let ending = credentialsLoaded ? credentials : try? await tokenStore.load()
@@ -151,13 +154,22 @@ public actor BookOrbitClient {
         let transport = transport
         let logout = Task {
             guard let request else { return }
-            _ = try? await transport.data(for: request)
+            let activity = ExpiringActivity(reason: "Ending your BookOrbit session")
+            defer { activity.end() }
+            // A deadline for the whole request: `timeoutInterval` only
+            // limits the wait between packets.
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { _ = try? await transport.data(for: request) }
+                group.addTask { try? await Task.sleep(for: .seconds(Self.logoutTimeout)) }
+                await group.next()
+                group.cancelAll()
+            }
         }
         if let removal { throw removal }
         return logout
     }
 
-    /// Ending the session on the server doesn't wait longer than this.
+    /// Ending the session on the server doesn't take longer than this.
     static let logoutTimeout: TimeInterval = 15
 
     private func postLogin(username: String, password: String, native: Bool) async throws -> (Data, HTTPURLResponse) {

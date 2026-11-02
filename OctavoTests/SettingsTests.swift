@@ -85,7 +85,28 @@ struct RemoveServerTests {
         try model.library.recents.record(downloaded)
         try model.library.finished.set(true, for: downloaded.id)
         try model.servers.save(SavedServer(id: Self.server, kind: .bookOrbit, address: "http://localhost:3300", name: "BookOrbit"))
-        await model.library.connect(LibraryServer(id: Self.server, name: "BookOrbit", source: StubLibrarySource()))
+        await model.library.connect(Self.bookOrbit(id: Self.server, account: "octavo"))
+        for book in [downloaded, imported] {
+            let key = try #require(book.book.readableFile?.storageKey)
+            try model.places.store.save(ReadingPosition(cfi: "epubcfi(/6/4!/4/2)", fraction: 0.3), forBook: key, needsPush: true)
+            try model.bookmarks.save([], forBook: key)
+        }
+    }
+
+    static func bookOrbit(id: LibrarySourceID, account: String) -> LibraryServer {
+        LibraryServer(id: id, name: "BookOrbit", address: "localhost:3300", username: account, signsIn: true, source: StubLibrarySource())
+    }
+
+    private func key(_ book: SourcedBook) -> String {
+        book.book.readableFile!.storageKey
+    }
+
+    private func hasPlace(_ book: SourcedBook) -> Bool {
+        model.places.store.progress(forBook: key(book)) != nil
+    }
+
+    private func hasBookmarks(_ book: SourcedBook) -> Bool {
+        FileManager.default.fileExists(atPath: model.bookmarks.fileURL(forBook: key(book)).path)
     }
 
     @Test func countsTheServersDownloadsNotImportedOnes() {
@@ -118,6 +139,47 @@ struct RemoveServerTests {
         #expect(model.serverDownloads().count == 1)
         await model.removeServer(removingBooks: false)
         #expect(model.downloads().map(\.book.id).contains(downloaded.id))
+    }
+
+    // BookOrbit numbers files from 1 on every server: another server (or
+    // account) must not find the removed one's book 3 as its own.
+    @Test func anotherServerFindsNoneOfTheRemovedOnesBooks() async {
+        await model.removeServer(removingBooks: false)
+        await model.library.connect(Self.bookOrbit(id: SavedServer.newID(), account: "someone-else"))
+        #expect(model.opener.localFile(for: downloaded.book) == nil)
+        #expect(!hasPlace(downloaded))
+        #expect(!hasBookmarks(downloaded))
+        #expect(model.downloads().map(\.book.id) == [imported.id])
+        #expect(model.opener.localFile(for: imported.book) != nil, "imported books stay")
+        #expect(hasPlace(imported))
+        #expect(hasBookmarks(imported))
+    }
+
+    // The same server and account, at a new ID: its books are where they
+    // were, as "Keep books on iPhone" promised.
+    @Test func theSameServerComingBackFindsItsBooks() async {
+        await model.removeServer(removingBooks: false)
+        await model.library.connect(Self.bookOrbit(id: SavedServer.newID(), account: "octavo"))
+        #expect(model.opener.localFile(for: downloaded.book) != nil)
+        #expect(hasPlace(downloaded))
+        #expect(hasBookmarks(downloaded))
+        #expect(model.removedServers.load() == nil)
+    }
+
+    // A download still running when the server goes doesn't land.
+    @Test func aRunningDownloadStopsAndLeavesNothing() async throws {
+        let slow = LibraryBook(id: LibraryBookID(rawValue: "slow"), title: "Slow")
+        await model.library.connect(LibraryServer(
+            id: Self.server, name: "BookOrbit", address: "localhost:3300", username: "octavo",
+            source: StubLibrarySource(downloadTime: .milliseconds(300))
+        ))
+        model.downloadBook(SourcedBook(source: Self.server, book: slow))
+        await model.removeServer(removingBooks: true)
+        try await Task.sleep(for: .milliseconds(600))
+        let file = try #require(StubLibrarySource().files.first)
+        #expect(files.store.localFile(for: file) == nil)
+        #expect(model.opener.status(of: slow) == .notDownloaded)
+        #expect(model.reading == nil)
     }
 
     @Test func theQuestionCountsTheBooks() {
