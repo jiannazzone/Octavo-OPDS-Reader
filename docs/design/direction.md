@@ -1,6 +1,6 @@
 # Octavo design direction
 
-Status: **being redone, area by area** (from 2026-11-01). Adam set aside the 2026-10-31 decisions and is deciding again, one area at a time, starting with the library. **"Library pass" below is the source of truth; where an older decision disagrees, the library pass wins.** The older decisions stay below for reference until each area is redone. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`.
+Status: **being redone, area by area** (from 2026-11-01). Adam set aside the 2026-10-31 decisions and is deciding again, one area at a time, starting with the library. **"Library pass" below is the source of truth; where an older decision disagrees, the library pass wins.** The older decisions stay below for reference until each area is redone. Ideas not yet approved, or parked, stay in `docs/UI-IDEAS.md`. The order the areas are built in is `docs/PLAN.md`.
 
 ## Device frame
 
