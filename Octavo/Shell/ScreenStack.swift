@@ -13,8 +13,6 @@ import SwiftUI
 struct ScreenStack<Root: View>: View {
     let tab: ShellTab
     let title: String
-    /// Whether the tab's root has its two-page layout yet.
-    var rootFillsSpread = false
     /// Setup has no Settings to open.
     var showsSettings = true
     @ViewBuilder let root: () -> Root
@@ -80,7 +78,7 @@ struct ScreenStack<Root: View>: View {
                             Button("Settings", systemImage: "gearshape") { shell.openSettings() }
                         }
                     } else {
-                        Button("Back", systemImage: "chevron.backward") { shell.pop(tab) }
+                        Button("Back", systemImage: "chevron.backward") { back() }
                     }
                 }
             }
@@ -121,13 +119,27 @@ struct ScreenStack<Root: View>: View {
     }
 
     private func screen(at id: ScreenID, in path: ShellPath) -> some View {
-        ScreenFrame(title: id.route.map(\.title) ?? title, fillsSpread: id.route?.fillsSpread ?? rootFillsSpread) {
+        ScreenFrame(title: id.route.map(\.title) ?? title) {
             if let route = id.route {
                 ShellScreen(route: route)
             } else {
                 root()
             }
         }
+        // Unfolded, Settings' page shows its list too, so the list's own
+        // screen beneath stays out of sight: a swipe back uncovers the tab.
+        .opacity(isListUnderItsPage(id, in: path) ? 0 : 1)
+    }
+
+    private func isListUnderItsPage(_ id: ScreenID, in path: ShellPath) -> Bool {
+        guard (measured ?? shell.lastSpread)?.isTwoPages == true, id.route == .settings, id.depth < path.routes.count,
+              case .settingsPage = path.routes[id.depth]
+        else { return false }
+        return true
+    }
+
+    private func back() {
+        shell.back(tab, twoPages: (measured ?? shell.lastSpread)?.isTwoPages == true)
     }
 
     /// The strip along the leading edge that a swipe back starts in.
@@ -152,7 +164,7 @@ struct ScreenStack<Root: View>: View {
                                 var instant = Transaction()
                                 instant.disablesAnimations = true
                                 withTransaction(instant) {
-                                    shell.pop(tab)
+                                    back()
                                     swipe = nil
                                 }
                             }
@@ -176,39 +188,49 @@ private struct ScreenID: Hashable {
 }
 
 /// A screen's title and content on an opaque page, so a pushed screen covers
-/// the one beneath.
-///
-/// The title sits on the left page. Unfolded, a screen that hasn't got its
-/// two-page layout yet keeps to the left page altogether; a book's screen
-/// and Home take the whole spread as they're redone.
+/// the one beneath. The title sits on the left page.
 struct ScreenFrame<Content: View>: View {
     let title: String?
-    var fillsSpread = false
     @ViewBuilder let content: () -> Content
     @Environment(\.spread) private var spread
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
-                Text(title)
-                    .font(.largeTitle.bold())
-                    .lineLimit(1)
-                    .padding(.horizontal, 20)
-                    .padding(.top, SpreadMetrics.titleTop)
-                    .padding(.bottom, 8)
+                ScreenTitle(title)
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
             }
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: fillsSpread ? nil : spread.pages?.leftWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // The bar's height changes as Back comes and goes, which would move
         // the title; the Duo keeps the bar's buttons in the side column, so
         // the screen ignores it and places its title itself.
         .ignoresSafeArea(.container, edges: .top)
         .background(Color(.systemBackground))
+    }
+}
+
+/// A screen's large title, where every screen has it: level with the one
+/// the system drew folded. A screen without a route title (Settings) draws
+/// one on each page with this.
+struct ScreenTitle: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.largeTitle.bold())
+            .lineLimit(1)
+            .padding(.horizontal, 20)
+            .padding(.top, SpreadMetrics.titleTop)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

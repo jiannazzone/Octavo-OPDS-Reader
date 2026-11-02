@@ -22,6 +22,12 @@ nonisolated struct BookmarkStore: Sendable {
         try JSONEncoder().encode(bookmarks).write(to: fileURL(forBook: bookID), options: .atomic)
     }
 
+    /// Every book's bookmarks but `keeping`'s (another server after Remove
+    /// server, `RemovedServer`).
+    func removeAll(keeping bookIDs: Set<String>) {
+        ReadingPositionStore.removeFiles(in: directory, keeping: bookIDs)
+    }
+
     func fileURL(forBook bookID: String) -> URL {
         ReadingPositionStore.fileURL(forBook: bookID, in: directory)
     }

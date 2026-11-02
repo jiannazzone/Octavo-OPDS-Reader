@@ -60,6 +60,23 @@ nonisolated struct ReadingPositionStore: Sendable {
         try? FileManager.default.removeItem(at: fileURL(forBook: bookID))
     }
 
+    /// Every book's place but `keeping`'s (another server after Remove
+    /// server, `RemovedServer`).
+    func removeAll(keeping bookIDs: Set<String>) {
+        Self.removeFiles(in: directory, keeping: bookIDs)
+    }
+
+    /// The per-book JSON files in `directory`, but `keeping`'s; folders
+    /// (the unsent places) stay.
+    static func removeFiles(in directory: URL, keeping bookIDs: Set<String>) {
+        let kept = Set(bookIDs.map { fileURL(forBook: $0, in: directory).lastPathComponent })
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasSuffix(".json") && !kept.contains(name) {
+            try? manager.removeItem(at: directory.appending(path: name, directoryHint: .notDirectory))
+        }
+    }
+
     /// Book IDs can be file names or server IDs; percent-encode anything that
     /// isn't safe in a file name.
     func fileURL(forBook bookID: String) -> URL {

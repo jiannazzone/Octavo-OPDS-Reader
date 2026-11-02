@@ -9,16 +9,22 @@ nonisolated enum ShellTab: String, Hashable, Sendable, CaseIterable {
     case home, library, search, setup
 }
 
+/// A page of Settings, opened from its list.
+nonisolated enum SettingsPage: Hashable, Sendable, CaseIterable {
+    case server, storage, licences
+}
+
 /// A screen a tab opens. A tab's root isn't a route; everything opened from
 /// it is, and the deepest one fills the spread.
-///
-/// `settingsPage` is a stand-in until Settings is designed.
 nonisolated enum ShellRoute: Hashable, Sendable {
     /// A list from a library: a collection, a series, an author's books, an
     /// OPDS feed.
     case feed(LibraryEntry, from: LibrarySourceID)
+    /// Settings' list. Unfolded it's beside a page (`SettingsScreen`).
     case settings
-    case settingsPage(String)
+    /// Folded, a page over the list; unfolded, the list with this page
+    /// chosen.
+    case settingsPage(SettingsPage)
     /// A book's screen. Unfolding on it opens the book if it's on the iPhone.
     case cover(SourcedBook)
     /// A step in adding the server.
@@ -26,22 +32,12 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     /// The server signed you out (or its password changed): sign in again.
     case signInAgain
 
-    /// Whether the screen has its two-page layout yet; one that hasn't keeps
-    /// to the left page unfolded.
-    var fillsSpread: Bool {
-        switch self {
-        case .feed, .cover, .setup, .signInAgain: true
-        case .settings, .settingsPage: false
-        }
-    }
-
-    /// Drawn as the screen's large title. `nil` for a book's screen.
+    /// Drawn as the screen's large title. `nil` for a book's screen, and for
+    /// Settings, which draws a title on each page.
     var title: String? {
         switch self {
         case .feed(let entry, _): entry.kind == .author ? AuthorIndex.displayName(entry) : entry.title
-        case .settings: "Settings"
-        case .settingsPage(let name): name
-        case .cover: nil
+        case .settings, .settingsPage, .cover: nil
         case .setup(.bookOrbit): "Sign in to BookOrbit"
         case .setup(.opds): "Add an OPDS catalog"
         case .setup(.trust): "Trust this server?"

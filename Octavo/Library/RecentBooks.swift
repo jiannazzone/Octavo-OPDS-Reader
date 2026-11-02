@@ -30,6 +30,13 @@ nonisolated struct RecentBooks: Sendable {
         try JSONEncoder().encode(kept).write(to: fileURL, options: .atomic)
     }
 
+    /// Forgets every book from `source` (Remove server).
+    func remove(source: LibrarySourceID) throws {
+        let kept = records().filter { $0.book.source != source }
+        guard kept.count != records().count else { return }
+        try JSONEncoder().encode(kept).write(to: fileURL, options: .atomic)
+    }
+
     /// Puts `book` first, replacing an older record of it.
     func record(_ book: SourcedBook, at date: Date = .now) throws {
         let kept = records().filter { $0.book.id != book.id }

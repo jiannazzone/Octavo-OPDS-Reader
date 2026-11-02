@@ -8,6 +8,7 @@ Spike 1b (`BookOrbitClient` in OctavoKit) and 2a (sync), measured against the lo
 - **Web mode (no `clientKind`, and the only mode before 3.0):** the body has `{accessToken, accessTokenExpiresAt, sessionId, user}` and the refresh token is a cookie (`Path=/api/v1/auth; HttpOnly; SameSite=Strict`, `Secure` only over HTTPS). BookOrbit's Android client still uses this mode.
 - Access tokens last 15 minutes, refresh tokens 7 days. **Refresh tokens rotate on every refresh** (30 s grace for concurrent reuse), so store the new one every time.
 - **Login is rate-limited to 5 per minute per IP** (HTTP 429).
+- **Logout:** `POST auth/logout {refreshToken}` revokes the session (measured 2026-11-02: afterwards the refresh token and the access token both get 401, and `auth_sessions.revoked_at` is set). The access token alone (bearer, empty body) gets 200 but revokes nothing. `BookOrbitClient.signOutEverywhere()` sends it, as the refresh cookie for pre-3.0 servers, after forgetting the tokens on the iPhone.
 - `BookOrbitClient` uses native mode and falls back to web mode for pre-3.0 servers, which reject `clientKind`. It never uses URLSession's cookie jar: in web mode it lifts the cookie into the token store and replays it as a header. That also avoids BookOrbit's 400 "Conflicting refresh credentials" when a stale cookie and a body token both arrive.
 
 ## Validation

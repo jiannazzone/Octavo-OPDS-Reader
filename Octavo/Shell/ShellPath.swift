@@ -27,6 +27,13 @@ nonisolated struct ShellPath: Hashable, Sendable {
         lastMove = .pop
     }
 
+    /// Back from Settings unfolded: its page and its list go together.
+    mutating func pop(_ count: Int) {
+        guard count > 0, !routes.isEmpty else { return }
+        routes.removeLast(min(count, routes.count))
+        lastMove = .pop
+    }
+
     mutating func popToRoot() {
         guard !routes.isEmpty else { return }
         routes = []

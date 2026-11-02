@@ -75,6 +75,20 @@ struct OPDSClient: Sendable {
 
     // MARK: Sign-in
 
+    /// Sign out: forgets the password, in the store and in memory. Requests
+    /// from then on go without it, so the catalog asks again. Memory is
+    /// cleared even if the store can't be.
+    func signOut() async throws {
+        await cache.clear()
+        do {
+            try await credentials.save(nil)
+        } catch {
+            await cache.clear()
+            throw error
+        }
+        await cache.clear()
+    }
+
     /// Loads the catalog's first page to see whether it needs a sign-in,
     /// with the stored credentials if there are any.
     func checkAccess() async throws -> OPDSAccess {
@@ -205,16 +219,23 @@ private final class DownloadProgress: NSObject, URLSessionTaskDelegate, Sendable
 private actor CredentialCache {
     private var loaded = false
     private var credentials: PasswordCredentials?
+    /// Moves with each `clear`, so a load that was still reading the store
+    /// can't put back what was cleared meanwhile.
+    private var generation = 0
 
     func load(from store: any PasswordStore) async throws -> PasswordCredentials? {
         if !loaded {
-            credentials = try await store.load()
+            let started = generation
+            let read = try await store.load()
+            guard started == generation else { return credentials }
+            credentials = read
             loaded = true
         }
         return credentials
     }
 
     func clear() {
+        generation += 1
         loaded = false
         credentials = nil
     }
