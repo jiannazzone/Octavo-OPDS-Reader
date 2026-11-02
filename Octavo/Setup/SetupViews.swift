@@ -164,15 +164,15 @@ private struct BookOrbitSetup: View {
         } form: {
             VStack(alignment: .leading, spacing: 12) {
                 AddressField(prompt: "books.example.com", address: $setup.bookOrbitAddress) {
-                    Task { await setup.signInToBookOrbit() }
+                    setup.signInToBookOrbit()
                 }
                 SetupField("Username", text: $setup.bookOrbitUsername)
                     .textContentType(.username)
                 SetupField("Password", text: $setup.bookOrbitPassword, secure: true)
                     .textContentType(.password)
-                    .onSubmit { Task { await setup.signInToBookOrbit() } }
+                    .onSubmit { setup.signInToBookOrbit() }
                 SetupButton("Sign in", working: setup.working) {
-                    await setup.signInToBookOrbit()
+                    setup.signInToBookOrbit()
                 }
                 SetupError(message: setup.error)
             }
@@ -180,6 +180,7 @@ private struct BookOrbitSetup: View {
             SetupText("The address you open BookOrbit at in a browser, such as books.example.com or 192.168.1.5:3300.")
                 .font(.footnote)
         }
+        .onDisappear { setup.leftStep() }
     }
 }
 
@@ -195,7 +196,7 @@ private struct CatalogSetup: View {
         } form: {
             VStack(alignment: .leading, spacing: 12) {
                 AddressField(prompt: "https://books.example.com/opds", address: $setup.catalogAddress) {
-                    Task { await setup.connectToCatalog() }
+                    setup.connectToCatalog()
                 }
                 if let signIn = setup.signIn {
                     Text(signIn.title.map { "Found “\($0)”. Sign-in required." } ?? "The catalog asks for a sign-in.")
@@ -205,10 +206,10 @@ private struct CatalogSetup: View {
                         .textContentType(.username)
                     SetupField(signIn.passwordLabel ?? "Password", text: $setup.catalogPassword, secure: true)
                         .textContentType(.password)
-                        .onSubmit { Task { await setup.connectToCatalog() } }
+                        .onSubmit { setup.connectToCatalog() }
                 }
                 SetupButton(setup.signIn == nil ? "Connect" : "Sign in", working: setup.working) {
-                    await setup.connectToCatalog()
+                    setup.connectToCatalog()
                 }
                 SetupError(message: setup.error)
             }
@@ -227,6 +228,7 @@ private struct CatalogSetup: View {
                 .foregroundStyle(.secondary)
             }
         }
+        .onDisappear { setup.leftStep() }
     }
 }
 
@@ -280,9 +282,9 @@ private struct TrustSetup: View {
                         }
                     }
                     if question.changed {
-                        SetupButton("Don’t connect", working: false) { await setup.decideTrust(false) }
+                        SetupButton("Don’t connect", working: false) { setup.decideTrust(false) }
                         Button(role: .destructive) {
-                            Task { await setup.decideTrust(true) }
+                            setup.decideTrust(true)
                         } label: {
                             Text(certificate.isTrustedBySystem ? "Use the new certificate" : "Trust the new certificate")
                                 .frame(maxWidth: .infinity)
@@ -291,9 +293,9 @@ private struct TrustSetup: View {
                         .controlSize(.large)
                         .foregroundStyle(.red)
                     } else {
-                        SetupButton("Trust", working: false) { await setup.decideTrust(true) }
+                        SetupButton("Trust", working: false) { setup.decideTrust(true) }
                         Button {
-                            Task { await setup.decideTrust(false) }
+                            setup.decideTrust(false)
                         } label: {
                             Text("Cancel")
                                 .frame(maxWidth: .infinity)
@@ -465,9 +467,9 @@ private struct SetupField: View {
 private struct SetupButton: View {
     let title: String
     let working: Bool
-    let action: () async -> Void
+    let action: () -> Void
 
-    init(_ title: String, working: Bool, action: @escaping () async -> Void) {
+    init(_ title: String, working: Bool, action: @escaping () -> Void) {
         self.title = title
         self.working = working
         self.action = action
@@ -475,7 +477,7 @@ private struct SetupButton: View {
 
     var body: some View {
         Button {
-            Task { await action() }
+            action()
         } label: {
             ZStack {
                 Text(title)
@@ -513,7 +515,7 @@ struct SignInAgainScreen: View {
     @Environment(ShellModel.self) private var shell
     @State private var username: String?
     @State private var password = ""
-    @State private var working = false
+    @State private var attempt = Attempt()
     @State private var error: String?
 
     var body: some View {
@@ -529,32 +531,46 @@ struct SignInAgainScreen: View {
                         .textContentType(.username)
                     SetupField("Password", text: $password, secure: true)
                         .textContentType(.password)
-                        .onSubmit { Task { await signIn(saved) } }
-                    SetupButton("Sign in", working: working) { await signIn(saved) }
+                        .onSubmit { signIn(saved) }
+                    SetupButton("Sign in", working: attempt.running) { signIn(saved) }
                     SetupError(message: error)
                 }
             }
+            // Typing again stops the try that's running; leaving stops it too.
+            .onChange(of: username) { edited() }
+            .onChange(of: password) { edited() }
+            .onDisappear { attempt.cancel() }
         } else {
             LibraryNotConnected()
         }
     }
 
-    private func signIn(_ saved: SavedServer) async {
+    private func signIn(_ saved: SavedServer) {
         let username = username ?? saved.username ?? ""
         guard !username.isEmpty, !password.isEmpty else {
             error = "Enter your username and password."
             return
         }
         error = nil
-        working = true
-        defer { working = false }
-        do {
-            try await shell.signInAgain(username: username, password: password)
-            password = ""
-            shell.pop(shell.tab)
-        } catch {
-            let host = URL(string: saved.address.replacingOccurrences(of: OPDSURLSecret.placeholder, with: "key"))?.host()
-            self.error = SetupModel.message(for: error, server: saved.name, host: host)
+        let host = URL(string: saved.address.replacingOccurrences(of: OPDSURLSecret.placeholder, with: "key"))?.host()
+        let password = password
+        attempt.start { isCurrent in
+            do {
+                try await shell.signInAgain(username: username, password: password)
+                guard isCurrent() else { return }
+                self.password = ""
+                shell.pop(shell.tab)
+            } catch {
+                guard isCurrent() else { return }
+                self.error = SetupModel.message(for: error, server: saved.name, host: host)
+            }
+        } timedOut: {
+            error = "\(host ?? saved.name) didn’t answer. Check that this iPhone is on the same network as the server."
         }
+    }
+
+    private func edited() {
+        attempt.cancel()
+        error = nil
     }
 }

@@ -27,7 +27,11 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [ ] **13. Sync you can see.** Last synced, "not synced yet". The place on a book's screen matches where the book opens (a server percentage without a position opens at the start today), and unfolding opens at once (the server's position is fetched while the cover shows, not after the unfold).
 - [ ] **14. Settings.** Server, Storage (books on iPhone), About, Remove server.
 - [ ] **15. Other ways in.** Import from Files, the bundled sample book, MOBI/AZW3/FB2 check.
-- [ ] **16. Security follow-up.** Confirm whether a server counts as local by its name alone (#9), and fix it if so.
+- [ ] **16. Security follow-up.** Confirm whether a server counts as local by its name alone (#9), and fix it if so. From the setup review (2026-11-02, all Low or Info): a Keychain read error at launch builds the server without its pinned certificate (fail closed instead); secrets left by an abandoned setup stay until a reinstall (clear them at launch); in-address secrets other than Kavita's key are saved as typed; the "Not encrypted" note could name the other-network risk (wording is Adam's).
+
+## Phase 4: First impressions
+
+- [ ] **17. The new-install flow.** What someone sees the first time, from opening the app to their first book (Adam, 2026-11-02). *Needs decisions.*
 
 ## To revisit
 

@@ -14,6 +14,7 @@ struct ServerAddressTests {
         #expect(try url("localhost:3300") == "http://localhost:3300")
         #expect(try url("nas.local/opds") == "http://nas.local/opds")
         #expect(try url("100.101.102.103") == "http://100.101.102.103")
+        #expect(try url("adam:pw@NAS.lan.") == "http://nas.lan")
     }
 
     @Test func theHostIsWrittenOneWay() throws {
@@ -112,15 +113,80 @@ struct SetupFlowTests {
         #expect(message(BookOrbitError.http(status: 404, message: nil)).hasPrefix("That doesn’t look like a BookOrbit server"))
     }
 
-    @Test func emptyFieldsAskBeforeTryingTheServer() async {
+    @Test func emptyFieldsAskBeforeTryingTheServer() {
         let setup = SetupModel()
-        await setup.signInToBookOrbit()
+        setup.signInToBookOrbit()
         #expect(setup.error == "Enter your server’s address.")
         setup.bookOrbitAddress = "localhost:3300"
-        await setup.signInToBookOrbit()
+        setup.signInToBookOrbit()
         #expect(setup.error == "Enter your username and password.")
         setup.bookOrbitAddress = "ftp://localhost"
-        await setup.signInToBookOrbit()
+        setup.signInToBookOrbit()
         #expect(setup.error == "Use an address that starts with https:// or http://.")
+        #expect(!setup.working)
+    }
+
+    /// `nas.lan@evil.com` is evil.com: the account moves to the fields and
+    /// nothing goes out until the address is tried again.
+    @Test func anAccountInTheAddressIsntSentOnTheSameTap() {
+        let setup = SetupModel()
+        setup.bookOrbitPassword = "typed"
+        setup.bookOrbitAddress = "nas.lan@evil.example"
+        setup.signInToBookOrbit()
+        #expect(!setup.working)
+        #expect(setup.bookOrbitAddress == "https://evil.example")
+        #expect(setup.bookOrbitUsername == "nas.lan")
+        #expect(setup.bookOrbitPassword == "typed")
+        #expect(setup.error == SetupModel.accountMoved)
+    }
+}
+
+@MainActor
+struct AttemptTests {
+    /// A server that never answers: the try gives up at the time limit, and
+    /// its answer, if it ever comes, changes nothing.
+    @Test func aServerThatDoesntAnswerTimesOut() async {
+        let attempt = Attempt(timeLimit: .milliseconds(50))
+        var outcome = "waiting"
+        attempt.start { isCurrent in
+            try? await Task.sleep(for: .milliseconds(300))
+            if isCurrent() { outcome = "answered" }
+        } timedOut: {
+            outcome = "timed out"
+        }
+        #expect(attempt.running)
+        try? await Task.sleep(for: .milliseconds(150))
+        #expect(outcome == "timed out")
+        #expect(!attempt.running)
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(outcome == "timed out", "the late answer goes nowhere")
+    }
+
+    @Test func aNewTryReplacesTheOneRunning() async {
+        let attempt = Attempt(timeLimit: .seconds(5))
+        var answers: [String] = []
+        attempt.start { isCurrent in
+            try? await Task.sleep(for: .milliseconds(100))
+            if isCurrent() { answers.append("first") }
+        } timedOut: {}
+        attempt.start { isCurrent in
+            if isCurrent() { answers.append("second") }
+        } timedOut: {}
+        await attempt.wait()
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(answers == ["second"])
+        #expect(!attempt.running)
+    }
+
+    @Test func typingStopsTheTry() {
+        let setup = SetupModel()
+        setup.bookOrbitAddress = "nas.local"
+        setup.bookOrbitUsername = "adam"
+        setup.bookOrbitPassword = "secret"
+        setup.signInToBookOrbit()
+        #expect(setup.working)
+        setup.bookOrbitAddress = "nas.local:3300"
+        #expect(!setup.working)
+        #expect(setup.error == nil)
     }
 }

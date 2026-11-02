@@ -136,11 +136,17 @@ final class ShellModel {
         case .opds:
             guard let source = server.source as? OPDSSource else { throw LibraryError.signedOut }
             let passwords = KeychainPasswordStore(serverID: saved.id.rawValue)
-            let previous = try? await passwords.load()
+            // Unreadable, nothing is changed: a failure would otherwise put
+            // back "no password".
+            let previous = try await passwords.load()
             try await passwords.save(PasswordCredentials(username: username, password: password))
-            guard case .open = try await source.checkAccess() else {
+            // Kept only once the catalog takes it: a refusal, a failure or a
+            // try given up on puts the old one back.
+            do {
+                guard case .open = try await source.checkAccess() else { throw LibraryError.signedOut }
+            } catch {
                 try? await passwords.save(previous)
-                throw LibraryError.signedOut
+                throw error
             }
         }
         if saved.username != username {

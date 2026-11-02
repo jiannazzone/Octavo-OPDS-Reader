@@ -137,7 +137,16 @@ nonisolated enum ServerAddress {
         guard !trimmed.isEmpty else { throw .empty }
         var written = trimmed
         if trimmed.range(of: "://") == nil {
-            let local = URL(string: "http://\(trimmed)").map(HomeNetworkPolicy.isLocalAddress) ?? false
+            // Judged by the host as it will be: without an account or a
+            // trailing dot (`adam@nas.lan.` is at home).
+            var probe = URLComponents(string: "http://\(trimmed)")
+            probe?.user = nil
+            probe?.password = nil
+            if var host = probe?.host?.lowercased() {
+                while host.hasSuffix(".") { host.removeLast() }
+                probe?.host = host
+            }
+            let local = probe?.url.map(HomeNetworkPolicy.isLocalAddress) ?? false
             written = (local ? "http://" : "https://") + trimmed
         }
         guard var components = URLComponents(string: written), let scheme = components.scheme?.lowercased() else {

@@ -15,27 +15,37 @@ nonisolated enum SetupStep: Hashable, Sendable {
 @Observable
 final class SetupModel {
     var bookOrbitAddress = "" {
-        didSet { if bookOrbitAddress != oldValue { error = nil } }
+        didSet { if bookOrbitAddress != oldValue { edited() } }
     }
-    var bookOrbitUsername = ""
-    var bookOrbitPassword = ""
+    var bookOrbitUsername = "" {
+        didSet { if bookOrbitUsername != oldValue { edited() } }
+    }
+    var bookOrbitPassword = "" {
+        didSet { if bookOrbitPassword != oldValue { edited() } }
+    }
 
     var catalogAddress = "" {
         didSet {
             guard catalogAddress != oldValue else { return }
-            error = nil
+            edited()
             signIn = nil
         }
     }
-    var catalogUsername = ""
-    var catalogPassword = ""
+    var catalogUsername = "" {
+        didSet { if catalogUsername != oldValue { edited() } }
+    }
+    var catalogPassword = "" {
+        didSet { if catalogPassword != oldValue { edited() } }
+    }
     /// The catalog asked for a sign-in, so its fields show.
     private(set) var signIn: OPDSSignInRequest?
 
     /// Where reading progress syncs, for the sync step.
     var syncsProgress = true
 
-    private(set) var working = false
+    /// Signing in or connecting: one try at a time, with a time limit.
+    let connecting = Attempt()
+    var working: Bool { connecting.running }
     /// Shown under the fields (decision 22).
     private(set) var error: String?
     /// What the trust step asks about.
@@ -52,41 +62,51 @@ final class SetupModel {
 
     /// Secrets are stored under this ID as setup goes (tokens, a password, a
     /// trusted certificate); it becomes the server's when setup finishes.
-    @ObservationIgnored private var attempt = SavedServer.newID()
-    /// The address `attempt`'s secrets are for.
+    @ObservationIgnored private var attemptID = SavedServer.newID()
+    /// The address `attemptID`'s secrets are for.
     @ObservationIgnored private var attemptAddress: URL?
     /// What to try again once a certificate is trusted.
-    @ObservationIgnored private var afterTrust: (() async -> Void)?
+    @ObservationIgnored private var afterTrust: (() -> Void)?
 
     // MARK: BookOrbit
 
     /// Sign in: on to the sync step.
-    func signInToBookOrbit() async {
-        guard !working, let parsed = parse(bookOrbitAddress) else { return }
+    func signInToBookOrbit() {
+        guard let parsed = parse(bookOrbitAddress) else { return }
+        // An account in the address moves to the fields, and nothing is sent
+        // until the address that's left has been seen: in `nas.lan@evil.com`
+        // the server is evil.com.
         if let username = parsed.username {
             bookOrbitUsername = username
-            bookOrbitPassword = parsed.password ?? bookOrbitPassword
+            if let password = parsed.password { bookOrbitPassword = password }
             bookOrbitAddress = parsed.url.absoluteString
+            error = Self.accountMoved
+            return
         }
         guard !bookOrbitUsername.isEmpty, !bookOrbitPassword.isEmpty else {
             error = "Enter your username and password."
             return
         }
-        let id = attemptID(for: parsed.url)
-        working = true
-        defer { working = false }
+        let id = serverID(for: parsed.url)
+        let (username, password) = (bookOrbitUsername, bookOrbitPassword)
         let client = SavedServer.bookOrbitClient(id: id, url: parsed.url)
-        do {
-            try await client.login(username: bookOrbitUsername, password: bookOrbitPassword)
-            bookOrbitPassword = ""
-            pending = SavedServer(
-                id: id, kind: .bookOrbit, address: parsed.url.absoluteString, name: "BookOrbit",
-                username: bookOrbitUsername, syncsProgress: true
-            )
-            syncsProgress = true
-            push(.sync)
-        } catch {
-            failed(error, server: "BookOrbit") { [weak self] in await self?.signInToBookOrbit() }
+        connecting.start { [weak self] isCurrent in
+            do {
+                try await client.login(username: username, password: password)
+                guard isCurrent(), let self else { return }
+                pending = SavedServer(
+                    id: id, kind: .bookOrbit, address: parsed.url.absoluteString, name: "BookOrbit",
+                    username: username, syncsProgress: true
+                )
+                syncsProgress = true
+                push(.sync)
+                bookOrbitPassword = ""
+            } catch {
+                guard isCurrent() else { return }
+                self?.failed(error, server: "BookOrbit") { [weak self] in self?.signInToBookOrbit() }
+            }
+        } timedOut: { [weak self] in
+            self?.timedOut(parsed.url)
         }
     }
 
@@ -100,48 +120,58 @@ final class SetupModel {
     // MARK: OPDS
 
     /// Connect, or Sign in once the catalog has asked.
-    func connectToCatalog() async {
-        guard !working, let parsed = parse(catalogAddress) else { return }
+    func connectToCatalog() {
+        guard let parsed = parse(catalogAddress) else { return }
         if let username = parsed.username {
             catalogUsername = username
-            catalogPassword = parsed.password ?? catalogPassword
+            if let password = parsed.password { catalogPassword = password }
             catalogAddress = parsed.url.absoluteString
+            error = Self.accountMoved
+            return
         }
-        let id = attemptID(for: parsed.url)
         let asked = signIn
         if asked != nil, catalogUsername.isEmpty || catalogPassword.isEmpty {
             error = "Enter your username and password."
             return
         }
-        working = true
-        defer { working = false }
-        do {
-            let passwords = KeychainPasswordStore(serverID: id.rawValue)
-            try await passwords.save(asked == nil ? nil : PasswordCredentials(username: catalogUsername, password: catalogPassword))
-            let secret = OPDSURLSecret.detect(in: parsed.url)
-            let source = SavedServer.opdsSource(id: id, url: parsed.url, scheme: asked?.scheme, secret: secret)
-            switch try await source.checkAccess() {
-            case .open(let title):
-                try KeychainCatalogSecretStore(serverID: id.rawValue).save(secret)
-                let address = parsed.url.absoluteString
-                finished(SavedServer(
-                    id: id, kind: .opds, address: secret?.redact(address) ?? address,
-                    name: Self.name(title ?? asked?.title, url: parsed.url),
-                    username: asked == nil ? nil : catalogUsername, authScheme: asked?.scheme
-                ))
-            case .signInRequired(let request):
-                if asked != nil {
-                    error = "That username or password didn’t work."
-                } else if request.scheme == nil {
-                    error = "This catalog signs in a way Octavo can’t yet."
-                } else {
-                    signIn = request
+        let id = serverID(for: parsed.url)
+        let credentials = asked == nil ? nil : PasswordCredentials(username: catalogUsername, password: catalogPassword)
+        connecting.start { [weak self] isCurrent in
+            do {
+                let passwords = KeychainPasswordStore(serverID: id.rawValue)
+                try await passwords.save(credentials)
+                let secret = OPDSURLSecret.detect(in: parsed.url)
+                let source = SavedServer.opdsSource(id: id, url: parsed.url, scheme: asked?.scheme, secret: secret)
+                let access = try await source.checkAccess()
+                guard isCurrent(), let self else { return }
+                switch access {
+                case .open(let title):
+                    try KeychainCatalogSecretStore(serverID: id.rawValue).save(secret)
+                    let address = parsed.url.absoluteString
+                    finished(SavedServer(
+                        id: id, kind: .opds, address: secret?.redact(address) ?? address,
+                        name: Self.name(title ?? asked?.title, url: parsed.url),
+                        username: credentials?.username, authScheme: asked?.scheme
+                    ))
+                case .signInRequired(let request):
+                    if asked != nil {
+                        error = "That username or password didn’t work."
+                    } else if request.scheme == nil {
+                        error = "This catalog signs in a way Octavo can’t yet."
+                    } else {
+                        signIn = request
+                    }
                 }
+            } catch {
+                guard isCurrent() else { return }
+                self?.failed(error, server: "the catalog") { [weak self] in self?.connectToCatalog() }
             }
-        } catch {
-            failed(error, server: "the catalog") { [weak self] in await self?.connectToCatalog() }
+        } timedOut: { [weak self] in
+            self?.timedOut(parsed.url)
         }
     }
+
+    static let accountMoved = "The account in the address is now in the fields. Check the address, then try again."
 
     /// The catalog's own name, or its address's host.
     static func name(_ title: String?, url: URL) -> String {
@@ -153,7 +183,7 @@ final class SetupModel {
 
     /// Trust or Cancel on the trust step: back to the form, and on if
     /// trusted.
-    func decideTrust(_ trust: Bool) async {
+    func decideTrust(_ trust: Bool) {
         guard let question = trustQuestion else { return }
         pop()
         trustQuestion = nil
@@ -162,12 +192,12 @@ final class SetupModel {
             return
         }
         do {
-            try KeychainCertificatePinStore(serverID: attempt.rawValue).save(question.certificate.pinToSave)
+            try KeychainCertificatePinStore(serverID: attemptID.rawValue).save(question.certificate.pinToSave)
         } catch {
             self.error = "Couldn’t keep the certificate. Try again."
             return
         }
-        await afterTrust?()
+        afterTrust?()
     }
 
     // MARK: State
@@ -175,6 +205,7 @@ final class SetupModel {
     /// Setup is done (or the server changed): start clean, keeping the
     /// finished attempt's secrets, which are the server's now.
     func reset() {
+        connecting.cancel()
         bookOrbitAddress = ""
         bookOrbitUsername = ""
         bookOrbitPassword = ""
@@ -187,8 +218,25 @@ final class SetupModel {
         trustQuestion = nil
         pending = nil
         afterTrust = nil
-        attempt = SavedServer.newID()
+        attemptID = SavedServer.newID()
         attemptAddress = nil
+    }
+
+    /// Back out of a step: stop waiting for its server.
+    func leftStep() {
+        connecting.cancel()
+    }
+
+    /// Something typed: the try still running is for what was there before,
+    /// so it stops, and the next Sign in or Connect starts afresh.
+    private func edited() {
+        connecting.cancel()
+        error = nil
+    }
+
+    /// The server didn't answer in time.
+    private func timedOut(_ url: URL) {
+        error = "\(url.host() ?? "The server") didn’t answer. Check the address, including any port (such as :3300), and that this iPhone is on the same network."
     }
 
     private func parse(_ text: String) -> ServerAddress.Parsed? {
@@ -208,17 +256,17 @@ final class SetupModel {
     /// The ID to keep secrets under for `url`. A different address starts
     /// over, so a certificate trusted for one server never applies to
     /// another.
-    private func attemptID(for url: URL) -> LibrarySourceID {
+    private func serverID(for url: URL) -> LibrarySourceID {
         if let attemptAddress, attemptAddress != url {
-            try? ServerCredentials.removeAll(serverID: attempt.rawValue)
-            attempt = SavedServer.newID()
+            try? ServerCredentials.removeAll(serverID: attemptID.rawValue)
+            attemptID = SavedServer.newID()
         }
         attemptAddress = url
-        return attempt
+        return attemptID
     }
 
-    private func failed(_ error: any Error, server: String, retry: @escaping () async -> Void) {
-        let pin = try? KeychainCertificatePinStore(serverID: attempt.rawValue).load()
+    private func failed(_ error: any Error, server: String, retry: @escaping () -> Void) {
+        let pin = try? KeychainCertificatePinStore(serverID: attemptID.rawValue).load()
         if let question = TrustQuestion(error, trusted: pin) {
             trustQuestion = question
             afterTrust = retry
@@ -256,7 +304,7 @@ final class SetupModel {
                  .serverCertificateHasUnknownRoot, .serverCertificateUntrusted, .clientCertificateRejected:
                 return "Couldn’t make a secure connection to \(place)."
             default:
-                return "Can’t reach \(place). Check the address, and that this iPhone is on the right network."
+                return "Can’t reach \(place). Check the address, including any port (such as :3300), and that this iPhone is on the same network."
             }
         default:
             return "Couldn’t connect to \(server). Try again."
