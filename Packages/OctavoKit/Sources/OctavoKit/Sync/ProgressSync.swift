@@ -21,7 +21,16 @@ public struct SyncedPosition: Hashable, Sendable {
 public protocol ProgressSync: Sendable {
     /// The backend's position, or `nil` if it has none for this book.
     func pull() async throws -> SyncedPosition?
+    /// The backend's position as it is now, never a recent pull kept for
+    /// reuse: an open reader asking whether another reader moved on.
+    func pullLatest() async throws -> SyncedPosition?
     func push(_ position: ReadingPosition) async throws
+}
+
+extension ProgressSync {
+    public func pullLatest() async throws -> SyncedPosition? {
+        try await pull()
+    }
 }
 
 /// The reader's own record of a book's position, kept on the device.

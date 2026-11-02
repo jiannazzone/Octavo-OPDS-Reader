@@ -186,6 +186,20 @@ struct BookPlacesTests {
         #expect(await backend.pulls == 2)
     }
 
+    // An open reader coming back to the app asks the server again, however
+    // recent the last pull (Adam, 2026-11-02).
+    @Test func theReadersCheckNeverReusesAPull() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace))
+        let places = places(backend)
+        let reader = try #require(places.readerSync(for: Self.book))
+        _ = try await reader.pull()
+
+        await backend.set(remote: SyncedPosition(position: Self.iPhonePlace))
+        #expect(try await reader.pullLatest()?.position == Self.iPhonePlace)
+        #expect(await backend.pulls == 2)
+        #expect(places.progress(of: Self.book) == Self.iPhonePlace.fraction)
+    }
+
     @Test func aPullAlreadyRunningIsShared() async throws {
         let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace))
         await backend.hold()

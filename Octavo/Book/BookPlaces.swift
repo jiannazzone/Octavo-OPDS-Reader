@@ -198,6 +198,10 @@ nonisolated struct SharedProgressSync: ProgressSync {
         try await places.pull(key, from: backend, reusingWithin: BookPlaces.reuseAge)
     }
 
+    func pullLatest() async throws -> SyncedPosition? {
+        try await places.pull(key, from: backend, reusingWithin: 0)
+    }
+
     func push(_ position: ReadingPosition) async throws {
         try await backend.push(position)
         await places.pushed(position, key: key)

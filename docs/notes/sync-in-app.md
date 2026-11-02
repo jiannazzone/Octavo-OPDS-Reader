@@ -59,6 +59,28 @@ The server was put back to 25% afterwards.
 
 **Running the app tests signs the simulator's app out.** They run inside the app on the same simulator, and `KeychainTests` wipes every BookOrbit token while testing the leftovers-after-install cleanup. So sign in again (or launch with `-connectBookOrbit 1`) after a test run. This was true before step 13.
 
+## Coming back with a book open (Adam, 2026-11-02)
+
+Before this, an open reader never asked the server again, and its next page turn replaced whatever another reader had saved meanwhile.
+
+- **When.** The app comes back to the foreground with a book open (`ReaderView` on `scenePhase` `.active`). `ReaderModel.checkServerPlace` pulls with `ProgressSync.pullLatest`, which `SharedProgressSync` never answers from a kept pull.
+- **What's offered.** Only a server CFI other than the one the reader knows (`serverCFI`: pulled to open, its own last push, or the last check), and only if it isn't on the visible page (`bridge.js` `onPage`, so two spellings of the same place don't count). A check overtaken by a push that landed meanwhile is dropped (`pushCount`), so a pull of an older push isn't offered back.
+- **The capsule** (`ReaderServerPlaceBar`): "BookOrbit: 62% · CHAPTER 80. The Nut.", **Go** and **✕**, in the footer's place like search's step bar, under the right page when unfolded. The percentage is the server's, which another foliate reader computes as the footer does. It waits while a panel, the progress bar or the step bar is up. No alert: decision 22.
+- **Go** jumps to the server's CFI. The page it lands on is saved as synced and not pushed, as when a book opens. If a fold or a text change sent this page's place while the capsule showed, Go sends the server's own position back.
+- **✕ and reading on** keep this iPhone's place. ✕ sends the page now; turning the page (or jumping anywhere) sends it as any move does. The capsule goes once the page it was offered on is no longer showing (`onPage`), so a fold or a text change keeps it.
+- **The pusher forgets its last push** once another reader has moved the server (`DebouncedProgressPusher.backendMoved`). Without that, ✕ on the page last pushed sent nothing, as the pusher skips a repeat.
+
+Checked on `iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947), Moby-Dick (file 3): read back to 48%, `bo.sh set` moved the server to 62% (Chapter 80), then Settings and back.
+
+| # | What | Result |
+|---|---|---|
+| 12 | Back in the app, folded | Capsule "BookOrbit: 62% · CHAPTER 80…", footer hidden |
+| — | Turned the page | Capsule gone, footer back, server 48.07% (this page) |
+| — | Go | Reader at 62.02% (Chapter 80); server kept its CFI, nothing pushed |
+| — | ✕ | Page stayed; server 48.01% (this page, sent again) |
+| 13 | Offered folded, then unfolded | Capsule stays, under the right page. The fold sent 47.94%; Go put the server back to its 62% CFI and opened the spread at 61.9% |
+| — | Server place on the visible spread | No capsule |
+
 ## Debug switches
 
 - `-syncPullDelay <seconds>`: every BookOrbit position pull waits first (a slow server).
@@ -69,9 +91,9 @@ The server was put back to 25% afterwards.
 
 - App: `BookPlacesTests`. These cover the place before and after a pull, a percentage-only server place, an unsent place sent from the screen (and a failed retry), the offline status, books that don't sync, a book not started, redraw on close, the reader reusing a recent pull and sharing a running one, a stale pull not undoing a push, a server change, which books sync, and the line's wording. `ReadingPositionStoreTests` covers `syncedAt` being kept and recorded.
 - OctavoKit: `BookOrbitSourceTests.leavesOutTheServersProgressWhenAsked` and `OpeningPositionTests.aRecordWithoutASyncTimeDecodes`.
+- Coming back with a book open: `BookPlacesTests.theReadersCheckNeverReusesAPull`, `ReaderServerPlaceTests`, and `DebouncedProgressPusherTests.sendsThePositionAgainOnceTheBackendMoved`. The capsule's choices were checked by hand (above); `ReaderModel` needs a loaded book to test.
 
 ## Not done (follow-ups)
 
-- **An open reader doesn't re-pull** when the app returns to the foreground. If another device moved on meanwhile, the reader stays put until it's reopened.
 - **Unsent places are retried only** when their book's screen shows or the book opens, not in the background for every book.
 - **If "Don't sync" comes back**, decide whether bookmarks follow it (they sync with BookOrbit regardless today).
