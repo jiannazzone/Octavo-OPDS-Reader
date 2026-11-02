@@ -47,7 +47,7 @@ Step 14 of `docs/PLAN.md`, built 2026-11-02. Settings replaces the stand-in that
 
 ## Security review (2026-11-02)
 
-An independent review of the Sign out and Remove server path (tokens, Keychain, the logout request, removal order, debug code), before Adam's sign-off. Nothing High.
+An independent review of the Sign out and Remove server path (tokens, Keychain, the logout request, removal order, debug code). Nothing High. **Adam signed it off on 2026-11-02**, with the fixes below.
 
 | # | Severity | Finding | Now |
 |---|---|---|---|
