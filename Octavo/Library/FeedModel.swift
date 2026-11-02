@@ -30,7 +30,14 @@ final class FeedModel {
     @ObservationIgnored private let library: any LibrarySource
     @ObservationIgnored private let report: (any Error) -> Void
     @ObservationIgnored private var next: LibraryLink?
+    /// The pages loaded so far: a server whose next page is one of these is
+    /// looping, and the list ends there.
+    @ObservationIgnored private var fetched: Set<LibraryLink> = []
     @ObservationIgnored private var task: Task<Void, Never>?
+
+    /// The most `loadAll` follows. The server decides how many pages there
+    /// are, so a list that never ends stops here.
+    static let maxPagesToLoadAll = 100
 
     init(link: LibraryLink, source: LibrarySourceID, library: any LibrarySource, report: @escaping (any Error) -> Void) {
         self.link = link
@@ -70,11 +77,14 @@ final class FeedModel {
         }
     }
 
-    /// Every page, for lists that jump around (Authors A–Z).
-    func loadAll() async {
+    /// Every page, for lists that flow from one page of the spread onto the
+    /// next or jump around (Authors A–Z), up to `maxPages`.
+    func loadAll(maxPages: Int = FeedModel.maxPagesToLoadAll) async {
         await load()
-        while state == .loaded, hasMore, !Task.isCancelled {
+        var pages = 1
+        while state == .loaded, hasMore, pages < maxPages, !Task.isCancelled {
             await loadMore()
+            pages += 1
         }
     }
 
@@ -84,7 +94,7 @@ final class FeedModel {
             do {
                 let feed = try await library.feed(page)
                 try Task.checkCancellation()
-                apply(feed, reset: reset)
+                apply(feed, page: page, reset: reset)
             } catch {
                 // A reload took over.
                 guard !Task.isCancelled else { return }
@@ -96,7 +106,9 @@ final class FeedModel {
         await task.value
     }
 
-    private func apply(_ feed: LibraryFeed, reset: Bool) {
+    private func apply(_ feed: LibraryFeed, page: LibraryLink, reset: Bool) {
+        if reset { fetched = [] }
+        fetched.insert(page)
         if reset {
             title = feed.title
             entries = feed.entries
@@ -107,8 +119,8 @@ final class FeedModel {
         }
         authorSections = isAuthorList ? AuthorIndex.sections(entries) : []
         total = feed.total ?? total
-        next = feed.next
-        hasMore = feed.next != nil
+        next = feed.next.flatMap { fetched.contains($0) ? nil : $0 }
+        hasMore = next != nil
         state = .loaded
     }
 }

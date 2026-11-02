@@ -105,6 +105,32 @@ struct FeedModelTests {
     }
 
     // Folding rebuilds the views; the list they find is the same one.
+    // A server whose next page is one already loaded is looping.
+    @Test func aListThatLoopsEnds() async throws {
+        let authors = [LibraryEntry(kind: .author, title: "Mary Shelley", link: link("authors/2"))]
+        let library = await connected(PagedSource(pages: [
+            "loop": LibraryFeed(entries: authors, next: link("loop?page=1")),
+            "loop?page=1": LibraryFeed(entries: authors, next: link("loop")),
+        ]))
+        let feed = try #require(library.feed(link("loop"), from: server))
+        await feed.loadAll()
+        #expect(feed.entries.count == 2)
+        #expect(!feed.hasMore)
+    }
+
+    // The server decides how many pages there are.
+    @Test func loadAllStopsAtItsLimit() async throws {
+        var pages: [String: LibraryFeed] = [:]
+        for page in 0..<10 {
+            pages["p\(page)"] = LibraryFeed(books: [book("\(page)")], next: link("p\(page + 1)"))
+        }
+        let library = await connected(PagedSource(pages: pages))
+        let feed = try #require(library.feed(link("p0"), from: server))
+        await feed.loadAll(maxPages: 4)
+        #expect(feed.books.count == 4)
+        #expect(feed.hasMore)
+    }
+
     @Test func keepsOneModelPerList() async throws {
         let library = await connected(PagedSource(pages: Self.pages))
         let feed = try #require(library.feed(link("a"), from: server))
