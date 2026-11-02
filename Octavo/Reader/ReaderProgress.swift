@@ -94,7 +94,13 @@ nonisolated struct ReaderControls: Equatable, Sendable {
     /// The bar lies over the page, so a tap should hide it, not turn.
     var coversPage: Bool { showsBar }
 
-    /// A tap in the middle of the page, or in the side column in book mode.
+    /// The column's button in book mode.
+    mutating func show() {
+        showsButtons = true
+        showsBar = true
+    }
+
+    /// A tap in the middle of the page.
     mutating func toggle() {
         if alwaysShowsButtons {
             showsBar.toggle()

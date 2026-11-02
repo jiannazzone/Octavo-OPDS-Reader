@@ -14,8 +14,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The visible page changed.
     case relocate(Relocation)
     /// The user tapped where the controls show: the `"middle"` of the page,
-    /// or in book mode the side `"column"`; or anywhere while the controls
-    /// cover the page (`"dismiss"`). See `ReaderTapMode`.
+    /// or anywhere while the controls cover the page (`"dismiss"`). See
+    /// `ReaderTapMode`.
     case tap(zone: String)
     /// The page's size in CSS px (= points), sent on load and whenever it
     /// changes.

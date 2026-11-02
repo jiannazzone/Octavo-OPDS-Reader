@@ -16,7 +16,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 ## Phase 2: Reading
 
-- [ ] **9. Reader controls.** How controls appear, especially half-open (a middle tap doesn't suit book mode). *Needs decisions.*
+- [x] **9. Reader controls.** Half open, a quiet "…" button in the side column brings the controls up and the rest of the column turns forward; flat and folded keep the middle tap.
 - [ ] **10. Page turning.** Taps, swipes, keyboard and trackpad; book mode; folding and unfolding mid-book.
 - [ ] **11. Rendering.** The rendering problems seen on the Duo.
 - [ ] **12. Panels.** Text and theme, Contents and bookmarks, Search in book. *Needs decisions.*

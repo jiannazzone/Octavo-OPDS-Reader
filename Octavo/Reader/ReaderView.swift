@@ -63,7 +63,7 @@ private struct ReaderScreen: View {
                     withAnimation { controls.toggle() }
                 }
                 .toolbar { buttons }
-                .toolbar(buttonsVisible ? .visible : .hidden, for: .navigationBar)
+                .toolbar(buttonsVisible || showsControlsButton ? .visible : .hidden, for: .navigationBar)
         }
         .ignoresSafeArea()
         // Measured outside the stack, so the reader's own toolbar showing or
@@ -112,6 +112,13 @@ private struct ReaderScreen: View {
         return controls.buttonsVisible
     }
 
+    /// Book mode, controls hidden: a quiet button in the column brings them
+    /// up, since a tap in the middle would land on the fold (Adam,
+    /// 2026-11-02). The rest of the column turns the page.
+    private var showsControlsButton: Bool {
+        model.isBookMode && model.phase == .open && !buttonsVisible
+    }
+
     @ViewBuilder private var status: some View {
         switch model.phase {
         case .loading:
@@ -127,16 +134,26 @@ private struct ReaderScreen: View {
     /// The column's buttons (frame 08). Contents, Text and theme, Search in
     /// book and Bookmark are greyed out until their panels exist (#18).
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
+        if showsControlsButton {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Show Controls", systemImage: "ellipsis") {
+                    withAnimation(.easeOut(duration: 0.2)) { controls.show() }
+                }
+                .tint(.secondary)
+            }
+        }
         ToolbarItemGroup(placement: .topBarTrailing) {
-            Button("Back", systemImage: "chevron.backward", action: close)
-            Button("Contents", systemImage: "list.bullet") {}
-                .disabled(true)
-            Button("Text and Theme", systemImage: "textformat.size") {}
-                .disabled(true)
-            Button("Search in Book", systemImage: "magnifyingglass") {}
-                .disabled(true)
-            Button("Bookmark", systemImage: "bookmark") {}
-                .disabled(true)
+            if buttonsVisible {
+                Button("Back", systemImage: "chevron.backward", action: close)
+                Button("Contents", systemImage: "list.bullet") {}
+                    .disabled(true)
+                Button("Text and Theme", systemImage: "textformat.size") {}
+                    .disabled(true)
+                Button("Search in Book", systemImage: "magnifyingglass") {}
+                    .disabled(true)
+                Button("Bookmark", systemImage: "bookmark") {}
+                    .disabled(true)
+            }
         }
     }
 }

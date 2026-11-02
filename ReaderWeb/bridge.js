@@ -22,11 +22,11 @@ const HANDLER = 'octavo'
 const TAP_ZONE = 0.3
 
 // How taps behave (Swift's `ReaderTapMode`). In book mode (decision 9) each
-// half of the spread turns its way, and a tap in the side column, where the
-// page runs under it, is reported to Swift for the controls. `content` is the
-// page's extent outside the system's areas; `dismisses` means the controls
-// cover the page, so any tap hides them.
-let tapMode = { book: false, columnStart: null, content: null, dismisses: false }
+// half of the spread turns its way, and the side column, where the page runs
+// under it, turns with the right page (the controls come up from the
+// column's own button). `content` is the page's extent outside the system's
+// areas; `dismisses` means the controls cover the page, so any tap hides them.
+let tapMode = { book: false, content: null, dismisses: false }
 
 const post = (type, payload = {}) => {
     const handler = window.webkit?.messageHandlers?.[HANDLER]
@@ -172,8 +172,8 @@ const detectTaps = (doc, onTap) => {
 const tap = x => {
     if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
     if (tapMode.book) {
-        if (tapMode.columnStart !== null && x >= tapMode.columnStart) return post('tap', { zone: 'column' })
-        // foliate centres the gap between the pages in its view.
+        // foliate centres the gap between the pages in its view. The side
+        // column lies right of it, so it turns with the right page.
         const box = view?.getBoundingClientRect()
         const spine = box ? box.left + box.width / 2 : innerWidth / 2
         if (x < spine) view?.goLeft()
@@ -515,7 +515,6 @@ window.octavo = Object.freeze({
         const content = Array.isArray(mode?.content) ? mode.content.map(finiteOrNull) : null
         tapMode = {
             book: Boolean(mode?.book),
-            columnStart: finiteOrNull(mode?.columnStart),
             content: content?.length === 2 && !content.includes(null) ? content : null,
             dismisses: Boolean(mode?.dismisses),
         }
