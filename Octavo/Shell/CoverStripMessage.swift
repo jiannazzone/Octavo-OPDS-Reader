@@ -8,4 +8,6 @@ nonisolated enum CoverStripMessage: Hashable, Sendable {
     /// Offline, and the book isn't on the iPhone yet.
     case needsConnection
     case downloading(fraction: Double)
+    /// Downloaded, and refused for its DRM.
+    case protected
 }

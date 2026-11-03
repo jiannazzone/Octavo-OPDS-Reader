@@ -1,14 +1,15 @@
 import OctavoKit
 import SwiftUI
 
-/// The cover's glass sheet, folded: at rest the book's summary (title,
-/// place, Download, Open); pulled up, the same sheet keeps the summary and
-/// adds the details below it. Drag the summary, or tap the grabber, to
+/// The cover's glass sheet, folded: at rest a compact summary (the title
+/// over the place, Open beside them, a progress line under them); pulled
+/// up, the same sheet keeps the summary and adds the author, Mark finished
+/// and the details below it. Drag the summary, or tap the grabber, to
 /// switch.
 ///
 /// Drawn by the cover page rather than presented, so a fold never catches
 /// it mid-presentation (`docs/notes/duo-tabbar.md` §6); unfolded, the right
-/// page shows the same summary and details instead.
+/// page shows the full summary and details instead.
 struct BookSheet: View {
     let page: BookPage
     let source: any LibrarySource
@@ -29,12 +30,8 @@ struct BookSheet: View {
                     .padding(.horizontal, 16)
                 // Only as tall as the details, up to the top of the screen.
                 ViewThatFits(in: .vertical) {
-                    BookDetails(page: page, source: source, sourceID: sourceID)
-                        .padding(16)
-                    ScrollView {
-                        BookDetails(page: page, source: source, sourceID: sourceID)
-                            .padding(16)
-                    }
+                    details
+                    ScrollView { details }
                 }
                 .transition(.opacity)
             }
@@ -57,7 +54,7 @@ struct BookSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(page.isExpanded ? "Hide details" : "Show details")
-            BookSummary(page: page, source: source, sourceID: sourceID)
+            BookSheetSummary(page: page, source: source, sourceID: sourceID)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
         }
@@ -82,13 +79,62 @@ struct BookSheet: View {
         let toward = page.isExpanded ? max(translation, 0) : min(translation, 0)
         return toward / 4
     }
+
+    /// Pulled up: the author and Mark finished, which the resting summary
+    /// leaves out, then the details.
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            BookAuthorLink(page: page)
+            BookFinishedButton(page: page, source: source)
+            BookDetails(page: page, source: source, sourceID: sourceID)
+        }
+        .padding(16)
+    }
 }
 
-/// The top of a book's sheet, and of its right page unfolded: the title
-/// and author, the place (with when it last synced) over the progress bar,
-/// then Mark finished and Open. Until the book is on the iPhone, Open is
-/// Download; a download's progress and problems show in its place
-/// (decision 22).
+/// The sheet's top, folded (Adam, 2026-11-03): the title on one line over
+/// the place, Open on the right of both, and a thin progress line under
+/// them. Until the book is on the iPhone, Open is Download; a download's
+/// progress and problems show in its place (decision 22).
+struct BookSheetSummary: View {
+    let page: BookPage
+    let source: any LibrarySource
+    let sourceID: LibrarySourceID
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        let place = BookPlace(page: page, sourceID: sourceID, shell: shell)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(page.current.title.isEmpty ? "Untitled" : page.current.title)
+                        .font(.headline)
+                        // In full once pulled up, as the details' heading.
+                        .lineLimit(page.isExpanded ? 2 : 1)
+                        .accessibilityAddTraits(.isHeader)
+                    // Redrawn each minute, so "just now" moves on.
+                    TimelineView(.everyMinute) { context in
+                        Text(place.line(now: context.date))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            // A problem says what to do, so it may wrap.
+                            .lineLimit(place.problem == nil ? 1 : 2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                BookOpenButton(page: page, source: source, fillsWidth: false)
+                    .fixedSize()
+            }
+            ProgressView(value: place.progress ?? 0)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// The top of a book's right page unfolded: the title and author, the
+/// place (with when it last synced) over the progress bar, then Mark
+/// finished and Open. Until the book is on the iPhone, Open is Download; a
+/// download's progress and problems show in its place (decision 22).
 struct BookSummary: View {
     let page: BookPage
     let source: any LibrarySource
@@ -96,7 +142,6 @@ struct BookSummary: View {
     var titleFont: Font = .title3.weight(.semibold)
     var titleLines = 2
     @Environment(ShellModel.self) private var shell
-    @Environment(\.openLibraryEntry) private var openLibraryEntry
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -105,7 +150,7 @@ struct BookSummary: View {
                     .font(titleFont)
                     .lineLimit(titleLines)
                     .accessibilityAddTraits(.isHeader)
-                author
+                BookAuthorLink(page: page)
             }
             place
             HStack(spacing: 10) {
@@ -119,14 +164,11 @@ struct BookSummary: View {
     /// place, when it last synced (step 13, Adam: on the same line, and
     /// nothing for a book that doesn't sync).
     private var place: some View {
-        let book = SourcedBook(source: sourceID, book: page.current)
-        let progress = page.isFinished ? 1 : shell.places.progress(of: book)
-        let problem = problem
-        let status = problem == nil && !page.isFinished ? shell.places.status(of: book) : nil
+        let place = BookPlace(page: page, sourceID: sourceID, shell: shell)
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text(problem ?? (page.isFinished ? "Finished" : BookPage.placeLine(progress: progress)))
-                if let status {
+                Text(place.text)
+                if let status = place.status {
                     Spacer(minLength: 12)
                     // Redrawn each minute, so "just now" moves on.
                     TimelineView(.everyMinute) { context in
@@ -137,27 +179,72 @@ struct BookSummary: View {
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
-            ProgressView(value: progress ?? 0)
+            ProgressView(value: place.progress ?? 0)
                 .accessibilityHidden(true)
         }
     }
+}
 
+/// What a book's place line says: "30%", "Finished", or a problem, and
+/// when the place last synced, for a book that syncs (step 13).
+struct BookPlace {
+    /// How far through, for the progress bar.
+    let progress: Double?
     /// A download or Mark finished that went wrong, in the place's stead.
-    private var problem: String? {
-        switch BookOpenButton.state(of: page.current, in: shell) {
+    let problem: String?
+    let status: BookPlaces.Status?
+    private let finished: Bool
+
+    init(page: BookPage, sourceID: LibrarySourceID, shell: ShellModel) {
+        let book = SourcedBook(source: sourceID, book: page.current)
+        self.init(
+            progress: shell.places.progress(of: book),
+            problem: Self.problem(BookOpenButton.state(of: page.current, in: shell), finishedFailed: page.finishedFailed),
+            status: shell.places.status(of: book),
+            finished: page.isFinished
+        )
+    }
+
+    /// A finished book's bar is full; finished or a problem leaves out the
+    /// sync.
+    init(progress: Double?, problem: String?, status: BookPlaces.Status?, finished: Bool) {
+        self.progress = finished ? 1 : progress
+        self.problem = problem
+        self.status = problem == nil && !finished ? status : nil
+        self.finished = finished
+    }
+
+    static func problem(_ state: BookOpenButton.State, finishedFailed: Bool) -> String? {
+        switch state {
         case .failed(offline: true): return "Needs a connection to download."
         case .failed(offline: false): return "Couldn’t download. Check your connection."
         case .protected: return "This file is DRM-protected and cannot be opened."
         default: break
         }
-        if page.finishedFailed { return "Couldn’t mark it finished. Check your connection." }
+        if finishedFailed { return "Couldn’t mark it finished. Check your connection." }
         return nil
     }
 
-    /// Tapping the author opens their books, where the screen provides a
-    /// way to open them.
-    @ViewBuilder
-    private var author: some View {
+    /// The place alone: "30%", "Not started", "Finished", or the problem.
+    var text: String {
+        problem ?? (finished ? "Finished" : BookPage.placeLine(progress: progress))
+    }
+
+    /// The place and when it last synced on one line, as the folded sheet
+    /// shows it: "48% · Synced just now".
+    func line(now: Date) -> String {
+        guard let status else { return text }
+        return "\(text) · \(status.text(now: now))"
+    }
+}
+
+/// The author; tapping them opens their books, where the screen provides a
+/// way to open them.
+struct BookAuthorLink: View {
+    let page: BookPage
+    @Environment(\.openLibraryEntry) private var openLibraryEntry
+
+    var body: some View {
         let line = page.authorLine
         if let entry = page.details?.authors.first, let openLibraryEntry {
             Button {
@@ -212,6 +299,9 @@ struct BookFinishedButton: View {
 struct BookOpenButton: View {
     let page: BookPage
     let source: any LibrarySource
+    /// As wide as the space it's given (unfolded, beside Mark finished), or
+    /// as wide as its label (the folded sheet's capsule).
+    var fillsWidth = true
     @Environment(ShellModel.self) private var shell
     @Environment(\.openBook) private var openBook
     @Environment(\.downloadBook) private var downloadBook
@@ -230,6 +320,7 @@ struct BookOpenButton: View {
         case .downloadFailed: return .failed(offline: false)
         case .needsConnection: return .failed(offline: true)
         case .downloading(let fraction): return .downloading(fraction: fraction)
+        case .protected: return .protected
         case nil: break
         }
         return switch shell.opener.status(of: book) {
@@ -250,7 +341,7 @@ struct BookOpenButton: View {
                 if let openBook { openBook(book) } else { opener.open(book, from: source) }
             } label: {
                 Text("Open")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
             .disabled(!opener.canOpen(book))
@@ -259,7 +350,7 @@ struct BookOpenButton: View {
                 if let downloadBook { downloadBook(book) } else { opener.download(book, from: source) }
             } label: {
                 Label("Download", systemImage: "arrow.down")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
             .disabled(!opener.canOpen(book))
@@ -271,7 +362,7 @@ struct BookOpenButton: View {
                     DownloadRing(fraction: fraction)
                     Text("Cancel")
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glass)
             .accessibilityLabel("Cancel download")
@@ -281,14 +372,14 @@ struct BookOpenButton: View {
                 if shell.coverStrip != nil { shell.coverStrip = nil } else { opener.retry(book, from: source) }
             } label: {
                 Text("Try again")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
         case .protected:
             // Greyed out, as for a format the reader can't open.
             Button {} label: {
                 Label("Download", systemImage: "arrow.down")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
             .disabled(true)

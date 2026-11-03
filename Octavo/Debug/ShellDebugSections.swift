@@ -25,6 +25,7 @@ struct ShellStatesSection: View {
                 Text("Couldn’t download").tag(CoverStripMessage?.some(.downloadFailed))
                 Text("Not downloaded").tag(CoverStripMessage?.some(.needsConnection))
                 Text("Downloading").tag(CoverStripMessage?.some(.downloading(fraction: 0.42)))
+                Text("Protected with DRM").tag(CoverStripMessage?.some(.protected))
             }
         } header: {
             Text("Shell states")
