@@ -39,8 +39,6 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 ## To revisit
 
-- The book sheet at rest, folded, is still quite tall; try a smaller resting state (Adam, after step 4).
-- The reader's progress bar sits too close to the screen's bottom-left corner when flat; tidy its placement, with the reader's panels (step 12) or sooner (Adam, after step 9).
 - Page-turn animations, designed together with opening and closing a book (Adam, after step 10; `docs/UI-IDEAS.md`).
 - Should Home and the Library share the reader's colours (its theme: Paper, Sepia, Night), or keep the system's light and dark? (Adam, after step 12.)
 - The empty strip at the reader's left edge, unfolded (the mirror of the side column, about 84 pt, so the pages split on the hinge). Options: keep it as a margin; a quiet progress rail with chapter ticks; or, with Narrow margins and the Duo flat, let the pages spread across the whole width (text then crosses the crease, and going half open re-lays out). (Adam, after step 12.)

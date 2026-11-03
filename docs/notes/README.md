@@ -22,5 +22,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `other-ways-in.md` (+ `other-ways-in/`) | step 15 | Import from Files and Open in Octavo, the bundled sample book, On iPhone, no server yet: the imported-books store, IDs from the bytes, setup's rule, file types, a grid trap on folds, simulator checks, the sample book's blank-page and fold checks |
 | `reader-page.md` (+ `reader-page/`) | #17 | The real reader: the page edge to edge with the text kept out of the side column, margins and the hinge gutter, controls and taps, the per-page footer and the scrubber, sideways, the debug remote that replaced the spike's screens for the check tools |
 | `formats-check.md` (+ `formats-check/`) | step 15 | MOBI, AZW3 and FB2 ship: the bridge's second script-blocking layer, the restore guard and FB2 links, refusing DRM and unsupported files by their bytes, reading an imported file's details through a hidden page, each layer measured alone in the app, positions and folds |
+| `layout-polish.md` (+ `layout-polish/`) | 2026-11-03 | The folded book sheet's compact resting state, the progress bar lined up with the text, Narrow's text drifting onto the hinge (WebKit's whole-point scrolling; fixed), the Night line (not reproduced) |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.
