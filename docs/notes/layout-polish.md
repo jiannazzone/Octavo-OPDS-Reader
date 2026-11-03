@@ -5,7 +5,7 @@ Two layouts Adam chose from picture mockups ("A" both times) off the plan's "To 
 ## Summary
 
 - **The folded book sheet at rest is compact:** the title on one line, the place under it ("48% · Synced just now"), Open as a capsule on the right of both, a thin progress line below. About 95 pt instead of about 170. The author and Mark finished moved into the pulled-up details. Unfolded, the right page is unchanged.
-- **The reader's progress bar lines up with the text** (its edges are the text's in every margin setting) and sits just above the home indicator. Half open, each piece lines up with its own page's text.
+- **The reader's progress bar lines up with the text** (its edges are the text's in every margin setting) and sits just above the home indicator, as tall as its rows plus 12 pt of padding. Half open, each piece lines up with its own page's text.
 - **Text on the hinge with Narrow margins was ours, and is fixed.** WebKit keeps a scroll offset in whole points, and foliate's page was 823.66 pt wide, so each page landed up to a point right of the layout. The view and gap are now whole points; every page reads 84–455 | 496–867.
 - **The thin light line in Night wasn't reproduced** in any state tried (section 4). It needs a screenshot or the steps from whoever saw it.
 
@@ -44,10 +44,11 @@ Measured on the screenshots (Night, the glass's edges on its middle row, against
 
 Every edge is the text's to the pixel (Wide's half-points show as 436.33 and 514.67 on the 1/3 pt grid).
 
-- **It now covers up to 12 pt of the last line while it shows.** It used to sit 12 pt from the bottom, under foliate's 48 pt bottom margin; just above the 34 pt home-indicator area, its 60 pt reach 12 pt into the text. Only while the controls show, as before for the column's buttons.
+- **Padding (Adam, 2026-11-03, after seeing it unfolded):** the bar was a fixed 60 pt, and the flat bar's three rows (chapter, slider, page numbers) are taller, so they ran into its top and bottom edges. It's now as tall as its rows plus 12 pt above and below: 82 pt flat and folded, 66 pt half open, where both pieces take the taller one's height (`10-bar-padding.jpg`: flat, then half open).
+- **It now covers about the last line and a half while it shows.** It used to sit 12 pt from the bottom, under foliate's 48 pt bottom margin; just above the 34 pt home-indicator area, its 82 pt reach about 36 pt into the text (20 half open). Only while the controls show.
 - The search step bar and the server's-place capsule, which take the footer's place, keep their old placement (the page's safe area, the right page in a spread). Not part of this change.
 
-`05-bar-folded-medium.jpg`, `06-bar-folded-narrow.jpg`, `07-bar-unfolded-narrow.jpg`, `08-bar-unfolded-wide.jpg`, `09-bar-half-open-medium.jpg`.
+`05-bar-folded-medium.jpg`, `06-bar-folded-narrow.jpg`, `07-bar-unfolded-narrow.jpg`, `08-bar-unfolded-wide.jpg`, `09-bar-half-open-medium.jpg` (05–09 at the old 60 pt; the edges are unchanged), `10-bar-padding.jpg`.
 
 ## 3. Text on the hinge (fixed)
 

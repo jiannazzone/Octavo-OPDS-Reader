@@ -400,6 +400,8 @@ extension ReaderInsets {
 /// with the text's, just above the home indicator (Adam, 2026-11-03). Half
 /// open, it follows the spread: the chapter and scrubber under the left
 /// page, the numbers under the right, nothing on the hinge (decision 9).
+/// As tall as what it holds plus its padding; half open both pieces take
+/// the taller one's height.
 private struct ReaderProgressBar: View {
     let model: ReaderModel
     /// Where the scrubber is while it's dragged, and after it's let go until
@@ -407,29 +409,31 @@ private struct ReaderProgressBar: View {
     @State private var scrub: Double?
     @State private var relocationsAtRelease: Int?
 
-    static let height = 60.0
-
     var body: some View {
-        if let geometry = model.geometry {
-            let spans = model.layout.barSpans(in: geometry, bookMode: model.isBookMode)
-            let top = ReaderLayout.barBottom(in: geometry) - Self.height
-            if spans.count == 2 {
-                glass { scrubber }
-                    .frame(width: spans[0].upperBound - spans[0].lowerBound, height: Self.height)
-                    .offset(x: spans[0].lowerBound, y: top)
-                glass { numbers.frame(maxWidth: .infinity, alignment: .leading) }
-                    .frame(width: spans[1].upperBound - spans[1].lowerBound, height: Self.height)
-                    .offset(x: spans[1].lowerBound, y: top)
-            } else if let span = spans.first {
-                glass {
-                    VStack(alignment: .leading, spacing: 2) {
-                        scrubber
-                        numbers
+        if let geometry = model.geometry,
+           case let spans = model.layout.barSpans(in: geometry, bookMode: model.isBookMode),
+           let first = spans.first, let last = spans.last {
+            Group {
+                if spans.count == 2 {
+                    HStack(spacing: last.lowerBound - first.upperBound) {
+                        glass { scrubber }
+                            .frame(width: first.upperBound - first.lowerBound)
+                        glass { numbers.frame(maxWidth: .infinity, alignment: .leading) }
+                            .frame(width: last.upperBound - last.lowerBound)
+                    }
+                } else {
+                    glass {
+                        VStack(alignment: .leading, spacing: 2) {
+                            scrubber
+                            numbers
+                        }
                     }
                 }
-                .frame(width: span.upperBound - span.lowerBound, height: Self.height)
-                .offset(x: span.lowerBound, y: top)
             }
+            .fixedSize(horizontal: false, vertical: true)
+            // The bar's bottom on the home indicator's edge.
+            .frame(width: last.upperBound - first.lowerBound, height: ReaderLayout.barBottom(in: geometry), alignment: .bottom)
+            .offset(x: first.lowerBound)
         }
     }
 
@@ -482,6 +486,7 @@ private struct ReaderProgressBar: View {
     private func glass(@ViewBuilder _ content: () -> some View) -> some View {
         content()
             .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .frame(maxHeight: .infinity)
             .glassEffect(.regular, in: .rect(cornerRadius: 22))
     }
