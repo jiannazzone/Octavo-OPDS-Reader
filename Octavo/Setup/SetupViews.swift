@@ -96,7 +96,7 @@ struct SetupStart: View {
 private struct ServerChoices: View {
     var body: some View {
         SetupPage {
-            SetupText("Choose the kind of server you have. Its books join the ones on this iPhone.")
+            SetupText("Choose what type of server you have.")
         } form: {
             VStack(spacing: 10) {
                 ServerChoiceButtons()

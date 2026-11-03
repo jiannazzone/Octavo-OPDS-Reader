@@ -147,7 +147,7 @@ struct BookSummary: View {
         switch BookOpenButton.state(of: page.current, in: shell) {
         case .failed(offline: true): return "Needs a connection to download."
         case .failed(offline: false): return "Couldn’t download. Check your connection."
-        case .protected: return "Protected with DRM, which Octavo can’t open."
+        case .protected: return "This file is DRM-protected and cannot be opened."
         default: break
         }
         if page.finishedFailed { return "Couldn’t mark it finished. Check your connection." }

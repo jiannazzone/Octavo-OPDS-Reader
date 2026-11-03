@@ -147,7 +147,7 @@ nonisolated extension SourcedBook {
     /// Why removing an imported book is different from removing a download.
     var removalMessage: String {
         isSample
-            ? "It came with Octavo, and can’t be added again once it’s removed."
+            ? "Are you sure? This book cannot be recovered."
             : "It was imported from Files, so it can’t be downloaded again. Import it again and it opens where you left it."
     }
 }
