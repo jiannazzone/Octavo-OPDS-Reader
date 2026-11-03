@@ -52,10 +52,11 @@ nonisolated struct ReaderGeometry: Equatable, Sendable, Codable {
 /// binds to `key`.
 nonisolated enum ReaderMargins: String, CaseIterable, Sendable, Codable {
     /// Text reaches the side column's edge: the margin itself lies under
-    /// the column. Unfolded, the gutter is the hinge's 40 pt.
+    /// the column. Unfolded, the gutter is a point wider than the hinge's
+    /// 40 pt.
     case narrow
     /// The frames (07–09): foliate's own 7%, 27 pt folded and 55 pt
-    /// unfolded.
+    /// unfolded (to the whole point).
     case medium
     case wide
 
@@ -190,30 +191,36 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
     /// One page across the safe area's width. With narrow margins the view
     /// reaches under each side's inset by its own margin, so the text meets
     /// the inset's edge.
+    ///
+    /// The view and the margin are whole points (`wholePageGap`).
     static func single(in geometry: ReaderGeometry, margins: ReaderMargins) -> ReaderLayout {
         let safe = geometry.safeArea
         let width = Double(geometry.size.width)
         let content = max(0, width - safe.left - safe.right)
-        let gap = margins.gapPercent / 100
-        var left = safe.left
-        var right = safe.right
-        if margins == .narrow {
-            let sides = (safe.left > 0 ? 1.0 : 0) + (safe.right > 0 ? 1.0 : 0)
-            let margin = gap * content / (1 - sides * gap)
-            if safe.left > 0 { left = max(0, left - margin) }
-            if safe.right > 0 { right = max(0, right - margin) }
-        }
+        let share = margins.gapPercent / 100
+        let reachesLeft = margins == .narrow && safe.left > 0
+        let reachesRight = margins == .narrow && safe.right > 0
+        let sides = (reachesLeft ? 1.0 : 0) + (reachesRight ? 1.0 : 0)
+        let margin = (share * content / (1 - sides * share)).rounded()
+        let view = (content + sides * margin).rounded(.down)
+        // Rounding the view down takes the fraction off the left, so the text
+        // still meets the right-hand inset's edge.
+        let right = max(0, Self.snapped(safe.right - (reachesRight ? margin : 0)))
+        let left = max(0, width - right - view)
         return ReaderLayout(
-            columns: 1, gapPercent: margins.gapPercent,
+            columns: 1, gapPercent: Self.gapPercent(margin, of: view, else: margins.gapPercent),
             leftInset: left, rightInset: right, topInset: safe.top, bottomInset: safe.bottom
         )
     }
 
     /// Two pages with foliate's view centred on `fold` (or on the middle of
-    /// the safe area) and a gap no narrower than the fold. The view is as
-    /// wide as the shorter side allows, so the margins match on both sides
-    /// (unfolded, the left edge gives up what the side column takes on the
-    /// right). Narrow margins reach under both edges by the margin.
+    /// the safe area) and a gap a point wider than the fold, so the text
+    /// stays half a point clear of it each side. The view is as wide as the
+    /// shorter side allows, so the margins match on both sides (unfolded,
+    /// the left edge gives up what the side column takes on the right).
+    /// Narrow margins reach under both edges by the margin.
+    ///
+    /// The view and the gap are whole points (`wholePageGap`).
     static func spread(in geometry: ReaderGeometry, fold: CGRect?, margins: ReaderMargins) -> ReaderLayout {
         let safe = geometry.safeArea
         let width = Double(geometry.size.width)
@@ -223,25 +230,48 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
         let half = max(0, min(mid - contentLeft, contentRight - mid))
         let foldWidth = Double(fold?.width ?? 0)
         let reaches = margins == .narrow
-        // The view's width for a gap `g`, and the smallest `g` whose gutter
-        // (g × view) covers the fold.
-        let viewWidth = { (g: Double) in reaches ? 2 * half / (1 - 2 * g) : 2 * half }
-        let foldShare = half > 0 ? (reaches ? foldWidth / (2 * half + 2 * foldWidth) : foldWidth / (2 * half)) : 0
-        // Rounded up to 0.1% so the gap never comes out narrower than the fold.
-        let gapPercent = max(margins.gapPercent, (foldShare * 1000).rounded(.up) / 10)
-        let view = viewWidth(gapPercent / 100)
+        let share = margins.gapPercent / 100
+        // The setting's gap, `share` of the view, which with narrow margins
+        // includes the gap twice more.
+        let setting = reaches ? share * 2 * half / (1 - 2 * share) : share * 2 * half
+        let gap = max(setting.rounded(), foldWidth > 0 ? (foldWidth + 1).rounded(.up) : 0)
+        let view = (2 * half + (reaches ? 2 * gap : 0)).rounded(.down)
+        let left = Self.snapped(mid - view / 2)
         return ReaderLayout(
             columns: 2,
-            gapPercent: gapPercent,
+            gapPercent: Self.gapPercent(gap, of: view, else: margins.gapPercent),
             // At half the view, foliate fits exactly two columns and never caps
             // the text width, which would move the gap off-centre.
             maxInlineSize: (view / 2).rounded(.up),
-            leftInset: max(0, mid - view / 2),
-            rightInset: max(0, width - (mid + view / 2)),
+            leftInset: max(0, left),
+            rightInset: max(0, width - (left + view)),
             topInset: safe.top,
             bottomInset: safe.bottom,
             fold: fold.map { Double($0.minX)...Double($0.maxX) }
         )
+    }
+
+    /// foliate turns a page by scrolling `page × page width`, and WebKit
+    /// keeps a scroll offset in whole points. A page width with a fraction
+    /// (823.66 pt with Narrow margins unfolded, when the view and gap were
+    /// shares of the screen) left every page's text up to a point right of
+    /// where the layout put it, onto the hinge with Narrow margins
+    /// (`docs/notes/layout-polish.md`, Text on the hinge). With a whole view
+    /// and a whole gap, the page (the view less the gap) is whole too.
+    ///
+    /// foliate takes the gap as a percentage, and WebKit truncates lengths to
+    /// 1/64 pt, so the percentage asks for this much more than the whole
+    /// gap: a quarter of that step, which truncates back to the gap.
+    static let wholePageGap = 1.0 / 256
+
+    /// `gap` points of a `view` points wide, as foliate's percentage.
+    private static func gapPercent(_ gap: Double, of view: Double, else fallback: Double) -> Double {
+        view > 0 ? (gap + wholePageGap) / view * 100 : fallback
+    }
+
+    /// To WebKit's 1/64 pt, so a whole view between two insets stays whole.
+    private static func snapped(_ value: Double) -> Double {
+        (value * 64).rounded() / 64
     }
 
     /// The gap between the two pages in a reader `width` wide, as foliate lays
@@ -274,6 +304,28 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
             let start = containerLeft + Double(index) * container / count + gap / 2
             return start...(start + columnWidth)
         }
+    }
+
+    /// Where the progress bar goes in a reader of `geometry` (Adam,
+    /// 2026-11-03): left to right, the stretches it covers, each edge on
+    /// the text's edge, so it follows the margins setting. One stretch under
+    /// the page or the spread; in book mode one under each page, so nothing
+    /// sits on the hinge (decision 9). Until foliate's columns are known,
+    /// the safe area less 12 pt each side.
+    func barSpans(in geometry: ReaderGeometry, bookMode: Bool) -> [ClosedRange<Double>] {
+        let width = Double(geometry.size.width)
+        guard let columns = textColumns(inReaderWidth: width), let first = columns.first, let last = columns.last else {
+            let left = geometry.safeArea.left + 12
+            return [left...max(left, width - geometry.safeArea.right - 12)]
+        }
+        if bookMode, columns.count == 2 { return columns }
+        return [first.lowerBound...last.upperBound]
+    }
+
+    /// The bar's bottom edge: just above the home indicator, so nothing runs
+    /// under it, and 12 pt up from a screen without one.
+    static func barBottom(in geometry: ReaderGeometry) -> Double {
+        Double(geometry.size.height) - max(geometry.safeArea.bottom, 12)
     }
 
     /// Arguments for `window.octavo.setLayout`.

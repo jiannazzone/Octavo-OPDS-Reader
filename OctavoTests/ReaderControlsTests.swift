@@ -118,6 +118,46 @@ struct ReaderControlsTests {
         #expect(ReaderPlace.chapterName(at: 0.5, in: []) == nil)
     }
 
+    // MARK: The chapter's progress, under the right page in book mode
+
+    /// Chapter 36 starts on page 293 (0.3 of 974) and chapter 37 on 302.
+    static func chapterPlace(first: Int, last: Int) -> ReaderPlace {
+        ReaderPlace(chapter: nil, location: .init(current: first - 1, next: last - 1, total: 974), fraction: Double(first - 1) / 974)
+    }
+
+    @Test func pagesLeftInTheChapter() throws {
+        let progress = try #require(ReaderChapterProgress(place: Self.chapterPlace(first: 295, last: 296), toc: Self.toc))
+        // 297–301 are still to come.
+        #expect(progress.pagesLeft == 5)
+        #expect(progress.text == "5 pages left in this chapter")
+        #expect(abs(progress.fraction - 4.0 / 9) < 1e-9)
+    }
+
+    @Test func theChaptersLastPages() throws {
+        let one = try #require(ReaderChapterProgress(place: Self.chapterPlace(first: 299, last: 300), toc: Self.toc))
+        #expect(one.text == "1 page left in this chapter")
+        let last = try #require(ReaderChapterProgress(place: Self.chapterPlace(first: 300, last: 301), toc: Self.toc))
+        #expect(last.pagesLeft == 0)
+        #expect(last.text == "Last page of this chapter")
+        #expect(last.fraction == 1)
+    }
+
+    // The last entry runs to the end of the book.
+    @Test func theLastChapterRunsToTheEnd() throws {
+        let progress = try #require(ReaderChapterProgress(place: Self.chapterPlace(first: 488, last: 489), toc: Self.toc))
+        #expect(progress.pagesLeft == 974 - 489)
+        #expect(abs(progress.fraction - 188.0 / 673) < 1e-9)
+    }
+
+    // Before the first entry, or without locations, the numbers show instead.
+    @Test func noChapterProgressWithoutAChapter() {
+        let toc: [ReaderMessage.TOCEntry] = [.init(label: "CHAPTER 1. Loomings.", fraction: 0.01)]
+        #expect(ReaderChapterProgress(place: Self.chapterPlace(first: 3, last: 4), toc: toc) == nil)
+        #expect(ReaderChapterProgress(place: Self.chapterPlace(first: 295, last: 296), toc: []) == nil)
+        let unmeasured = ReaderPlace(chapter: nil, location: .init(current: nil, total: nil), fraction: 0.302)
+        #expect(ReaderChapterProgress(place: unmeasured, toc: Self.toc) == nil)
+    }
+
     @Test func aScrubberPointHasALocation() {
         let place = ReaderPlace(fraction: 0.5, toc: Self.toc, total: 974)
         #expect(place.chapter == "CHAPTER 37. Sunset.")

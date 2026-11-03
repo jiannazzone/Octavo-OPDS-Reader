@@ -396,10 +396,12 @@ extension ReaderInsets {
 }
 
 /// The glass progress bar (decision 7, frames 08 and 09): the chapter, a
-/// scrubber through the whole book, and the page numbers. It runs along the
-/// bottom of the page, clear of the side column. Half open, it follows the
-/// spread: the chapter and scrubber on the left page, the numbers on the
-/// right, nothing on the hinge (decision 9).
+/// scrubber through the whole book, and the page numbers. Its edges line up
+/// with the text's, just above the home indicator (Adam, 2026-11-03). Half
+/// open, it follows the spread: the chapter and scrubber under the left
+/// page, the chapter's progress under the right (`ReaderBarReadout`),
+/// nothing on the hinge (decision 9). As tall as what it holds plus its
+/// padding; half open both pieces take the taller one's height.
 private struct ReaderProgressBar: View {
     let model: ReaderModel
     /// Where the scrubber is while it's dragged, and after it's let go until
@@ -407,34 +409,31 @@ private struct ReaderProgressBar: View {
     @State private var scrub: Double?
     @State private var relocationsAtRelease: Int?
 
-    static let height = 60.0
-    static let inset = 12.0
-
     var body: some View {
-        if let geometry = model.geometry {
-            let safe = geometry.safeArea
-            let width = Double(geometry.size.width)
-            let left = safe.left + Self.inset
-            let right = width - safe.right - Self.inset
-            // Over the home indicator like a tab bar, 12 pt from the edge (frame 08).
-            let top = Double(geometry.size.height) - Self.inset - Self.height
-            if model.isBookMode, let fold = model.layout.fold, fold.lowerBound - Self.inset > left, fold.upperBound + Self.inset < right {
-                glass { scrubber }
-                    .frame(width: fold.lowerBound - Self.inset - left, height: Self.height)
-                    .offset(x: left, y: top)
-                glass { numbers.frame(maxWidth: .infinity, alignment: .leading) }
-                    .frame(width: right - fold.upperBound - Self.inset, height: Self.height)
-                    .offset(x: fold.upperBound + Self.inset, y: top)
-            } else {
-                glass {
-                    VStack(alignment: .leading, spacing: 2) {
-                        scrubber
-                        numbers
+        if let geometry = model.geometry,
+           case let spans = model.layout.barSpans(in: geometry, bookMode: model.isBookMode),
+           let first = spans.first, let last = spans.last {
+            Group {
+                if spans.count == 2 {
+                    HStack(spacing: last.lowerBound - first.upperBound) {
+                        glass { scrubber }
+                            .frame(width: first.upperBound - first.lowerBound)
+                        glass { readout }
+                            .frame(width: last.upperBound - last.lowerBound)
+                    }
+                } else {
+                    glass {
+                        VStack(alignment: .leading, spacing: 2) {
+                            scrubber
+                            numbers
+                        }
                     }
                 }
-                .frame(width: max(0, right - left), height: Self.height)
-                .offset(x: left, y: top)
             }
+            .fixedSize(horizontal: false, vertical: true)
+            // The bar's bottom on the home indicator's edge.
+            .frame(width: last.upperBound - first.lowerBound, height: ReaderLayout.barBottom(in: geometry), alignment: .bottom)
+            .offset(x: first.lowerBound)
         }
     }
 
@@ -467,6 +466,48 @@ private struct ReaderProgressBar: View {
         }
     }
 
+    /// Under the right page in book mode.
+    @ViewBuilder private var readout: some View {
+        let place = place
+        switch ReaderBarReadout.standard {
+        case .chapter:
+            if let chapter = ReaderChapterProgress(place: place, toc: model.toc) {
+                // Laid out as the scrubber is, so the line is level with
+                // its track on the left.
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(chapter.text)
+                            .font(.footnote.weight(.semibold))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        if let pages = place.pages(spread: true) {
+                            Text(pages)
+                                .font(.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .layoutPriority(1)
+                        }
+                    }
+                    // The system slider without its thumb, so the line has
+                    // the scrubber's colours on the glass (a ProgressView
+                    // draws a deeper blue there).
+                    Slider(value: .constant(chapter.fraction), in: 0...1)
+                        .controlSize(.mini)
+                        .sliderThumbVisibility(.hidden)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+                .accessibilityElement(children: .combine)
+            } else {
+                numbers.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        case .pages:
+            numbers.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var numbers: some View {
         Text(place.barLine(spread: model.layout.columns == 2))
             .font(.caption)
@@ -487,6 +528,7 @@ private struct ReaderProgressBar: View {
     private func glass(@ViewBuilder _ content: () -> some View) -> some View {
         content()
             .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .frame(maxHeight: .infinity)
             .glassEffect(.regular, in: .rect(cornerRadius: 22))
     }

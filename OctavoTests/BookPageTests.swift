@@ -50,6 +50,41 @@ struct BookPageTests {
         #expect(BookPage.placeLine(progress: progress) == expected)
     }
 
+    // The folded sheet's second row (Adam, 2026-11-03): the place and when
+    // it synced on one line.
+    @Test func sheetPlaceLine() {
+        let now = Date(timeIntervalSince1970: 1_793_700_000)
+        let synced = BookPlace(progress: 0.48, problem: nil, status: .synced(now), finished: false)
+        #expect(synced.line(now: now) == "48% · Synced just now")
+        let unsent = BookPlace(progress: 0.48, problem: nil, status: .notSynced, finished: false)
+        #expect(unsent.line(now: now) == "48% · Not synced yet, will retry")
+        // An OPDS book doesn't sync: the place alone.
+        #expect(BookPlace(progress: nil, problem: nil, status: nil, finished: false).line(now: now) == "Not started")
+    }
+
+    // Finished and problems leave out the sync, and finished fills the bar.
+    @Test func sheetPlaceLineLeavesOutTheSync() {
+        let now = Date(timeIntervalSince1970: 1_793_700_000)
+        let finished = BookPlace(progress: 0.48, problem: nil, status: .synced(now), finished: true)
+        #expect(finished.line(now: now) == "Finished")
+        #expect(finished.progress == 1)
+        let failed = BookPlace(progress: 0.48, problem: "Needs a connection to download.", status: .synced(now), finished: false)
+        #expect(failed.line(now: now) == "Needs a connection to download.")
+        #expect(failed.progress == 0.48)
+    }
+
+    @Test(arguments: [
+        (BookOpenButton.State.failed(offline: true), false, String?("Needs a connection to download.")),
+        (.failed(offline: false), false, "Couldn’t download. Check your connection."),
+        (.protected, false, "This file is DRM-protected and cannot be opened."),
+        (.open, true, "Couldn’t mark it finished. Check your connection."),
+        (.downloading(fraction: 0.4), false, nil),
+        (.open, false, nil),
+    ])
+    func sheetProblems(state: BookOpenButton.State, finishedFailed: Bool, expected: String?) {
+        #expect(BookPlace.problem(state, finishedFailed: finishedFailed) == expected)
+    }
+
     @Test func unnumberedSeries() {
         var book = Self.book
         book.series = LibrarySeriesPosition(name: "Sea Stories")

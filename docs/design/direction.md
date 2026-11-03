@@ -68,7 +68,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **A quiet card with ✕ that never returns once dismissed** (remembered on the iPhone) is the pattern for an optional nudge that isn't the screen's point, like "Have a server?" under the Library's grid. Use it elsewhere when a hint or suggestion would otherwise stay on screen for good. It never replaces an empty screen's invitation (decision 22) or a problem's banner.
 
 ### A book's screen
-- **Folded:** the cover fills the screen, with a sheet whose resting state shows the title, author, place and progress bar, then **Mark finished | Open**; pull it up for the details.
+- **Folded:** the cover fills the screen, with a compact sheet at rest (Adam, 2026-11-03, about half its old height): the title on one line, the place under it ("48% · Synced just now"), **Open** as a capsule on the right of both, and a thin progress line below. A problem takes the place's line and wraps to two lines if it needs to (Adam: it's important information). Pull it up for the author, **Mark finished** and the details.
 - **Unfolded:** Cover | Details, the cover on the left page and the same details on the right.
 - **Open is Download until the book is on the iPhone** (Adam, 2026-11-01): Download, then a ring with Cancel while it downloads, then Open. A problem shows on the place line, with Try again on the button. Downloading doesn't open the book.
 - **The place is where the book opens, with when it last synced beside it** (step 13, Adam 2026-11-02): on the place's own line, at the right ("Synced just now", "Synced 5 minutes ago", "Synced yesterday", "Synced Oct 28"), or "Not synced yet, will retry" while a place waits to be sent. A book whose place doesn't sync (an OPDS catalog) shows nothing there.
@@ -100,7 +100,7 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
 ### Picking a book (approved 2026-10-31)
 
 4. **Folded: full-screen cover.** Tapping a book shows its cover filling the outer display.
-   - Over the cover: a bottom strip (a glass sheet at its compact height, with a grabber) showing the chapter and percentage, when it last synced, an **Open** button and a progress bar.
+   - Over the cover: a bottom strip (a glass sheet at its compact height, with a grabber) showing the title over the percentage and when it last synced, an **Open** capsule beside them and a thin progress line (amended 2026-11-03: the title, not the chapter).
    - Swipe up on it for details: the same sheet expands (decision 20).
    - **Unfolding on the cover opens the book at your place immediately**, with no prompt (answers part of duo-spreads §7 question 5).
    - The cover runs under the camera column, which covers its top-right corner; accepted. The tab column stays visible over the cover.
@@ -117,9 +117,9 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
 
 ### Book details (approved 2026-10-31)
 
-20. **The cover's strip expands into the details.** The progress strip and the details are one Liquid Glass sheet with two heights. Swiping up keeps the strip's top (chapter and percentage, progress bar, last sync, **Open**) and adds the details below; the cover stays behind it. Drag it down or tap the cover to return to the strip; unfolding still opens the book. Unfolded, the same sheet expands inside the right-hand cover pane. Below the strip:
-    - Title; author (tap: their books).
-    - Actions: **Mark as finished**, **Download / Remove download**.
+20. **The cover's strip expands into the details.** The progress strip and the details are one Liquid Glass sheet with two heights. Swiping up keeps the strip (title, place and last sync, **Open**, progress line; the title may take two lines) and adds the details below; the cover stays behind it. Drag it down or tap the cover to return to the strip; unfolding still opens the book. Unfolded, the right page shows the full summary (title, author, place, **Mark finished | Open**) with the details below it. Below the strip (amended 2026-11-03):
+    - Author (tap: their books).
+    - **Mark finished**; **Remove download** at the end of the details.
     - Description (three lines, then More).
     - Series, Collections, File (format, size), From (server), Added.
     - Mark as finished goes to BookOrbit for BookOrbit books and stays on the iPhone for OPDS and imported books (OPDS can't store it). Ratings and editing collections come later.
@@ -175,7 +175,7 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
 Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first half is decision 4).
 
 7. **Controls are hidden while you read.** A tap in the middle shows them: Back, Contents, Text and theme, Search in book and Bookmark in the side column, plus a glass progress bar with the chapter and page. Taps on the left and right sides turn pages. A setting, **Always show controls**, keeps them visible; it is off by default.
-   - **Progress, amended 2026-11-01 (#17)**, following the usual e-reader pattern (Apple Books, Kindle): **each page's bottom margin always shows its chapter and page** ("CHAPTER 36. The Quarter-Deck. · 291 of 974 · 30%"; a spread puts the chapter under the left page and the numbers under the right), so it never covers text and needs nothing special half-open. **The glass bar is a scrubber** that comes and goes with the tap, the same in every posture: over the page flat and folded, and half-open split at the hinge (chapter and scrubber on the left page, numbers on the right).
+   - **Progress, amended 2026-11-01 (#17)**, following the usual e-reader pattern (Apple Books, Kindle): **each page's bottom margin always shows its chapter and page** ("CHAPTER 36. The Quarter-Deck. · 291 of 974 · 30%"; a spread puts the chapter under the left page and the numbers under the right), so it never covers text and needs nothing special half-open. **The glass bar is a scrubber** that comes and goes with the tap, the same in every posture: over the page flat and folded, and half-open split at the hinge (chapter and scrubber on the left page, numbers on the right). **Its edges line up with the text's**, so it follows Narrow, Medium and Wide, and it sits just above the home indicator (Adam, 2026-11-03); half open, each piece lines up with its own page's text. **Half open, the right-hand piece shows the chapter's progress** (Adam, 2026-11-03): "6 pages left in this chapter" over a line through the chapter, with the book's page numbers; time left and choosing the readout come later (`docs/UI-IDEAS.md`).
    - **Always show controls keeps only the column's buttons** (they never cover text); the middle tap still shows and hides the bar. The toggle lives in the Customize panel (decision 13, #18).
    - While the controls show, a tap anywhere on the page hides them (frame 08's hotspot) instead of turning.
    - The column's panels and Bookmark are built (step 12).

@@ -38,10 +38,11 @@ struct ReaderLayoutTests {
         #expect(abs((gap.lowerBound + gap.upperBound) / 2 - 475.5) < 0.001)
     }
 
-    @Test func spreadKeepsFoliatesSpacingWhenTheFoldIsNarrower() {
+    @Test func spreadKeepsFoliatesSpacingWhenTheFoldIsNarrower() throws {
         let layout = ReaderLayout(posture: .open, geometry: Self.unfolded(active: false))
-        // 40 of 951 is 4.3%, under foliate's 7%.
-        #expect(layout.gapPercent == ReaderLayout.defaultGapPercent)
+        // 40 of 951 is 4.3%, under foliate's 7%: 7% of 951, to the point.
+        let gap = try #require(layout.gap(inReaderWidth: 951))
+        #expect(Self.near(gap.upperBound - gap.lowerBound, 67, within: 0.01))
     }
 
     @Test func spreadWidensTheGapForAWideFold() throws {
@@ -141,8 +142,8 @@ struct ReaderLayoutTests {
         #expect(layout.rightInset == 84)
         #expect(layout.bottomInset == 34)
         let text = try #require(layout.textColumns(inReaderWidth: 466)?.first)
-        #expect(Self.near(text.lowerBound, 26.7))
-        #expect(Self.near(text.upperBound, 355.3))
+        #expect(Self.near(text.lowerBound, 27, within: 0.01))
+        #expect(Self.near(text.upperBound, 355, within: 0.01))
     }
 
     // Frame 09: the spread centred on the hinge, the left edge giving up the
@@ -154,36 +155,37 @@ struct ReaderLayoutTests {
         #expect(layout.rightInset == 84)
         let columns = try #require(layout.textColumns(inReaderWidth: 951))
         #expect(columns.count == 2)
-        #expect(Self.near(columns[0].lowerBound, 138.8))
-        #expect(Self.near(columns[0].upperBound, 448.1))
-        #expect(Self.near(columns[1].lowerBound, 502.9))
-        #expect(Self.near(columns[1].upperBound, 812.2))
+        #expect(Self.near(columns[0].lowerBound, 139, within: 0.01))
+        #expect(Self.near(columns[0].upperBound, 448, within: 0.01))
+        #expect(Self.near(columns[1].lowerBound, 503, within: 0.01))
+        #expect(Self.near(columns[1].upperBound, 812, within: 0.01))
         #expect(columns[0].upperBound <= 455.5)
         #expect(columns[1].lowerBound >= 495.5)
     }
 
-    @Test(arguments: [(ReaderMargins.narrow, 18.4), (.medium, 26.7), (.wide, 38.2)])
+    // 4.6%, 7% and 10% of the content area, to the point.
+    @Test(arguments: [(ReaderMargins.narrow, 18.0), (.medium, 27), (.wide, 38)])
     func foldedMargins(margins: ReaderMargins, margin: Double) throws {
         let layout = ReaderLayout(posture: .closed, geometry: Self.foldedScreen, margins: margins)
         let text = try #require(layout.textColumns(inReaderWidth: 466)?.first)
-        #expect(Self.near(text.lowerBound, margin, within: 0.1))
+        #expect(Self.near(text.lowerBound, margin, within: 0.01))
         if margins == .narrow {
             // The text reaches the column's edge; the margin lies under it.
-            #expect(Self.near(text.upperBound, 382, within: 0.1))
+            #expect(Self.near(text.upperBound, 382, within: 0.01))
         } else {
-            #expect(Self.near(text.upperBound, 382 - margin, within: 0.1))
+            #expect(Self.near(text.upperBound, 382 - margin, within: 0.01))
         }
     }
 
-    // Narrow's gap rounds up to 4.7%: a 40.6 pt gutter, just over the hinge.
-    @Test(arguments: [(ReaderMargins.narrow, 40.6), (.medium, 54.8), (.wide, 78.3)])
+    // Narrow's gutter is a point wider than the 40 pt hinge.
+    @Test(arguments: [(ReaderMargins.narrow, 41.0), (.medium, 55), (.wide, 78)])
     func unfoldedMarginsAndGutter(margins: ReaderMargins, gutter: Double) throws {
         let layout = ReaderLayout(posture: .open, geometry: Self.unfoldedScreen(), margins: margins)
         let columns = try #require(layout.textColumns(inReaderWidth: 951))
-        #expect(Self.near(columns[1].lowerBound - columns[0].upperBound, gutter))
-        // Never narrower than the hinge.
-        #expect(columns[0].upperBound <= 455.5)
-        #expect(columns[1].lowerBound >= 495.5)
+        #expect(Self.near(columns[1].lowerBound - columns[0].upperBound, gutter, within: 0.01))
+        // Half a point clear of the hinge each side.
+        #expect(columns[0].upperBound <= 455)
+        #expect(columns[1].lowerBound >= 496)
         // Still centred on the hinge.
         #expect(Self.near((columns[0].upperBound + columns[1].lowerBound) / 2, 475.5, within: 0.01))
         if margins == .narrow {
@@ -222,7 +224,8 @@ struct ReaderLayoutTests {
         #expect(arguments["rightInset"] as? Double == 84)
         #expect(arguments["bottomInset"] as? Double == 34)
         #expect(arguments["topInset"] as? Double == 0)
-        #expect(arguments["gapPercent"] as? Double == 7)
+        // 27 pt of the 382 pt view.
+        #expect(Self.near(arguments["gapPercent"] as? Double ?? 0, 2700.0 / 382, within: 0.01))
     }
 
     @Test func safeAreaInPhysicalDirections() {
@@ -249,7 +252,94 @@ struct ReaderLayoutTests {
 
         let spread = ReaderLayout(posture: .open, geometry: Self.unfolded(active: false)).scriptArguments
         #expect(spread["columns"] as? Int == 2)
-        #expect(spread["gapPercent"] as? Double == 7)
+        #expect(Self.near(spread["gapPercent"] as? Double ?? 0, 6700.0 / 951, within: 0.01))
         #expect(spread["fold"] as? [Double] == [455.5, 495.5])
+    }
+
+    // MARK: A whole page (text on the hinge, docs/notes/reader-page.md)
+
+    static let sideways = ReaderGeometry(
+        size: CGSize(width: 669, height: 951),
+        divisions: [.init(frame: CGRect(x: 0, y: 455.5, width: 669, height: 40), isActive: false)],
+        safeArea: ReaderInsets(top: 82, left: 0, bottom: 34, right: 0)
+    )
+
+    /// foliate's page width as WebKit lays it out: the view less its two
+    /// half-gaps, each truncated to 1/64 pt.
+    static func foliatePage(_ layout: ReaderLayout, readerWidth: Double) -> (view: Double, page: Double) {
+        let view = readerWidth - layout.leftInset - layout.rightInset
+        let halfGap = ((layout.gapPercent ?? 7) / 100 * view / 2 * 64).rounded(.down) / 64
+        return (view, view - 2 * halfGap)
+    }
+
+    // WebKit scrolls to whole points, so foliate's page must be whole or
+    // each page lands up to a point right of where the layout put it.
+    @Test(arguments: ReaderMargins.allCases, [ReaderPosture.closed, .open, .halfOpen])
+    func foliatesPageIsWholePoints(margins: ReaderMargins, posture: ReaderPosture) {
+        let geometry = posture == .closed ? Self.foldedScreen : Self.unfoldedScreen(active: posture == .halfOpen)
+        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: margins)
+        let (view, page) = Self.foliatePage(layout, readerWidth: Double(geometry.size.width))
+        #expect(view == view.rounded())
+        #expect(page == page.rounded())
+    }
+
+    @Test(arguments: ReaderMargins.allCases)
+    func sidewaysPageIsWholePoints(margins: ReaderMargins) {
+        let layout = ReaderLayout(posture: .open, geometry: Self.sideways, margins: margins)
+        let (view, page) = Self.foliatePage(layout, readerWidth: 669)
+        #expect(view == view.rounded())
+        #expect(page == page.rounded())
+    }
+
+    // 823.66 pt before: Narrow's view and gap were shares of the screen.
+    @Test func narrowSpreadIsAWholePageWithTheTextAtTheEdges() throws {
+        let layout = ReaderLayout(posture: .open, geometry: Self.unfoldedScreen(), margins: .narrow)
+        #expect(layout.leftInset == 43)
+        #expect(layout.rightInset == 43)
+        #expect(Self.foliatePage(layout, readerWidth: 951).page == 824)
+        let columns = try #require(layout.textColumns(inReaderWidth: 951))
+        #expect(Self.near(columns[0].lowerBound, 84, within: 0.01))
+        #expect(Self.near(columns[0].upperBound, 455, within: 0.01))
+        #expect(Self.near(columns[1].lowerBound, 496, within: 0.01))
+        #expect(Self.near(columns[1].upperBound, 867, within: 0.01))
+    }
+
+    // MARK: The progress bar (Adam, 2026-11-03)
+
+    @Test(arguments: ReaderMargins.allCases)
+    func barLinesUpWithTheFoldedText(margins: ReaderMargins) throws {
+        let layout = ReaderLayout(posture: .closed, geometry: Self.foldedScreen, margins: margins)
+        let text = try #require(layout.textColumns(inReaderWidth: 466)?.first)
+        #expect(layout.barSpans(in: Self.foldedScreen, bookMode: false) == [text])
+        // Just above the home indicator.
+        #expect(ReaderLayout.barBottom(in: Self.foldedScreen) == 644)
+    }
+
+    @Test(arguments: ReaderMargins.allCases)
+    func barSpansTheSpreadFlat(margins: ReaderMargins) throws {
+        let layout = ReaderLayout(posture: .open, geometry: Self.unfoldedScreen(), margins: margins)
+        let columns = try #require(layout.textColumns(inReaderWidth: 951))
+        #expect(layout.barSpans(in: Self.unfoldedScreen(), bookMode: false) == [columns[0].lowerBound...columns[1].upperBound])
+        #expect(ReaderLayout.barBottom(in: Self.unfoldedScreen()) == 635)
+    }
+
+    // Half open, a piece under each page and nothing on the hinge.
+    @Test(arguments: ReaderMargins.allCases)
+    func barSplitsUnderEachPageInBookMode(margins: ReaderMargins) throws {
+        let geometry = Self.unfoldedScreen(active: true)
+        let layout = ReaderLayout(posture: .halfOpen, geometry: geometry, margins: margins)
+        let spans = layout.barSpans(in: geometry, bookMode: true)
+        #expect(spans == layout.textColumns(inReaderWidth: 951))
+        #expect(spans.count == 2)
+        #expect(spans[0].upperBound <= 455.5)
+        #expect(spans[1].lowerBound >= 495.5)
+    }
+
+    // Before foliate's columns are known, the safe area less 12 pt.
+    @Test func barKeepsToTheSafeAreaWhileFoliateDecides() {
+        let geometry = ReaderGeometry(size: CGSize(width: 1024, height: 768), safeArea: ReaderInsets(top: 0, left: 0, bottom: 0, right: 84))
+        let layout = ReaderLayout(posture: .noHinge, geometry: geometry)
+        #expect(layout.barSpans(in: geometry, bookMode: false) == [12...928])
+        #expect(ReaderLayout.barBottom(in: geometry) == 756)
     }
 }

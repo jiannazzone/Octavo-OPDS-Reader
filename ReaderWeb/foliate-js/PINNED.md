@@ -46,3 +46,4 @@ foliate-js says its API is unstable. Update deliberately:
    - The paginator calls `this.render()` from its `ResizeObserver` and from `attributeChangedCallback` (`max-inline-size`). `applyLayout` shadows `render` on the instance to skip those and render once.
    - A render re-scrolls to the paginator's anchor (`#scrollToAnchor`) without replacing it, so a fold keeps the position.
    - The paginator relocates with `reason: 'anchor'` after a render, and once more when the section's body is measured; `settle` waits for those to stop.
+5. Check that the page stays whole points: `ReaderLayout` relies on the paginator's grid taking the view less its two half-gaps as the page, and on scrolling `page × page width` (`docs/notes/layout-polish.md`, Text on the hinge). Its probe turns 20 pages and reads the same text edges on each.

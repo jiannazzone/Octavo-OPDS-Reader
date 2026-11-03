@@ -620,7 +620,7 @@ final class ShellModel {
     /// `-sampleLibrary 1|empty`
     /// (made-up books; `empty` has nothing in progress), `-shellTab library`,
     /// `-shellConnection unreachable|signedOut`,
-    /// `-shellCoverStrip failed|offline|downloading`,
+    /// `-shellCoverStrip failed|offline|downloading|protected`,
     /// `-shellOpen collection|deep|cover` (sample books),
     /// `-shellOpen settings|server|storage|licences` (Settings, or one of
     /// its pages),
@@ -644,6 +644,7 @@ final class ShellModel {
         case "failed": coverStrip = .downloadFailed
         case "offline": coverStrip = .needsConnection
         case "downloading": coverStrip = .downloading(fraction: 0.42)
+        case "protected": coverStrip = .protected
         default: break
         }
         let sample = defaults.string(forKey: "sampleLibrary")
