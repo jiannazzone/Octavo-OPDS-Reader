@@ -102,13 +102,107 @@ struct KeychainTests {
         let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
         try await tokens.save(BookOrbitCredentials(accessToken: "left over"))
 
-        try ServerCredentials.removeLeftoversAfterInstall(defaults: defaults)
+        try ServerCredentials.removeLeftoversAfterInstall(hasSavedServer: false, defaults: defaults)
         #expect(try await tokens.load() == nil)
 
         try await tokens.save(BookOrbitCredentials(accessToken: "signed in after"))
-        try ServerCredentials.removeLeftoversAfterInstall(defaults: defaults)
+        try ServerCredentials.removeLeftoversAfterInstall(hasSavedServer: false, defaults: defaults)
         #expect(try await tokens.load()?.accessToken == "signed in after")
         try ServerCredentials.removeAll(serverID: serverID)
+    }
+
+    // MARK: The launch path
+
+    /// This test host is the app, launched the real way, so this fails if
+    /// launch stops running the steps. They sat in `App.init` behind a check
+    /// that was always false, and every test here still passed because each
+    /// calls its function directly.
+    @MainActor @Test func launchRunsTheSteps() {
+        #expect(LaunchSteps.ranAtLaunch)
+        // What they leave: the marker, and the tour's decision from before it.
+        #expect(UserDefaults.standard.bool(forKey: ServerCredentials.installedKey))
+        #expect(TourRecord().state != nil)
+    }
+
+    /// An install from before the steps ran has a saved server and no marker.
+    /// That isn't a reinstall: it stays signed in, and only the rest goes.
+    @MainActor @Test func anInstallWithoutTheMarkerKeepsItsSavedServer() async throws {
+        let prefix = "launch-test-\(UUID().uuidString)-"
+        let id = prefix + "saved"
+        let abandoned = prefix + "abandoned"
+        defer { for account in [id, abandoned] { try? ServerCredentials.removeAll(serverID: account) } }
+        let defaults = UserDefaults.testSuite("launch-test")
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        try store.save(SavedServer(
+            id: LibrarySourceID(rawValue: id), kind: .opds, address: "http://nas.lan/feed?apikey=abcdefgh12345678", name: "COPS"
+        ))
+        try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
+        try KeychainCertificatePinStore(serverID: id).save(CertificatePin(sha256: Data(repeating: 1, count: 32)))
+        try await KeychainPasswordStore(serverID: abandoned).save(PasswordCredentials(username: "u", password: "p"))
+
+        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0.hasPrefix(prefix) })
+
+        #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
+        #expect(try KeychainCertificatePinStore(serverID: id).load() != nil)
+        #expect(try await KeychainPasswordStore(serverID: abandoned).load() == nil)
+        #expect(try store.read()?.address == "http://nas.lan/feed?apikey={key}")
+        #expect(try KeychainCatalogSecretStore(serverID: id).load() != nil)
+        #expect(defaults.bool(forKey: ServerCredentials.installedKey))
+        // Decided before the marker was set, or this would read as played.
+        #expect(TourRecord(defaults: defaults).state == .new)
+    }
+
+    /// A saved server that can't be read still means this install has run
+    /// before: nothing goes, and the sweep will try again next launch.
+    @MainActor @Test func anUnreadableSavedServerIsntAReinstall() async throws {
+        let id = "launch-test-\(UUID().uuidString)"
+        defer { try? ServerCredentials.removeAll(serverID: id) }
+        let defaults = UserDefaults.testSuite("launch-test")
+        let file = URL.testDirectory.appending(path: "Server.json")
+        try Data("{ not json".utf8).write(to: file)
+        try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
+
+        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: ServerStore(fileURL: file)) { $0 == id })
+
+        #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
+    }
+
+    /// No saved server and no marker: a reinstall, whose items go. Once: the
+    /// sign-in after it stays at the next launch.
+    @MainActor @Test func aReinstallStartsSignedOutThroughTheSteps() async throws {
+        let defaults = UserDefaults.testSuite("launch-test")
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
+        try await tokens.save(BookOrbitCredentials(accessToken: "left over"))
+
+        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0 == serverID })
+        #expect(try await tokens.load() == nil)
+        #expect(defaults.bool(forKey: ServerCredentials.installedKey))
+        #expect(TourRecord(defaults: defaults).state == .new)
+
+        try await tokens.save(BookOrbitCredentials(accessToken: "signed in after"))
+        try store.save(SavedServer(id: LibrarySourceID(rawValue: serverID), kind: .bookOrbit, address: "http://nas.lan", name: "BookOrbit"))
+        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0 == serverID })
+        #expect(try await tokens.load()?.accessToken == "signed in after")
+        try ServerCredentials.removeAll(serverID: serverID)
+    }
+
+    /// Before the first unlock nothing runs, and nothing is decided.
+    @MainActor @Test func nothingRunsBeforeTheFirstUnlock() async throws {
+        let id = "launch-test-\(UUID().uuidString)"
+        defer { try? ServerCredentials.removeAll(serverID: id) }
+        let defaults = UserDefaults.testSuite("launch-test")
+        let address = "http://nas.lan/feed?apikey=abcdefgh12345678"
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        try store.save(SavedServer(id: LibrarySourceID(rawValue: id + "-saved"), kind: .opds, address: address, name: "COPS"))
+        try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
+
+        #expect(!LaunchSteps.run(protectedDataAvailable: false, defaults: defaults, servers: store) { $0 == id })
+
+        #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
+        #expect(try store.read()?.address == address)
+        #expect(!defaults.bool(forKey: ServerCredentials.installedKey))
+        #expect(TourRecord(defaults: defaults).state == nil)
     }
 
     // MARK: Step 16

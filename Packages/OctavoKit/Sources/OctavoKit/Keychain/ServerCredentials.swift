@@ -118,10 +118,18 @@ public enum ServerCredentials {
     /// doesn't. On the first launch after an install (no marker in
     /// `defaults`, which is deleted with the app), delete every item left
     /// from before, so a reinstall starts signed out.
-    public static func removeLeftoversAfterInstall(defaults: UserDefaults = .standard) throws {
+    ///
+    /// `hasSavedServer`: the saved server is deleted with the app too, so one
+    /// without the marker means this install has run before and has simply
+    /// never set it (builds from before it was set, or a delete that failed
+    /// before the server was added). Its sign-in isn't a leftover: only the
+    /// marker is set, and the launch sweep takes anything else.
+    public static func removeLeftoversAfterInstall(hasSavedServer: Bool, defaults: UserDefaults = .standard) throws {
         guard !defaults.bool(forKey: installedKey) else { return }
-        for service in allServices {
-            try KeychainItem.deleteAll(service: service)
+        if !hasSavedServer {
+            for service in allServices {
+                try KeychainItem.deleteAll(service: service)
+            }
         }
         defaults.set(true, forKey: installedKey)
     }

@@ -187,7 +187,7 @@ struct TourRecord {
     }
 
     /// New or not, once. Before the install marker is set at launch
-    /// (`OctavoApp`): an install that already has one has run before.
+    /// (`LaunchSteps`): an install that already has one has run before.
     func settle() {
         guard state == nil else { return }
         set(defaults.bool(forKey: ServerCredentials.installedKey) ? .played : .new)
