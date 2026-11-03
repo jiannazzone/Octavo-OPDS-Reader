@@ -144,14 +144,14 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
    - **OPDS catalog:** enter the feed address (examples under the field: Calibre-Web `…/opds`, COPS `…/feed.php`, Komga `…/opds/v1.2/catalog`, Kavita: paste the OPDS link from its settings) and tap Connect. The account fields appear only if the server asks for a password ("Found “Calibre-Web”. It asks for a sign-in."); otherwise you land in the Library.
    - **The sync step is skipped for OPDS servers in v1** (only BookOrbit syncs); progress stays on the iPhone. The step returns once iCloud or KOReader sync exists, with iCloud preselected. A BookOrbit server shows it with itself preselected.
    - **"Don't sync" isn't offered for now** (Adam, 2026-11-02, step 13): with BookOrbit as the only choice left, setup skips the Reading progress step and every BookOrbit server syncs. The step and the choice stay in the code behind `SavedServer.offersSyncChoice`, for when there's a real choice to make.
-   - **No skip on first launch:** the first screen stays until a server is added or a file imported.
+   - **No skip on first launch:** the first screen stays until a server is added or a file imported. Replaced by decision 30 (2026-11-03): a new install starts with the tour (decision 29), which can be skipped to Home with the sample book.
    - **Built (step 8, 2026-11-01):**
      - **Each step is one screen across the spread** (Adam chose it over list | detail and over one step on the left page): what it is on the left page under the title, what you do on the right. Steps slide in over each other like the app's other screens, with Back in the column; there's no tab column during setup. Folded, one page: the words, the form, then any help (the OPDS address examples).
      - **Where to get a server:** Add your books has a "Don’t have one yet?" card on its left page (under the choices folded), one quiet grouped card with a row each (Adam chose it over a card each and over side-by-side tiles): BookOrbit, opening its GitHub (Adam), and calibre, opening calibre-ebook.com. Generic symbols, not the projects' logos. Rows open in Safari.
      - **Steps:** Add your books (BookOrbit or OPDS catalog) → Sign in to BookOrbit → Home (the Reading progress step, this BookOrbit server or Don't sync, is off for now; see above). OPDS: the address → Connect → the account fields only if the catalog asks → Home. "Trust this server?" comes in between when a certificate needs it.
      - **Signing in again:** the signed-out banner's Sign in opens a "Sign in again" screen in the same style (the server, the account, a new password), then returns to where you were. The server's page in Settings has the same Sign in when signed out (step 14).
      - **Not yet:** BookOrbit's single sign-on (Octavo can't do it yet). Import from Files and the sample book are built (step 15, Other ways in above).
-   - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
+   - **A bundled sample book:** a "Read a sample book" row on the first screen opens **Pride and Prejudice** (Standard Ebooks edition, CC0) straight in the reader, so the Duo reader can be tried before any setup (and App Review can test without a server). Leaving the reader returns to the first screen until something is added; afterwards the book stays under On iPhone and can be removed. Since decision 29 the tour opens it instead, and the row goes. Credit Standard Ebooks in `THIRD-PARTY-NOTICES.md`.
 25. **Plain http and self-signed certificates.**
     - **Plain `http://` is allowed only for home and VPN addresses;** internet addresses need https ("Use https:// for servers on the internet."). An http address shows "Not encrypted. On other networks, your password could be seen." under it (Adam, step 16, over "Octavo uses http:// only at home or over a VPN.").
     - **What counts as home or VPN** is a fixed set of standards-based rules applied to the address's host, not a list anyone maintains: IP addresses in 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 (RFC 1918), 100.64.0.0/10 (RFC 6598, used by Tailscale), 127.0.0.0/8, 169.254.0.0/16, and the IPv6 equivalents (fc00::/7, fe80::/10, ::1); special-use local names (`localhost`, `*.local`, `*.home.arpa`, `*.internal`, `*.lan`); any other name counts only if every address it resolves to is in those ranges (covers `*.ts.net` and split DNS at home).
@@ -209,6 +209,28 @@ Decided with animated mockups in the planning session (no Figma frames); replace
     - **Folding while reading and unfolding on a cover stay as they are**: the fold is already the motion (decisions 10 and 11).
     - **Built (2026-11-03, `docs/notes/page-turns.md`), for Adam to see on his Duo.** The cover rests on the right page until the book has opened, then swings. Closing plays only when Back lands on the book's screen; Back lands on the screen the book was opened over (`docs/PLAN.md`, To revisit).
 
+### The tour (Adam, 2026-11-03)
+
+Decided with mockups in the planning session (no Figma frames). This is step 17, the new-install flow.
+
+29. **A new install starts with a short tour that opens like a book**, taught in the sample book (Pride and Prejudice) rather than on slides. Reading comes first, then adding your books:
+    1. **Close your iPhone**, only if Octavo first opens unfolded: a Duo closing on the left page; "Close your iPhone" / "Octavo opens like a book." on the right. Closing moves the screen to the outer display. **Continue without closing** plays decision 28's cover opening on screen and goes on to step 3, for a phone on a stand or anyone who finds folding awkward.
+    2. **The cover, folded:** Pride and Prejudice's cover, with "Open your iPhone to begin" at the bottom. Unfolding opens it, the same gesture as every book afterwards (decision 10).
+    3. **Welcome:** the book opens at its first spread with the card "Welcome to Octavo" / "Try things out on this book. It’s yours to keep." · Start.
+    4. **Turn the page:** "Tap the right page, or swipe. Tap the left page to go back." Moves on when they turn.
+    5. **Bring up the controls:** "Tap ··· whenever you need them." Moves on when the controls open.
+    6. **Make it yours:** "Tap Aa for themes, text size and fonts." The real Text and theme panel opens (decision 13) and the left page changes as they choose; the card says "The page changes as you go" / "Come back to Aa any time." · Done.
+    7. **Add your own books:** "From your server, or from Files." · Not now · Add books. Add books closes the reader and opens Add your books (decision 6); its steps end on Home as today.
+    - **The tour card** is Liquid Glass, at the bottom of the left page (folded, the bottom of the page), in the same place for every step, with dots for how far along it is. A step that asks for something moves on when it's done; only Welcome, Make it yours and the last card have buttons. A pulsing ring marks what to tap (the right page, ···, Aa); with Reduce Motion it holds still.
+    - **Folding mid-tour closes the book**, as always; the folded cover then says "Open your iPhone to continue", and unfolding picks the tour up at the same step.
+    - **Without a fold** (another iPhone, an iPad), steps 1 and 2 drop out and the tour starts at Welcome.
+    - **Left out:** book mode (it turns itself on when half open), Contents, bookmarks and search (they're in the controls step 5 opens), and folding to close a book. Weighed as optional lessons and dropped to keep the tour short.
+    - **Add your books loses its Read a sample book row:** the tour opens the sample book, and afterwards it's on Home and in On iPhone.
+    - The wording is a draft for Adam to approve.
+30. **Skipping and seeing it again.** Skip sits in the column on every tour screen. Skip, or Not now on the last card, lands on Home with Pride and Prejudice under Continue reading; the Library's "Have a server?" card and Settings › Add a server stay the ways to add one (step 15). This replaces decision 6's no skip on first launch.
+    - **It plays once**, on a new install's first launch.
+    - **Show the tour** in Settings, above About, plays it from the beginning and returns to Settings. If the sample book was removed, the tour still opens it but doesn't put it back on the shelf, so "This book cannot be recovered" stays true.
+
 ### Text and theme (approved 2026-10-31)
 
 13. **A compact panel, Customize one step in.** The "Aa" button opens a Liquid Glass sheet (where available) so the page shows through while you adjust. Front: the four themes and A−/A+. Customize: font, line spacing, margins, page turn (decision 27), justify, Match Dark Mode, Book-mode shadow, Always show controls. These reading choices live only here, not in Settings. Unfolded, the panel covers the right page and the left page shows each change live.
@@ -233,6 +255,7 @@ Decided with animated mockups in the planning session (no Figma frames); replace
 24. **A lean Settings tab** (redone with Adam on 2026-11-02, under Settings in the library pass above; Settings is a button, not a tab):
     - **Server:** the server (address, account), reading-progress status; its page has Sign out and Remove server.
     - **Storage:** Books on iPhone (count and size), where downloads can be removed.
+    - **Show the tour** (decision 30), above About.
     - **About:** version, source code and licences.
     - Reading choices are not repeated here; they live in the reader's Customize panel (decision 13).
     - **Removing the server asks what to do with its downloaded books:** "Remove BookOrbit? Its 12 downloaded books use 48 MB." · Keep books on iPhone · Remove books too · Cancel. Imported books and the sample book are never affected.
@@ -354,5 +377,6 @@ Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (d
 - **Fold cross-fade (decision 11).** Show a `WebView` snapshot over the transition and fade it out once the layout settles; also batch the hinge, resize, layout and fold-region inputs into one re-layout (duo-spreads §5 counts 10–13 today).
 - **Sample book.** Bundle the Standard Ebooks Pride and Prejudice and re-run the blank-page and fold checks on it (the spike's Gutenberg edition had the blank page after the dedication). Done in step 15 (`docs/notes/other-ways-in.md`).
 - **Page turns (decision 27).** foliate's paginator slides a turn itself (its `animated` attribute), but not across a section break. The flip is ours, drawn from snapshots of the page over the web view, so the next page has to be ready the moment a finger lands. Measure that on a real Duo (snapshot time, turning foliate under a snapshot) before building the flip. Measured on the simulator and built (2026-11-03, `docs/notes/page-turns.md`): snapshots take 2–5 ms and the next page is drawn 20–70 ms after a turn; still to check on a real Duo.
+- **The tour (decisions 29 and 30).** The card and its rings are SwiftUI over the reader, never inside the book's page. Each step waits for the reader's own events (a turn, the controls, the Text and theme panel), and the posture at launch comes from the hinge (`onHingeChange` fires once on appear). Continue without closing reuses decision 28's opening. A tour replayed from Settings opens the sample book at its start without saving its place.
 - **Book mode (decision 9).** Detect the half-open range from `onHingeChange`, swap the tap zones, and draw the spine shadow as an overlay outside the book's content.
 - **Unfold on the cover → reader.** The spike's handoff already does this from its book screen (about 20 ms). It must compare old and new hinge status, not react to repeated or on-appear callbacks. Done in #14: `ShellModel.hingeChanged` → `BookOpener`, which downloads the book first if it isn't on the iPhone.
