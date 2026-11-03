@@ -71,19 +71,23 @@ enum SampleRoutes {
 /// A shell whose library and downloads keep their files in a temporary
 /// folder, not the app's.
 @MainActor
-func makeShell(opener: BookOpener? = nil) -> ShellModel {
+func makeShell(opener: BookOpener? = nil, imported: ImportedBooks? = nil, importer: ((ImportedBooks) -> BookImporter)? = nil) -> ShellModel {
     let folder = URL.testDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    // Never the app's own imported books.
+    let imported = imported ?? ImportedBooks(directory: folder.appending(path: "Imported"))
     return ShellModel(
         library: LibraryModel(
             recents: RecentBooks(fileURL: folder.appending(path: "RecentBooks.json")),
             finished: FinishedBooks(fileURL: folder.appending(path: "FinishedBooks.json")),
-            onIPhone: BooksOnIPhone(fileURL: folder.appending(path: "BooksOnIPhone.json"))
+            onIPhone: BooksOnIPhone(fileURL: folder.appending(path: "BooksOnIPhone.json")),
+            imported: imported
         ),
-        opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books"))),
+        opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books"), imported: imported)),
         servers: ServerStore(fileURL: folder.appending(path: "Server.json")),
         positions: ReadingPositionStore(directory: folder.appending(path: "ReadingPositions")),
         bookmarks: BookmarkStore(directory: folder.appending(path: "Bookmarks")),
-        removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServer.json"))
+        removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServer.json")),
+        importer: importer?(imported)
     )
 }
 

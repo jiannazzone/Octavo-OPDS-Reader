@@ -20,6 +20,13 @@ import time
 SIM = os.environ['SIM']
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 BUNDLE = 'com.ianazzone.ereader'
+
+
+def reader_id(book):
+    """The reader's ID for a book in Documents: since #17 its file's
+    `storageKey` (`BookFiles.swift`), no longer its name."""
+    import hashlib
+    return 'book-' + hashlib.sha256(book.encode()).hexdigest()[:32]
 out, books = sys.argv[1], sys.argv[2:]
 os.makedirs(out, exist_ok=True)
 
@@ -74,7 +81,7 @@ for book in books:
     time.sleep(1)
     started = time.time()
     command('openLocal', name=book)
-    while time.time() - started < 120 and state().get('bookID') != book:
+    while time.time() - started < 120 and state().get('bookID') not in (book, reader_id(book)):
         time.sleep(0.5)
     time.sleep(3)
     opened = state()

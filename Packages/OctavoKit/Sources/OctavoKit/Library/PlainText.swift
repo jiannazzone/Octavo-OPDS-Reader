@@ -108,7 +108,12 @@ public enum PlainText {
                     if !trimmed.isEmpty, pendingBreak == nil, !pendingBullet, !output.isEmpty, output.last != " " { output += " " }
                     continue
                 }
-                if !output.isEmpty, let pendingBreak { output = output.trimmingTrailingSpaces() + pendingBreak }
+                // In place: a copy per break made a long description
+                // (thousands of paragraphs) quadratic.
+                if !output.isEmpty, let pendingBreak {
+                    while output.last == " " { output.removeLast() }
+                    output += pendingBreak
+                }
                 if pendingBullet { output += "• " }
                 pendingBreak = nil
                 pendingBullet = false
@@ -186,12 +191,4 @@ public enum PlainText {
         "iuml": "ï", "ntilde": "ñ", "oacute": "ó", "ocirc": "ô", "ouml": "ö", "oslash": "ø",
         "uacute": "ú", "ucirc": "û", "uuml": "ü", "szlig": "ß", "aelig": "æ", "oelig": "œ",
     ]
-}
-
-private extension String {
-    func trimmingTrailingSpaces() -> String {
-        var copy = self
-        while copy.last == " " { copy.removeLast() }
-        return copy
-    }
 }

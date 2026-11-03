@@ -6,18 +6,25 @@ import SwiftUI
 /// covers across both pages; the same layout for every server.
 struct LibraryView: View {
     @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
         if let server = library.server {
             if let root = library.root {
                 LibraryContents(source: server.id, sections: Self.sections(root))
             } else {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 12) {
                     ConnectionBannerSlot()
                         .padding(.horizontal, 20)
+                    ImportFailureBanner()
+                        .padding(.horizontal, 20)
                     if library.connectionProblem != nil {
-                        // The banner says why, and retries.
-                        Spacer(minLength: 0)
+                        // The banner says why, and retries; what's on the
+                        // iPhone still reads (decision 22).
+                        ScrollView {
+                            OnIPhoneShelf()
+                                .padding(.top, 20)
+                        }
                     } else if library.rootFailed {
                         EmptyInvitation(
                             symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
@@ -28,6 +35,10 @@ struct LibraryView: View {
                     }
                 }
             }
+        } else if !shell.onIPhoneBooks().isEmpty {
+            // Books imported, no server yet: the books themselves (Adam,
+            // 2026-11-02).
+            OnIPhoneContent(offersServer: true)
         } else {
             NoLibraryInvitation()
         }
@@ -56,9 +67,16 @@ struct LibraryContents: View {
                 ConnectionBannerSlot()
                     .padding(.horizontal, SpreadMetrics.margin)
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                // Files an import couldn't take, when none came in (with
+                // one that did, On iPhone shows it).
+                ImportFailureBanner()
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
                 ForEach(sections) { section in
                     LibraryShelf(entry: section, source: source)
                 }
+                // Last, after the server's own sections (Adam, 2026-11-02).
+                OnIPhoneShelf()
             }
             .padding(.top, 8)
             .padding(.bottom, 20)

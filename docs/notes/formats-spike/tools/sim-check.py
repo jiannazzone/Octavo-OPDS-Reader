@@ -30,6 +30,13 @@ APP = os.path.join(TOOLS, '../../duo-spreads/tools/app.sh')
 BUNDLE = 'com.ianazzone.ereader'
 
 
+def reader_id(book):
+    """The reader's ID for a book in Documents: since #17 its file's
+    `storageKey` (`BookFiles.swift`), no longer its name."""
+    import hashlib
+    return 'book-' + hashlib.sha256(book.encode()).hexdigest()[:32]
+
+
 def documents():
     out = subprocess.run(['xcrun', 'simctl', 'get_app_container', SIM, BUNDLE, 'data'],
                          capture_output=True, text=True, check=True)
@@ -77,7 +84,7 @@ def wait_for_open(book, since, timeout=180):
     while time.time() < deadline:
         s = state()
         updated = s.get('updatedAt')
-        if s.get('bookID') == book and updated and time.mktime(time.strptime(updated, '%Y-%m-%dT%H:%M:%SZ')) - time.timezone >= since - 1:
+        if s.get('bookID') in (book, reader_id(book)) and updated and time.mktime(time.strptime(updated, '%Y-%m-%dT%H:%M:%SZ')) - time.timezone >= since - 1:
             return s, time.time() - since
         time.sleep(0.25)
     return {}, None
@@ -144,6 +151,10 @@ def check(book):
     time.sleep(1)
     started = time.time()
     subprocess.run(['xcrun', 'simctl', 'launch', SIM, BUNDLE], capture_output=True)
+    # Since #17 nothing reopens the last book at launch: open it again, from
+    # the position the reader saved before it was killed.
+    time.sleep(6)
+    app(f'"cmd":"openLocal","name":{json.dumps(book)}', wait=False)
     s, seconds = wait_for_open(book, started)
     s = settle() if s else s
     after = page(s)

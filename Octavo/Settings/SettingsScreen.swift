@@ -13,16 +13,19 @@ struct SettingsScreen: View {
     /// `nil`: the list itself.
     let page: SettingsPage?
     @Environment(\.spread) private var spread
+    @Environment(LibraryModel.self) private var library
 
     var body: some View {
+        // With no server yet (books imported), Storage's page to start with.
+        let first: SettingsPage = library.server == nil ? .storage : .server
         Group {
             if let pages = spread.pages {
                 HStack(spacing: 0) {
-                    SettingsList(chosen: page ?? .server)
+                    SettingsList(chosen: page ?? first)
                         .frame(width: pages.leftWidth)
                     Color.clear
                         .frame(width: pages.hingeWidth)
-                    SettingsPageView(page: page ?? .server)
+                    SettingsPageView(page: page ?? first)
                         .frame(width: pages.rightWidth)
                 }
             } else if let page {
@@ -87,6 +90,23 @@ struct SettingsList: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+                }
+            } else {
+                // Books imported, no server yet (Adam, 2026-11-02).
+                Section("Server") {
+                    Button {
+                        shell.push(.setup(.choose))
+                    } label: {
+                        HStack {
+                            Text("Add a server")
+                                .foregroundStyle(.tint)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.forward")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(.rect)
                     }
                 }
             }

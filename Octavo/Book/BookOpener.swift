@@ -32,6 +32,10 @@ final class BookOpener {
         /// `offline`: the iPhone has no connection ("Needs a connection to
         /// download."). Try again keeps what was asked for.
         case failed(offline: Bool, opensWhenDone: Bool)
+        /// The download was a Kindle or store book with DRM, which foliate
+        /// would show as garbage: it was deleted (step 15, as imports
+        /// refuse them). Downloading again won't help.
+        case protected
         case downloaded
     }
 
@@ -135,6 +139,12 @@ final class BookOpener {
         return book.readableFile.flatMap(files.localFile(for:))
     }
 
+    /// Files came or went outside the opener (an import, an imported book
+    /// removed): covers and screens look again.
+    func filesChanged() {
+        removals += 1
+    }
+
     /// Forgets a failure, so the strip shows Open again.
     func clearFailure(_ book: LibraryBook) {
         if case .failed = statuses[book.id] { statuses[book.id] = nil }
@@ -159,6 +169,12 @@ final class BookOpener {
                     try? files.remove(file)
                     throw CancellationError()
                 }
+                // Checked by its bytes, as an import is.
+                if await Self.isProtected(url) {
+                    try? files.remove(file)
+                    refused(book)
+                    return
+                }
                 finished(full, file: file, url: url)
             } catch {
                 failed(book, error)
@@ -178,6 +194,25 @@ final class BookOpener {
         tasks[book.id] = nil
         statuses[book.id] = nil
         if opens { onOpen(OpenedBook(book: book, file: file, url: url)) }
+    }
+
+    private func refused(_ book: LibraryBook) {
+        guard case .downloading = statuses[book.id] else { return }
+        tasks[book.id] = nil
+        statuses[book.id] = .protected
+    }
+
+    /// DRM, by the file's own bytes (`BookFileCheck`). Anything else it
+    /// refuses is left to the reader, which says it can't open it.
+    @concurrent nonisolated static func isProtected(_ url: URL) async -> Bool {
+        do {
+            _ = try BookFileCheck.check(url)
+            return false
+        } catch BookFileRefusal.drmProtected {
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func failed(_ book: LibraryBook, _ error: any Error) {

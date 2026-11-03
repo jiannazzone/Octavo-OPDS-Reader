@@ -77,7 +77,7 @@ struct BookInfoPage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 BookSummary(page: page, source: source, sourceID: sourceID, titleFont: .title2.bold(), titleLines: 4)
-                BookDetails(page: page, source: source)
+                BookDetails(page: page, source: source, sourceID: sourceID)
             }
             .padding(.horizontal, SpreadMetrics.margin)
             .padding(.top, SpreadMetrics.titleTop)

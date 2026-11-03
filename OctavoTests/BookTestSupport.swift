@@ -12,6 +12,8 @@ nonisolated struct StubLibrarySource: LibrarySource {
     var downloadTime: Duration = .zero
     /// Set for a server that keeps the finished mark, as BookOrbit does.
     var finishedMarks: FinishedMarks?
+    /// What a download writes, if not a placeholder.
+    var downloadData: Data?
 
     var tracksFinished: Bool { finishedMarks != nil }
 
@@ -56,7 +58,7 @@ nonisolated struct StubLibrarySource: LibrarySource {
         progress(0.5)
         if downloadTime > .zero { try await Task.sleep(for: downloadTime) }
         if let downloadError { throw downloadError }
-        try Data("not really an epub".utf8).write(to: destination)
+        try (downloadData ?? Data("not really an epub".utf8)).write(to: destination)
         progress(1)
         return destination
     }
@@ -74,9 +76,11 @@ nonisolated struct TemporaryBookFiles {
     let store: StoredBookFiles
 
     init() throws {
-        directory = URL.testDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        // Downloads and imported books side by side, as in the app.
+        let folder = URL.testDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        directory = folder.appending(path: "Books", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        store = StoredBookFiles(directory: directory)
+        store = StoredBookFiles(directory: directory, imported: ImportedBooks(directory: folder.appending(path: "Imported", directoryHint: .isDirectory)))
     }
 }
 
@@ -90,4 +94,11 @@ func eventually(timeout: Duration = .seconds(5), _ condition: () -> Bool) async 
         try? await Task.sleep(for: .milliseconds(10))
     }
     return true
+}
+
+nonisolated extension ImportedBooks {
+    /// A store of its own, never the app's.
+    static func temporary() -> ImportedBooks {
+        ImportedBooks(directory: URL.testDirectory.appending(path: "Imported-\(UUID().uuidString)", directoryHint: .isDirectory))
+    }
 }

@@ -13,7 +13,9 @@ struct SearchView: View {
     @Environment(\.spread) private var spread
 
     var body: some View {
-        if let server = library.server {
+        // With no server yet, the imported books alone.
+        if library.server != nil || library.hasAddedBooks {
+            let server = library.server
             let search = shell.search
             VStack(alignment: .leading, spacing: 0) {
                 SearchField(search: search)
@@ -24,7 +26,7 @@ struct SearchView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         VStack(alignment: .leading, spacing: 12) {
                             ConnectionBannerSlot()
-                            if !search.serverSearches {
+                            if let server, !search.serverSearches {
                                 Text("\(server.name) doesn’t offer search. Showing books on your iPhone.")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
@@ -33,7 +35,7 @@ struct SearchView: View {
                         .padding(.horizontal, SpreadMetrics.margin)
                         .frame(width: spread.pages?.leftWidth, alignment: .leading)
                         if search.searchText == nil {
-                            SearchStart(search: search, source: server.id)
+                            SearchStart(search: search, source: server?.id ?? .files)
                         } else {
                             SearchResultsContent(search: search)
                         }

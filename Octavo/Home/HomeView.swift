@@ -11,9 +11,9 @@ struct HomeView: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        if library.server == nil {
+        if library.server == nil, !library.hasAddedBooks {
             NoLibraryInvitation()
-        } else if !library.homeLoaded {
+        } else if library.server != nil, !library.homeLoaded {
             HomeContent(books: nil)
         } else if library.continueReading.isEmpty {
             VStack(spacing: 0) {

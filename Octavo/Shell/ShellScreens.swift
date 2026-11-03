@@ -16,6 +16,7 @@ struct ShellScreen: View {
         case .cover(let book): CoverScreen(book: book)
         case .setup(let step): SetupScreen(step: step)
         case .signInAgain: SignInAgainScreen()
+        case .onIPhone: OnIPhoneScreen()
         }
     }
 }

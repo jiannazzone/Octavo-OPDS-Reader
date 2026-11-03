@@ -122,6 +122,19 @@ struct BookOpenerTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: files.directory.path).isEmpty)
     }
 
+    // A Kindle file with DRM from the server is refused by its bytes, as an
+    // import is, and nothing is kept (step 15).
+    @Test func aProtectedDownloadIsRefused() async throws {
+        let folder = try ImportFixtures.folder()
+        let drm = try Data(contentsOf: ImportFixtures.drmMobi(in: folder))
+        var source = StubLibrarySource(downloadData: drm)
+        source.files = [LibraryFile(id: LibraryFileID(rawValue: "file-drm"), format: "mobi", isPrimary: true)]
+        opener.open(Self.book, from: source)
+        #expect(await eventually { opener.status(of: Self.book) == .protected })
+        #expect(opened.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: files.directory.path).isEmpty)
+    }
+
     @Test func formatsTheReaderCantOpenDoNothing() {
         var book = Self.book
         book.files = [LibraryFile(id: LibraryFileID(rawValue: "pdf"), format: "pdf", isPrimary: true)]
@@ -170,7 +183,7 @@ struct StoredBookFilesTests {
 
     @Test func downloadsStayOutOfTheBackup() async throws {
         let files = try TemporaryBookFiles()
-        let store = StoredBookFiles(directory: files.directory.appending(path: "Books", directoryHint: .isDirectory))
+        let store = StoredBookFiles(directory: files.directory.appending(path: "Books", directoryHint: .isDirectory), imported: .temporary())
         _ = try await store.download(Self.file, from: StubLibrarySource()) { _ in }
         let values = try store.directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
         #expect(values.isExcludedFromBackup == true)
@@ -181,7 +194,7 @@ struct StoredBookFilesTests {
     @Test func booksMoveInFromCaches() throws {
         let files = try TemporaryBookFiles()
         let old = files.directory.appending(path: "Caches-Books", directoryHint: .isDirectory)
-        let store = StoredBookFiles(directory: files.directory.appending(path: "Books", directoryHint: .isDirectory))
+        let store = StoredBookFiles(directory: files.directory.appending(path: "Books", directoryHint: .isDirectory), imported: .temporary())
         try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: store.directory, withIntermediateDirectories: true)
         try Data("old".utf8).write(to: old.appending(path: "a.epub"))

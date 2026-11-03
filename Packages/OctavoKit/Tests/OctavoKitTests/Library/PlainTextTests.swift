@@ -67,4 +67,14 @@ struct PlainTextTests {
     @Test func unclosedTagKeepsTheRest() {
         #expect(PlainText.fromHTML("<p>Text <b") == "Text <b")
     }
+
+    // A book's description is its own: 50,000 paragraphs once took a copy
+    // of everything so far at each one.
+    @Test func manyParagraphsStayFast() {
+        let html = String(repeating: "<p>Word </p>", count: 50_000)
+        let start = ContinuousClock.now
+        let text = PlainText.fromHTML(html)
+        #expect(ContinuousClock.now - start < .seconds(5))
+        #expect(text.hasPrefix("Word\n\nWord"))
+    }
 }

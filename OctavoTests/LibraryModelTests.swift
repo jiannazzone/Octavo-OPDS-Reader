@@ -76,7 +76,8 @@ private func temporaryLibrary(recents: RecentBooks = temporaryRecents()) -> Libr
     LibraryModel(
         recents: recents,
         finished: FinishedBooks(fileURL: URL.testDirectory.appending(path: "FinishedBooks-\(UUID().uuidString).json")),
-        onIPhone: BooksOnIPhone(fileURL: URL.testDirectory.appending(path: "BooksOnIPhone-\(UUID().uuidString).json"))
+        onIPhone: BooksOnIPhone(fileURL: URL.testDirectory.appending(path: "BooksOnIPhone-\(UUID().uuidString).json")),
+        imported: .temporary()
     )
 }
 

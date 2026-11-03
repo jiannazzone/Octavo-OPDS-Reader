@@ -29,6 +29,9 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     case cover(SourcedBook)
     /// A step in adding the server.
     case setup(SetupStep)
+    /// Every book on the iPhone (`ShellModel.onIPhoneBooks`): the Library's
+    /// last shelf, and where an import lands.
+    case onIPhone
     /// The server signed you out (or its password changed): sign in again.
     case signInAgain
 
@@ -38,6 +41,8 @@ nonisolated enum ShellRoute: Hashable, Sendable {
         switch self {
         case .feed(let entry, _): entry.kind == .author ? AuthorIndex.displayName(entry) : entry.title
         case .settings, .settingsPage, .cover: nil
+        case .onIPhone: "On iPhone"
+        case .setup(.choose): "Add a server"
         case .setup(.bookOrbit): "Sign in to BookOrbit"
         case .setup(.opds): "Add an OPDS catalog"
         case .setup(.trust): "Trust this server?"

@@ -54,11 +54,21 @@ nonisolated extension LibraryFile {
 ///
 /// Keyed by the file's ID alone: v1 has one server (decision 1). A second
 /// server needs the server in the key.
+///
+/// Books imported from Files (and the sample book) are on the iPhone too,
+/// in `ImportedBooks`' folder: they open from there, but only
+/// `ImportedBooks` removes them, never Remove download or Remove all
+/// downloads.
 nonisolated struct StoredBookFiles: BookFiles {
     let directory: URL
+    let imported: ImportedBooks
 
-    init(directory: URL = URL.applicationSupportDirectory.appending(path: "Books", directoryHint: .isDirectory)) {
+    init(
+        directory: URL = URL.applicationSupportDirectory.appending(path: "Books", directoryHint: .isDirectory),
+        imported: ImportedBooks = ImportedBooks()
+    ) {
         self.directory = directory
+        self.imported = imported
     }
 
     func url(for file: LibraryFile) -> URL? {
@@ -67,6 +77,10 @@ nonisolated struct StoredBookFiles: BookFiles {
     }
 
     func localFile(for file: LibraryFile) -> URL? {
+        downloadedFile(for: file) ?? imported.localFile(for: file)
+    }
+
+    private func downloadedFile(for file: LibraryFile) -> URL? {
         guard let url = url(for: file), FileManager.default.fileExists(atPath: url.path) else { return nil }
         return url
     }
@@ -78,7 +92,7 @@ nonisolated struct StoredBookFiles: BookFiles {
     }
 
     func remove(_ file: LibraryFile) throws {
-        guard let url = localFile(for: file) else { return }
+        guard let url = downloadedFile(for: file) else { return }
         try FileManager.default.removeItem(at: url)
     }
 

@@ -111,7 +111,7 @@ struct DownloadBadge: View {
                 .frame(width: size, height: size)
                 .padding(size / 4)
                 .animation(.linear(duration: 0.2), value: fraction)
-        case .notDownloaded, .failed:
+        case .notDownloaded, .failed, .protected:
             EmptyView()
         }
     }
@@ -121,7 +121,7 @@ struct DownloadBadge: View {
         switch status {
         case .downloaded: "Downloaded"
         case .downloading(let fraction, _): "Downloading, \(fraction.formatted(.percent.precision(.fractionLength(0))))"
-        case .notDownloaded, .failed: ""
+        case .notDownloaded, .failed, .protected: ""
         }
     }
 }

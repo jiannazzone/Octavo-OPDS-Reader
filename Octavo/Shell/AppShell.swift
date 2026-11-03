@@ -48,6 +48,19 @@ struct AppShell: View {
                     .transition(.asymmetric(insertion: .opacity, removal: .identity))
             }
         }
+        // Import from Files and the Library's +: the system's picker, no
+        // screen of our own (decision 6).
+        .fileImporter(
+            isPresented: Binding(get: { model.picksFiles }, set: { model.picksFiles = $0 }),
+            allowedContentTypes: BookImporter.contentTypes, allowsMultipleSelection: true
+        ) { result in
+            guard case .success(let urls) = result else { return }
+            Task { await model.importBooks(urls) }
+        }
+        // Open in Octavo, from another app's share sheet.
+        .onOpenURL { url in
+            Task { await model.openSharedFile(url) }
+        }
         .onHingeChange { old, new in
             model.hingeChanged(HingeTransition(from: old, to: new))
         }
@@ -73,7 +86,7 @@ struct AppShell: View {
                 ScreenStack(tab: .home, title: "Home") { HomeView() }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                ScreenStack(tab: .library, title: "Library") { LibraryView() }
+                ScreenStack(tab: .library, title: "Library", importsBooks: true) { LibraryView() }
             }
             Tab(value: .search, role: .search) {
                 ScreenStack(tab: .search, title: "Search") { SearchView() }

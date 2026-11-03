@@ -144,8 +144,12 @@ final class SearchModel {
     }
 
     private func search(_ text: String) async {
-        guard let server = library.server else { return }
         let local = library.iPhoneBooks().filter { isOnIPhone($0.book) && Self.matches($0.book, text) }
+        // No server yet: the imported books alone.
+        guard let server = library.server else {
+            finish(Results(query: text, books: local, series: [], authors: [], source: .files))
+            return
+        }
         guard serverSearches else {
             finish(Results(query: text, books: local, series: [], authors: [], source: server.id))
             return

@@ -274,7 +274,9 @@ struct ThirdPartyNoticeTests {
 
     @Test func readsEveryComponentWithItsLicence() throws {
         let parsed = ThirdPartyNotice.parse(try String(contentsOf: Self.notices, encoding: .utf8))
-        #expect(parsed.map(\.name) == ["foliate-js", "zip.js (bundled by foliate-js)", "fflate (bundled by foliate-js)", "EB Garamond (logo lettering)"])
+        #expect(parsed.map(\.name) == ["foliate-js", "zip.js (bundled by foliate-js)", "fflate (bundled by foliate-js)", "EB Garamond (logo lettering)",
+            "Pride and Prejudice (the sample book), Standard Ebooks",
+        ])
         #expect(parsed.map(\.license).prefix(3) == ["MIT", "BSD-3-Clause", "MIT"])
         let foliate = try #require(parsed.first)
         #expect(foliate.paragraphs.first == "MIT License")
@@ -283,6 +285,6 @@ struct ThirdPartyNoticeTests {
     }
 
     @Test func theAppBundlesThem() {
-        #expect(ThirdPartyNotice.bundled().count == 4)
+        #expect(ThirdPartyNotice.bundled().count == 5)
     }
 }

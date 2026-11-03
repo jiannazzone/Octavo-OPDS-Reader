@@ -17,6 +17,9 @@ MODE is `csp` or `nocsp`, optionally followed by `+sanitize` and/or `+meta`
 - `+sanitize`, `+meta`: the bridge is served with one extra line after
   `view.open()` that applies the prototype in harden.js (served as
   /foliate-js/octavo-harden.js) with those parts switched on.
+- `+noharden`: the bridge is served without its own harden layer (step 15,
+  `docs/notes/formats-check.md`), so `nocsp+noharden` is the positive
+  control and plain `nocsp` tests that layer alone.
 
 Paths: /reader.html, /bridge.js, /foliate-js/* from REPO/ReaderWeb, and
 /book/<name> from BOOKS_DIR.
@@ -47,8 +50,16 @@ print(f'mode {spec}; reader policy: {READER_CSP}', flush=True)
 OPEN_LINE = '    await view.open(new File([await response.blob()], name, { type }))\n'
 
 
+HARDEN_LINE = '    if (harden !== false) hardenBook(view.book)\n'
+
+
 def patched_bridge():
     source = open(os.path.join(web, 'bridge.js')).read()
+    if 'noharden' in extras:
+        assert source.count(HARDEN_LINE) == 1, 'bridge.js changed: update HARDEN_LINE'
+        source = source.replace(HARDEN_LINE, '')
+    if 'sanitize' not in extras and 'meta' not in extras:
+        return source.encode()
     assert source.count(OPEN_LINE) == 1, 'bridge.js changed: update OPEN_LINE'
     options = f"{{ sanitize: {'true' if 'sanitize' in extras else 'false'}, meta: {'true' if 'meta' in extras else 'false'} }}"
     return source.replace(OPEN_LINE, OPEN_LINE

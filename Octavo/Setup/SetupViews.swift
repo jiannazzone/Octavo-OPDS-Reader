@@ -55,6 +55,7 @@ struct SetupScreen: View {
 
     var body: some View {
         switch step {
+        case .choose: ServerChoices()
         case .bookOrbit: BookOrbitSetup()
         case .opds: CatalogSetup()
         case .trust: TrustSetup()
@@ -64,25 +65,102 @@ struct SetupScreen: View {
 }
 
 /// "Add your books": the kinds of server (frame 05), and where to get one
-/// (Adam, 2026-11-01). Import from Files and the sample book join them in
-/// step 15.
+/// (Adam, 2026-11-01), then Import from Files as a third choice and the
+/// sample book as a quiet row under them (Adam, 2026-11-02). A file that
+/// didn't come in says why under the choices.
 struct SetupStart: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
         SetupPage {
-            SetupText("Octavo reads the books on your own server. Choose the kind of server you have.")
+            SetupText("Octavo reads the books on your own server, or ones you import. Choose where your books are.")
         } form: {
-            VStack(spacing: 10) {
-                SetupChoice(title: "BookOrbit", detail: "Your Reading Space") {
-                    shell.push(.setup(.bookOrbit))
+            VStack(alignment: .leading, spacing: 10) {
+                ServerChoiceButtons()
+                SetupChoice(title: "Import from Files", detail: "EPUB, MOBI, AZW3 or FB2 files", working: shell.isImporting) {
+                    shell.showFilePicker()
                 }
-                SetupChoice(title: "OPDS catalog", detail: "Calibre-Web, COPS, Kavita, Komga…") {
-                    shell.push(.setup(.opds))
-                }
+                SetupError(message: ImportFailure.summary(shell.setupImportFailures))
+                    .padding(.horizontal, 4)
+                SampleBookRow()
+                    .padding(.top, 4)
             }
         } help: {
             ServerSuggestions()
+        }
+    }
+}
+
+/// Settings' Add a server, once books were imported without one: the kinds
+/// of server and where to get one, each step a screen with Back.
+private struct ServerChoices: View {
+    var body: some View {
+        SetupPage {
+            SetupText("Choose what type of server you have.")
+        } form: {
+            VStack(spacing: 10) {
+                ServerChoiceButtons()
+            }
+        } help: {
+            ServerSuggestions()
+        }
+    }
+}
+
+private struct ServerChoiceButtons: View {
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        SetupChoice(title: "BookOrbit", detail: "Your Reading Space") {
+            shell.push(.setup(.bookOrbit))
+        }
+        SetupChoice(title: "OPDS catalog", detail: "Calibre-Web, COPS, Kavita, Komga…") {
+            shell.push(.setup(.opds))
+        }
+    }
+}
+
+/// "Read a sample book": Pride and Prejudice, straight into the reader
+/// (decision 6). Leaving it comes back here until something is added.
+private struct SampleBookRow: View {
+    @Environment(ShellModel.self) private var shell
+    @State private var cover: UIImage?
+
+    var body: some View {
+        Button {
+            shell.readSampleBook()
+        } label: {
+            HStack(spacing: 12) {
+                Group {
+                    if let cover {
+                        Image(uiImage: cover)
+                            .resizable()
+                    } else {
+                        StandInCover(title: SampleBook.book.title, author: "Jane Austen", seed: LibraryBookID.sample.rawValue)
+                    }
+                }
+                .aspectRatio(2 / 3, contentMode: .fill)
+                .frame(width: 40, height: 60)
+                .clipShape(.rect(cornerRadius: 3))
+                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Read a sample book")
+                        .font(.headline)
+                        .foregroundStyle(.tint)
+                    Text("Pride and Prejudice, Jane Austen")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(SampleBook.bundledFile == nil)
+        .task {
+            cover = SampleBook.bundledCover.flatMap { UIImage(contentsOfFile: $0.path) }
         }
     }
 }
@@ -373,6 +451,8 @@ private struct SetupChoice: View {
     let title: String
     let detail: String
     var selected: Bool? = nil
+    /// A spinner at the end while it's busy (an import copying in).
+    var working = false
     let action: () -> Void
 
     var body: some View {
@@ -386,7 +466,9 @@ private struct SetupChoice: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 8)
-                if selected == true {
+                if working {
+                    ProgressView()
+                } else if selected == true {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
                         .foregroundStyle(.tint)
@@ -402,6 +484,7 @@ private struct SetupChoice: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .disabled(working)
         .accessibilityAddTraits(selected == true ? .isSelected : [])
     }
 }

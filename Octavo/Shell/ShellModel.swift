@@ -49,6 +49,18 @@ final class ShellModel {
     let removedServers: RemovedServerStore
     /// Bookmarks, for clearing a removed server's (`RemovedServer`).
     let bookmarks: BookmarkStore
+    /// Copies books in from Files.
+    let importer: BookImporter
+    /// The Files picker is showing (Import from Files, or the Library's +).
+    var picksFiles = false
+    /// Files from the last import that didn't come in: a banner on On
+    /// iPhone until OK (`docs/design/direction.md`, Other ways in).
+    var importFailures: [ImportFailure] = []
+    /// The same, under setup's choices, when nothing came in.
+    var setupImportFailures: [ImportFailure] = []
+    /// Imports copying files in (the picker and Open in can overlap).
+    private var importsRunning = 0
+    var isImporting: Bool { importsRunning > 0 }
     /// A debug launch argument is connecting a server: the tabs show, not
     /// setup, while it does.
     private var connectingAtLaunch = false
@@ -63,9 +75,10 @@ final class ShellModel {
     init(
         library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore(),
         positions: ReadingPositionStore = ReadingPositionStore(), bookmarks: BookmarkStore = BookmarkStore(),
-        removedServers: RemovedServerStore = RemovedServerStore()
+        removedServers: RemovedServerStore = RemovedServerStore(), importer: BookImporter? = nil
     ) {
         self.library = library
+        self.importer = importer ?? BookImporter(store: library.imported)
         self.opener = opener
         self.servers = servers
         self.bookmarks = bookmarks
@@ -87,8 +100,15 @@ final class ShellModel {
             retryUnsentPlaces()
         }
         connection.onReturn = { [weak self] in self?.retryUnsentPlaces() }
-        setup.push = { [weak self] in self?[path: .setup].push(.setup($0)) }
-        setup.pop = { [weak self] in self?[path: .setup].pop() }
+        Task.detached(priority: .background) { ShellModel.clearOldInboxFiles() }
+        setup.push = { [weak self] in
+            guard let self else { return }
+            self[path: setupTab].push(.setup($0))
+        }
+        setup.pop = { [weak self] in
+            guard let self else { return }
+            self[path: setupTab].pop()
+        }
         setup.finished = { [weak self] in self?.serverAdded($0) }
         // The saved server, at once: the first frame shows the tabs, which
         // load as it answers.
@@ -122,10 +142,17 @@ final class ShellModel {
 
     // MARK: Setup
 
-    /// No server yet: setup shows instead of the tabs, with no way past it
-    /// until one is added (decision 6).
+    /// No server yet and nothing imported: setup shows instead of the tabs,
+    /// with no way past it until one is added or a book imported (decision
+    /// 6). Reading the sample book isn't adding one.
     var needsSetup: Bool {
-        library.server == nil && !connectingAtLaunch
+        library.server == nil && !connectingAtLaunch && !library.hasAddedBooks
+    }
+
+    /// Where setup's steps go: setup itself, or (adding a server later from
+    /// Settings) the tab it was opened in.
+    private var setupTab: ShellTab {
+        needsSetup ? .setup : tab
     }
 
     /// Setup finished: keep the server and open Home on it.
@@ -186,6 +213,134 @@ final class ShellModel {
         }
         #endif
         push(.signInAgain)
+    }
+
+    // MARK: Other ways in
+
+    /// Import from Files, the Library's +: the system's Files picker.
+    func showFilePicker() {
+        setupImportFailures = []
+        picksFiles = true
+    }
+
+    /// The picked files (or one opened in Octavo from another app), copied
+    /// in one by one. What came in shows on On iPhone, newest first, with a
+    /// banner for any that didn't; with no server the Library itself lists
+    /// them. If nothing came in, the Library's top screen shows the banner
+    /// instead (Adam, 2026-11-02: a failed import doesn't move you to On
+    /// iPhone), and on setup's first screen setup says why under its
+    /// choices.
+    func importBooks(_ urls: [URL]) async {
+        guard !urls.isEmpty else { return }
+        // A new import's banner starts afresh; one overlapping another adds
+        // to it.
+        if importsRunning == 0 {
+            importFailures = []
+            setupImportFailures = []
+        }
+        importsRunning += 1
+        defer { importsRunning -= 1 }
+        var failures: [ImportFailure] = []
+        var imported: [SourcedBook] = []
+        for url in urls {
+            switch await importer.importFile(at: url) {
+            case .success(let book): imported.append(SourcedBook(source: .files, book: book))
+            case .failure(let failure): failures.append(failure)
+            }
+        }
+        // The first picked ends up first.
+        for book in imported.reversed() { try? library.onIPhone.record(book) }
+        library.importedChanged()
+        opener.filesChanged()
+        if needsSetup {
+            setupImportFailures += failures
+            return
+        }
+        importFailures += failures
+        setupImportFailures = []
+        reading = nil
+        tab = .library
+        self[path: .library].replace(imported.isEmpty || library.server == nil ? [] : [.onIPhone])
+    }
+
+    /// Open in Octavo, from the share sheet of Files, Mail or Safari: iOS
+    /// hands over a copy in Documents/Inbox, which goes once it's in.
+    func openSharedFile(_ url: URL) async {
+        guard url.isFileURL else { return }
+        await importBooks([url])
+        if Self.isInInbox(url) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// Where iOS puts a copy of a shared file: `Documents/Inbox`, or
+    /// `tmp/<bundle ID>-Inbox` with scenes.
+    nonisolated static var inboxes: [URL] {
+        let bundle = Bundle.main.bundleIdentifier ?? "com.ianazzone.ereader"
+        return [
+            URL.documentsDirectory.appending(path: "Inbox", directoryHint: .isDirectory),
+            URL.temporaryDirectory.appending(path: "\(bundle)-Inbox", directoryHint: .isDirectory),
+        ]
+    }
+
+    /// Whether `url` is a file directly in an inbox. Compared with links
+    /// resolved: on a device the same folder is `/var/…` or
+    /// `/private/var/…`.
+    nonisolated static func isInInbox(_ url: URL, inboxes: [URL] = inboxes) -> Bool {
+        let folder = url.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL.path
+        return inboxes.contains { $0.resolvingSymlinksInPath().standardizedFileURL.path == folder }
+    }
+
+    /// At launch: inbox copies an import cut short left behind (anything an
+    /// hour old; a file that just arrived is about to be imported).
+    nonisolated static func clearOldInboxFiles(inboxes: [URL] = inboxes, now: Date = Date()) {
+        let manager = FileManager.default
+        for inbox in inboxes {
+            guard let names = try? manager.contentsOfDirectory(atPath: inbox.path) else { continue }
+            for name in names {
+                let file = inbox.appending(path: name)
+                let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+                if now.timeIntervalSince(modified) > 3600 { try? manager.removeItem(at: file) }
+            }
+        }
+    }
+
+    /// Read a sample book, on setup's first screen: straight into the
+    /// reader. From then on it's under On iPhone.
+    func readSampleBook() {
+        guard let book = try? SampleBook.install(into: library.imported) else { return }
+        let sample = SourcedBook(source: .files, book: book)
+        library.importedChanged()
+        try? library.onIPhone.record(sample)
+        opener.filesChanged()
+        openBook(sample)
+    }
+
+    /// Every book whose file is on this iPhone that can open now: the
+    /// server's downloads, imported books and the sample book once read,
+    /// newest first. A removed server's kept books wait for it to return.
+    func onIPhoneBooks() -> [SourcedBook] {
+        _ = library.importedBooks
+        return downloads().map(\.book).filter { library.source(for: $0.source) != nil }
+    }
+
+    /// Removes an imported book (or the sample book), confirmed first since
+    /// it's the only copy. Its place and bookmarks stay, for the same file
+    /// imported again. A screen showing it closes.
+    func removeImported(_ book: SourcedBook) {
+        guard book.source == .files else { return }
+        opener.cancel(book.book)
+        try? library.imported.remove(book.book.id)
+        try? library.onIPhone.remove(book.id)
+        try? library.recents.remove(book.id)
+        library.importedChanged()
+        opener.filesChanged()
+        pages.remove(book.book.id)
+        for tab in ShellTab.allCases {
+            let routes = self[path: tab].routes
+            let kept = routes.filter { $0 != .cover(book) }
+            if kept.count != routes.count { self[path: tab].replace(kept) }
+        }
     }
 
     // MARK: Settings
@@ -295,7 +450,7 @@ final class ShellModel {
     /// setup.
     func push(_ route: ShellRoute) {
         if case .setup = route {
-            self[path: .setup].push(route)
+            self[path: setupTab].push(route)
         } else {
             self[path: tab].push(route)
         }
@@ -443,9 +598,10 @@ final class ShellModel {
 
     /// Closes the reader onto `book`'s screen, opening that screen if the
     /// book was opened from somewhere else (Home's debug launch argument).
+    /// The sample book read from setup goes back to setup.
     private func closeToItsScreen(_ book: OpenedBook) {
         reading = nil
-        guard let source = readingSource else { return }
+        guard !needsSetup, let source = readingSource else { return }
         if case .cover(let shown)? = self[path: tab].top, shown.book.id == book.book.id { return }
         self[path: tab].replace(self[path: tab].routes + [.cover(SourcedBook(source: source, book: book.book))])
     }

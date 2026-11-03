@@ -4,6 +4,9 @@ import OctavoKit
 
 /// A setup screen after the first ("Add your books").
 nonisolated enum SetupStep: Hashable, Sendable {
+    /// The kinds of server, opened from Settings' Add a server once books
+    /// were imported without one.
+    case choose
     case bookOrbit, opds, trust, sync
 }
 
