@@ -1,6 +1,7 @@
 import Foundation
 import OctavoKit
 import Observation
+import SwiftUI
 import UIKit
 import WebKit
 import os
@@ -72,6 +73,21 @@ final class ReaderModel {
     var appearance = ReaderAppearance().script(darkMode: false) {
         didSet { if appearance != oldValue { sendAppearance() } }
     }
+    /// Page Turn (decision 27); Reduce Motion turns Automatic into a fade.
+    var pageTurn = ReaderPageTurn.standard {
+        didSet { if pageTurn != oldValue { sendTurnMode() } }
+    }
+    var reduceMotion = false
+    /// The turn on screen, if any (`ReaderModel+Turns`).
+    var turn: ReaderTurn?
+    @ObservationIgnored let snapshots = ReaderPageSnapshots()
+    /// A finger's turns, recognised beside the web view.
+    @ObservationIgnored let swipes = ReaderSwipeRecognizer()
+    @ObservationIgnored var turnRun: ReaderTurnRun?
+    @ObservationIgnored var turnCount = 0
+    /// Turns asked for while one was still being drawn, played after it.
+    @ObservationIgnored var queuedTurns: [ReaderTurnSide] = []
+    @ObservationIgnored private var sentTurnMode: Bool?
     /// The page's size as the page reports it.
     @ObservationIgnored private var viewport: CGSize?
     /// The system's areas (the side column, or a band along the top when
@@ -174,6 +190,7 @@ final class ReaderModel {
         #endif
 
         relay.onMessage = { [weak self] body in self?.receive(body) }
+        swipes.onSwipe = { [weak self] swipe in self?.swiped(swipe) }
         if let sync {
             pusher = DebouncedProgressPusher(delay: pushDelay) { [weak self] position in
                 do {
@@ -231,6 +248,9 @@ final class ReaderModel {
         onBookModeChange?(isBookMode)
     }
 
+    /// A fold is settling (`FoldBatch`).
+    var isFolding: Bool { foldBatch != nil }
+
     /// The reader view's size or the fold's regions changed.
     func geometryChanged(_ geometry: ReaderGeometry) {
         lastGeometry = geometry
@@ -268,6 +288,16 @@ final class ReaderModel {
         guard phase == .open, appearance != sentAppearance else { return }
         sentAppearance = appearance
         call("return await window.octavo.setAppearance(appearance)", arguments: ["appearance": appearance.scriptArguments])
+    }
+
+    /// Whether Swift draws the turns; sent when Page Turn changes and once
+    /// the book has opened.
+    private func sendTurnMode() {
+        let animated = pageTurn.isAnimated
+        swipes.isEnabled = animated
+        guard phase == .open, animated != sentTurnMode else { return }
+        sentTurnMode = animated
+        call("return await window.octavo.setTurnMode(mode)", arguments: ["mode": ["animated": animated]])
     }
 
     /// Sent when `coversPage` changes, and once the book has opened (while
@@ -318,6 +348,8 @@ final class ReaderModel {
     /// cover it with a snapshot, and lay out once the fold's inputs settle.
     private func beginFold(folded: Bool) {
         guard phase == .open else { return }
+        // A turn under way ends where it was going, before the page holds.
+        let endTurn = finishTurnForFold() ?? ""
         let now = ContinuousClock.now
         if foldBatch != nil {
             foldBatch?.hingeMoved(folded: folded, at: now)
@@ -326,7 +358,7 @@ final class ReaderModel {
         }
         foldBatch = FoldBatch(folded: folded, at: now)
         lastFold = FoldReport()
-        call("return await window.octavo.hold()")
+        call(endTurn + "return await window.octavo.hold()")
         captureCover(startedAt: now)
         scheduleFoldEnd()
     }
@@ -484,6 +516,7 @@ final class ReaderModel {
             didOpen()
             sendLayout()
             sendTapMode()
+            sendTurnMode()
             sendAppearance()
             Task { await refreshBookmarks() }
         case .contents(let entries):
@@ -502,6 +535,10 @@ final class ReaderModel {
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
             onControlsTap?(zone)
+        case .turn(let side):
+            turnRequested(side)
+        case .selection(let active):
+            swipes.pageHasSelection = active
         case .viewport(let width, let height):
             log.debug("viewport \(width)×\(height)")
             viewport = CGSize(width: width, height: height)

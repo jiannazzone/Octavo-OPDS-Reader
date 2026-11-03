@@ -88,9 +88,9 @@ struct ReaderPanelFrame<Content: View>: View {
 }
 
 /// Text and theme (decision 13, frames 10 and 11): the themes and A−/A+ in
-/// front, then Customize (font, line spacing, margins, justify, Match Dark
-/// Mode, Book-mode shadow, Always show controls). On a spread there's room
-/// for both at once; on one page Customize is a step in.
+/// front, then Customize (font, line spacing, margins, page turn, justify,
+/// Match Dark Mode, Book-mode shadow, Always show controls). On a spread
+/// there's room for both at once; on one page Customize is a step in.
 struct ReaderTextPanel: View {
     @Binding var appearance: ReaderAppearance
     /// The iPhone is in Dark Mode.
@@ -99,6 +99,7 @@ struct ReaderTextPanel: View {
     let showsAll: Bool
     @State private var customizing = false
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
+    @AppStorage(ReaderPageTurn.key) private var pageTurn = ReaderPageTurn.standard
     @AppStorage(ReaderSettings.bookModeShadowKey) private var bookModeShadow = ReaderSettings.bookModeShadowDefault
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
 
@@ -212,6 +213,15 @@ struct ReaderTextPanel: View {
                     Text("Wide").tag(ReaderMargins.wide)
                 }
                 .pickerStyle(.segmented)
+            }
+            LabeledContent("Page Turn") {
+                Picker("Page Turn", selection: $pageTurn) {
+                    ForEach(ReaderPageTurn.allCases) { style in
+                        Text(style.name).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
             }
             Toggle("Justify", isOn: $appearance.justify)
             Toggle("Match Dark Mode", isOn: $appearance.matchDarkMode)
