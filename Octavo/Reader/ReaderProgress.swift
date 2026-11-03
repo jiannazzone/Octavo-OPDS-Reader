@@ -72,6 +72,52 @@ nonisolated struct ReaderPlace: Equatable, Sendable {
     }
 }
 
+/// What the progress bar's right-hand piece shows in book mode, under the
+/// right page (Adam, 2026-11-03). One readout at a time: time left in the
+/// chapter joins once Octavo measures reading speed, and choosing which
+/// shows is for later (`docs/UI-IDEAS.md`).
+nonisolated enum ReaderBarReadout: Sendable {
+    /// Pages left in the chapter, over a line through it.
+    case chapter
+    /// The book's page numbers and percentage.
+    case pages
+
+    static let standard = ReaderBarReadout.chapter
+}
+
+/// How far through its chapter a place is. The chapter is the contents
+/// entry the place falls in (the one the bar names) and runs to the next
+/// entry; pages are the footer's.
+nonisolated struct ReaderChapterProgress: Equatable, Sendable {
+    /// Pages after the ones on screen, before the next entry starts.
+    var pagesLeft: Int
+    /// 0...1 through the chapter, counting the pages on screen as read.
+    var fraction: Double
+
+    /// `nil` before the first entry, or without locations.
+    init?(place: ReaderPlace, toc: [ReaderMessage.TOCEntry]) {
+        let starts = toc.compactMap(\.fraction)
+        guard let last = place.last, let total = place.total,
+              let start = starts.filter({ $0 <= place.fraction + 1e-9 }).max()
+        else { return nil }
+        let end = starts.filter { $0 > start + 1e-9 }.min()
+        let page = { (fraction: Double) in ReaderPlace(fraction: fraction, toc: [], total: total).first ?? 1 }
+        let firstPage = page(start)
+        let nextFirstPage = end.map(page) ?? total + 1
+        pagesLeft = max(0, nextFirstPage - 1 - last)
+        fraction = min(max(Double(last - firstPage + 1) / Double(max(1, nextFirstPage - firstPage)), 0), 1)
+    }
+
+    /// "6 pages left in this chapter".
+    var text: String {
+        switch pagesLeft {
+        case 0: String(localized: "Last page of this chapter", comment: "Progress bar, book mode: the chapter ends on this spread")
+        case 1: String(localized: "1 page left in this chapter", comment: "Progress bar, book mode: pages after this spread in its chapter")
+        default: String(localized: "\(pagesLeft) pages left in this chapter", comment: "Progress bar, book mode: pages after this spread in its chapter")
+        }
+    }
+}
+
 /// What the controls show (decision 7, approved 2026-11-01): the column's
 /// buttons, and the progress bar over the page.
 ///

@@ -399,9 +399,9 @@ extension ReaderInsets {
 /// scrubber through the whole book, and the page numbers. Its edges line up
 /// with the text's, just above the home indicator (Adam, 2026-11-03). Half
 /// open, it follows the spread: the chapter and scrubber under the left
-/// page, the numbers under the right, nothing on the hinge (decision 9).
-/// As tall as what it holds plus its padding; half open both pieces take
-/// the taller one's height.
+/// page, the chapter's progress under the right (`ReaderBarReadout`),
+/// nothing on the hinge (decision 9). As tall as what it holds plus its
+/// padding; half open both pieces take the taller one's height.
 private struct ReaderProgressBar: View {
     let model: ReaderModel
     /// Where the scrubber is while it's dragged, and after it's let go until
@@ -418,7 +418,7 @@ private struct ReaderProgressBar: View {
                     HStack(spacing: last.lowerBound - first.upperBound) {
                         glass { scrubber }
                             .frame(width: first.upperBound - first.lowerBound)
-                        glass { numbers.frame(maxWidth: .infinity, alignment: .leading) }
+                        glass { readout }
                             .frame(width: last.upperBound - last.lowerBound)
                     }
                 } else {
@@ -463,6 +463,40 @@ private struct ReaderProgressBar: View {
                 scrub = nil
                 self.relocationsAtRelease = nil
             }
+        }
+    }
+
+    /// Under the right page in book mode.
+    @ViewBuilder private var readout: some View {
+        let place = place
+        switch ReaderBarReadout.standard {
+        case .chapter:
+            if let chapter = ReaderChapterProgress(place: place, toc: model.toc) {
+                // The line level with the scrubber's track on the left.
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(chapter.text)
+                            .font(.footnote.weight(.semibold))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        if let pages = place.pages(spread: true) {
+                            Text(pages)
+                                .font(.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .layoutPriority(1)
+                        }
+                    }
+                    ProgressView(value: chapter.fraction)
+                }
+                .frame(maxHeight: .infinity, alignment: .top)
+                .accessibilityElement(children: .combine)
+            } else {
+                numbers.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        case .pages:
+            numbers.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

@@ -51,6 +51,13 @@ Adam, while settling #8's start chip: "we definitely need a nicer empty state th
 - **Real page numbers.** The numbers are foliate's 1,500-character locations, so a page turn doesn't always change them. Counting real pages for the current layout means paginating the whole book after every fold and text change; the Contents panel (#18, "page numbers for the current layout") meets the same question.
 - **Footer on or off**, as a Customize setting, if anyone wants the page bare.
 
+## The book-mode readout (Adam, 2026-11-03)
+
+Half open, the bar's right-hand piece shows the chapter's progress: pages left in the chapter over a line through it, and the book's page numbers (`ReaderBarReadout.chapter`). Adam wants it customizable later:
+
+- **Time left** in the chapter and the book. Octavo doesn't measure reading speed yet; it would need to time page turns over a few sessions first.
+- **Choosing the readout**: chapter pages, time left, or the book's page numbers (`ReaderBarReadout.pages`), probably in Text and theme or a long press on the piece itself.
+
 ## Page-turn animations, with opening and closing a book (Adam, 2026-11-02)
 
 Turning a page cuts straight to the next one today (a swipe drags the page and snaps). Animate the turn, and design it together with how a book opens and closes (today the reader fades in over its screen, and folding closes it), so the two feel like one motion: a cover that opens into the spread, pages that turn the same way.
