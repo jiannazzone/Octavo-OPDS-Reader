@@ -58,7 +58,7 @@ struct ReaderTurn: Equatable {
     /// The pictures a turn needs before it starts, and once the new page is
     /// drawn, in the page's coordinates. A flip needs the new page only where
     /// it's on the back of the turning page; elsewhere the web view shows it.
-    static func regions(motion: ReaderTurnMotion, side: ReaderTurnSide, size: CGSize, spine: Double?) -> (old: Regions, new: Regions) {
+    nonisolated static func regions(motion: ReaderTurnMotion, side: ReaderTurnSide, size: CGSize, spine: Double?) -> (old: Regions, new: Regions) {
         switch motion {
         case .slide:
             return (.whole, .whole)
@@ -70,7 +70,7 @@ struct ReaderTurn: Equatable {
         }
     }
 
-    struct Regions: OptionSet {
+    nonisolated struct Regions: OptionSet, Sendable {
         let rawValue: Int
         static let whole = Regions(rawValue: 1)
         static let left = Regions(rawValue: 2)
@@ -78,7 +78,7 @@ struct ReaderTurn: Equatable {
     }
 
     /// The halves of a spread split at `spine`, in the page's coordinates.
-    static func half(_ side: ReaderTurnSide, of size: CGSize, spine: Double) -> CGRect {
+    nonisolated static func half(_ side: ReaderTurnSide, of size: CGSize, spine: Double) -> CGRect {
         side == .left
             ? CGRect(x: 0, y: 0, width: spine, height: size.height)
             : CGRect(x: spine, y: 0, width: Double(size.width) - spine, height: size.height)

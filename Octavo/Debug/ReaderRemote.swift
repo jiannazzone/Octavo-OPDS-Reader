@@ -224,7 +224,9 @@ enum ReaderRemote {
             let side = command.side.flatMap(ReaderTurnSide.init(rawValue:))
             reader.swiped(.init(phase: phase, side: side, dx: command.dx ?? 0, velocity: command.velocity ?? 0))
         case "turnState":
-            guard let run = reader.turnRun else { return "idle, last drawn after \(reader.lastTurnDrawnAfter ?? -1) ms, queued \(reader.queuedTurns.count), overlay \(reader.turn != nil); \(reader.swipes.debugState)" }
+            let motion = reader.pageTurn.motion(spread: reader.layout.columns == 2, reduceMotion: reader.reduceMotion)
+            let setting = "page turn \(reader.pageTurn.rawValue), reduce motion \(reader.reduceMotion) → \(motion.rawValue)"
+            guard let run = reader.turnRun else { return "\(setting); idle, last drawn after \(reader.lastTurnDrawnAfter ?? -1) ms, queued \(reader.queuedTurns.count), overlay \(reader.turn != nil); \(reader.swipes.debugState)" }
             return "run \(run.id) \(run.side) \(run.motion) interactive \(run.interactive) moved \(String(describing: run.moved)) drawn \(run.drawn) target \(String(describing: run.target)) done \(run.animationDone) progress \(reader.turn?.progress ?? -1)"
         case "next": reader.next()
         case "prev": reader.previous()
