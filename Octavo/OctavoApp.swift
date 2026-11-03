@@ -11,6 +11,7 @@ struct OctavoApp: App {
             try? ServerCredentials.removeLeftoversAfterInstall()
             // Before the shell exists, so no setup has started storing yet.
             try? KeychainSweep.run()
+            try? ServerStore().moveSecretsOut()
         }
     }
 

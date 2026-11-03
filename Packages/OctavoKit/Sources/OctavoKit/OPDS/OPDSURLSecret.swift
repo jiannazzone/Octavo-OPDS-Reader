@@ -48,23 +48,36 @@ public struct OPDSURLSecret: Sendable {
 
     /// The secrets in a catalog address someone pasted, of the kinds Octavo
     /// knows: a key in the path (Kavita's `api/opds/<key>`, Stump's
-    /// `opds/<key>/v1.2`) and query items named like a credential (`apikey`,
-    /// `token`, `password`, …). One shorter than 8 characters can't be
-    /// swapped out safely and stays as typed.
+    /// `opds/<key>/v1.2`), and path parameters (`;jsessionid=`) and query
+    /// items named like a credential (`apikey`, `token`, `password`, …).
+    /// Each is taken as it's written in the address, percent-encoding and
+    /// all, so `redact` finds it there and `restore` gives back the same
+    /// address (`abc%26def` decoded would split into two query items). One
+    /// shorter than 8 characters can't be swapped out safely and stays as
+    /// typed.
     public static func detect(in catalogURL: URL) -> OPDSURLSecret? {
+        guard let components = URLComponents(url: catalogURL, resolvingAgainstBaseURL: true) else { return nil }
         var found: [String] = []
-        let parts = catalogURL.pathComponents.filter { $0 != "/" }
+        let segments = components.percentEncodedPath.split(separator: "/").map(String.init)
+        // Without path parameters, for matching the path.
+        let parts = segments.map { String($0.prefix { $0 != ";" }) }
         // The last `api/opds/<key>`: a proxy may put its own `opds` in front.
         if let opds = parts.indices.last(where: { $0 > 0 && $0 + 1 < parts.count && parts[$0] == "opds" && parts[$0 - 1] == "api" }) {
             found.append(parts[opds + 1])
         } else if let opds = parts.indices.last(where: { $0 + 2 < parts.count && parts[$0] == "opds" && isVersion(parts[$0 + 2]) }),
-                  parts[opds + 1].contains(where: \.isNumber) {
-            // A key, not a word: `opds/discover/v1` is a path.
+                  parts[opds + 1].contains(where: { $0.isNumber || $0 == "_" }) {
+            // A key (Stump's are `stump_…_…`), not a word: `opds/discover/v1`
+            // is a path.
             found.append(parts[opds + 1])
         }
-        let items = URLComponents(url: catalogURL, resolvingAgainstBaseURL: true)?.queryItems ?? []
-        for item in items where isCredentialName(item.name) {
-            if let value = item.value, isReplaceable(value) { found.append(value) }
+        for segment in segments {
+            for parameter in segment.split(separator: ";").dropFirst() {
+                let pair = parameter.split(separator: "=", maxSplits: 1).map(String.init)
+                if pair.count == 2, isCredentialName(pair[0]) { found.append(pair[1]) }
+            }
+        }
+        for item in components.percentEncodedQueryItems ?? [] where isCredentialName(item.name.removingPercentEncoding ?? item.name) {
+            if let value = item.value { found.append(value) }
         }
         return OPDSURLSecret(values: found.filter(isReplaceable))
     }
@@ -80,7 +93,7 @@ public struct OPDSURLSecret: Sendable {
     /// back in requests to the catalog the same way.
     static func isCredentialName(_ name: String) -> Bool {
         let name = name.lowercased().filter { $0.isLetter || $0.isNumber }
-        let words = ["key", "token", "secret", "pass", "pwd", "auth", "session", "sig", "jwt", "otp"]
+        let words = ["key", "token", "secret", "pass", "pw", "auth", "bearer", "session", "sig", "jwt", "otp"]
         return name == "sid" || name == "code" || words.contains { name.contains($0) }
     }
 
@@ -96,16 +109,23 @@ public struct OPDSURLSecret: Sendable {
         string.replacing(/\{key[0-9]*\}/, with: "key")
     }
 
-    /// `string` with the secrets replaced, as written or percent-encoded.
+    /// `string` with the secrets replaced: as found in the address, decoded,
+    /// or fully percent-encoded (a catalog's links may write a token another
+    /// way than the address did).
     public func redact(_ string: String) -> String {
+        var forms: [(form: String, placeholder: String)] = []
+        for (index, value) in values.enumerated() {
+            let placeholder = Self.placeholder(at: index)
+            let decoded = value.removingPercentEncoding ?? value
+            let encoded = decoded.addingPercentEncoding(withAllowedCharacters: Self.unreserved) ?? decoded
+            for form in [value, decoded, encoded] where Self.isReplaceable(form) && !forms.contains(where: { $0.form == form }) {
+                forms.append((form, placeholder))
+            }
+        }
         var string = string
         // Longest first, so a secret inside another doesn't split it.
-        for (index, value) in values.enumerated().sorted(by: { $0.element.count > $1.element.count }) {
-            let placeholder = Self.placeholder(at: index)
-            string = string.replacingOccurrences(of: value, with: placeholder)
-            if let encoded = value.addingPercentEncoding(withAllowedCharacters: Self.unreserved), encoded != value {
-                string = string.replacingOccurrences(of: encoded, with: placeholder, options: .caseInsensitive)
-            }
+        for (form, placeholder) in forms.sorted(by: { $0.form.count > $1.form.count }) {
+            string = string.replacingOccurrences(of: form, with: placeholder, options: form.contains("%") ? .caseInsensitive : [])
         }
         return string
     }

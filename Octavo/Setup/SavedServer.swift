@@ -156,6 +156,34 @@ nonisolated struct ServerStore: Sendable {
 /// trailing dot (`URL` writes an international name as `xn--`), and any
 /// `user:password@` moved out to the account fields. Whether the address
 /// may be used is `ServerTransport`'s to say, on every request.
+nonisolated extension ServerStore {
+    /// A server saved before step 16 recognised its address's secrets
+    /// (Stump's key, a token in the query, a query on a BookOrbit address)
+    /// has them moved out at launch: into the Keychain first, then the
+    /// address saved with placeholders, so a crash between the two leaves
+    /// the next launch to do it again.
+    func moveSecretsOut() throws {
+        guard var saved = try read() else { return }
+        switch saved.kind {
+        case .bookOrbit:
+            guard let url = URL(string: saved.address), url.query != nil else { return }
+            saved.address = url.withoutQuery.absoluteString
+        case .opds:
+            let store = KeychainCatalogSecretStore(serverID: saved.id.rawValue)
+            let kept = try store.load()
+            // A key that's gone already sends setup again; nothing to move.
+            if OPDSURLSecret.isRedacted(saved.address), kept == nil { return }
+            guard let url = URL(string: kept?.restore(saved.address) ?? saved.address),
+                  let found = OPDSURLSecret.detect(in: url) else { return }
+            let new = found.values.filter { !(kept?.values.contains($0) ?? false) }
+            guard !new.isEmpty, let merged = OPDSURLSecret(values: (kept?.values ?? []) + new) else { return }
+            try store.save(merged)
+            saved.address = merged.redact(url.absoluteString)
+        }
+        try save(saved)
+    }
+}
+
 nonisolated extension URL {
     /// The same address with no query.
     var withoutQuery: URL {

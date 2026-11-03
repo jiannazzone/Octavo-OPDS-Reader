@@ -604,6 +604,37 @@ struct OPDSSourceTests {
         #expect(OPDSURLSecret.detect(in: URL(string: "https://x.example/feed?token=short")!) == nil)
     }
 
+    /// The review's cases: a secret is taken as written, so a token typed
+    /// percent-encoded (`abc%26def` is one value, not two items) is found
+    /// in the address and restored exactly.
+    @Test func keepsASecretAsItsWrittenInTheAddress() throws {
+        for address in [
+            "https://nas.lan/opds?token=abc/def%3D%3Dxyz",
+            "https://nas.lan/opds?token=abc%26def%3Dghi",
+            "https://nas.lan/opds?token=ab%2Bcdefgh",
+            "https://nas.lan/opds?token=ab%23cdefgh",
+            "https://nas.lan/opds?token=a%62cdefgh12",
+            "https://nas.lan/opds?token=abc!*'()defgh",
+        ] {
+            let url = try #require(URL(string: address))
+            let secret = try #require(OPDSURLSecret.detect(in: url), "\(address)")
+            let saved = secret.redact(url.absoluteString)
+            #expect(saved == "https://nas.lan/opds?token={key}", "\(address)")
+            #expect(secret.restore(saved) == url.absoluteString)
+        }
+        // A link written another way than the address still loses it.
+        let secret = try #require(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds?token=abc/def%3D%3Dxyz")!))
+        #expect(secret.redact("https://nas.lan/cover?token=abc/def==xyz") == "https://nas.lan/cover?token={key}")
+        #expect(secret.redact("https://nas.lan/cover?token=abc%2Fdef%3D%3Dxyz") == "https://nas.lan/cover?token={key}")
+    }
+
+    @Test func findsOtherCredentialShapes() {
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds;jsessionid=0123456789ABCDEF/catalog")!)?.values == ["0123456789ABCDEF"])
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds?pw=hunter2hunter2")!)?.values == ["hunter2hunter2"])
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds?bearer=eyJhbGciOi")!)?.values == ["eyJhbGciOi"])
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds/stump_abcdEFGH_ijklMNOP/v1.2/catalog")!)?.values == ["stump_abcdEFGH_ijklMNOP"])
+    }
+
     @Test func redactsAndRestoresSeveralSecrets() throws {
         // The second is inside the first: the longer goes first.
         let secret = try #require(OPDSURLSecret(values: ["0123456789abcdef", "0123456789", "0123456789"]))

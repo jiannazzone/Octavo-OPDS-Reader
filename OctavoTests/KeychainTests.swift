@@ -192,6 +192,27 @@ struct KeychainTests {
         #expect(try KeychainCatalogSecretStore(serverID: id).load() != nil)
     }
 
+    /// A pin that no longer decodes fails closed: an error, and the item
+    /// stays, rather than "no pin" (which lets iOS alone judge the server).
+    @Test func anUndecodablePinFailsClosed() throws {
+        let pins = KeychainCertificatePinStore(serverID: serverID)
+        defer { try? ServerCredentials.removeAll(serverID: serverID) }
+        try pins.save(CertificatePin(sha256: Data(repeating: 1, count: 32)))
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: ServerCredentials.pinService,
+            kSecAttrAccount: serverID,
+            kSecUseDataProtectionKeychain: true,
+        ]
+        #expect(SecItemUpdate(query as CFDictionary, [kSecValueData: Data("a newer format".utf8)] as CFDictionary) == errSecSuccess)
+
+        #expect(throws: KeychainError(status: errSecDecode)) { try pins.load() }
+        #expect(throws: KeychainError(status: errSecDecode)) { try pins.load() }
+        // Trusting again replaces it.
+        try pins.save(CertificatePin(sha256: Data(repeating: 2, count: 32)))
+        #expect(try pins.load()?.sha256 == Data(repeating: 2, count: 32))
+    }
+
     /// A catalog address can carry more than one secret; one is still
     /// stored the way step 8 stored Kavita's key, a JSON string.
     @Test func catalogSecretsKeepSeveralAndStayReadable() throws {

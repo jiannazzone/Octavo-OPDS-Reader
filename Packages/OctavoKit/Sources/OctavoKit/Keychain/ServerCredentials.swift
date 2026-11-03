@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 /// A username and password for an OPDS server (HTTP Basic or Digest).
 public struct PasswordCredentials: Codable, Hashable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
@@ -234,8 +235,17 @@ public struct KeychainCertificatePinStore: CertificatePinStore {
         item = KeychainItem(service: ServerCredentials.pinService, account: serverID)
     }
 
+    /// A pin that no longer decodes (another build's format) throws and is
+    /// kept, unlike tokens and passwords: dropping it would let iOS alone
+    /// judge the server, which an MDM or proxy root passes (step 16).
+    /// Trusting the server again replaces it.
     public func load() throws -> CertificatePin? {
-        try item.decoded(CertificatePin.self)
+        guard let data = try item.read() else { return nil }
+        do {
+            return try JSONDecoder().decode(CertificatePin.self, from: data)
+        } catch {
+            throw KeychainError(status: errSecDecode)
+        }
     }
 
     public func save(_ pin: CertificatePin?) throws {

@@ -66,7 +66,8 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
 ### Network trust (#9, D25; `docs/notes/network-trust.md`)
 - Every server request goes through OctavoKit's `ServerTransport` (one per server), never a bare `URLSession`. It checks the address before every request and redirect: plain http only to home and VPN addresses, with standard address spellings only (ATS alone lets `http://16843009/` out). It also applies the server's certificate pin and redirect hygiene.
 - Self-signed HTTPS: an exact-certificate pin per server host and port. A changed certificate asks again, even if iOS would trust it.
-- Secrets live in the Keychain (`ServerCredentials`, `AfterFirstUnlockThisDeviceOnly`), never in saved URLs or logs. Remove server calls `ServerCredentials.removeAll(serverID:)`. Sign out and Remove server also end the BookOrbit session on the server (`BookOrbitClient.signOutEverywhere()`, `auth/logout`; `docs/notes/settings.md`).
+- Secrets live in the Keychain (`ServerCredentials`, `AfterFirstUnlockThisDeviceOnly`), never in saved URLs or logs: a catalog address's key or token (Kavita's and Stump's path keys, credential-named query items and path parameters) is saved as `{key}` (`OPDSURLSecret`, as written in the address so it restores exactly). Remove server calls `ServerCredentials.removeAll(serverID:)`. Sign out and Remove server also end the BookOrbit session on the server (`BookOrbitClient.signOutEverywhere()`, `auth/logout`; `docs/notes/settings.md`).
+- At launch, `KeychainSweep` deletes every Keychain item that isn't the saved server's, and a signed-out server's sign-in; it deletes nothing if `Server.json` can't be read. A saved server's transport reads its pin before the first request (`ServerTransport(server:pins:)`); a pin that can't be read or decoded fails the request instead of being dropped (step 16).
 - Changes here need a security review that Adam signs off before merge.
 
 ### Parsing and OPDS

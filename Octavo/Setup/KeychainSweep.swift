@@ -16,12 +16,24 @@ nonisolated enum KeychainSweep {
     ///   to their own.
     static func run(servers: ServerStore = ServerStore(), scope: (String) -> Bool = { _ in true }) throws {
         let saved = try servers.read()
-        try ServerCredentials.removeAll { account in
-            !scope(account) || account == saved?.id.rawValue || keepsForDebugging(account)
+        // Both run; the first failure is thrown after (an item that won't
+        // delete mustn't keep a signed-out sign-in).
+        var failure: (any Error)?
+        do {
+            try ServerCredentials.removeAll { account in
+                !scope(account) || account == saved?.id.rawValue || keepsForDebugging(account)
+            }
+        } catch {
+            failure = error
         }
         if let saved, saved.signedOut == true {
-            try ServerCredentials.removeSignIn(serverID: saved.id.rawValue)
+            do {
+                try ServerCredentials.removeSignIn(serverID: saved.id.rawValue)
+            } catch {
+                failure = failure ?? error
+            }
         }
+        if let failure { throw failure }
     }
 
     /// The debug servers' fixed IDs (`LibraryModel.localBookOrbitID`, the

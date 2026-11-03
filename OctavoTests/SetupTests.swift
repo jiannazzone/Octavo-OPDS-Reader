@@ -109,6 +109,29 @@ struct SavedServerTests {
         #expect(stump.libraryServer()?.name == "Stump")
     }
 
+    /// A server saved before step 16 has its address's other secrets moved
+    /// to the Keychain at launch, next to a key already there; once done,
+    /// it's left alone.
+    @Test func movesOlderSavedSecretsOut() throws {
+        let store = Self.temporaryStore()
+        let id = SavedServer.newID()
+        defer { try? ServerCredentials.removeAll(serverID: id.rawValue) }
+        let secrets = KeychainCatalogSecretStore(serverID: id.rawValue)
+        try secrets.save(OPDSURLSecret("kavita0123456789"))
+        try store.save(SavedServer(id: id, kind: .opds, address: "http://nas.lan/api/opds/{key}?token=abcdefgh1234", name: "Kavita"))
+
+        try store.moveSecretsOut()
+        #expect(store.load()?.address == "http://nas.lan/api/opds/{key}?token={key2}")
+        #expect(try secrets.load()?.values == ["kavita0123456789", "abcdefgh1234"])
+        try store.moveSecretsOut()
+        #expect(store.load()?.address == "http://nas.lan/api/opds/{key}?token={key2}")
+
+        let bookOrbit = SavedServer(id: SavedServer.newID(), kind: .bookOrbit, address: "https://books.example.com?token=abcdefgh", name: "BookOrbit")
+        try store.save(bookOrbit)
+        try store.moveSecretsOut()
+        #expect(store.load()?.address == "https://books.example.com")
+    }
+
     /// BookOrbit's address is its root: a query typed with it goes.
     @Test func aBookOrbitAddressDropsItsQuery() throws {
         #expect(URL(string: "https://books.example.com/?token=abcdefgh")!.withoutQuery.absoluteString == "https://books.example.com/")

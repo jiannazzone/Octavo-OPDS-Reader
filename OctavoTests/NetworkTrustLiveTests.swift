@@ -82,26 +82,42 @@ struct NetworkTrustLiveTests {
     /// `.local`) are judged by where they resolve. `uz` is a top-level
     /// domain with an internet address; the probes are `.local` names
     /// answered over Bonjour with internet addresses. Each is refused before
-    /// anything is sent: the probes' addresses never answer, so a connection
-    /// attempt would wait for the timeout. A `.local` name with a global
-    /// IPv6 address on this network still reaches BookOrbit.
+    /// a task is even made (the refusal after a request, `verify`, gives the
+    /// same error, so the test counts tasks). A `.local` name with a global
+    /// IPv6 address on this network still reaches BookOrbit, which shows
+    /// the count works.
     @Test(.enabled(if: liveDNS, "Set TEST_RUNNER_OCTAVO_LIVE_DNS=1 and start docs/notes/network-trust/mdns-probes.sh"))
     func namesAreJudgedByWhereTheyResolve() async throws {
         for address in ["http://uz/", "http://octavo-probe-public.local:3300/", "http://octavo-probe-v6.local:3300/"] {
             let url = try #require(URL(string: address))
-            let started = ContinuousClock.now
+            let tasks = TaskCounter()
             do {
-                _ = try await ServerTransport(server: url).data(for: URLRequest(url: url))
+                _ = try await ServerTransport(server: url).download(for: URLRequest(url: url), delegate: tasks)
                 Issue.record("\(address) was loaded")
             } catch NetworkTrustError.insecureAddress(_, reason: .internetAddress) {
-                #expect(ContinuousClock.now - started < .seconds(2), "\(address) was refused only after trying to connect")
+                #expect(tasks.count == 0, "\(address) was refused only after a request")
             }
         }
         try await HomeNetworkPolicy.system.check(#require(URL(string: "http://octavo-probe-home.local:3300/")))
 
         guard let localName = Self.localName else { return }
         let url = try #require(URL(string: "http://\(localName):3300/"))
-        let (_, response) = try await ServerTransport(server: url).data(for: URLRequest(url: url))
+        let tasks = TaskCounter()
+        let (file, response) = try await ServerTransport(server: url).download(for: URLRequest(url: url), delegate: tasks)
+        try? FileManager.default.removeItem(at: file)
         #expect((response as? HTTPURLResponse)?.statusCode == 200)
+        #expect(tasks.count == 1)
+    }
+}
+
+/// Counts the tasks a transport makes.
+private final class TaskCounter: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var made = 0
+
+    var count: Int { lock.withLock { made } }
+
+    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
+        lock.withLock { made += 1 }
     }
 }
