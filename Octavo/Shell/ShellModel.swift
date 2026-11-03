@@ -547,22 +547,44 @@ final class ShellModel {
     /// is the motion then (decision 10).
     @ObservationIgnored private var opensByUnfold = false
 
+    /// Back from the reader (not a fold, whose motion is the fold): onto the
+    /// book's own screen, the opening plays backwards. `pages` are the
+    /// reader's, taken as Back was tapped; the reader then goes at once.
+    func readerClosing(_ pages: ReaderCoverPages) {
+        guard let book = reading else { return }
+        coverMotion = nil
+        let motion = coverMotion(for: book, closing: pages)
+        motion?.onFinished = { [weak self, weak motion] in
+            if self?.coverMotion === motion { self?.coverMotion = nil }
+        }
+        coverMotion = motion
+    }
+
     /// From the book's own screen, its cover opens it; from anywhere else
     /// the reader fades in as before.
     private func coverMotion(opening book: OpenedBook) -> ReaderCoverMotion? {
-        guard reading == nil, case .cover(let shown)? = self[path: tab].top, shown.book.id == book.book.id,
-              let page = pages.existingPage(for: book.book.id), let frame = page.coverFrame,
+        guard reading == nil else { return nil }
+        return coverMotion(for: book, closing: nil)
+    }
+
+    /// The cover's motion for `book` over its own screen, the top one: a
+    /// picture of the screen to open from, or of your pages to close from.
+    private func coverMotion(for book: OpenedBook, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
+        guard case .cover(let shown)? = self[path: tab].top, shown.book.id == book.book.id,
+              let page = self.pages.existingPage(for: book.book.id), let frame = page.coverFrame,
               let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows).first(where: \.isKeyWindow),
-              frame.width > 0, frame.height > 0,
-              let screen = window.snapshotView(afterScreenUpdates: false)
+              frame.width > 0, frame.height > 0
         else { return nil }
+        let screen = pages == nil ? window.snapshotView(afterScreenUpdates: false) : nil
+        guard pages != nil || screen != nil else { return nil }
         let size = window.bounds.size
         let appearance = UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance()
         let darkMode = window.traitCollection.userInterfaceStyle == .dark
         let thumbnail = library.covers.cachedImage(for: shown, size: .thumbnail)
         return ReaderCoverMotion(
             cover: page.cover ?? thumbnail, title: page.current.title, author: page.authorLine,
-            coverFrame: frame, windowSize: size, bookScreen: ReaderSnapshot(view: screen, frame: window.bounds),
+            coverFrame: frame, windowSize: size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
+            closing: pages,
             // Cover | Details: the cover has half the screen or less.
             spread: frame.width < size.width * 0.75,
             reduceMotion: UIAccessibility.isReduceMotionEnabled,

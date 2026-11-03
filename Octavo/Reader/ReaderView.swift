@@ -22,6 +22,9 @@ struct ReaderView: View {
     /// for the cover's motion (`ReaderCoverMotion`), or `nil` if it couldn't
     /// open.
     var opened: (ReaderCoverPages?) -> Void = { _ in }
+    /// Back was tapped: pictures of the pages as they are, for the book to
+    /// close like a cover. `close` follows at once.
+    var closing: (ReaderCoverPages) -> Void = { _ in }
     let close: () -> Void
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
@@ -31,7 +34,10 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             if let model {
-                ReaderScreen(model: model, connectionReturns: connectionReturns, close: close)
+                ReaderScreen(model: model, connectionReturns: connectionReturns) { [closing, close] in
+                    closing(model.coverPages())
+                    close()
+                }
                     // Once the book is open and its place has stopped moving
                     // (a restore relocates a few times as it settles).
                     .task(id: ReaderOpenedCheck(open: model.phase == .open, relocations: model.relocationCount)) {

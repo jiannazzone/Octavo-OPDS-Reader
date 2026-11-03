@@ -10,6 +10,13 @@ import UIKit
 /// into the page. The cover rests where it is until the reader has opened
 /// your place, so the wait for the book is part of the motion.
 ///
+/// Closing with Back onto the book's screen plays it backwards: your left
+/// page swings back over the spine as the cover, which moves back into its
+/// place; folded, the cover swings in from the left over your page. The
+/// reader goes at once (a reader left on screen is rebuilt by an unfold,
+/// which WebKit traps on; `AppShell`), so the motion draws your pages from
+/// pictures taken as Back was tapped, over the book's screen.
+///
 /// Drawn by `ReaderCoverMotionView` over the whole window, above the
 /// reader, which opens underneath it at once (`AppShell`). Unfolding on a
 /// cover and folding while reading keep their own motion, the fold.
@@ -30,14 +37,22 @@ final class ReaderCoverMotion {
     let coverFrame: CGRect
     let windowSize: CGSize
     /// The book's screen as it was when the book opened, under the motion
-    /// until the cover leaves it.
-    let bookScreen: ReaderSnapshot
+    /// until the cover leaves it. Closing, the screen itself is underneath.
+    let bookScreen: ReaderSnapshot?
+    /// Played backwards, as the book closes.
+    let closing: Bool
     /// Cover | Details: the cover moves onto the right page and swings over
     /// the spine. Otherwise it fills the screen and swings off it.
     let spread: Bool
     let reduceMotion: Bool
     /// The page's colour where the cover has left.
     var paper: Color
+    /// How far the cover swings: over the spine, or folded only until it
+    /// stands edge on at the screen's left edge (past that it's off the
+    /// screen, and the page would sit still for half the swing).
+    var swungOver: Double { spread ? 1 : 0.5 }
+    /// Folded, the visible half of the swing at the flip's pace.
+    var swingDuration: Double { Self.swingDuration * swungOver }
     /// The reader's pages once it has opened your place: the left page goes
     /// on the back of the cover.
     private(set) var pages: ReaderCoverPages?
@@ -56,8 +71,11 @@ final class ReaderCoverMotion {
     @ObservationIgnored private var slid = false
     @ObservationIgnored private var swinging = false
 
+    /// Opening, from a picture of the book's screen; or closing, from
+    /// pictures of your pages.
     init(cover: UIImage?, title: String, author: String, coverFrame: CGRect, windowSize: CGSize,
-         bookScreen: ReaderSnapshot, spread: Bool, reduceMotion: Bool, paper: Color) {
+         bookScreen: ReaderSnapshot?, closing pages: ReaderCoverPages? = nil,
+         spread: Bool, reduceMotion: Bool, paper: Color) {
         self.cover = cover
         self.title = title
         self.author = author
@@ -66,7 +84,14 @@ final class ReaderCoverMotion {
         self.bookScreen = bookScreen
         self.spread = spread
         self.reduceMotion = reduceMotion
-        self.paper = paper
+        self.paper = pages?.paper ?? paper
+        closing = pages != nil
+        guard let pages else { return }
+        // As the reader left it: your pages, the cover swung over the spine.
+        self.pages = pages
+        slide = spread ? 1 : 0
+        swing = swungOver
+        showsBookScreen = false
     }
 
     /// The middle of the reader's spread, once known; the window's middle
@@ -94,6 +119,7 @@ final class ReaderCoverMotion {
     func start() {
         guard !started else { return }
         started = true
+        if closing { return close() }
         guard spread, !reduceMotion else {
             slid = true
             return
@@ -121,10 +147,32 @@ final class ReaderCoverMotion {
         swinging = true
         if reduceMotion { return finish(fading: true) }
         showsBookScreen = false
-        withAnimation(.easeInOut(duration: Self.swingDuration)) {
-            swing = 1
+        withAnimation(spread ? .easeInOut(duration: swingDuration) : .easeIn(duration: swingDuration)) {
+            swing = swungOver
         } completion: { [weak self] in
             self?.onFinished?()
+        }
+    }
+
+    /// Backwards: the cover swings back over your page, then, unfolded,
+    /// moves back to its place on the book's screen. With Reduce Motion your
+    /// pages fade into the book's screen.
+    private func close() {
+        if reduceMotion { return finish(fading: true) }
+        withAnimation(spread ? .easeInOut(duration: swingDuration) : .easeOut(duration: swingDuration)) {
+            swing = 0
+        } completion: { [weak self] in
+            guard let self else { return }
+            guard spread else {
+                onFinished?()
+                return
+            }
+            showsBookScreen = true
+            withAnimation(.easeInOut(duration: Self.slideDuration)) {
+                slide = 0
+            } completion: { [weak self] in
+                self?.onFinished?()
+            }
         }
     }
 
@@ -171,10 +219,8 @@ struct ReaderCoverMotionView: View {
         return ZStack(alignment: .topLeading) {
             if motion.showsBookScreen {
                 bookScreen
-            } else if motion.spread {
-                // The left page is bare until the cover lands on it.
-                motion.paper
-                    .frame(width: motion.spine, height: size.height)
+            } else {
+                yourPages
             }
             if !motion.reduceMotion {
                 // There from the start, so its swing animates: folded it
@@ -195,18 +241,51 @@ struct ReaderCoverMotionView: View {
         }
     }
 
-    /// The book's screen as it was, its cover gone from its place once the
-    /// cover moves.
+    /// The book's screen as it was (or, closing, the screen itself), its
+    /// cover gone from its place while the cover moves.
     private var bookScreen: some View {
         ZStack(alignment: .topLeading) {
-            ReaderSnapshotView(snapshot: motion.bookScreen)
-                .frame(width: motion.bookScreen.frame.width, height: motion.bookScreen.frame.height)
+            if let screen = motion.bookScreen {
+                ReaderSnapshotView(snapshot: screen)
+                    .frame(width: screen.frame.width, height: screen.frame.height)
+            }
             if motion.spread {
                 motion.paper
                     .frame(width: motion.coverFrame.width, height: motion.coverFrame.height)
                     .offset(x: motion.coverFrame.minX, y: motion.coverFrame.minY)
             }
         }
+    }
+}
+
+extension ReaderCoverMotionView {
+    /// Under the swinging cover: your right page, the left page bare until
+    /// the cover lands on it; folded, your page. The pictures, as the reader
+    /// (gone when closing) drew them; with Reduce Motion, both pages.
+    @ViewBuilder fileprivate var yourPages: some View {
+        let size = motion.windowSize
+        ZStack(alignment: .topLeading) {
+            if motion.spread {
+                motion.paper
+                    .frame(width: motion.spine, height: size.height)
+                if motion.reduceMotion, let left = motion.pages?.left {
+                    picture(left)
+                }
+                if let right = motion.pages?.right {
+                    picture(right)
+                }
+            } else if let whole = motion.pages?.whole {
+                motion.paper
+                    .frame(width: size.width, height: size.height)
+                picture(whole)
+            }
+        }
+    }
+
+    private func picture(_ snapshot: ReaderSnapshot) -> some View {
+        ReaderSnapshotView(snapshot: snapshot)
+            .frame(width: snapshot.frame.width, height: snapshot.frame.height)
+            .offset(x: snapshot.frame.minX, y: snapshot.frame.minY)
     }
 }
 
