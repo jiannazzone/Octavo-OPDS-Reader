@@ -72,7 +72,7 @@ enum SampleRoutes {
 /// folder, not the app's.
 @MainActor
 func makeShell(opener: BookOpener? = nil, imported: ImportedBooks? = nil, importer: ((ImportedBooks) -> BookImporter)? = nil) -> ShellModel {
-    let folder = URL.temporaryDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let folder = URL.testDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     // Never the app's own imported books.
     let imported = imported ?? ImportedBooks(directory: folder.appending(path: "Imported"))
     return ShellModel(
@@ -148,6 +148,7 @@ struct HingeTransitionTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct ShellModelTests {
     static let book = SampleRoutes.book(1)
 

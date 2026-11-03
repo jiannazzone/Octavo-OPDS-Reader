@@ -14,7 +14,7 @@ import OctavoKit
 ///   the same way.
 /// - `<storageKey>.cover`: its cover image, if it has one.
 ///
-/// Files on their way in wait in a folder under `tmp/`, out of the backup.
+/// Files on their way in wait in a folder beside it, out of the backup.
 nonisolated struct ImportedBooks: Sendable {
     let directory: URL
 
@@ -96,11 +96,15 @@ nonisolated struct ImportedBooks: Sendable {
         try write(books.filter { $0.book.id != id })
     }
 
-    /// A folder for files on their way in, in `tmp/`, so a copy cut short
-    /// never reaches the backup. One per store.
+    /// A folder for files on their way in, beside the store and kept out
+    /// of the backup, so a copy cut short never reaches it.
     func incomingDirectory() throws -> URL {
-        try FileManager.default.createDirectory(at: incomingURL, withIntermediateDirectories: true)
-        return incomingURL
+        var incoming = incomingURL
+        try FileManager.default.createDirectory(at: incoming, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try incoming.setResourceValues(values)
+        return incoming
     }
 
     /// At launch: whatever an import cut short left behind.
@@ -109,9 +113,7 @@ nonisolated struct ImportedBooks: Sendable {
     }
 
     private var incomingURL: URL {
-        let digest = SHA256.hash(data: Data(directory.standardizedFileURL.path.utf8))
-        let name = "ImportIncoming-" + digest.prefix(8).map { String(format: "%02x", $0) }.joined()
-        return URL.temporaryDirectory.appending(path: name, directoryHint: .isDirectory)
+        directory.deletingLastPathComponent().appending(path: ".\(directory.lastPathComponent)-incoming", directoryHint: .isDirectory)
     }
 
     private var catalogURL: URL {

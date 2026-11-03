@@ -67,17 +67,29 @@ private func sourced(_ book: LibraryBook, from source: LibrarySourceID = server)
 }
 
 private func temporaryRecents() -> RecentBooks {
-    RecentBooks(fileURL: URL.temporaryDirectory.appending(path: "RecentBooks-\(UUID().uuidString).json"))
+    RecentBooks(fileURL: URL.testDirectory.appending(path: "RecentBooks-\(UUID().uuidString).json"))
+}
+
+/// A library whose lists keep their files in the test's folder, not the app's.
+@MainActor
+private func temporaryLibrary(recents: RecentBooks = temporaryRecents()) -> LibraryModel {
+    LibraryModel(
+        recents: recents,
+        finished: FinishedBooks(fileURL: URL.testDirectory.appending(path: "FinishedBooks-\(UUID().uuidString).json")),
+        onIPhone: BooksOnIPhone(fileURL: URL.testDirectory.appending(path: "BooksOnIPhone-\(UUID().uuidString).json")),
+        imported: .temporary()
+    )
 }
 
 @MainActor
 private func connected(_ source: some LibrarySource, recents: RecentBooks = temporaryRecents()) async -> LibraryModel {
-    let library = LibraryModel(recents: recents, imported: .temporary())
+    let library = temporaryLibrary(recents: recents)
     await library.connect(LibraryServer(id: server, name: "Shelf", source: source))
     return library
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct FeedModelTests {
     static let pages = [
         "a": LibraryFeed(books: [book("1"), book("2")], total: 3, next: link("a?page=1")),
@@ -176,6 +188,7 @@ struct FeedModelTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct LibraryModelTests {
     @Test func aFailedContinueReadingIsntAnEmptyOne() async {
         let library = await connected(PagedSource(faults: Faults(["reading": LibraryError.server(status: 500, message: nil)])))
@@ -197,7 +210,7 @@ struct LibraryModelTests {
     @Test func rowsPreviewFromTheSmallPageSource() async throws {
         let full = PagedSource(pages: ["c": LibraryFeed(books: (0..<50).map { book("\($0)") })])
         let small = PagedSource(pages: ["c": LibraryFeed(books: (0..<3).map { book("\($0)") })])
-        let library = LibraryModel(recents: temporaryRecents(), imported: .temporary())
+        let library = temporaryLibrary()
         await library.connect(LibraryServer(id: server, name: "Shelf", source: full, previewSource: small))
 
         let preview = try #require(library.preview(link("c"), from: server))
@@ -314,6 +327,7 @@ struct ContinueReadingTests {
     }
 }
 
+@Suite(.temporaryFiles)
 struct RecentBooksTests {
     @Test func newestFirstWithoutRepeats() throws {
         let recents = temporaryRecents()

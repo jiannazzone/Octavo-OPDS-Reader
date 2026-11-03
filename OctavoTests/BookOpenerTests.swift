@@ -6,6 +6,7 @@ import Testing
 /// Opening a book downloads it first (decision 3), with progress and
 /// problems on the cover's strip (decision 22).
 @MainActor
+@Suite(.temporaryFiles)
 struct BookOpenerTests {
     /// As a list shows it: no files until the details load.
     static let book = LibraryBook(id: LibraryBookID(rawValue: "3"), title: "Moby-Dick", authors: ["Herman Melville"])
@@ -176,6 +177,7 @@ struct BookOpenerTests {
 }
 
 /// Where downloads live: kept until removed, out of the backup.
+@Suite(.temporaryFiles)
 struct StoredBookFilesTests {
     static let file = LibraryFile(id: LibraryFileID(rawValue: "file-1"), format: "epub", isPrimary: true)
 

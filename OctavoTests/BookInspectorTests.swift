@@ -7,11 +7,12 @@ import Testing
 /// shown, and the files refused before that (step 15,
 /// `docs/notes/formats-check.md`).
 @MainActor
+@Suite(.temporaryFiles)
 struct BookInspectorTests {
     private static let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
 
     private func file(_ data: Data, _ name: String) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let directory = URL.testDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appending(path: name)
         try data.write(to: url)

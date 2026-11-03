@@ -3,17 +3,18 @@ import Testing
 import WebKit
 @testable import Octavo
 
+@Suite(.temporaryFiles)
 struct ReaderSchemeHandlerTests {
     let root: URL
     let book: URL
     let handler: ReaderSchemeHandler
 
     init() throws {
-        root = URL.temporaryDirectory.appending(path: "ReaderWeb-\(UUID().uuidString)", directoryHint: .isDirectory)
+        root = URL.testDirectory.appending(path: "ReaderWeb-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: root.appending(path: "foliate-js"), withIntermediateDirectories: true)
         try Data("export const x = 1\n".utf8).write(to: root.appending(path: "foliate-js/view.js"))
         try Data("<!DOCTYPE html>".utf8).write(to: root.appending(path: "reader.html"))
-        book = URL.temporaryDirectory.appending(path: "book-\(UUID().uuidString).epub")
+        book = URL.testDirectory.appending(path: "book-\(UUID().uuidString).epub")
         try Data(repeating: 0x50, count: 3_000_000).write(to: book)
         handler = ReaderSchemeHandler(bookFile: book, webRoot: root)
     }

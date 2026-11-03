@@ -12,7 +12,7 @@ import Testing
 /// file with its DRM field set, and text that only says it's an EPUB.
 nonisolated enum ImportFixtures {
     static func folder() throws -> URL {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ImportFixtures-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let folder = URL.testDirectory.appending(path: "ImportFixtures-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return folder
     }
@@ -50,6 +50,7 @@ nonisolated enum ImportFixtures {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct BookImporterTests {
     let folder: URL
     let store: ImportedBooks
@@ -130,6 +131,7 @@ struct BookImporterTests {
 
 /// From the security review of the import path (2026-11-02).
 @MainActor
+@Suite(.temporaryFiles)
 struct ImportHardeningTests {
     // A title can't put line breaks or direction overrides into the
     // removal question.
@@ -224,6 +226,7 @@ struct ImportHardeningTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct ImportedBooksTests {
     @Test func removingABookTakesItsFileAndCoverOnly() throws {
         let store = ImportedBooks.temporary()
@@ -263,6 +266,7 @@ struct ImportedBooksTests {
 }
 
 @MainActor
+@Suite(.temporaryFiles)
 struct OtherWaysInShellTests {
     let folder: URL
 

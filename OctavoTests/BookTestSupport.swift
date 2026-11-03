@@ -77,7 +77,7 @@ nonisolated struct TemporaryBookFiles {
 
     init() throws {
         // Downloads and imported books side by side, as in the app.
-        let folder = FileManager.default.temporaryDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let folder = URL.testDirectory.appending(path: "BookFilesTests-\(UUID().uuidString)", directoryHint: .isDirectory)
         directory = folder.appending(path: "Books", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         store = StoredBookFiles(directory: directory, imported: ImportedBooks(directory: folder.appending(path: "Imported", directoryHint: .isDirectory)))
@@ -99,6 +99,6 @@ func eventually(timeout: Duration = .seconds(5), _ condition: () -> Bool) async 
 nonisolated extension ImportedBooks {
     /// A store of its own, never the app's.
     static func temporary() -> ImportedBooks {
-        ImportedBooks(directory: FileManager.default.temporaryDirectory.appending(path: "Imported-\(UUID().uuidString)", directoryHint: .isDirectory))
+        ImportedBooks(directory: URL.testDirectory.appending(path: "Imported-\(UUID().uuidString)", directoryHint: .isDirectory))
     }
 }
