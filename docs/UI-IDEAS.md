@@ -68,3 +68,13 @@ Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded
 ## An accent colour (Adam, 2026-11-03)
 
 Octavo has no accent colour of its own: no `AccentColor` asset and no tint set app-wide, so buttons, links, the scrubber and progress lines use iOS's default blue (rendered (0, 128, 245) on Paper and (41, 186, 255) on Night's glass). Pinned for later: whether Octavo gets its own.
+
+## Covers that aren't 2:3: fill or fit? (Adam, 2026-11-03)
+
+Every cover fills its frame today and is cropped to it (`CoverImage`, `BookCoverArt`, and the cover that swings open in decision 28): 2:3 cells on the shelves and grids, the whole screen folded, the right half unfolded. A cover of another shape, such as a square one or a scanned comic, loses its edges, which can cut off a title or an author's name. Even a 2:3 cover loses about 20 pt top and bottom on the folded screen (466×678 pt).
+
+- **Fill** (today): no empty space, but the crop.
+- **Fit**: the whole cover always shows, and the space around it takes the cover's colours, as Apple Music does behind album art: a colour picked from the cover, or a blurred, enlarged copy of it. Core Image finds the colour (`CIAreaAverage`, or the colours along the cover's edges), so no new dependency.
+- **In between**: fill when a cover is close to its frame's shape and fit when it isn't; or let grid cells take each cover's own shape, as Apple Books does, with the covers lined up along the bottom.
+
+Decide per place: the small covers on shelves and grids, the large cover page, Home's book, and the cover in the opening motion.
