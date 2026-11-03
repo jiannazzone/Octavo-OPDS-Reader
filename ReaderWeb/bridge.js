@@ -588,12 +588,13 @@ const turnOnce = async (side, hold) => {
         done.then(() => relocation !== null),
         new Promise(resolve => setTimeout(() => resolve(relocation !== null), 2000)),
     ])
-    relocationWatchers.delete(watch)
-    // Two frames, so the new page has reached the screen.
+    // Two frames, so the new page has reached the screen. A new section's
+    // first relocation can still be measuring it, so the latest is sent.
     if (moved) {
         await nextFrame()
         await nextFrame()
     }
+    relocationWatchers.delete(watch)
     return { moved, relocation: relocation ? JSON.stringify(relocation) : null, done }
 }
 

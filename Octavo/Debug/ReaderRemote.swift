@@ -28,6 +28,7 @@ import WebKit
 ///   `velocity`): a finger's page turn, as `ReaderSwipeRecognizer` reports
 ///   it, to hold a turn part way and look at it.
 /// - `turnState`: what the turn under way is doing, in the ack's message.
+/// - `pageTurn` (`name`): sets Page Turn, as Customize does.
 /// - `keyboard` (`on`: true or false): shows or hides the keyboard over the
 ///   reader, through a hidden text field, to check that it never moves the
 ///   page (the panels in #18 bring up a real one).
@@ -125,6 +126,10 @@ enum ReaderRemote {
         case "turnProbe":
             guard let reader else { return "no open reader" }
             return await TurnProbe.run(reader)
+        case "pageTurn":
+            guard let style = command.name.flatMap(ReaderPageTurn.init(rawValue:)) else { return "pageTurn needs name: automatic, slide, flip, fade or none" }
+            UserDefaults.standard.set(style.rawValue, forKey: ReaderPageTurn.key)
+            return nil
         case "keyboard":
             guard reader != nil else { return "no open reader" }
             NotificationCenter.default.post(name: keyboardNotification, object: nil, userInfo: ["on": command.on ?? true])
@@ -219,7 +224,7 @@ enum ReaderRemote {
             let side = command.side.flatMap(ReaderTurnSide.init(rawValue:))
             reader.swiped(.init(phase: phase, side: side, dx: command.dx ?? 0, velocity: command.velocity ?? 0))
         case "turnState":
-            guard let run = reader.turnRun else { return "idle, queued \(reader.queuedTurns.count), overlay \(reader.turn != nil); \(reader.swipes.debugState)" }
+            guard let run = reader.turnRun else { return "idle, last drawn after \(reader.lastTurnDrawnAfter ?? -1) ms, queued \(reader.queuedTurns.count), overlay \(reader.turn != nil); \(reader.swipes.debugState)" }
             return "run \(run.id) \(run.side) \(run.motion) interactive \(run.interactive) moved \(String(describing: run.moved)) drawn \(run.drawn) target \(String(describing: run.target)) done \(run.animationDone) progress \(reader.turn?.progress ?? -1)"
         case "next": reader.next()
         case "prev": reader.previous()

@@ -87,6 +87,8 @@ final class ReaderModel {
     @ObservationIgnored var turnCount = 0
     /// Turns asked for while one was still being drawn, played after it.
     @ObservationIgnored var queuedTurns: [ReaderTurnSide] = []
+    /// How long the last turn's new page took to draw, in ms, for debugging.
+    @ObservationIgnored var lastTurnDrawnAfter: Int?
     @ObservationIgnored private var sentTurnMode: Bool?
     /// The page's size as the page reports it.
     @ObservationIgnored private var viewport: CGSize?
@@ -531,6 +533,10 @@ final class ReaderModel {
             tocLabel = relocation.tocLabel
             location = relocation.location
             if !isRestoring { moved(to: relocation) }
+            // A turn's new page, measured again since its pictures came.
+            if turnRun?.drawn == true, turn?.newPlace != nil {
+                turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.fraction ?? 0)
+            }
             if serverPlace != nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):

@@ -18,6 +18,9 @@ final class ReaderTurnRun {
     /// fall back. `nil` while a finger holds it.
     var target: Double?
     var animationDone = false
+    let startedAt = ContinuousClock.now
+    /// Milliseconds from the start until the new page's pictures were in.
+    var drawnAfter: Int?
 
     init(id: Int, side: ReaderTurnSide, motion: ReaderTurnMotion, interactive: Bool) {
         self.id = id
@@ -109,9 +112,20 @@ extension ReaderModel {
             oldPlace: ReaderPlace(chapter: chapter, location: location, fraction: position?.fraction ?? 0)
         )
         Task { await turnUnderPictures(run, regions: regions.new, size: size, spine: spine) }
-        // A fade waits for the new page, since it shows through at once.
-        if !interactive, motion != .fade { play(run, to: 1) }
+        // A tap's turn waits for the new page, which is drawn about 50 ms
+        // later (too soon to notice), so it moves in whole; one that takes
+        // longer (a chapter loading) starts anyway, over the page's colour.
+        // A fade always waits: the page shows through it at once.
+        guard !interactive, motion != .fade else { return }
+        Task {
+            try? await Task.sleep(for: Self.longestWaitForPage)
+            guard turnRun === run, run.target == nil else { return }
+            play(run, to: 1)
+        }
     }
+
+    /// How long a tap's turn waits for the new page before it moves.
+    static let longestWaitForPage = Duration.milliseconds(100)
 
     /// No pictures to draw (no web view to snapshot): foliate turns at once.
     private func turnWithoutPictures(_ side: ReaderTurnSide) {
@@ -137,7 +151,9 @@ extension ReaderModel {
             }
             let place = relocation.map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.fraction ?? 0) }
             let new = pictures(regions, size: size, spine: spine, afterScreenUpdates: true) ?? ReaderTurn.Pictures()
-            withAnimation(.easeOut(duration: ReaderTurnMotion.fade.duration)) {
+            // Fades in only over the page's colour, if the turn is moving.
+            let fadesIn = run.target != nil || (run.interactive && turn?.progress ?? 0 > 0)
+            withAnimation(fadesIn ? .easeOut(duration: ReaderTurnMotion.fade.duration) : nil) {
                 turn?.new = new
                 turn?.newPlace = place
             }
@@ -146,7 +162,9 @@ extension ReaderModel {
             play(run, to: 0)
         }
         run.drawn = true
-        if !run.interactive, run.motion == .fade, moved { play(run, to: 1) }
+        run.drawnAfter = FoldReport.milliseconds(since: run.startedAt)
+        lastTurnDrawnAfter = run.drawnAfter
+        if !run.interactive, run.target == nil, moved { play(run, to: 1) }
         if run.animationDone, run.target == 1 { return endTurn() }
         if !queuedTurns.isEmpty, run.canEndEarly { return endTurn() }
         // A snapshot taken as the page reached the screen can miss it by a
