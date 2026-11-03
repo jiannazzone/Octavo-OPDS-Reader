@@ -270,7 +270,7 @@ final class ShellModel {
         opener.filesChanged()
         // Sent here mid-tour with nothing that came in: the tour carries on,
         // and the Library's banner says why afterwards.
-        if tour != nil, imported.isEmpty {
+        if tour != nil || tourWaitsForHinge, imported.isEmpty {
             importFailures += failures
             return
         }
@@ -279,6 +279,11 @@ final class ShellModel {
             return
         }
         addsBooksAfterTour = false
+        // Opened with this file on a new install: it's what they came for.
+        if tourWaitsForHinge {
+            tourWaitsForHinge = false
+            tourRecord.set(.played)
+        }
         finishTour()
         importFailures += failures
         setupImportFailures = []
@@ -811,8 +816,10 @@ final class ShellModel {
         case .fold:
             coverMotion = nil
             pendingCoverMotion = nil
-            reading = nil
-            tour?.handle(.folded)
+            closingReaderAtOnce {
+                reading = nil
+                tour?.handle(.folded)
+            }
         case .unfold:
             guard tour?.step == .cover else { return }
             tour?.handle(.unfolded)
@@ -875,12 +882,24 @@ final class ShellModel {
         self[path: .setup].replace([])
     }
 
+    /// The reader goes with no animation at all. The card's fade would keep a
+    /// leaving reader, and its web page, on screen a moment longer, and a fold
+    /// meanwhile has SwiftUI rebuild that web view, which WebKit traps on
+    /// (`AppShell`).
+    private func closingReaderAtOnce(_ change: () -> Void) {
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant, change)
+    }
+
     private func finishTour() {
         guard let finished = tour else { return }
-        tour = nil
         coverMotion = nil
         pendingCoverMotion = nil
-        reading = nil
+        closingReaderAtOnce {
+            tour = nil
+            reading = nil
+        }
         tourReplayPlace?.clear()
         tourReplayPlace = nil
         guard !finished.isReplay else { return }

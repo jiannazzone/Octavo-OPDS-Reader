@@ -111,6 +111,29 @@ struct TourFlowTests {
         #expect(flow.step == .tapAa)
     }
 
+    // Aa opened from Turn the page: the bar has gone with it, and the panel
+    // is what Make it yours asks for.
+    @Test func thePanelOpenWhenBringUpControlsComesCounts() {
+        var flow = TourFlow(fold: nil)
+        flow.handle(.start)
+        flow.handle(.reader(.panel))
+        flow.handle(.pageTurned)
+        #expect(flow.step == .bringUpControls)
+        flow.handle(.reader(.panel))
+        #expect(flow.step == .makeItYours)
+    }
+
+    // Another panel hides the bar too: closing it brings the bar back.
+    @Test func anotherPanelWaitsAtBringUpControls() {
+        var flow = TourFlow(fold: nil)
+        flow.handle(.start)
+        flow.handle(.pageTurned)
+        flow.handle(.reader(.otherPanel))
+        #expect(flow.step == .bringUpControls)
+        flow.handle(.reader(.controls))
+        #expect(flow.step == .tapAa)
+    }
+
     // Done is there as long as the card is, with or without the panel.
     @Test func closingThePanelKeepsTheCardWithDone() {
         var flow = TourFlow(fold: nil)
@@ -191,8 +214,9 @@ struct TourRecordTests {
         #expect(record.shouldPlay(hasEarlierData: true, protectedDataAvailable: true))
     }
 
-    // An older build's install has its server, books or places: Settings only.
-    @Test func anExistingInstallIsSettledOnce() {
+    // A build from before the marker left a server, books or places:
+    // Settings only.
+    @Test func earlierDataSettlesAnExistingInstallOnce() {
         let record = TourRecord.temporary()
         #expect(!record.shouldPlay(hasEarlierData: true, protectedDataAvailable: true))
         #expect(record.state == .played)
@@ -200,20 +224,32 @@ struct TourRecordTests {
         #expect(!record.shouldPlay(hasEarlierData: false, protectedDataAvailable: true))
     }
 
-    // An older build's install with nothing in it still has the marker.
+    // An earlier build's install with nothing in it still has the marker.
     @Test func theInstallMarkerSettlesAnExistingInstall() {
         let record = TourRecord.temporary()
-        record.settleEarlierInstall()
-        #expect(record.state == nil)
         record.defaults.set(true, forKey: ServerCredentials.installedKey)
-        record.settleEarlierInstall()
+        record.settle()
         #expect(record.state == .played)
+        #expect(!record.shouldPlay(hasEarlierData: false, protectedDataAvailable: true))
+    }
+
+    // iOS runs the app ahead of the first launch (prewarming): the app's init
+    // says new and sets the marker, and nobody has seen a thing yet. The real
+    // first launch still plays it.
+    @Test func aRunBeforeTheFirstLaunchDoesNotUseItUp() {
+        let record = TourRecord.temporary()
+        record.settle()
+        #expect(record.state == .new)
+        record.defaults.set(true, forKey: ServerCredentials.installedKey)
+        record.settle()
+        #expect(record.state == .new)
+        #expect(record.shouldPlay(hasEarlierData: false, protectedDataAvailable: true))
     }
 
     @Test func theMarkerDoesNotEndATourUnderWay() {
         let record = TourRecord.temporary(state: .playing)
         record.defaults.set(true, forKey: ServerCredentials.installedKey)
-        record.settleEarlierInstall()
+        record.settle()
         #expect(record.state == .playing)
     }
 
@@ -419,6 +455,18 @@ struct TourShellTests {
         await model.importBooks([try ImportFixtures.epub(in: folder)])
         #expect(model.tour == nil)
         #expect(record.state == .played)
+        #expect(model.tab == .library)
+    }
+
+    // Opened with a file before the hinge has even said how to start.
+    @Test func aSharedFileBeforeTheTourStartsCancelsIt() async throws {
+        let model = shell()
+        #expect(model.tourWaitsForHinge)
+        await model.importBooks([try ImportFixtures.epub(in: folder)])
+        #expect(!model.tourWaitsForHinge)
+        #expect(record.state == .played)
+        model.hingeReported(.closed)
+        #expect(model.tour == nil)
         #expect(model.tab == .library)
     }
 

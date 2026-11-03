@@ -205,7 +205,10 @@ private struct ReaderScreen: View {
         }
         // Over the column too, for the ring on its buttons.
         .overlay {
-            if let target = shell.tour?.step.ring, model.phase == .open, shell.coverMotion == nil {
+            // Not on the right page while something covers it: a tap there
+            // would only close that.
+            if let target = shell.tour?.step.ring, model.phase == .open, shell.coverMotion == nil,
+               target != .rightPage || !model.coversPage {
                 TourRingLayer(target: target, geometry: model.geometry, layout: model.layout)
             }
         }

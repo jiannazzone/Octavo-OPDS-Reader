@@ -89,9 +89,13 @@ nonisolated struct TourFlow: Equatable, Sendable {
         case (.pageTurned, .turnThePage):
             step = .bringUpControls
         case (.reader(let state), .bringUpControls):
-            guard state.barVisible else { return }
-            // Aa may already be open, from looking ahead.
-            step = state.textPanelOpen ? .makeItYours : .tapAa
+            // Aa may already be open, from looking ahead: the bar goes while
+            // a panel shows.
+            if state.textPanelOpen {
+                step = .makeItYours
+            } else if state.barVisible {
+                step = .tapAa
+            }
         case (.reader(let state), .tapAa):
             if state.textPanelOpen {
                 step = .makeItYours
@@ -154,12 +158,16 @@ nonisolated enum TourRingTarget: Equatable, Sendable {
     case columnButton(String)
 }
 
-/// Whether the tour has played on this install. It plays once: an install is
-/// new if nothing shows the app ran before (`shouldPlay`). Unfinished, it
-/// starts again at the next launch, so someone who left at step 1 still sees
-/// it. Lives in the same defaults as the install marker, which go with the app.
+/// Whether the tour has played on this install. It plays once. Whether an
+/// install is new is decided the first time the app runs at all, and kept:
+/// iOS can run the app before anyone opens it (prewarming), which would leave
+/// the install marker behind and make the first real launch look like a later
+/// one. Unfinished, it starts again at the next launch, so someone who left at
+/// step 1 still sees it. These defaults go with the app.
 struct TourRecord {
     enum State: String {
+        /// No sign of an earlier run: it plays at the next launch with a screen.
+        case new
         case playing, played
     }
 
@@ -178,24 +186,25 @@ struct TourRecord {
         defaults.set(state.rawValue, forKey: Self.key)
     }
 
-    /// Before the install marker is set at launch (`OctavoApp`): an install
-    /// that already has it isn't new, so it never plays the tour by itself.
-    func settleEarlierInstall() {
-        guard state == nil, defaults.bool(forKey: ServerCredentials.installedKey) else { return }
-        set(.played)
+    /// New or not, once. Before the install marker is set at launch
+    /// (`OctavoApp`): an install that already has one has run before.
+    func settle() {
+        guard state == nil else { return }
+        set(defaults.bool(forKey: ServerCredentials.installedKey) ? .played : .new)
     }
 
     /// `hasEarlierData`: a saved server or books, places and recents left by
-    /// an earlier build. Before the iPhone's first unlock nothing can be read,
-    /// so nothing is decided: the next launch asks again.
+    /// a build from before the marker. Before the iPhone's first unlock nothing
+    /// can be read, so nothing is decided: the next launch asks again.
     func shouldPlay(hasEarlierData: Bool, protectedDataAvailable: Bool) -> Bool {
         guard protectedDataAvailable else { return false }
+        settle()
         switch state {
-        case .played?:
+        case .played?, nil:
             return false
         case .playing?:
             return true
-        case nil:
+        case .new?:
             if hasEarlierData { set(.played) }
             return !hasEarlierData
         }
