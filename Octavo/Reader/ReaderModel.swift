@@ -237,6 +237,10 @@ final class ReaderModel {
         relayout()
     }
 
+    /// A page really turned: not a swipe that fell back, or a tap at the
+    /// book's first or last page (the tour's Turn the page).
+    @ObservationIgnored var onPageTurned: (() -> Void)?
+
     /// Called when book mode starts or ends, so the controls can hide.
     @ObservationIgnored var onBookModeChange: ((Bool) -> Void)?
     @ObservationIgnored private var reportedBookMode = false
@@ -527,12 +531,18 @@ final class ReaderModel {
             search.receive(batch)
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
+            let previous = self.relocation
             self.relocation = relocation
             relocationCount += 1
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
             location = relocation.location
-            if !isRestoring { moved(to: relocation) }
+            if !isRestoring {
+                // With None the page turns itself: its relocation is all
+                // there is to go by.
+                if !pageTurn.isAnimated, foldBatch == nil, relocation.cfi != previous?.cfi { onPageTurned?() }
+                moved(to: relocation)
+            }
             // A turn's new page, measured again since its pictures came.
             if turnRun?.drawn == true, turn?.newPlace != nil {
                 turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.fraction ?? 0)

@@ -11,7 +11,7 @@ struct HomeView: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        if library.server == nil, !library.hasAddedBooks {
+        if library.server == nil, !library.hasBooks {
             NoLibraryInvitation()
         } else if library.server != nil, !library.homeLoaded {
             HomeContent(books: nil)

@@ -97,10 +97,10 @@ final class LibraryModel {
         return server?.id == id ? server?.source : nil
     }
 
-    /// Something was imported (not just the sample book read): enough to
-    /// leave setup without a server (decision 6).
-    var hasAddedBooks: Bool {
-        importedBooks.contains { !$0.isSample }
+    /// A book on the shelf, imported or the sample: enough to leave setup
+    /// without a server (decisions 6 and 30).
+    var hasBooks: Bool {
+        !importedBooks.isEmpty
     }
 
     /// `imported` changed: an import, a removal, the sample book read.

@@ -278,23 +278,6 @@ struct OtherWaysInShellTests {
         makeShell { BookImporter(store: $0, inspect: ImportFixtures.inspect()) }
     }
 
-    // Decision 6: setup stays until a book is imported; reading the sample
-    // book isn't adding one.
-    @Test func theSampleBookOpensWithoutLeavingSetup() async throws {
-        let model = shell()
-        #expect(model.needsSetup)
-        model.readSampleBook()
-        #expect(await eventually { model.reading != nil })
-        #expect(model.reading?.book.id == .sample)
-        #expect(model.needsSetup)
-        #expect(model.onIPhoneBooks().map(\.book.id) == [.sample])
-        // Folding while reading goes back to setup, not to a book's screen.
-        model.hingeChanged(.fold)
-        #expect(model.reading == nil)
-        #expect(model[path: .home].routes.isEmpty)
-        #expect(model.needsSetup)
-    }
-
     // No server: the Library is the iPhone's books, so it opens at its top.
     @Test func anImportLeavesSetupForTheLibrary() async throws {
         let model = shell()
@@ -374,9 +357,7 @@ struct OtherWaysInShellTests {
         let model = shell()
         await model.library.connect(RemoveServerTests.bookOrbit(id: LibrarySourceID(rawValue: "keep-server"), account: "octavo"))
         await model.importBooks([try ImportFixtures.epub(in: folder)])
-        model.readSampleBook()
-        #expect(await eventually { model.reading != nil })
-        model.reading = nil
+        model.installSampleBook()
         model.opener.removeAllDownloads()
         #expect(Set(model.onIPhoneBooks().map(\.book.title)) == ["Persuasion", "Pride and Prejudice"])
         await model.removeServer(removingBooks: true)

@@ -29,6 +29,9 @@ import WebKit
 ///   it, to hold a turn part way and look at it.
 /// - `turnState`: what the turn under way is doing, in the ack's message.
 /// - `pageTurn` (`name`): sets Page Turn, as Customize does.
+/// - `tour` (`name`: `state`, in the ack's message, or `show`, as Settings'
+///   Show the tour does). `signin`, `open`, `openLocal`, `detail` and `home`
+///   end a tour under way, for scripts that check something else.
 /// - `keyboard` (`on`: true or false): shows or hides the keyboard over the
 ///   reader, through a hidden text field, to check that it never moves the
 ///   page (the panels in #18 bring up a real one).
@@ -91,7 +94,11 @@ enum ReaderRemote {
 
     /// Returns an error message, or `nil` on success.
     private static func handle(_ command: Command, shell: ShellModel) async -> String? {
+        if ["signin", "open", "openLocal", "detail", "home"].contains(command.cmd) { shell.debugEndTour() }
         switch command.cmd {
+        case "tour":
+            if command.name == "show" { shell.showTour() }
+            return shell.debugTourState
         case "signin":
             await shell.library.connectLocalBookOrbit()
             if case .failed(let message) = shell.library.debugConnection { return message }

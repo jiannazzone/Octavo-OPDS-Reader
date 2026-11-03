@@ -26,6 +26,7 @@ struct ReaderView: View {
     /// close like a cover. `close` follows at once.
     var closing: (ReaderCoverPages) -> Void = { _ in }
     let close: () -> Void
+    @Environment(ShellModel.self) private var shell
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
     @State private var model: ReaderModel?
@@ -34,7 +35,7 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             if let model {
-                ReaderScreen(model: model, connectionReturns: connectionReturns) { [closing, close] in
+                ReaderScreen(model: model, connectionReturns: connectionReturns, tourStep: shell.tour?.step) { [closing, close] in
                     closing(model.coverPages())
                     close()
                 }
@@ -59,13 +60,19 @@ struct ReaderView: View {
         }
         .task(id: book.reader) {
             guard model?.book != book.reader else { return }
-            let bookmarks = ReaderBookmarks(bookID: book.reader.id, sync: bookmarkSync)
+            // A tour replayed from Settings saves nothing of its own
+            // (decision 30).
+            let replay = shell.tourReplayPlace
+            let bookmarks = ReaderBookmarks(bookID: book.reader.id, store: replay?.bookmarks ?? BookmarkStore(), sync: bookmarkSync)
             #if DEBUG
             let cfiShape = ReaderRemote.cfiShape
             #else
             let cfiShape = ReaderMessage.CFIShape.point
             #endif
-            model = ReaderModel(book: book.reader, sync: progressSync, fallback: listedPlace, bookmarks: bookmarks, cfiShape: cfiShape)
+            model = ReaderModel(
+                book: book.reader, store: replay?.positions ?? ReadingPositionStore(), sync: progressSync, fallback: listedPlace,
+                bookmarks: bookmarks, cfiShape: cfiShape
+            )
         }
         .onDisappear {
             guard let model else { return }
@@ -85,6 +92,7 @@ private struct ReaderScreen: View {
     let model: ReaderModel
     let connectionReturns: Int
     let close: () -> Void
+    @Environment(ShellModel.self) private var shell
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
     @AppStorage(ReaderAppearance.key) private var appearance = ReaderAppearance()
@@ -100,7 +108,24 @@ private struct ReaderScreen: View {
     @State private var panelButtonFrame: CGRect?
     /// How far the keyboard comes up over the reader, for Search's panel.
     @State private var keyboard: Double = 0
+    /// The sheet's height along the bottom of one page, for the tour's card.
+    @State private var sheetHeight: Double?
     @Environment(\.scenePhase) private var scenePhase
+
+    /// `tourStep`: a reader reopened mid-tour by an unfold puts back what the
+    /// step had up.
+    init(model: ReaderModel, connectionReturns: Int, tourStep: TourFlow.Step?, close: @escaping () -> Void) {
+        self.model = model
+        self.connectionReturns = connectionReturns
+        self.close = close
+        var controls = ReaderControls()
+        if tourStep?.showsControlsOnOpening == true { controls.show() }
+        if tourStep == .makeItYours {
+            controls.panelOpened()
+            _panel = State(initialValue: .textAndTheme)
+        }
+        _controls = State(initialValue: controls)
+    }
 
     var body: some View {
         NavigationStack {
@@ -147,25 +172,42 @@ private struct ReaderScreen: View {
                     if let panel, model.phase == .open, let geometry = model.geometry {
                         let fold = model.layout.columns == 2 ? model.layout.fold : nil
                         ReaderPanelFrame(geometry: geometry, fold: fold, source: panelButtonFrame, fillsSheet: panel != .textAndTheme, keyboard: keyboard) {
-                            switch panel {
-                            case .textAndTheme:
-                                ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
-                            case .contents:
-                                contentsPanel
-                            case .search:
-                                searchPanel
+                            Group {
+                                switch panel {
+                                case .textAndTheme:
+                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
+                                case .contents:
+                                    contentsPanel
+                                case .search:
+                                    searchPanel
+                                }
                             }
+                            .onGeometryChange(for: Double.self) { Double($0.size.height) } action: { sheetHeight = $0 }
                         }
                         // Another panel grows out of its own button.
                         .id(panel)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if let step = shell.tour?.step, model.phase == .open, shell.coverMotion == nil, let geometry = model.geometry {
+                        let onOnePage = panel != nil && !(model.layout.columns == 2 && model.layout.fold != nil)
+                        TourCardSlot(step: step, geometry: geometry, layout: model.layout, sheetHeight: onOnePage ? sheetHeight : nil)
+                            .id(step)
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: shell.tour?.step)
                 .ignoresSafeArea()
                 .accessibilityAction(named: Text(controls.showsBar ? "Hide Controls" : "Show Controls")) {
                     withAnimation { controls.toggle() }
                 }
                 .toolbar { buttons }
-                .toolbar(buttonsVisible || showsControlsButton ? .visible : .hidden, for: .navigationBar)
+                .toolbar(buttonsVisible || showsControlsButton || shell.tour != nil ? .visible : .hidden, for: .navigationBar)
+        }
+        // Over the column too, for the ring on its buttons.
+        .overlay {
+            if let target = shell.tour?.step.ring, model.phase == .open, shell.coverMotion == nil {
+                TourRingLayer(target: target, geometry: model.geometry, layout: model.layout)
+            }
         }
         // The column's buttons, the footer, the bar and the panel in the
         // page's colours. Here, not for the window, so `systemColorScheme`
@@ -201,6 +243,18 @@ private struct ReaderScreen: View {
         }
         .onChange(of: panel) { _, panel in
             if panel == .contents { Task { await model.placeOnScreen() } }
+        }
+        .onChange(of: tourReaderState, initial: true) { _, state in
+            shell.tourEvent(.reader(state))
+        }
+        .onChange(of: shell.tour?.step) { _, step in
+            // Done: on to the last card, with the page clear.
+            if step == .addYourBooks { backToReading() }
+            // A step may start with what it asks for already done.
+            shell.tourEvent(.reader(tourReaderState))
+            if let card = shell.tour?.step.card {
+                AccessibilityNotification.Announcement("\(card.title). \(card.message)").post()
+            }
         }
         // Another reader may have moved on while the app was away, or a
         // place may not have gone for want of a connection.
@@ -249,6 +303,7 @@ private struct ReaderScreen: View {
             model.onBookModeChange = { _ in
                 withAnimation(.easeOut(duration: 0.2)) { controls.wrappedValue.hide() }
             }
+            model.onPageTurned = { [weak shell] in shell?.tourEvent(.pageTurned) }
         }
         #if DEBUG
         .readerRemote(model)
@@ -256,6 +311,11 @@ private struct ReaderScreen: View {
     }
 
     private var darkMode: Bool { systemColorScheme == .dark }
+
+    /// What the tour's steps in the book look at.
+    private var tourReaderState: TourFlow.ReaderState {
+        TourFlow.ReaderState(barVisible: controls.showsBar, buttonsVisible: controls.buttonsVisible, textPanelOpen: panel == .textAndTheme)
+    }
 
     /// A book that couldn't open keeps Back up, so there's a way out.
     private var buttonsVisible: Bool {
@@ -286,12 +346,21 @@ private struct ReaderScreen: View {
 
     /// The column's buttons (frame 08).
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
+        if shell.tour != nil {
+            ToolbarItem(placement: .topBarTrailing) {
+                TourSkipButton { shell.skipTour() }
+            }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        }
         if showsControlsButton, !buttonsVisible {
             ToolbarItem(placement: .topBarTrailing) { showControlsButton }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if buttonsVisible {
-                Button("Back", systemImage: "chevron.backward", action: close)
+                // Skip is the way out of the tour.
+                if shell.tour == nil {
+                    Button("Back", systemImage: "chevron.backward", action: close)
+                }
                 panelButton(.contents, title: "Contents", systemImage: "list.bullet")
                 panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size")
                 panelButton(.search, title: "Search in Book", systemImage: "magnifyingglass")
@@ -312,7 +381,7 @@ private struct ReaderScreen: View {
     private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String) -> some View {
         Button(String(localized: title), systemImage: systemImage) {
             if panel != selected {
-                panelButtonFrame = Self.columnButtonFrame(titled: String(localized: title))
+                panelButtonFrame = ReaderColumnButton.frame(titled: String(localized: title))
             }
             withAnimation(ReaderPanel.animation) {
                 if panel == selected {
@@ -393,10 +462,24 @@ private struct ReaderScreen: View {
         }
     }
 
-    /// A column button's frame in the window, for its panel to grow out of.
-    /// SwiftUI measures a toolbar item in its own space (about (-15, -10)
-    /// for Aa), so this asks UIKit for the bar button with that title.
-    private static func columnButtonFrame(titled title: String) -> CGRect? {
+    private var showControlsButton: some View {
+        Button(ReaderColumnButton.showControls, systemImage: "ellipsis") {
+            withAnimation(.easeOut(duration: 0.2)) { controls.show() }
+        }
+        .tint(.secondary)
+    }
+}
+
+/// The column's buttons by title, which is how UIKit finds them.
+enum ReaderColumnButton {
+    static var showControls: String { String(localized: "Show Controls") }
+    static var textAndTheme: String { String(localized: "Text and Theme") }
+
+    /// A column button's frame in the window, for its panel to grow out of or
+    /// the tour's ring. SwiftUI measures a toolbar item in its own space
+    /// (about (-15, -10) for Aa), so this asks UIKit for the bar button with
+    /// that title.
+    static func frame(titled title: String) -> CGRect? {
         func bars(in view: UIView) -> [UINavigationBar] {
             (view as? UINavigationBar).map { [$0] } ?? view.subviews.flatMap(bars)
         }
@@ -411,13 +494,6 @@ private struct ReaderScreen: View {
             }
         }
         return nil
-    }
-
-    private var showControlsButton: some View {
-        Button("Show Controls", systemImage: "ellipsis") {
-            withAnimation(.easeOut(duration: 0.2)) { controls.show() }
-        }
-        .tint(.secondary)
     }
 }
 

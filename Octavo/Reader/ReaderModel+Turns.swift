@@ -129,7 +129,11 @@ extension ReaderModel {
 
     /// No pictures to draw (no web view to snapshot): foliate turns at once.
     private func turnWithoutPictures(_ side: ReaderTurnSide) {
-        call("return await window.octavo.turn(side, false)", arguments: ["side": side.rawValue])
+        guard phase == .open else { return }
+        Task {
+            let answer = try? await page.callJavaScript("return await window.octavo.turn(side, false)", arguments: ["side": side.rawValue]) as? [String: Any]
+            if answer?["moved"] as? Bool == true { onPageTurned?() }
+        }
     }
 
     /// Has foliate turn under the pictures, then takes the new page's.
@@ -211,6 +215,7 @@ extension ReaderModel {
     /// The pictures go, and the web view shows where the turn went. A turn
     /// asked for meanwhile starts.
     private func endTurn() {
+        if let turnRun, turnRun.target == 1, turnRun.moved == true { onPageTurned?() }
         turnRun = nil
         turn = nil
         guard !queuedTurns.isEmpty else { return }

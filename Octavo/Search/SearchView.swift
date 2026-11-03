@@ -14,7 +14,7 @@ struct SearchView: View {
 
     var body: some View {
         // With no server yet, the imported books alone.
-        if library.server != nil || library.hasAddedBooks {
+        if library.server != nil || library.hasBooks {
             let server = library.server
             let search = shell.search
             VStack(alignment: .leading, spacing: 0) {

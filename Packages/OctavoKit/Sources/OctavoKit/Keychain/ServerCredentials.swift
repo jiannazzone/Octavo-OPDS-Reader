@@ -112,7 +112,7 @@ public enum ServerCredentials {
         return removed
     }
 
-    static let installedKey = "ServerCredentials.installed"
+    public static let installedKey = "ServerCredentials.installed"
 
     /// Keychain items outlive the app, but the list of servers they belong to
     /// doesn't. On the first launch after an install (no marker in
