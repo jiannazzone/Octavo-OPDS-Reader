@@ -35,7 +35,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 ## Phase 4: First impressions
 
-- [ ] **17. The new-install flow.** What someone sees the first time, from opening the app to their first book (Adam, 2026-11-02). Decided 2026-11-03 (decisions 29 and 30 in `docs/design/direction.md`): a short tour in the sample book that opens like a book. Close your iPhone, Pride and Prejudice's cover, unfold, then a card at the bottom of the left page teaches turning, the controls and Text and theme, and ends on Add your books. Skip lands on Home with the sample book; Show the tour in Settings plays it again.
+- [ ] **17. The new-install flow.** What someone sees the first time, from opening the app to their first book (Adam, 2026-11-02). Decided 2026-11-03 (decisions 29 and 30 in `docs/design/direction.md`): a short tour in the sample book that opens like a book. Close your iPhone, Pride and Prejudice's cover, unfold, then a card at the bottom of the left page teaches turning, the controls and Text and theme, and ends on Add your books. Skip lands on Home with the sample book; Show the tour in Settings plays it again. Built 2026-11-03 and checked on the simulator (`docs/notes/tour.md`); ticks once Adam has tried it on his Duo.
 
 ## To revisit
 

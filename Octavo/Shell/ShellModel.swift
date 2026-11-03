@@ -255,7 +255,10 @@ final class ShellModel {
             setupImportFailures = []
         }
         importsRunning += 1
-        defer { importsRunning -= 1 }
+        defer {
+            importsRunning -= 1
+            startTourIfHingeKnown()
+        }
         var failures: [ImportFailure] = []
         var imported: [SourcedBook] = []
         for url in urls {
@@ -279,10 +282,12 @@ final class ShellModel {
             return
         }
         addsBooksAfterTour = false
-        // Opened with this file on a new install: it's what they came for.
+        // Opened with this file on a new install: it's what they came for
+        // (Adam, 2026-11-03). The sample book is there all the same.
         if tourWaitsForHinge {
             tourWaitsForHinge = false
             tourRecord.set(.played)
+            if let sample = installSampleBook() { library.bookOpened(sample) }
         }
         finishTour()
         importFailures += failures
@@ -396,8 +401,8 @@ final class ShellModel {
     /// its books that can't open without it. `removingBooks` deletes its
     /// downloads too (`serverDownloads`); kept, they come back if the same
     /// server is added again, and Storage still lists them. Imported books
-    /// belong to no server, so they stay. Then setup, as on a new install
-    /// (decision 6).
+    /// belong to no server, so they stay. Then setup, if that leaves no books
+    /// at all (decision 6); the sample book counts as one.
     func removeServer(removingBooks: Bool) async {
         guard let server = library.server else { return }
         let id = server.id
@@ -553,6 +558,9 @@ final class ShellModel {
     /// whose download failed or was cancelled.
     private func opened(_ book: OpenedBook) {
         let source = opening.removeValue(forKey: book.book.id)
+        // A download that finishes during the tour stays on the iPhone. It
+        // mustn't open with the tour's card, or a replay's place.
+        if tour != nil, book.book.id != .sample { return }
         if let source {
             library.bookOpened(SourcedBook(source: source, book: book.book))
         }
@@ -731,6 +739,7 @@ final class ShellModel {
     private(set) var tourReplayPlace: TourReplayPlace?
     /// The hinge as last reported, `nil` while it's said nothing.
     @ObservationIgnored private var hingeFold: HingeTransition.Fold?
+    @ObservationIgnored private var hingeIsSilent = false
 
     /// Whether this launch plays the tour: a new install (`TourRecord`), or
     /// one that didn't finish it.
@@ -751,27 +760,49 @@ final class ShellModel {
     }
 
     /// Every report from the hinge (`onHingeChange` fires once on appear): the
-    /// first with a hinge says how a new install's tour starts.
+    /// first with a hinge says how a new install's tour starts. After that the
+    /// tour follows it, even if the change itself was never reported, as when
+    /// the iPhone was opened or closed while the app was away.
     func hingeReported(_ fold: HingeTransition.Fold?) {
         guard let fold else { return }
-        hingeFold = fold
         #if DEBUG
         guard !UserDefaults.standard.bool(forKey: "tourNoFold") else { return }
         #endif
-        if tourWaitsForHinge { startTour(fold: fold) }
+        hingeFold = fold
+        if let step = tour?.step {
+            if fold == .open, step == .cover {
+                tourHingeChanged(.unfold)
+            } else if fold == .closed, step != .cover {
+                tourHingeChanged(.fold)
+            }
+        }
+        startTourIfHingeKnown()
     }
 
     /// The hinge hasn't said anything by now: this iPhone has no fold.
     func hingeStayedSilent() {
-        if tourWaitsForHinge { startTour(fold: nil) }
+        hingeIsSilent = true
+        startTourIfHingeKnown()
+    }
+
+    /// Not while a file is coming in: opened with one, the tour waits to see
+    /// whether it arrives (`importBooks`).
+    private func startTourIfHingeKnown() {
+        guard tourWaitsForHinge, importsRunning == 0 else { return }
+        if let hingeFold {
+            startTour(fold: hingeFold)
+        } else if hingeIsSilent {
+            startTour(fold: nil)
+        }
     }
 
     private func startTour(fold: HingeTransition.Fold?) {
         tourWaitsForHinge = false
         tourRecord.set(.playing)
         guard installSampleBook() != nil else {
-            // Nothing to teach with (no room for its copy): setup instead.
-            tourRecord.set(.played)
+            // Nothing to teach with (no room for its copy): setup for now,
+            // and the next launch tries again.
+            tourRecord.set(.new)
             return
         }
         begin(TourFlow(fold: fold))
@@ -882,10 +913,10 @@ final class ShellModel {
         self[path: .setup].replace([])
     }
 
-    /// The reader goes with no animation at all. The card's fade would keep a
-    /// leaving reader, and its web page, on screen a moment longer, and a fold
-    /// meanwhile has SwiftUI rebuild that web view, which WebKit traps on
-    /// (`AppShell`).
+    /// The reader goes with no animation at all. Anything animating in it (the
+    /// card's fade, the ring's pulse) can keep a leaving reader, and its web
+    /// page, on screen a moment longer, and a fold meanwhile has SwiftUI
+    /// rebuild that web view, which WebKit traps on (`AppShell`).
     private func closingReaderAtOnce(_ change: () -> Void) {
         var instant = Transaction()
         instant.disablesAnimations = true
@@ -913,6 +944,9 @@ final class ShellModel {
     /// checking something else, on what may be a fresh install.
     private var debugLaunchSkipsTour: Bool {
         let defaults = UserDefaults.standard
+        // The test host isn't a new install, whatever its simulator says. Tests
+        // of the tour pass a record of their own.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil, tourRecord.defaults === defaults { return true }
         return ["connectBookOrbit", "connectOPDS", "sampleLibrary", "shellOpen", "shellReading", "shellTab", "shellConnection",
                 "shellCoverStrip", "searchQuery", "forgetServer", "setupCatalog"]
             .contains { defaults.object(forKey: $0) != nil }
@@ -924,8 +958,14 @@ final class ShellModel {
         guard tour != nil || tourWaitsForHinge else { return }
         tourWaitsForHinge = false
         tourRecord.set(.played)
-        tour = nil
-        reading = nil
+        coverMotion = nil
+        pendingCoverMotion = nil
+        closingReaderAtOnce {
+            tour = nil
+            reading = nil
+        }
+        tourReplayPlace?.clear()
+        tourReplayPlace = nil
     }
 
     /// For the remote: where the tour is.
@@ -948,7 +988,7 @@ final class ShellModel {
     /// its pages),
     /// `-shellReading 1` (the first book in Continue reading, once connected)
     /// `-searchQuery austen` (typed into Search, once connected),
-    /// `-forgetServer 1` (start at setup), `-setupCatalog <address>`
+    /// `-forgetServer 1` (no server), `-setupCatalog <address>`
     /// (setup's OPDS step, filled in), and for BookOrbit's position sync
     /// `-syncPullDelay <seconds>` (a slow server) and `-syncFailsPushes 1`
     /// (pushes fail as if offline: "Not synced yet").

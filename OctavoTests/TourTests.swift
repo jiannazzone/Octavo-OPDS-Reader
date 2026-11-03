@@ -373,6 +373,50 @@ struct TourShellTests {
         #expect(await eventually { model.reading != nil })
     }
 
+    // Opened or closed while the app was away, with no change reported: the
+    // tour still follows the hinge.
+    @Test func theTourFollowsAReportWithoutAChange() async {
+        let model = started()
+        model.hingeReported(.open)
+        #expect(model.tour?.step == .welcome)
+        #expect(await eventually { model.reading != nil })
+        model.hingeReported(.closed)
+        #expect(model.tour?.step == .cover)
+        #expect(model.reading == nil)
+        // The repeats change nothing.
+        model.hingeReported(.closed)
+        #expect(model.tour?.step == .cover)
+        model.hingeReported(.open)
+        model.hingeChanged(.unfold)
+        #expect(model.tour?.step == .welcome)
+        #expect(await eventually { model.reading != nil })
+    }
+
+    // A hinge that reports late, on a tour already started without one.
+    @Test func aLateHingeStillClosesTheBook() async {
+        let model = started(fold: nil)
+        #expect(await eventually { model.reading != nil })
+        model.hingeReported(.closed)
+        #expect(model.reading == nil)
+        #expect(model.tour?.step == .cover)
+    }
+
+    // A download finishing mid-tour stays a download: no reader, and the
+    // tour carries on.
+    @Test func aDownloadFinishingDuringATourDoesNotOpen() async throws {
+        let files = try TemporaryBookFiles()
+        let model = makeShell(opener: BookOpener(files: files.store), tourRecord: .temporary(state: .played))
+        let source = StubLibrarySource()
+        let book = SampleRoutes.book(1).book
+        await model.library.connect(RemoveServerTests.bookOrbit(id: LibrarySourceID(rawValue: "tour-download"), account: "octavo"))
+        model.hingeReported(.closed)
+        model.showTour()
+        model.opener.open(book, from: source)
+        #expect(await eventually { model.opener.status(of: book) == .downloaded })
+        #expect(model.reading == nil)
+        #expect(model.tour?.step == .cover)
+    }
+
     @Test func closingAtStepOneGoesToTheCover() {
         let model = started(fold: .open)
         model.hingeChanged(.fold)
@@ -468,6 +512,26 @@ struct TourShellTests {
         model.hingeReported(.closed)
         #expect(model.tour == nil)
         #expect(model.tab == .library)
+    }
+
+    // Opened with a file, the book's what they came for, whichever comes
+    // first: the sample's on the shelf either way.
+    @Test func aSharedFileBeforeTheTourStartsStillLeavesTheSampleBook() async throws {
+        let model = shell()
+        await model.importBooks([try ImportFixtures.epub(in: folder)])
+        #expect(model.onIPhoneBooks().map(\.book.id).contains(.sample))
+        #expect(model.library.continueReading.map(\.book.id) == [.sample])
+    }
+
+    // Refused before the hinge reported: the tour starts once it does.
+    @Test func aRefusedFileBeforeTheTourStartsLeavesItToStart() async throws {
+        let model = shell()
+        await model.importBooks([try ImportFixtures.drmMobi(in: folder)])
+        #expect(model.tourWaitsForHinge)
+        #expect(model.tour == nil)
+        model.hingeReported(.closed)
+        #expect(model.tour?.step == .cover)
+        #expect(model.importFailures == [ImportFailure(fileName: "Kindred.mobi", reason: .drmProtected)])
     }
 
     // One that doesn't come in leaves the tour playing.

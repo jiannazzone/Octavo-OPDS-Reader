@@ -139,6 +139,7 @@ struct TourRingLayer: View {
     let target: TourRingTarget
     let geometry: ReaderGeometry?
     let layout: ReaderLayout
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var buttonFrame: CGRect?
 
     var body: some View {
@@ -146,6 +147,8 @@ struct TourRingLayer: View {
             if let rect {
                 let origin = proxy.frame(in: .global).origin
                 TourRing(diameter: rect.size.width)
+                    // Starts over if the setting changes under it.
+                    .id(reduceMotion)
                     .position(x: rect.midX - origin.x, y: rect.midY - origin.y)
             }
         }
