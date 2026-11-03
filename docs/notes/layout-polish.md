@@ -7,7 +7,7 @@ Two layouts Adam chose from picture mockups ("A" both times) off the plan's "To 
 - **The folded book sheet at rest is compact:** the title on one line, the place under it ("48% · Synced just now"), Open as a capsule on the right of both, a thin progress line below. About 95 pt instead of about 170. The author and Mark finished moved into the pulled-up details. Unfolded, the right page is unchanged.
 - **The reader's progress bar lines up with the text** (its edges are the text's in every margin setting) and sits just above the home indicator, as tall as its rows plus 12 pt of padding. Half open, each piece lines up with its own page's text.
 - **Text on the hinge with Narrow margins was ours, and is fixed.** WebKit keeps a scroll offset in whole points, and foliate's page was 823.66 pt wide, so each page landed up to a point right of the layout. The view and gap are now whole points; every page reads 84–455 | 496–867.
-- **The thin light line in Night wasn't reproduced** in any state tried (section 4). It needs a screenshot or the steps from whoever saw it.
+- **The thin light line in Night wasn't reproduced** in any state tried (section 4), and nobody knows its steps: dropped for now (Adam, 2026-11-03), until it shows up again.
 
 ## 1. The folded book sheet
 
@@ -87,11 +87,11 @@ NOWAIT=1 docs/notes/duo-spreads/tools/app.sh "\"cmd\":\"js\",\"script\":$(jq -Rs
 sleep 10; cat $D/spike-js.json
 ```
 
-## 4. A thin light line in Night (not reproduced)
+## 4. A thin light line in Night (not reproduced; dropped for now)
 
 Reported as a thin light line between the page and the side column in Night, unfolded, never investigated. None showed here. Tried, unfolded unless said: Night chosen in light mode and Night from Dark Mode; Narrow and Medium; controls hidden and shown; the Text and theme panel open; half open; the reader opened by unfolding on a cover; and folded with the bar in every margin. Each screenshot was scanned column by column for a line one or two pixels wide that is lighter than both neighbours over a quarter of the screen's height: none, anywhere across the width.
 
-Candidates ruled out by those scans: the edge of foliate's view under the column (Narrow's view ends at 908, Medium's at 867), the scroll sliver the drift left at the container's edges (section 3, now gone), and the side column's toolbar in its shown and hidden states. Still to try with the reporter's steps: a real device, a page turn or fold in progress, another book's own background, Sepia and Paper in Dark Mode with Match Dark Mode off.
+Candidates ruled out by those scans: the edge of foliate's view under the column (Narrow's view ends at 908, Medium's at 867), the scroll sliver the drift left at the container's edges (section 3, now gone), and the side column's toolbar in its shown and hidden states. Dropped for now (Adam, 2026-11-03): no one has its steps. If it shows up again, a screenshot or the steps would pin it down. Not tried: a real device, a page turn or fold in progress, another book's own background, Sepia and Paper in Dark Mode with Match Dark Mode off.
 
 ## Checks
 
