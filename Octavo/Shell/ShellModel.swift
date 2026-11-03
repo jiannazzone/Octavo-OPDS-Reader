@@ -226,8 +226,10 @@ final class ShellModel {
     /// The picked files (or one opened in Octavo from another app), copied
     /// in one by one. What came in shows on On iPhone, newest first, with a
     /// banner for any that didn't; with no server the Library itself lists
-    /// them. If nothing came in on setup's first screen, setup says why
-    /// under its choices instead.
+    /// them. If nothing came in, the Library's top screen shows the banner
+    /// instead (Adam, 2026-11-02: a failed import doesn't move you to On
+    /// iPhone), and on setup's first screen setup says why under its
+    /// choices.
     func importBooks(_ urls: [URL]) async {
         guard !urls.isEmpty else { return }
         // A new import's banner starts afresh; one overlapping another adds
@@ -258,7 +260,7 @@ final class ShellModel {
         setupImportFailures = []
         reading = nil
         tab = .library
-        self[path: .library].replace(library.server == nil ? [] : [.onIPhone])
+        self[path: .library].replace(imported.isEmpty || library.server == nil ? [] : [.onIPhone])
     }
 
     /// Open in Octavo, from the share sheet of Files, Mail or Safari: iOS

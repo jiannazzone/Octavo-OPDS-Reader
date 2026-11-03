@@ -324,6 +324,18 @@ struct OtherWaysInShellTests {
         #expect(model.onIPhoneBooks().first?.book.title == "Persuasion")
     }
 
+    // Nothing came in: no move to On iPhone; the Library's top screen
+    // shows why (Adam, 2026-11-02).
+    @Test func aFailedImportStaysOnTheLibrary() async throws {
+        let model = shell()
+        await model.library.connect(RemoveServerTests.bookOrbit(id: LibrarySourceID(rawValue: "fail-server"), account: "octavo"))
+        model.select(.home)
+        await model.importBooks([try ImportFixtures.drmMobi(in: folder)])
+        #expect(model.tab == .library)
+        #expect(model[path: .library].routes.isEmpty)
+        #expect(model.importFailures == [ImportFailure(fileName: "Kindred.mobi", reason: .drmProtected)])
+    }
+
     @Test func removingTheLastImportedBookGoesBackToSetup() async throws {
         let model = shell()
         await model.importBooks([try ImportFixtures.epub(in: folder)])

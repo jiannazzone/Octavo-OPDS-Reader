@@ -13,8 +13,10 @@ struct LibraryView: View {
             if let root = library.root {
                 LibraryContents(source: server.id, sections: Self.sections(root))
             } else {
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 12) {
                     ConnectionBannerSlot()
+                        .padding(.horizontal, 20)
+                    ImportFailureBanner()
                         .padding(.horizontal, 20)
                     if library.connectionProblem != nil {
                         // The banner says why, and retries; what's on the
@@ -63,6 +65,11 @@ struct LibraryContents: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 ConnectionBannerSlot()
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                // Files an import couldn't take, when none came in (with
+                // one that did, On iPhone shows it).
+                ImportFailureBanner()
                     .padding(.horizontal, SpreadMetrics.margin)
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
                 ForEach(sections) { section in
