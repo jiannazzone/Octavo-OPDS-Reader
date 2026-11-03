@@ -60,10 +60,10 @@ Half open, the bar's right-hand piece shows the chapter's progress: pages left i
 
 ## Page-turn animations, with opening and closing a book (Adam, 2026-11-02)
 
-Turning a page cuts straight to the next one today (a swipe drags the page and snaps). Animate the turn, and design it together with how a book opens and closes (today the reader fades in over its screen, and folding closes it), so the two feel like one motion: a cover that opens into the spread, pages that turn the same way.
-- To decide with mockups: a slide, a curl or a fade; whether book mode turns differently (each half of the spread turning its own way); speed; and Reduce Motion (a cross-fade or nothing).
-- foliate's paginator already has an `animated` attribute that slides a turn; a curl would be ours, over the web view.
-- Fits Phase 4 (first impressions) or after the panels (step 12).
+Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded slides, open flips over the spine, a Page Turn menu in Customize, and a cover that swings open). Still parked:
+
+- **Curl as a Page Turn choice**: the corner peels over, as in Apple Books. Adam was tempted by it for open and left it out for now. It would draw from the same snapshots as the flip (or UIKit's page curl).
+- **Opening and closing** (decision 28) may change once Adam has seen it on his Duo.
 
 ## An accent colour (Adam, 2026-11-03)
 

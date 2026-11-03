@@ -39,7 +39,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 ## To revisit
 
-- Page-turn animations, designed together with opening and closing a book (Adam, after step 10; `docs/UI-IDEAS.md`).
+- Page-turn animations, designed together with opening and closing a book (Adam, after step 10). Decided 2026-11-03 (decisions 27 and 28 in `docs/design/direction.md`) and being built; opening and closing to be confirmed on Adam's Duo.
 - Should Home and the Library share the reader's colours (its theme: Paper, Sepia, Night), or keep the system's light and dark? (Adam, after step 12.)
 - The empty strip at the reader's left edge, unfolded (the mirror of the side column, about 84 pt, so the pages split on the hinge). Options: keep it as a margin; a quiet progress rail with chapter ticks; or, with Narrow margins and the Duo flat, let the pages spread across the whole width (text then crosses the crease, and going half open re-lays out). (Adam, after step 12.)
 

@@ -193,9 +193,23 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 11. **Folds cross-fade** (§7 Q6): a snapshot of the old page fades into the settled layout (about 0.3 s), hiding the intermediate re-layouts.
 12. **Unfolded and turned sideways, one column runs straight across the fold** (§7 Q2), as the spike does today. Half-opened that way (laptop-style), the text bends over the fold; accepted.
 
+### Page turns and opening a book (Adam, 2026-11-03)
+
+Decided with animated mockups in the planning session (no Figma frames); replaces the idea in `docs/UI-IDEAS.md`.
+
+27. **Folded, a page slides; open, it flips over the spine.** Flat and half open alike, the page swings over the hinge like paper: going forward, the right page lifts and lands as the next spread's left page; going back, the left page swings over to the right. Each half of a book-mode spread turns its own way (decision 9). Folded, the page slides sideways, as in Kindle and Kobo.
+    - **A swipe drives the turn under your finger**; let go before halfway, without a flick, and the page falls back. Taps, the keyboard and the trackpad play the whole turn. A turn looks the same across a chapter break.
+    - **Page Turn in Customize** (decision 13): a menu below Margins with **Automatic** (the default: slide folded, flip open), **Slide**, **Flip**, **Fade** and **None**. Any choice but Automatic applies in every posture; None is the instant turn Octavo had before.
+    - **Reduce Motion:** Automatic fades. A style picked by hand is kept.
+    - **Speed:** about 0.3 s for a slide, 0.5 s for a flip and 0.15 s for a fade, set on a real Duo.
+    - **Curl** (the corner peels over, as in Apple Books) was weighed for open and left out for now (`docs/UI-IDEAS.md`).
+28. **A book opens like a cover** (provisional: Adam decides once he has seen it on his Duo). Opening from a book's screen, the cover moves onto the right page and swings over the spine, landing as the left page of your place: the same motion as a flip. Folded, the cover fills the screen and swings away to the left, uncovering your page. Closing plays it backwards: the page swings back over as the cover, which shrinks back into its place on the book's screen. With no cover on screen, the reader fades in as before.
+    - **Reduce Motion** cross-fades instead.
+    - **Folding while reading and unfolding on a cover stay as they are**: the fold is already the motion (decisions 10 and 11).
+
 ### Text and theme (approved 2026-10-31)
 
-13. **A compact panel, Customize one step in.** The "Aa" button opens a Liquid Glass sheet (where available) so the page shows through while you adjust. Front: the four themes and A−/A+. Customize: font, line spacing, margins, justify, Match Dark Mode, Book-mode shadow, Always show controls. These reading choices live only here, not in Settings. Unfolded, the panel covers the right page and the left page shows each change live.
+13. **A compact panel, Customize one step in.** The "Aa" button opens a Liquid Glass sheet (where available) so the page shows through while you adjust. Front: the four themes and A−/A+. Customize: font, line spacing, margins, page turn (decision 27), justify, Match Dark Mode, Book-mode shadow, Always show controls. These reading choices live only here, not in Settings. Unfolded, the panel covers the right page and the left page shows each change live.
     - **Built (step 12, 2026-11-02).** Unfolded and half open, the panel fills the right page from the fold to the column, with Customize shown below the front (there's room for both). Folded, it's a sheet along the bottom, only as tall as what it shows, with Customize one step in. **Opening and closing** (Adam, 2026-11-02): unfolded and half open the panel grows out of the Aa button and shrinks back into it, with a light spring; folded the sheet slides up from the bottom. The column stays up while a panel is open, with Aa lit (the bar goes, as it would run under the panel). Aa again closes it, back to the controls as they were; a tap on the page closes it and the controls together. Reduce Motion fades instead. Folding closes the book, panel and all. Text size steps 80–200%; line spacing starts at the book's own and steps 1.2–1.8. Margins are decision 8's three. The themes other than Original set the page and text colours and clear the book's own backgrounds; Original keeps the book's colours on white. Atkinson Hyperlegible and OpenDyslexic come later (`docs/PLAN.md`).
 14. **Settings apply to every book**, not per book.
 15. **Themes: Original, Paper, Sepia, Night.** Night follows the iPhone's Dark Mode; "Match Dark Mode" in Customize turns that off.
@@ -337,5 +351,6 @@ Spikes before building: MOBI/AZW3/FB2 through foliate, the bridge and the CSP (d
 - **Page area (decision 8).** Lay out the `foliate-view` with the bridge's left/right insets so the page never reaches the column, map the margin setting onto foliate's gap, and keep the hinge gutter at least the reserved region's width. Done in #17 (`docs/notes/reader-page.md`).
 - **Fold cross-fade (decision 11).** Show a `WebView` snapshot over the transition and fade it out once the layout settles; also batch the hinge, resize, layout and fold-region inputs into one re-layout (duo-spreads §5 counts 10–13 today).
 - **Sample book.** Bundle the Standard Ebooks Pride and Prejudice and re-run the blank-page and fold checks on it (the spike's Gutenberg edition had the blank page after the dedication). Done in step 15 (`docs/notes/other-ways-in.md`).
+- **Page turns (decision 27).** foliate's paginator slides a turn itself (its `animated` attribute), but not across a section break. The flip is ours, drawn from snapshots of the page over the web view, so the next page has to be ready the moment a finger lands. Measure that on a real Duo (snapshot time, turning foliate under a snapshot) before building the flip.
 - **Book mode (decision 9).** Detect the half-open range from `onHingeChange`, swap the tap zones, and draw the spine shadow as an overlay outside the book's content.
 - **Unfold on the cover → reader.** The spike's handoff already does this from its book screen (about 20 ms). It must compare old and new hinge status, not react to repeated or on-appear callbacks. Done in #14: `ShellModel.hingeChanged` → `BookOpener`, which downloads the book first if it isn't on the iPhone.
