@@ -472,8 +472,9 @@ private struct ReaderProgressBar: View {
         switch ReaderBarReadout.standard {
         case .chapter:
             if let chapter = ReaderChapterProgress(place: place, toc: model.toc) {
-                // The line level with the scrubber's track on the left.
-                VStack(alignment: .leading, spacing: 10) {
+                // Laid out as the scrubber is, so the line is level with
+                // its track on the left.
+                VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(chapter.text)
                             .font(.footnote.weight(.semibold))
@@ -488,7 +489,14 @@ private struct ReaderProgressBar: View {
                                 .layoutPriority(1)
                         }
                     }
-                    ProgressView(value: chapter.fraction)
+                    // The system slider without its thumb, so the line has
+                    // the scrubber's colours on the glass (a ProgressView
+                    // draws a deeper blue there).
+                    Slider(value: .constant(chapter.fraction), in: 0...1)
+                        .controlSize(.mini)
+                        .sliderThumbVisibility(.hidden)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
                 .accessibilityElement(children: .combine)
