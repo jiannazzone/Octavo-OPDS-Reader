@@ -581,6 +581,74 @@ struct OPDSSourceTests {
         #expect(OPDSURLSecret("short") == nil)
     }
 
+    // MARK: Other secrets in the address (step 16)
+
+    @Test func findsOtherSecretsInTheAddress() throws {
+        let key = "stump_9fK2abcd_XYZ0123456789"
+        // Stump's key router, for readers that can't send a password.
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds/\(key)/v1.2/catalog")!)?.values == [key])
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/stump/opds/\(key)/v2.0/catalog")!)?.values == [key])
+        // Komga's and Stump's usual addresses carry none.
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds/v1.2/catalog")!) == nil)
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds/v2/catalog")!) == nil)
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds/discover/v1/catalog")!) == nil)
+        // Keys and tokens in the query (Bindery's `?apikey=`).
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://bindery.example.com/opds?apikey=0123456789abcdef")!)?.values == ["0123456789abcdef"])
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://x.example/feed?page=2&Access_Token=tok-12345678")!)?.values == ["tok-12345678"])
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://x.example/feed?password=hunter2hunter2")!)?.values == ["hunter2hunter2"])
+        // Two different ones: both, in order.
+        let both = try #require(OPDSURLSecret.detect(in: URL(string: "https://nas.lan/opds/\(key)/v1.2/catalog?token=abcdefgh1234")!))
+        #expect(both.values == [key, "abcdefgh1234"])
+        // Not named like a credential, or too short to swap out safely.
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://x.example/feed?page=12345678&sort=title")!) == nil)
+        #expect(OPDSURLSecret.detect(in: URL(string: "https://x.example/feed?token=short")!) == nil)
+    }
+
+    @Test func redactsAndRestoresSeveralSecrets() throws {
+        // The second is inside the first: the longer goes first.
+        let secret = try #require(OPDSURLSecret(values: ["0123456789abcdef", "0123456789", "0123456789"]))
+        #expect(secret.values == ["0123456789abcdef", "0123456789"])
+        let link = "https://x.example/a/0123456789abcdef/b?token=0123456789"
+        let redacted = secret.redact(link)
+        #expect(redacted == "https://x.example/a/{key}/b?token={key2}")
+        #expect(secret.restore(redacted) == link)
+        #expect(OPDSURLSecret.isRedacted(redacted))
+        #expect(!OPDSURLSecret.isRedacted(link))
+        #expect(OPDSURLSecret.masked(redacted) == "https://x.example/a/key/b?token=key")
+        #expect(OPDSURLSecret(values: ["0123456789", "x{y}zzzzzz"]) == nil)
+        #expect(OPDSURLSecret(values: []) == nil)
+    }
+
+    @Test func keepsAQueryTokenOutOfEverythingItHandsOut() async throws {
+        let key = "0123456789abcdefTOKEN"
+        let feed = """
+        <feed xmlns="http://www.w3.org/2005/Atom"><title>Recent</title>
+          <link rel="next" href="/opds/recent?page=2&amp;apikey=\(key)" type="application/atom+xml;profile=opds-catalog"/>
+          <entry><title>Alice</title><id>urn:book:1</id>
+            <link rel="http://opds-spec.org/image" type="image/jpeg" href="/cover/1?apikey=\(key)"/>
+            <link rel="http://opds-spec.org/acquisition" type="application/epub+zip" href="/download/1?apikey=\(key)"/>
+          </entry>
+        </feed>
+        """
+        let server = StubServer { request in
+            guard request.query["apikey"] == key else { return .notFound }
+            return request.path.hasPrefix("/cover") ? .bytes("jpeg", type: "image/jpeg") : .atom(feed)
+        }
+        let catalog = try #require(URL(string: url(server, "/opds/recent?apikey=\(key)")))
+        let secret = try #require(OPDSURLSecret.detect(in: catalog))
+        let source = OPDSSource(
+            catalogURL: catalog, transport: ServerTransport(server: server.baseURL, configuration: server.configuration), secret: secret
+        )
+        let root = try await source.root()
+        let chip = try #require(root.chips.last)
+        #expect(chip.link.rawValue == url(server, "/opds/recent?apikey={key}"))
+        let books = try await source.feed(chip.link)
+        let alice = try #require(books.books.first)
+        let handedOut = [books.next?.rawValue, alice.id.rawValue, alice.cover?.rawValue] + alice.files.map(\.id.rawValue)
+        #expect(handedOut.allSatisfy { $0?.contains(key) != true })
+        #expect(try await source.cover(try #require(alice.cover), size: .full) == Data("jpeg".utf8))
+    }
+
     @Test func keepsKavitasKeyOutOfEverythingItHandsOut() async throws {
         let key = "9fK2abcdXYZ0123456789qrstuvwx"
         let series = """

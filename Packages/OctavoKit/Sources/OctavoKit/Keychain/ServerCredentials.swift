@@ -71,6 +71,46 @@ public enum ServerCredentials {
         if let failure { throw failure }
     }
 
+    /// Sign out: deletes the sign-in kept for `serverID` (BookOrbit's
+    /// tokens, an OPDS password), keeping its trusted certificate and a
+    /// catalog's key. Every item is tried; the first failure is thrown.
+    public static func removeSignIn(serverID: String) throws {
+        var failure: (any Error)?
+        for service in [tokenService, passwordService] {
+            do {
+                try KeychainItem(service: service, account: serverID).delete()
+            } catch {
+                failure = failure ?? error
+            }
+        }
+        if let failure { throw failure }
+    }
+
+    /// The launch sweep: deletes everything kept for servers `keeps` turns
+    /// down, such as one whose Remove server couldn't clear the Keychain, or
+    /// a setup left before it finished. Nothing is deleted unless every kind
+    /// of item could be listed; then every server is tried, and the first
+    /// failure is thrown once they all have been.
+    /// - Returns: the servers whose items were deleted.
+    @discardableResult
+    public static func removeAll(keeping keeps: (String) -> Bool) throws -> Set<String> {
+        var accounts: Set<String> = []
+        for service in allServices {
+            accounts.formUnion(try KeychainItem.accounts(service: service))
+        }
+        let removed = accounts.filter { !keeps($0) }
+        var failure: (any Error)?
+        for account in removed {
+            do {
+                try removeAll(serverID: account)
+            } catch {
+                failure = failure ?? error
+            }
+        }
+        if let failure { throw failure }
+        return removed
+    }
+
     static let installedKey = "ServerCredentials.installed"
 
     /// Keychain items outlive the app, but the list of servers they belong to
@@ -133,8 +173,8 @@ public struct KeychainPasswordStore: PasswordStore {
     }
 }
 
-/// The secret an OPDS catalog's address carries (Kavita's API key,
-/// `OPDSURLSecret`), so the address can be saved with the placeholder in its
+/// The secrets an OPDS catalog's address carries (Kavita's API key,
+/// `OPDSURLSecret`), so the address can be saved with placeholders in their
 /// place.
 public struct KeychainCatalogSecretStore: Sendable {
     private let item: KeychainItem
@@ -144,15 +184,43 @@ public struct KeychainCatalogSecretStore: Sendable {
     }
 
     public func load() throws -> OPDSURLSecret? {
-        try item.decoded(String.self).flatMap(OPDSURLSecret.init)
+        try item.decoded(StoredValues.self).flatMap { OPDSURLSecret(values: $0.values) }
     }
 
     /// `nil` forgets the secret.
     public func save(_ secret: OPDSURLSecret?) throws {
         if let secret {
-            try item.write(JSONEncoder().encode(secret.value))
+            try item.write(JSONEncoder().encode(StoredValues(values: secret.values)))
         } else {
             try item.delete()
+        }
+    }
+
+    /// One secret as a JSON string, as step 8 saved Kavita's key; more as an
+    /// array.
+    private struct StoredValues: Codable {
+        var values: [String]
+
+        init(values: [String]) {
+            self.values = values
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let one = try? container.decode(String.self) {
+                values = [one]
+            } else {
+                values = try container.decode([String].self)
+            }
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            if values.count == 1 {
+                try container.encode(values[0])
+            } else {
+                try container.encode(values)
+            }
         }
     }
 }

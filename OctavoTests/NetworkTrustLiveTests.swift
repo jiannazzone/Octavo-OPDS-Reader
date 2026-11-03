@@ -16,6 +16,12 @@ struct NetworkTrustLiveTests {
     static let environment = ProcessInfo.processInfo.environment
     static let bookOrbit = environment["OCTAVO_LAN_BOOKORBIT"].flatMap(URL.init(string:))
     static let trustHost = environment["OCTAVO_LAN_TRUST_HOST"]
+    /// Step 16: `TEST_RUNNER_OCTAVO_LIVE_DNS=1` after
+    /// `docs/notes/network-trust/mdns-probes.sh start`, and optionally
+    /// `TEST_RUNNER_OCTAVO_LIVE_DNS_LOCAL_NAME=<Mac>.local` for the local
+    /// BookOrbit by this Mac's Bonjour name.
+    static let liveDNS = environment["OCTAVO_LIVE_DNS"] == "1"
+    static let localName = environment["OCTAVO_LIVE_DNS_LOCAL_NAME"]
 
     /// Plain http to a home address passes ATS and the policy; the tokens
     /// land in the Keychain and a relaunch uses them without signing in.
@@ -70,5 +76,32 @@ struct NetworkTrustLiveTests {
         await #expect(throws: NetworkTrustError.unsupportedAddress("http://16843009")) {
             try await ServerTransport(server: URL(string: "http://16843009/")!).data(for: URLRequest(url: URL(string: "http://16843009/")!))
         }
+    }
+
+    /// Step 16 (#9): names ATS lets through by their shape (a single label,
+    /// `.local`) are judged by where they resolve. `uz` is a top-level
+    /// domain with an internet address; the probes are `.local` names
+    /// answered over Bonjour with internet addresses. Each is refused before
+    /// anything is sent: the probes' addresses never answer, so a connection
+    /// attempt would wait for the timeout. A `.local` name with a global
+    /// IPv6 address on this network still reaches BookOrbit.
+    @Test(.enabled(if: liveDNS, "Set TEST_RUNNER_OCTAVO_LIVE_DNS=1 and start docs/notes/network-trust/mdns-probes.sh"))
+    func namesAreJudgedByWhereTheyResolve() async throws {
+        for address in ["http://uz/", "http://octavo-probe-public.local:3300/", "http://octavo-probe-v6.local:3300/"] {
+            let url = try #require(URL(string: address))
+            let started = ContinuousClock.now
+            do {
+                _ = try await ServerTransport(server: url).data(for: URLRequest(url: url))
+                Issue.record("\(address) was loaded")
+            } catch NetworkTrustError.insecureAddress(_, reason: .internetAddress) {
+                #expect(ContinuousClock.now - started < .seconds(2), "\(address) was refused only after trying to connect")
+            }
+        }
+        try await HomeNetworkPolicy.system.check(#require(URL(string: "http://octavo-probe-home.local:3300/")))
+
+        guard let localName = Self.localName else { return }
+        let url = try #require(URL(string: "http://\(localName):3300/"))
+        let (_, response) = try await ServerTransport(server: url).data(for: URLRequest(url: url))
+        #expect((response as? HTTPURLResponse)?.statusCode == 200)
     }
 }

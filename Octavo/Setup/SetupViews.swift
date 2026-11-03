@@ -637,7 +637,7 @@ struct SignInAgainScreen: View {
             return
         }
         error = nil
-        let host = URL(string: saved.address.replacingOccurrences(of: OPDSURLSecret.placeholder, with: "key"))?.host()
+        let host = URL(string: OPDSURLSecret.masked(saved.address))?.host()
         let password = password
         attempt.start { isCurrent in
             do {

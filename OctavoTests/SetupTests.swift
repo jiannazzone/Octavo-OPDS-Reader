@@ -76,6 +76,45 @@ struct SavedServerTests {
         #expect(server.progressSyncs)
     }
 
+    /// Step 16: no file is "no server"; a file that can't be read throws,
+    /// so the launch sweep never takes it for none. A file saved before
+    /// `signedOut` existed still reads.
+    @Test func tellsNoServerFromOneThatCantBeRead() throws {
+        let store = Self.temporaryStore()
+        #expect(try store.read() == nil)
+        try Data("{ not json".utf8).write(to: store.fileURL)
+        #expect(throws: (any Error).self) { try store.read() }
+        #expect(store.load() == nil)
+
+        let older = #"{"id":"server-1","kind":"opds","address":"http://nas.lan/opds","name":"COPS","syncsProgress":false}"#
+        try Data(older.utf8).write(to: store.fileURL)
+        #expect(try store.read()?.signedOut == nil)
+        #expect(try store.read()?.name == "COPS")
+    }
+
+    /// Other secrets in a catalog's address are saved as placeholders, and
+    /// the address still shows its host.
+    @Test func otherSecretsInTheAddressAreSavedAsPlaceholders() throws {
+        let id = SavedServer.newID()
+        let address = "https://nas.lan/opds/{key}/v1.2/catalog?token={key2}"
+        let stump = SavedServer(id: id, kind: .opds, address: address, name: "Stump")
+        #expect(stump.detail == "nas.lan")
+        #expect(stump.libraryServer() == nil, "no secrets in the Keychain")
+
+        let typed = try #require(URL(string: "https://nas.lan/opds/stump_0123456789/v1.2/catalog?token=abcdefgh1234"))
+        let secret = try #require(OPDSURLSecret.detect(in: typed))
+        #expect(secret.redact(typed.absoluteString) == address)
+        try KeychainCatalogSecretStore(serverID: id.rawValue).save(secret)
+        defer { try? ServerCredentials.removeAll(serverID: id.rawValue) }
+        #expect(stump.libraryServer()?.name == "Stump")
+    }
+
+    /// BookOrbit's address is its root: a query typed with it goes.
+    @Test func aBookOrbitAddressDropsItsQuery() throws {
+        #expect(URL(string: "https://books.example.com/?token=abcdefgh")!.withoutQuery.absoluteString == "https://books.example.com/")
+        #expect(URL(string: "http://nas.lan:3300")!.withoutQuery.absoluteString == "http://nas.lan:3300")
+    }
+
     @Test func aCatalogWhoseKeyIsGoneStartsSetupAgain() throws {
         let id = SavedServer.newID()
         let kavita = SavedServer(id: id, kind: .opds, address: "http://localhost:3340/api/opds/{key}", name: "Kavita")

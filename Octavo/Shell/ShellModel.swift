@@ -196,8 +196,9 @@ final class ShellModel {
                 throw error
             }
         }
-        if saved.username != username {
+        if saved.username != username || saved.signedOut != nil {
             saved.username = username
+            saved.signedOut = nil
             try? servers.save(saved)
         }
         library.signedIn(as: username)
@@ -350,6 +351,12 @@ final class ShellModel {
     /// server stays, and so do its books, which still open.
     func signOut() {
         guard let server = library.server, server.signsIn else { return }
+        // Noted first: if the Keychain can't delete the sign-in now, the
+        // next launch does (`KeychainSweep`).
+        if var saved = servers.load(), saved.id == server.id {
+            saved.signedOut = true
+            try? servers.save(saved)
+        }
         library.connectionProblem = .signedOut(server: server.name)
         Task { await Self.endSignIn(on: server) }
     }

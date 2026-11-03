@@ -90,15 +90,18 @@ final class SetupModel {
             error = "Enter your username and password."
             return
         }
-        let id = serverID(for: parsed.url)
+        // BookOrbit's address is its root: a query (a token pasted with it)
+        // is never sent or saved.
+        let root = parsed.url.withoutQuery
+        let id = serverID(for: root)
         let (username, password) = (bookOrbitUsername, bookOrbitPassword)
-        let client = SavedServer.bookOrbitClient(id: id, url: parsed.url)
+        let client = SavedServer.bookOrbitClient(id: id, url: root)
         connecting.start { [weak self] isCurrent in
             do {
                 try await client.login(username: username, password: password)
                 guard isCurrent(), let self else { return }
                 pending = SavedServer(
-                    id: id, kind: .bookOrbit, address: parsed.url.absoluteString, name: "BookOrbit",
+                    id: id, kind: .bookOrbit, address: root.absoluteString, name: "BookOrbit",
                     username: username, syncsProgress: true
                 )
                 syncsProgress = true
@@ -113,7 +116,7 @@ final class SetupModel {
                 self?.failed(error, server: "BookOrbit") { [weak self] in self?.signInToBookOrbit() }
             }
         } timedOut: { [weak self] in
-            self?.timedOut(parsed.url)
+            self?.timedOut(root)
         }
     }
 

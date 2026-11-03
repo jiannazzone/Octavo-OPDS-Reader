@@ -14,6 +14,10 @@ public protocol HTTPTransport: Sendable {
 /// (`docs/notes/network-trust.md`). Make one per server; a new pin needs a
 /// new transport.
 ///
+/// - The pin is given, or read from the server's `CertificatePinStore`
+///   before the first request. A store that can't be read fails the request
+///   (fail closed: without its pin a self-signed server would be judged by
+///   iOS alone) and is read again for the next one.
 /// - Before every request and every redirect, `HomeNetworkPolicy` checks
 ///   the address (plain http only to home and VPN addresses), and a server on
 ///   the internet can't send the app to a home address.
@@ -39,15 +43,17 @@ public final class ServerTransport: HTTPTransport {
 
     private let session: URLSession
     private let rules: TrustRules
+    private let pins: PinSource
     private let maximumDataSize: Int
 
     /// - Parameters:
+    ///   - pin: the certificate trusted for this server, if any.
     ///   - authScheme: the scheme the server asked for when it was added;
     ///     `passwords` answer only that one, and nothing when it's `nil`.
     ///   - maximumDataSize: the longest answer `data(for:)` accepts, in bytes.
     ///   - configuration: copied; cookies, credential storage and the cache
     ///     are switched off on the copy.
-    public init(
+    public convenience init(
         server: URL,
         pin: CertificatePin? = nil,
         passwords: (any PasswordStore)? = nil,
@@ -56,9 +62,39 @@ public final class ServerTransport: HTTPTransport {
         policy: HomeNetworkPolicy = .system,
         configuration: URLSessionConfiguration = .default
     ) {
+        self.init(server: server, pins: PinSource(pin), passwords: passwords, authScheme: authScheme,
+                  maximumDataSize: maximumDataSize, policy: policy, configuration: configuration)
+    }
+
+    /// A saved server's transport: its pin is read from `pins` before the
+    /// first request, and an error reading it fails that request instead of
+    /// going on without the pin.
+    public convenience init(
+        server: URL,
+        pins: any CertificatePinStore,
+        passwords: (any PasswordStore)? = nil,
+        authScheme: HTTPAuthScheme? = nil,
+        maximumDataSize: Int = 64 << 20,
+        policy: HomeNetworkPolicy = .system,
+        configuration: URLSessionConfiguration = .default
+    ) {
+        self.init(server: server, pins: PinSource(store: pins), passwords: passwords, authScheme: authScheme,
+                  maximumDataSize: maximumDataSize, policy: policy, configuration: configuration)
+    }
+
+    private init(
+        server: URL,
+        pins: PinSource,
+        passwords: (any PasswordStore)?,
+        authScheme: HTTPAuthScheme?,
+        maximumDataSize: Int,
+        policy: HomeNetworkPolicy,
+        configuration: URLSessionConfiguration
+    ) {
         self.server = server
+        self.pins = pins
         self.maximumDataSize = maximumDataSize
-        rules = TrustRules(server: server, pin: pin, passwords: passwords, authScheme: authScheme, policy: policy)
+        rules = TrustRules(server: server, passwords: passwords, authScheme: authScheme, policy: policy)
         let configuration = configuration.copy() as! URLSessionConfiguration
         configuration.httpCookieAcceptPolicy = .never
         configuration.httpShouldSetCookies = false
@@ -96,8 +132,9 @@ public final class ServerTransport: HTTPTransport {
         transfer: (URLRequest, TaskGuard) async throws -> Result
     ) async throws -> Result {
         guard let url = request.url else { throw URLError(.badURL) }
+        let pin = try pins.current()
         try await rules.check(url)
-        let guardian = TaskGuard(rules: rules, inner: delegate)
+        let guardian = TaskGuard(rules: rules, pin: pin, inner: delegate)
         let result: Result
         do {
             result = try await transfer(request, guardian)
@@ -124,18 +161,48 @@ public final class ServerTransport: HTTPTransport {
     }
 }
 
+/// A transport's pin: given, or read from its store once it reads.
+final class PinSource: Sendable {
+    private enum Kind {
+        case given
+        case store(any CertificatePinStore)
+    }
+
+    private let kind: Kind
+    /// `.some(nil)`: read, and there's no pin.
+    private let read: Mutex<CertificatePin??>
+
+    init(_ pin: CertificatePin?) {
+        kind = .given
+        read = Mutex(.some(pin))
+    }
+
+    init(store: any CertificatePinStore) {
+        kind = .store(store)
+        read = Mutex(nil)
+    }
+
+    /// The pin, reading the store the first time. A failed read throws and
+    /// isn't remembered, so the next request tries again.
+    func current() throws -> CertificatePin? {
+        if let pin = read.withLock({ $0 }) { return pin }
+        guard case .store(let store) = kind else { return nil }
+        let pin = try store.load()
+        read.withLock { $0 = .some(pin) }
+        return pin
+    }
+}
+
 /// What one transport enforces, shared by its tasks' guards.
 struct TrustRules: Sendable {
     let policy: HomeNetworkPolicy
-    let pin: CertificatePin?
     let passwords: (any PasswordStore)?
     let authScheme: HTTPAuthScheme?
     private let origin: Origin?
     let serverIsLocal: Bool
 
-    init(server: URL, pin: CertificatePin?, passwords: (any PasswordStore)?, authScheme: HTTPAuthScheme? = nil, policy: HomeNetworkPolicy) {
+    init(server: URL, passwords: (any PasswordStore)?, authScheme: HTTPAuthScheme? = nil, policy: HomeNetworkPolicy) {
         self.policy = policy
-        self.pin = pin
         self.passwords = passwords
         self.authScheme = authScheme
         origin = Origin(server)
@@ -191,6 +258,8 @@ struct Origin: Hashable {
 /// the request after it was checked.
 final class TaskGuard: NSObject, URLSessionDataDelegate, Sendable {
     private let rules: TrustRules
+    /// The certificate trusted for the server, read before the task.
+    private let pin: CertificatePin?
     private let body = Mutex(Body())
     private let inner: (any URLSessionTaskDelegate)?
     private let refusalStorage = Mutex<NetworkTrustError?>(nil)
@@ -203,8 +272,9 @@ final class TaskGuard: NSObject, URLSessionDataDelegate, Sendable {
         #selector(URLSessionTaskDelegate.urlSession(_:task:needNewBodyStreamFrom:completionHandler:)),
     ]
 
-    init(rules: TrustRules, inner: (any URLSessionTaskDelegate)?) {
+    init(rules: TrustRules, pin: CertificatePin?, inner: (any URLSessionTaskDelegate)?) {
         self.rules = rules
+        self.pin = pin
         self.inner = inner
     }
 
@@ -338,7 +408,7 @@ final class TaskGuard: NSObject, URLSessionDataDelegate, Sendable {
         guard let leaf = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first else {
             return (.cancelAuthenticationChallenge, nil)
         }
-        if let pin = rules.pin {
+        if let pin {
             if pin.matches(leaf) { return (.useCredential, URLCredential(trust: trust)) }
             refuse(.certificateChanged(CertificateSummary(leaf, host: space.host, port: space.port, isTrustedBySystem: trustedBySystem)))
             return (.cancelAuthenticationChallenge, nil)
