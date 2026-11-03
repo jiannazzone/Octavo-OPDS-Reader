@@ -320,7 +320,25 @@ const collapseBlankPageBreaks = doc => {
 // Section documents live in iframes that are wider than the screen (one
 // column per page) and scrolled by the paginator, so the tap is converted to
 // the top window's coordinates before deciding which side it was on.
+// Part of the hardening layer (`open`'s `harden`), so the DEBUG switch
+// measures the layer whole.
+let guardsLinks = true
+
 const onSectionLoad = ({ detail: { doc } }) => {
+    // A click on a link foliate doesn't intercept (an SVG or MathML link,
+    // an image map's area) goes nowhere: the hardening layer already took
+    // their targets, and this holds if a target slipped through.
+    if (guardsLinks) doc.addEventListener('click', e => {
+        for (const el of e.composedPath()) {
+            if (el.nodeType !== Node.ELEMENT_NODE) continue
+            if (el.localName === 'a' && el.namespaceURI === XHTML_NS && el.hasAttribute('href')) return
+            if (el.localName === 'area' || (el.localName !== 'image' && el.localName !== 'use'
+                && (el.hasAttribute('href') || el.hasAttributeNS(XLINK, 'href')))) {
+                e.preventDefault()
+                return
+            }
+        }
+    }, true)
     collapseBlankPageBreaks(doc)
     detectTaps(doc, e => {
         const frame = doc.defaultView?.frameElement
@@ -777,6 +795,8 @@ const placeOnScreen = cfis => (Array.isArray(cfis) ? cfis : []).map(cfi => {
 //   <body>.
 const SCRIPT_TYPE_BLOCKED = 'application/x-octavo-blocked'
 const XLINK = 'http://www.w3.org/1999/xlink'
+const XHTML_NS = 'http://www.w3.org/1999/xhtml'
+const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
 const SECTION_POLICY = [
     "default-src 'self' blob: data:",
     "script-src 'none'",
@@ -802,16 +822,45 @@ const sanitizeSection = doc => {
     // <?xml-stylesheet?> outside the root: XSLT could build a new document.
     for (const node of [...doc.childNodes])
         if (node.nodeType === Node.PROCESSING_INSTRUCTION_NODE) node.remove()
+    sanitizeTree(doc, doc.contentType === 'text/html')
+}
+
+// A <template>'s content is a fragment of its own, which neither
+// getElementsByTagName nor querySelectorAll reaches, so it's walked too.
+// Its shadowroot attributes go: the iframe's parser would turn a
+// `<template shadowrootmode>` into a live shadow root (declarative shadow
+// DOM) that DOMParser here never made, so its markup would arrive unchecked.
+const TEMPLATE_SHADOW = ['shadowrootmode', 'shadowroot', 'shadowrootdelegatesfocus', 'shadowrootclonable', 'shadowrootserializable']
+const sanitizeTree = (root, isHTML) => {
     // HTML only: DOMParser reads a <noscript>'s content with scripting off,
     // as markup, but the iframe reads it with scripting on, as text up to
     // the first `</noscript>`, which an attribute or a comment inside can
     // carry (mutation XSS: what's checked here isn't what the iframe gets).
     // With scripting on it shows nothing, so no position is ever inside it,
     // and emptying it moves no CFI.
-    if (doc.contentType === 'text/html')
-        for (const el of [...doc.getElementsByTagName('noscript')]) el.replaceChildren()
-    for (const el of doc.getElementsByTagName('*')) {
+    if (isHTML)
+        for (const el of root.querySelectorAll('noscript')) el.replaceChildren()
+    for (const el of root.querySelectorAll('*')) {
         const name = el.localName.toLowerCase()
+        if (name === 'template') {
+            for (const attr of TEMPLATE_SHADOW) el.removeAttribute(attr)
+            if (el.content) sanitizeTree(el.content, isHTML)
+        }
+        // Links foliate doesn't catch (it handles clicks on HTML a[href]
+        // only): an image map's area, an SVG link, MathML's href. A target
+        // inside the page (a fragment) stays; any other goes, so the frame
+        // can't navigate itself to a document this layer never saw (a data:
+        // page, or another section as foliate built it). Forms can't
+        // submit anywhere either. Attributes move no CFI.
+        if (isNavigating(el, name)) {
+            for (const attr of ['href', 'action', 'formaction']) {
+                if (el.hasAttribute(attr) && !el.getAttribute(attr).trim().startsWith('#')) el.removeAttribute(attr)
+            }
+            const xlink = el.getAttributeNS(XLINK, 'href')
+            if (xlink !== null && !xlink.trim().startsWith('#')) el.removeAttributeNS(XLINK, 'href')
+        }
+        if (el.hasAttribute('formaction')) el.removeAttribute('formaction')
+        if (name === 'param') el.removeAttribute('value')
         for (const attr of [...el.attributes]) {
             if (/^on/i.test(attr.localName) || isScriptURL(attr.value)) el.removeAttributeNode(attr)
         }
@@ -834,9 +883,21 @@ const sanitizeSection = doc => {
     }
 }
 
+// Elements whose href (or action) would navigate the frame when clicked or
+// submitted, other than the HTML links foliate intercepts.
+const isNavigating = (el, name) => {
+    if (el.namespaceURI === XHTML_NS) return name === 'area' || name === 'form'
+    if (el.namespaceURI === MATHML_NS) return el.hasAttribute('href')
+    return name === 'a'
+}
+
+// Only a real <head>, first in <html>: a `head` elsewhere (another
+// namespace, the body) would hold a policy WebKit ignores, and inserting
+// there would move CFIs. Markup before it would load before the policy.
+// Without one the section keeps the sanitizer and the reader's CSP.
 const addSectionPolicy = doc => {
-    const head = doc.querySelector('head')
-    if (!head) return false
+    const head = doc.documentElement?.firstElementChild
+    if (!head || head.localName !== 'head' || head.namespaceURI !== XHTML_NS) return false
     const meta = doc.createElementNS(head.namespaceURI, 'meta')
     meta.setAttribute('http-equiv', 'Content-Security-Policy')
     meta.setAttribute('content', SECTION_POLICY)
@@ -875,7 +936,29 @@ const hardenSection = async (url, sectionIndex) => {
     }
     sanitizeSection(doc)
     addSectionPolicy(doc)
-    return URL.createObjectURL(new Blob([serializeSection(doc, type)], { type }))
+    const hardened = serializeSection(doc, type)
+    // Written out and read back, the section must still hold nothing live:
+    // a serializer/parser disagreement (mutation XSS) is refused, not shown.
+    if (hasLiveContent(new DOMParser().parseFromString(hardened, type))) {
+        post('log', { level: 'warn', message: `Section ${sectionIndex}: live content after hardening, refused` })
+        return null
+    }
+    return URL.createObjectURL(new Blob([hardened], { type }))
+}
+
+const hasLiveContent = root => {
+    for (const el of root.querySelectorAll('*')) {
+        const name = el.localName.toLowerCase()
+        if (name === 'template') {
+            if (TEMPLATE_SHADOW.some(attr => el.hasAttribute(attr))) return true
+            if (el.content && hasLiveContent(el.content)) return true
+        }
+        if (name === 'script' && (el.getAttribute('type') !== SCRIPT_TYPE_BLOCKED || el.hasAttribute('src'))) return true
+        for (const attr of el.attributes) {
+            if (/^on/i.test(attr.localName) || isScriptURL(attr.value)) return true
+        }
+    }
+    return false
 }
 
 // Wraps each section's `load` and `unload`. foliate's paginator loads a
@@ -997,7 +1080,8 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     })
     // Before the first section loads. `harden: false` comes only from a
     // DEBUG build's `-readerWithoutHarden` (the formats check's controls).
-    if (harden !== false) hardenBook(view.book)
+    guardsLinks = harden !== false
+    if (guardsLinks) hardenBook(view.book)
     view.renderer.setAttribute('flow', 'paginated')
     if (initialAppearance) appearance = { css: String(initialAppearance.css ?? ''), background: String(initialAppearance.background ?? '') }
     applyAppearance()
@@ -1199,6 +1283,12 @@ const isLocked = async book => {
         .some(algorithm => !FONT_OBFUSCATION.has(algorithm))
 }
 
+// What a book file says about itself is the book's: capped before it's sent,
+// so a crafted title or description can't stall the app's parse.
+const short = (value, limit) => typeof value === 'string' ? value.slice(0, limit) : value
+const shortNames = value => names(Array.isArray(value) ? value.slice(0, 50) : value)
+    .map(name => name.slice(0, 500))
+
 const inspect = async ({ url, name }) => {
     const response = await fetch(url)
     if (!response.ok) throw new Error(`Couldn't load the book (${response.status})`)
@@ -1209,13 +1299,13 @@ const inspect = async ({ url, name }) => {
         const metadata = book.metadata ?? {}
         const description = metadata.description
         return {
-            title: plainText(metadata.title)?.trim() || null,
-            subtitle: plainText(metadata.subtitle)?.trim() || null,
-            authors: names(metadata.author),
-            publisher: firstText(metadata.publisher),
-            language: firstText(metadata.language),
-            published: typeof metadata.published === 'string' ? metadata.published.trim() || null : null,
-            description: typeof description === 'string' ? description : plainText(description),
+            title: short(plainText(short(metadata.title, 4000))?.trim(), 1000) || null,
+            subtitle: short(plainText(short(metadata.subtitle, 4000))?.trim(), 1000) || null,
+            authors: shortNames(metadata.author),
+            publisher: short(firstText(metadata.publisher), 500),
+            language: short(firstText(metadata.language), 64),
+            published: typeof metadata.published === 'string' ? metadata.published.trim().slice(0, 64) || null : null,
+            description: short(typeof description === 'string' ? description : plainText(description), 100_000),
             sectionCount: book.sections?.length ?? 0,
             cover: await coverOf(book),
         }

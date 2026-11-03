@@ -79,6 +79,7 @@ The name never counts: a `.zip` that's an EPUB is an EPUB, an `.epub` that's tex
 - The control proves the vectors are live in iOS 27.1 WebKit inside the app: inline and typed scripts, a script from the book's own resources (KF8/MOBI), handlers (`img onerror`, `svg onload`, `onanimationstart`, `details ontoggle`, `video source onerror`, SVG `animate onbegin`), SVG `<script>`, `iframe srcdoc` and `javascript:` frames, `data:` documents in `iframe`/`object`/`embed`.
 - The FB2 cover in the bridge-alone row isn't a book document: it's foliate's reader-page code, covered by the reader CSP, and the app reads FB2 covers in Swift anyway.
 - Screenshot of the vectors section, shipping build: `formats-check/shipping-script-test-azw3.jpg`.
+- **Re-run after the independent review's fixes** (templates, links, the head check, `param`, the re-parse check), on `iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947) with the bridge layer alone (`-readerWithoutCSP 1`): all seven script-test books, **0 scripts**, and no beacon request but FB2's remote cover (as above). The new vectors (`formats-check/tools/`: `link-test.epub`, `template-test.epub`, run by `probe-modes.py`): with both layers off a declarative shadow root attached and its handler ran, and a click on an SVG link navigated the frame away; with the bridge layer alone, or both, neither. Positions with the layer off and on after these fixes (`app-walk.py`, the sample book, Moby-Dick, *The Time Machine* AZW3, Alice MOBI and FB2): **136/136 identical**.
 
 **The bridge layer doesn't move positions.** `app-walk.py` went to every section of 11 books (Alice and Frankenstein in EPUB, MOBI, AZW3 and FB2; *The Time Machine* in MOBI, AZW3, FB2) and turned two pages, once with the layer off and once on: **269/269 positions came back with the same CFI and first words** (`runs/walk/compare.txt`). A rendered section carried the layer's CSP `<meta>` in the "on" run, so it really ran.
 
@@ -102,7 +103,7 @@ Two pages in all 45 states (27 open, 18 half open, book mode); left pages end at
 
 ## Security review
 
-Reviewed adversarially in this step (by Claude, against the code; this fork couldn't start an independent reviewer, so one should look at `bridge.js`'s hardening and `BookInspector` before the merge), plus the coordinator's review of the import path. Findings, all fixed unless marked:
+Reviewed adversarially in this step (by Claude, against the code), then by an independent reviewer of commit 48ca1ab (read-only, 2026-11-02), plus the coordinator's review of the import path. Findings, all fixed unless marked:
 
 | | Finding | Outcome |
 |---|---|---|
@@ -112,8 +113,15 @@ Reviewed adversarially in this step (by Claude, against the code; this fork coul
 | Low (coordinator) | After the inspector's timeout, a pending call into the page kept it, and its web process, alive | The page answers by message, started by a user script; nothing waits on it, and it's freed at once (measured: gone 0 s after the drop) |
 | Low (coordinator) | A description of 10⁵–10⁶ paragraphs is quadratic in `PlainText`, on the main actor, past the timeout | Cut to 20,000 characters first (`descriptionLimit`); the coordinator fixes `PlainText` itself |
 | Low, open | A web process stuck in a script outlives its page: after the drop it kept 95–100% CPU for 45 s (until the test ended), and navigating the page away first or giving it its own data store didn't end it either (measured on the simulator, host `ps`). No public API kills it | No book is known to do this to foliate. Stays until the app quits |
-| Low, open | `BookFileCheck` isn't on the server-download path | See Left open |
+| Low | `BookFileCheck` wasn't on the server-download path | Fixed by the coordinator: `BookOpener` checks a file as it lands, deletes a DRM-protected one, and the book's screen says "Protected with DRM, which Octavo can’t open." with Download greyed out |
+| Medium (automated review, after the commit) | A `<template>`'s content isn't reached by the sanitizer's walk, and in an HTML section the iframe's parser turns `<template shadowrootmode>` into a live shadow root (declarative shadow DOM) that DOMParser never made, so a handler inside arrived unchecked (the reader CSP still blocked it) | Fixed by the coordinator: every template's content is sanitized, recursively, and its `shadowroot*` attributes removed. Measured on the simulator with a test EPUB (an HTML section, `<template shadowrootmode="open"><img onerror>`): both layers off, the shadow root attached and the handler ran; the bridge layer alone, no shadow root, no handler, nothing ran. A literal `<parsererror>` element only re-reads the section as HTML, which is hardened too |
 | Info | An XHTML section without `<head>` gets no section CSP (adding a head would move every CFI) | The sanitizer and the reader CSP still apply |
+| Medium (independent review) | Links foliate doesn't intercept (it catches clicks on HTML `a[href]` only): an SVG `<a xlink:href>`, an image map's `<area href>`, MathML `href`, a form's `action`. Clicked, the frame navigates itself to a `data:` page, or (EPUB) to another section as foliate built it, never hardened (the reader CSP's `frame-src` still blocks a `data:` frame) | Fixed by the coordinator: the sanitizer drops those targets unless they're fragments (and every `formaction`), and a capture-phase click handler cancels clicks on such links; both are part of the `harden` layer. Measured on the simulator (`formats-check/tools/`, `link-test.epub`): both layers off, clicking the SVG link navigated the frame away; the bridge layer alone or both, every target gone and the frame stayed |
+| Low (independent review) | The section CSP `<meta>` went into the first element named `head` anywhere (another namespace, the body), where WebKit ignores it and a CFI could move; markup before `<head>` loaded before it | Only a first-child XHTML `<head>` gets it; otherwise the section keeps the sanitizer and the reader CSP |
+| Low (independent review) | `<object>` can take its URL from `<param value>` | `param` values are removed (`object-src 'none'` in both CSPs too) |
+| Low (independent review) | The inspector's answer had no size cap before Swift parsed it on the main actor | Capped in the page: titles 1,000 characters, 50 authors of 500, description 100,000 before Swift cuts it to 20,000 |
+| — (independent review, wider fix) | Any other serializer/parser disagreement | Each hardened section is written out, read back and checked again; anything live (a script without the blocked type, a handler, a `javascript:` URL, a shadow-root template) and the section is refused |
+| Info (independent review) | The bridge's "main frame only" message check isn't independent of the CSP: a script already running in a same-origin book frame could call the parent's handlers | Not counted as a layer of its own; it matters only once a script runs |
 | Info | The DEBUG switches (`-readerWithoutCSP`, `-readerWithoutHarden`) are compiled out of Release; the bridge's `harden: false` option exists in Release but only Swift passes `open`'s options | Kept |
 | Info | The inspector page's only channel is `octavoInspect`: main frame, `octavo://app` only, JSON parsed with type checks; it has no `octavo` handler | Kept |
 | Info | `FB2Cover`: external entities off, base64 capped at 16 MB; `BookFileCheck`: every read bounded, the central directory at 8 MB | Kept |
@@ -121,7 +129,6 @@ Reviewed adversarially in this step (by Claude, against the code; this fork coul
 
 ## Left open
 
-- **Server downloads aren't checked yet.** `BookFileCheck` refuses DRM and unsupported files, but only the import path calls it so far; a DRM-protected Kindle file downloaded from a server would still open as scrambled text. The download path (`BookOpener`) should run the same check when a file lands.
 - `.fbz` covers (above). FB2 percentages stay approximate, and the same as BookOrbit's (Adam, 2026-11-01).
 - CBZ: `BookFileCheck` and the inspector recognise it (foliate reads it), but v1 doesn't offer comics; whether an import accepts a `.cbz` is the import's call.
 - A file that makes foliate spin forever (none seen) keeps a web process busy after the 30 s timeout gives up on it, until the app quits (Security review). Local files the user picked only.
