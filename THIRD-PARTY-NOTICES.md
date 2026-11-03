@@ -107,3 +107,10 @@ SOFTWARE.
 - Location: the "8vo" in the app icon (`Octavo/AppIcon.icon`) and in `docs/design/logo/glyph-8vo.svg`, drawn as outlines. No font file is bundled.
 - License: SIL Open Font License 1.1 (https://openfontlicense.org). Copyright 2017 The EB Garamond Project Authors.
 - The OFL allows using the font in artwork such as logos. This entry is a credit, not a requirement of the license.
+
+## Pride and Prejudice (the sample book), Standard Ebooks
+
+- Source: https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice, the compatible EPUB (`jane-austen_pride-and-prejudice.epub`, SHA-256 `85814417c1a74d2ca7f3b077b47454d0cfc728392d40d846d1c97d44f24c5279`, downloaded 2026-11-02), and its cover image
+- Location: `Octavo/SampleBook/`
+- License: the text and artwork are in the United States public domain; Standard Ebooks' contributors dedicate their work (markup, cover, titlepage, colophon and the rest) to the worldwide public domain under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/).
+- Produced for Standard Ebooks by Alex Cabal and Alina Pyzowski, from a Project Gutenberg transcription and HathiTrust scans; the cover is adapted from *A Wet Sunday Morning* (1896) by Edmund Blair Leighton. CC0 asks for nothing; this entry is a credit.

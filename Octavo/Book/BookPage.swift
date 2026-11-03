@@ -196,4 +196,10 @@ final class BookPages {
         pages = [:]
         recent = []
     }
+
+    /// A book that's gone (an imported book removed).
+    func remove(_ id: LibraryBookID) {
+        pages[id] = nil
+        recent.removeAll { $0 == id }
+    }
 }

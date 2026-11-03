@@ -77,9 +77,8 @@ struct SpreadGrid<Item: Identifiable, Cell: View>: View {
         LazyVStack(alignment: .leading, spacing: 16) {
             ForEach(rows.indices, id: \.self) { row in
                 SpreadRow { page, _ in
-                    let start = counts.prefix(page).reduce(0, +)
                     HStack(alignment: .top, spacing: SpreadMetrics.spacing) {
-                        ForEach(rows[row].dropFirst(start).prefix(counts[page])) { item in
+                        ForEach(Self.items(in: rows, row: row, page: page, counts: counts)) { item in
                             cell(item)
                                 .frame(width: cellWidth)
                         }
@@ -95,6 +94,16 @@ struct SpreadGrid<Item: Identifiable, Cell: View>: View {
 
     private static func columns(_ page: CGFloat) -> Int {
         SpreadMetrics.columns(page)
+    }
+
+    /// The items of `row` on `page`. Across a fold the row's pages can be
+    /// laid out for the new spread before this grid is (a grid that goes
+    /// from two rows folded to one unfolded asked for row 1 of 1, or page 1
+    /// of one page, and trapped), so an index that's gone is no items.
+    static func items(in rows: [[Item]], row: Int, page: Int, counts: [Int]) -> [Item] {
+        guard rows.indices.contains(row), counts.indices.contains(page) else { return [] }
+        let start = counts.prefix(page).reduce(0, +)
+        return Array(rows[row].dropFirst(start).prefix(counts[page]))
     }
 
     private static func cellWidth(page: CGFloat, columns: Int) -> CGFloat {

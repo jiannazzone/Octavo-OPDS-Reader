@@ -15,6 +15,9 @@ struct ScreenStack<Root: View>: View {
     let title: String
     /// Setup has no Settings to open.
     var showsSettings = true
+    /// The Library's top screen has a + for Import from Files, above
+    /// Settings (Adam, 2026-11-02).
+    var importsBooks = false
     @ViewBuilder let root: () -> Root
     @Environment(ShellModel.self) private var shell
     /// `nil` until the stack has been laid out once.
@@ -72,8 +75,11 @@ struct ScreenStack<Root: View>: View {
             }
             .environment(\.spread, spread)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
                     if path.routes.isEmpty {
+                        if importsBooks {
+                            Button("Import from Files", systemImage: "plus") { shell.showFilePicker() }
+                        }
                         if showsSettings {
                             Button("Settings", systemImage: "gearshape") { shell.openSettings() }
                         }

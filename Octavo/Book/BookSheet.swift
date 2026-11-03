@@ -29,10 +29,10 @@ struct BookSheet: View {
                     .padding(.horizontal, 16)
                 // Only as tall as the details, up to the top of the screen.
                 ViewThatFits(in: .vertical) {
-                    BookDetails(page: page, source: source)
+                    BookDetails(page: page, source: source, sourceID: sourceID)
                         .padding(16)
                     ScrollView {
-                        BookDetails(page: page, source: source)
+                        BookDetails(page: page, source: source, sourceID: sourceID)
                             .padding(16)
                     }
                 }
@@ -147,6 +147,7 @@ struct BookSummary: View {
         switch BookOpenButton.state(of: page.current, in: shell) {
         case .failed(offline: true): return "Needs a connection to download."
         case .failed(offline: false): return "Couldn’t download. Check your connection."
+        case .protected: return "Protected with DRM, which Octavo can’t open."
         default: break
         }
         if page.finishedFailed { return "Couldn’t mark it finished. Check your connection." }
@@ -219,6 +220,8 @@ struct BookOpenButton: View {
         case open, download
         case downloading(fraction: Double)
         case failed(offline: Bool)
+        /// Downloaded, and refused for its DRM.
+        case protected
     }
 
     /// The opener's state, or the debug stand-in (`-shellCoverStrip`).
@@ -234,6 +237,7 @@ struct BookOpenButton: View {
         case .notDownloaded: .download
         case .downloading(let fraction, _): .downloading(fraction: fraction)
         case .failed(let offline, _): .failed(offline: offline)
+        case .protected: .protected
         }
     }
 
@@ -280,6 +284,14 @@ struct BookOpenButton: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
+        case .protected:
+            // Greyed out, as for a format the reader can't open.
+            Button {} label: {
+                Label("Download", systemImage: "arrow.down")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .disabled(true)
         }
     }
 }
@@ -289,8 +301,10 @@ struct BookOpenButton: View {
 struct BookDetails: View {
     let page: BookPage
     let source: any LibrarySource
+    let sourceID: LibrarySourceID
     @Environment(ShellModel.self) private var shell
     @State private var confirmsRemoval = false
+    @State private var removingImported: SourcedBook?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -323,7 +337,16 @@ struct BookDetails: View {
                 Divider()
                 row("Added", page.addedLine)
             }
-            if shell.opener.status(of: page.current) == .downloaded {
+            if sourceID == .files {
+                // The only copy: Remove from iPhone, always asked (Adam,
+                // 2026-11-02).
+                Button("Remove from iPhone", role: .destructive) {
+                    removingImported = SourcedBook(source: sourceID, book: page.current)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+                .confirmRemovingImported($removingImported)
+            } else if shell.opener.status(of: page.current) == .downloaded {
                 removeDownload
             }
         }

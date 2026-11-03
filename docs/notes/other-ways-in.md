@@ -1,0 +1,83 @@
+# Other ways in (step 15)
+
+Step 15 of `docs/PLAN.md`, built 2026-11-02: Import from Files, Open in Octavo, the bundled sample book and the On iPhone list. The design was decided with Adam from picture mockups, one question at a time (`docs/design/direction.md`, Other ways in). The MOBI/AZW3/FB2 check that decides which formats import is in `formats-check.md`. Screenshots are in `other-ways-in/`.
+
+## What it looks like
+
+- **Add your books** has Import from Files as a third choice under BookOrbit and OPDS catalog ("EPUB, MOBI, AZW3 or FB2 files"), then **Read a sample book** with its cover ("Pride and Prejudice, Jane Austen"). The line under the title: "Octavo reads the books on your own server, or ones you import. Choose where your books are." Unfolded, the choices and the sample row are on the right page and Don't have one yet? on the left.
+- **Read a sample book** opens Pride and Prejudice straight in the reader. Leaving it (Back, or folding) comes back to the first screen: reading the sample isn't adding a book, so setup stays until a server is added or a file imported (decision 6).
+- **Import from Files** is the system's Files picker, several files at once. What came in lands on **On iPhone** over the Library (Back goes to the Library), newest first; with no server the Library is that grid itself. A file that couldn't come in is named in a warning note above the books, with why and OK. From the first screen, if nothing came in, the reason shows in red under the choices and setup stays.
+- **Open in Octavo**: Octavo is in the share sheet of Files, Mail, Safari and other apps for EPUB, MOBI, AZW3 and FB2 (the Files picker showed Octavo's icon on those files). The book lands on On iPhone the same way.
+- **On iPhone** is every book whose file is on this iPhone: the server's downloads, imported books, and the sample book once read. A downloaded book is the same book on its server shelf and in On iPhone (one file, one place, one sync), not a copy. It's the Library's last shelf, after the server's own sections, and while the server can't be reached it's what the Library shows under the banner (decision 22).
+- **No server yet, books imported:** the Library is the grid of the iPhone's books ("Library", "5 books"), ending with a quiet "Have a server?" card (Add a server, ✕ to dismiss for good). Settings' Server section shows Add a server, which opens the server choices over the spread, each step a screen with Back; Settings opens on Books on iPhone unfolded, as there's no server page. Home shows the books in progress; Search finds the imported books.
+- **The library's +** above Settings in the Library's column opens the Files picker, with or without a server.
+- **An imported book's screen** is like any other: Cover | Details unfolded, unfolding opens it, Not started or its place with nothing about syncing, Mark finished kept on the iPhone, From: Files, and **Remove from iPhone**, which always asks (it's the only copy): "Remove “Moby-Dick” from this iPhone?" / "It was imported from Files, so it can’t be downloaded again. Import it again and it opens where you left it." The sample book says "It came with Octavo, and can’t be added again once it’s removed." A swipe in Settings › Books on iPhone asks the same; a server download still goes at once.
+- **Remove all downloads** and **Remove server** leave imported books and the sample book alone. Remove all downloads only shows while there are server downloads.
+
+## How it works
+
+- **`ImportedBooks`** (`Octavo/Library/ImportedBooks.swift`): `Application Support/Imported/`, in the iPhone's backup (downloads aren't, because the server has them; imported books have nowhere else). `Books.json` keeps each book's `LibraryBookDetails`, newest first; the file is `<storageKey>.<format>` and the cover `<storageKey>.cover`, so the reader's place, bookmarks and finished mark are keyed exactly as a download's. Files on their way in wait in a folder of their own under `tmp/` (out of the backup), emptied at launch. A `Books.json` that's there but can't be read is never written over.
+- **IDs from the bytes.** An imported book's ID (and its file's) is `import-` plus the first 16 bytes of the file's SHA-256. The same file imported twice is one book, which moves first; removed and imported again, it opens where it was, with its bookmarks, since removing keeps the place.
+- **`BookImporter`** (`Octavo/Library/BookImporter.swift`): for each URL, off the main thread, with the picker's security scope and an `NSFileCoordinator` read (which waits for an iCloud Drive file to download): only a plain file of at most 1 GB (no links, folders or pipes); `BookFileCheck` sniffs it by its bytes (DRM-protected Kindle, PDF, KFX, comics and anything else are refused before a copy is made); then it's copied in under a UUID with its real extension (foliate tells FB2 from EPUB by name) and hashed. `BookInspector` reads its details through foliate under the reader's CSP (`formats-check.md`), the v1 format list is checked again on that copy, the text is cleaned (`ImportText`) and the cover re-encoded at most 1,600 pixels a side. The file's own name never reaches a path. v1 imports EPUB, MOBI, AZW3, FB2 and FBZ; CBZ is refused for now (comics are later in v1 scope).
+- **`ImportedBooksSource`**: the store as a `LibrarySource` (`LibrarySourceID.files`), so a book's screen, covers, search and the reader work as for a server, and `ProgressSync`/bookmark sync are `nil` for it. `LibraryModel.source(for: .files)` always answers, and `LibraryModel.importedBooks` (observed) changes with every import and removal.
+- **`StoredBookFiles`** finds imported files in the imported folder after its own, but `remove` and `removeAll(keeping:)` only ever touch downloads. Only `ShellModel.removeImported` deletes an imported book (file, cover, record, Books on iPhone and Continue reading entries, any screen showing it).
+- **Setup.** `ShellModel.needsSetup` is `server == nil && !library.hasAddedBooks` (the sample book doesn't count). Setup's steps go to the setup stack before there's anything, and to the current tab's stack when Add a server was opened from Settings (`setupTab`, used by `push(.setup)` and `SetupModel.push/pop`). `SetupStep.choose` is the server choices without Import or the sample. Adding the server clears every stack and opens Home, as before.
+- **The sample book** (`SampleBook`, `Octavo/SampleBook/`): bundled, CC0 (`THIRD-PARTY-NOTICES.md`). Read a sample book copies it into `ImportedBooks` with fixed details (its own description, publisher Standard Ebooks) and its bundled cover, records it under On iPhone and opens it. Its ID is fixed (`sample-pride-and-prejudice`). Folding the reader while setup shows goes back to setup instead of to a book's screen.
+- **File types** (`Config/Octavo-Info.plist`): `CFBundleDocumentTypes` (Viewer, Alternate) for EPUB (`org.idpf.epub-container`) and MOBI, AZW3, FB2 and FBZ, which nobody declares system-wide, so they're imported types under Octavo's identifiers (`com.ianazzone.ereader.mobi` and so on). `LSSupportsOpeningDocumentsInPlace` is false: iOS copies a shared file into `Documents/Inbox`, `ShellModel.openSharedFile` imports it and deletes the inbox copy (only ever inside the inbox). The picker's types come from `UTType(filenameExtension:)`, so they're whatever iOS calls those files even if another app declared them first.
+- **On iPhone** (`Octavo/Library/OnIPhoneViews.swift`, route `.onIPhone`): `ShellModel.onIPhoneBooks()` is `downloads()` (Books on iPhone's list) limited to books whose library can open them now, so a removed server's kept books wait for it, as before.
+- **Server downloads are checked too.** `BookOpener` runs `BookFileCheck` on a file as it lands; a DRM-protected one is deleted and its book's screen says "Protected with DRM, which Octavo can’t open." with Download greyed out, as for a format the reader can't open (`BookOpener.Status.protected`).
+- **A grid fix found on the way:** `SpreadGrid` trapped on a fold from one page to two when its rows went from two to one (On iPhone with five books): a row's pages were laid out for the new spread before the grid was, with the old row index. Out-of-range indices are now no items (`SpreadGrid.items`). The same could happen to any five- or six-book list.
+
+## Checked on the simulator
+
+`iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947), iOS 27.1, folded, unfolded and half open:
+
+- First screen folded and unfolded; Read a sample book → reader; folding → back to the first screen; the sample in `Imported/`.
+- Import from Files, six files at once from On My iPhone: an EPUB, a MOBI, an AZW3, an FB2 (with its cover, read natively), a DRM-flagged MOBI and a text file named `.epub`. Four came in, the banner named the other two ("“Kindred.mobi” is protected with DRM, which Octavo can’t open. “Notes.epub” isn’t a book Octavo reads."), and the Library was their grid with the + above Settings.
+- Unfolded Library with the Have a server? card; Home with the sample in progress; Settings with Add a server and Books on iPhone.
+- Add a server from Settings → BookOrbit sign-in (local test account) inside the Library tab → Home with the server's books; the Library's shelves with On iPhone last.
+- An imported book's screen (Cover | Details, From: Files, Remove from iPhone with its confirmation); removing it closed the screen, the shelf went from 5 to 4 and the file left `Imported/`.
+- Open in Octavo (`simctl openurl` with a file URL): the removed book came back, first in On iPhone.
+
+## The sample book's blank-page and fold checks
+
+The spike's Gutenberg Pride and Prejudice had a blank page after its dedication (`foliate-blank-page-upstream.md`), so the Standard Ebooks edition went through the real reader on the simulator (the debug remote; nothing on the Mac's screen).
+
+- **Every page, folded:** an in-page loop (`window.octavo.next()`, then the visible text, text boxes and images of each page) from the start to the last page of the Uncopyright: **920 pages, none blank.** The one page without text is the title page's own picture ("Pride and Prejudice" lettering, one image). Raw: `other-ways-in/walk-folded.json`.
+- **One empty page before the title page, reachable only by the scrubber.** Going to 0% (`goToFraction(0)`) shows an empty "0 of 547" page ahead of the title page, with foliate's location at -1; opening the book, and Back from the title page, never reach it. Moby-Dick and Alice at 0% show their first page. Left for the reader's owner (follow-ups).
+
+- **Folds** (`duo-spreads/tools/fold-run.py`, folded at 12%, 50% and 88% plus two pages, then open, half, open, half, open; raw `other-ways-in/folds.jsonl`): **the place held in all 15 open and half-open states**, the spread containing the folded page's start by CFI and by its first eight words. Folding back isn't in the run any more: folding while reading closes the book (step 10), so the reader's state stops there (the first runs timed out on every fold for that reason; `formats-check.md` drops the folds the same way).
+- **Text against the hinge, with Narrow margins** (this simulator's setting, where the text meets the hinge's edge by design, `reader-page.md`): at 12% the left page ends at 455.5 pt exactly; at 50% and 88% it ends at 455.8 and 456.2 pt and the right page starts at 496.4 and 496.8 pt, so 17 text boxes count as "on the fold" by up to 0.7 pt of the 40 pt strip. Moby-Dick at 88% shows the same drift on its right page (495.9 pt). It's sub-point and not the book's: a follow-up for the reader's layout, not for this step.
+- **Half open** (110°), the Library with On iPhone lays out as a spread clear of the hinge (`other-ways-in/12-library-half-open.jpg`).
+
+Re-running the walk: copy the book into the app's Documents, open it with the debug remote, then send `other-ways-in/walk.js` as a `js` command; the result lands in `Documents/spike-js.json` when the loop ends (a few minutes; the state file doesn't update meanwhile).
+
+```bash
+D=$(xcrun simctl get_app_container <udid> com.ianazzone.ereader data)/Documents
+cp Octavo/SampleBook/pride-and-prejudice.epub $D/se-pride-and-prejudice.epub
+SIM=<udid> docs/notes/duo-spreads/tools/app.sh '"cmd":"openLocal","name":"se-pride-and-prejudice.epub"'
+SIM=<udid> NOWAIT=1 docs/notes/duo-spreads/tools/app.sh "$(python3 -I -c 'import json,sys;print(json.dumps({"cmd":"js","script":open(sys.argv[1]).read()})[1:-1])' docs/notes/other-ways-in/walk.js)"
+```
+
+## Tests
+
+`OctavoTests/OtherWaysInTests.swift`: the importer (details and cover, the same file twice, a title from the file name, DRM, not a book, damaged, the failure wording), the store (removal, downloads never touching imported files), the shell (the sample book doesn't leave setup and folding returns to it; an import leaves setup for the Library; nothing imported stays on setup with the reason; with a server an import lands on On iPhone; removing the last imported book goes back to setup; Add a server stays in its tab; Remove all downloads and Remove server keep imported books and the sample; search without a server), the review's fixes (safe text, downsampled covers, links refused, the copy's format, an unreadable list kept, inbox paths with links resolved, old inbox copies cleared), and the grid's index guard. OctavoKit: `PlainText` on 50,000 paragraphs. App 322/322, OctavoKit 242/242. Every test library now gets its own temporary `ImportedBooks`, never the app's.
+
+## Security review
+
+An independent review of the import path (read-only, 2026-11-02) found nothing High. Fixed here:
+
+- **Medium, the inbox on a device.** iOS hands a shared file over as `/private/var/…/Documents/Inbox/…` (or `tmp/<bundle ID>-Inbox/`), which a prefix compare against `/var/…` never matched, so every shared copy (refused ones too) would have stayed in the backed-up container. Now the file's folder is compared with both inboxes with links resolved (`ShellModel.isInInbox`), and copies over an hour old are cleared at launch (`clearOldInboxFiles`; a newer one may be about to arrive through `onOpenURL`).
+- **Medium, cover pixel bombs.** A 1 MB PNG can claim 30,000 × 30,000 pixels and take gigabytes when drawn on the grid it lands on. Covers are decoded with ImageIO at no more than 1,600 pixels a side and stored as JPEG (`BookImporter.coverImage`); one that won't decode, or claims more than 30,000 a side, is dropped.
+- **Low:** book text is one line each (control and bidi characters dropped, so a title can't rewrite the removal question) and capped (`ImportText`); descriptions are capped at 20,000 characters and `PlainText.fromHTML` no longer copies everything at each break (it was quadratic); links, folders, pipes and files over 1 GB are refused before anything is read; the v1 format list is checked on the inspected copy too, so a file swapped mid-import can't land as a comic; an unreadable `Books.json` is never overwritten by a list of one; files on their way in wait under `tmp/`, out of the backup; an import overlapping another adds to its banner instead of replacing it.
+- **For the inspector** (`formats-check.md`): a timed-out inspection must tear its web page down, and descriptions are capped before conversion.
+- Fine as it was: file names never reach a path, IDs can't collide (128 bits of SHA-256, a fixed sample ID, URL or numeric server IDs), removal paths come from hashes and an extension allow-list, `BookFileCheck` and `FB2Cover` read within bounds, and the Info.plist declarations (Viewer, Alternate, imported types).
+
+## Follow-ups
+
+- `NSFileCoordinator` waits without a time limit for a file in iCloud Drive that can't download (offline), so that import's spinner stays until it does.
+- The reader's text drifts up to 0.7 pt into the hinge strip late in a book with Narrow margins (above).
+- Going to 0% shows an empty page before the sample book's title page (above).
+- `.fb2.zip` can't be picked (its type is zip); Open in Octavo can't take it either. FBZ files can.
+- A removed server's kept books show their check on Home but aren't in On iPhone until that server is back (as step 14 decided for Storage).
+- Wording I wrote that Adam hasn't seen: the downloaded-DRM line on a book's screen ("Protected with DRM, which Octavo can’t open.", the import wording he approved, shortened), the Add a server screen's line ("Choose the kind of server you have. Its books join the ones on this iPhone."), the sample book's removal message, On iPhone's empty state ("No books on iPhone" / "Books you download or import show here." · Import from Files) and Storage's empty line ("Books you download or import show here.").

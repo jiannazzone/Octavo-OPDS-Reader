@@ -66,6 +66,11 @@ final class LibraryModel {
     @ObservationIgnored let recents: RecentBooks
     @ObservationIgnored let finished: FinishedBooks
     @ObservationIgnored let onIPhone: BooksOnIPhone
+    /// Books imported from Files, and the sample book once read.
+    @ObservationIgnored let imported: ImportedBooks
+    @ObservationIgnored let importedSource: ImportedBooksSource
+    /// What `imported` holds, newest first, so the shell sees an import.
+    private(set) var importedBooks: [SourcedBook] = []
     @ObservationIgnored private var feeds: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var previews: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var serverContinueReading: [SourcedBook] = []
@@ -73,15 +78,35 @@ final class LibraryModel {
     /// The book you're reading and the others in progress Home shows.
     static let continueReadingLimit = 8
 
-    init(recents: RecentBooks = RecentBooks(), finished: FinishedBooks = FinishedBooks(), onIPhone: BooksOnIPhone = BooksOnIPhone()) {
+    init(
+        recents: RecentBooks = RecentBooks(), finished: FinishedBooks = FinishedBooks(), onIPhone: BooksOnIPhone = BooksOnIPhone(),
+        imported: ImportedBooks = ImportedBooks()
+    ) {
         self.recents = recents
         self.finished = finished
         self.onIPhone = onIPhone
+        self.imported = imported
+        importedSource = ImportedBooksSource(store: imported)
+        imported.clearIncoming()
+        importedChanged()
     }
 
-    /// The library `id` names, if it's connected.
+    /// The library `id` names, if it's connected. Imported books' always is.
     func source(for id: LibrarySourceID) -> (any LibrarySource)? {
-        server?.id == id ? server?.source : nil
+        if id == .files { return importedSource }
+        return server?.id == id ? server?.source : nil
+    }
+
+    /// Something was imported (not just the sample book read): enough to
+    /// leave setup without a server (decision 6).
+    var hasAddedBooks: Bool {
+        importedBooks.contains { !$0.isSample }
+    }
+
+    /// `imported` changed: an import, a removal, the sample book read.
+    func importedChanged() {
+        importedBooks = imported.all().map { SourcedBook(source: .files, book: $0.book) }
+        mergeContinueReading()
     }
 
     /// Replaces the server and loads its chips and Home.
@@ -121,7 +146,8 @@ final class LibraryModel {
         feeds = [:]
         previews = [:]
         serverContinueReading = []
-        continueReading = []
+        // Imported books stay in progress.
+        mergeContinueReading()
         homeLoaded = false
         continueReadingFailed = false
         rootFailed = false
@@ -253,14 +279,14 @@ final class LibraryModel {
         try? onIPhone.record(book)
     }
 
-    /// The connected server's books this iPhone has asked for, newest first,
+    /// The connected server's books this iPhone has asked for, and the
+    /// imported ones, newest first,
     /// including ones opened before `onIPhone` kept a list. Whether each is
     /// still on the iPhone is the opener's to say.
     func iPhoneBooks() -> [SourcedBook] {
-        guard let server else { return [] }
         var seen = Set<SourcedBook.ID>()
         return (onIPhone.books() + recents.records().map(\.book))
-            .filter { $0.source == server.id && seen.insert($0.id).inserted }
+            .filter { ($0.source == server?.id || $0.source == .files) && seen.insert($0.id).inserted }
     }
 
     /// Lists Continue reading again, so its rows show the latest positions.

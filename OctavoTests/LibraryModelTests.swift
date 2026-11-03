@@ -72,7 +72,7 @@ private func temporaryRecents() -> RecentBooks {
 
 @MainActor
 private func connected(_ source: some LibrarySource, recents: RecentBooks = temporaryRecents()) async -> LibraryModel {
-    let library = LibraryModel(recents: recents)
+    let library = LibraryModel(recents: recents, imported: .temporary())
     await library.connect(LibraryServer(id: server, name: "Shelf", source: source))
     return library
 }
@@ -197,7 +197,7 @@ struct LibraryModelTests {
     @Test func rowsPreviewFromTheSmallPageSource() async throws {
         let full = PagedSource(pages: ["c": LibraryFeed(books: (0..<50).map { book("\($0)") })])
         let small = PagedSource(pages: ["c": LibraryFeed(books: (0..<3).map { book("\($0)") })])
-        let library = LibraryModel(recents: temporaryRecents())
+        let library = LibraryModel(recents: temporaryRecents(), imported: .temporary())
         await library.connect(LibraryServer(id: server, name: "Shelf", source: full, previewSource: small))
 
         let preview = try #require(library.preview(link("c"), from: server))

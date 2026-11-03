@@ -61,7 +61,7 @@ private struct Harness {
         library = LibraryModel(
             recents: RecentBooks(fileURL: temporaryFile("RecentBooks")),
             finished: FinishedBooks(fileURL: temporaryFile("FinishedBooks")),
-            onIPhone: BooksOnIPhone(fileURL: temporaryFile("BooksOnIPhone"))
+            onIPhone: BooksOnIPhone(fileURL: temporaryFile("BooksOnIPhone")), imported: .temporary()
         )
         defaults = UserDefaults(suiteName: "SearchModelTests-\(UUID().uuidString)")!
         search = SearchModel(library: library, isOnIPhone: { downloaded.contains($0.id.rawValue) }, defaults: defaults, pause: pause)
@@ -244,7 +244,7 @@ struct BooksOnIPhoneTests {
         try recents.record(SourcedBook(source: server, book: book("1", "Opened long ago")))
         let library = LibraryModel(
             recents: recents, finished: FinishedBooks(fileURL: temporaryFile("FinishedBooks")),
-            onIPhone: BooksOnIPhone(fileURL: temporaryFile("BooksOnIPhone"))
+            onIPhone: BooksOnIPhone(fileURL: temporaryFile("BooksOnIPhone")), imported: .temporary()
         )
         await library.connect(LibraryServer(id: server, name: "Shelf", source: SearchSource()))
         library.bookDownloading(SourcedBook(source: server, book: book("2", "Downloaded")))
