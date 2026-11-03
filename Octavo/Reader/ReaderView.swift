@@ -396,10 +396,10 @@ extension ReaderInsets {
 }
 
 /// The glass progress bar (decision 7, frames 08 and 09): the chapter, a
-/// scrubber through the whole book, and the page numbers. It runs along the
-/// bottom of the page, clear of the side column. Half open, it follows the
-/// spread: the chapter and scrubber on the left page, the numbers on the
-/// right, nothing on the hinge (decision 9).
+/// scrubber through the whole book, and the page numbers. Its edges line up
+/// with the text's, just above the home indicator (Adam, 2026-11-03). Half
+/// open, it follows the spread: the chapter and scrubber under the left
+/// page, the numbers under the right, nothing on the hinge (decision 9).
 private struct ReaderProgressBar: View {
     let model: ReaderModel
     /// Where the scrubber is while it's dragged, and after it's let go until
@@ -408,32 +408,27 @@ private struct ReaderProgressBar: View {
     @State private var relocationsAtRelease: Int?
 
     static let height = 60.0
-    static let inset = 12.0
 
     var body: some View {
         if let geometry = model.geometry {
-            let safe = geometry.safeArea
-            let width = Double(geometry.size.width)
-            let left = safe.left + Self.inset
-            let right = width - safe.right - Self.inset
-            // Over the home indicator like a tab bar, 12 pt from the edge (frame 08).
-            let top = Double(geometry.size.height) - Self.inset - Self.height
-            if model.isBookMode, let fold = model.layout.fold, fold.lowerBound - Self.inset > left, fold.upperBound + Self.inset < right {
+            let spans = model.layout.barSpans(in: geometry, bookMode: model.isBookMode)
+            let top = ReaderLayout.barBottom(in: geometry) - Self.height
+            if spans.count == 2 {
                 glass { scrubber }
-                    .frame(width: fold.lowerBound - Self.inset - left, height: Self.height)
-                    .offset(x: left, y: top)
+                    .frame(width: spans[0].upperBound - spans[0].lowerBound, height: Self.height)
+                    .offset(x: spans[0].lowerBound, y: top)
                 glass { numbers.frame(maxWidth: .infinity, alignment: .leading) }
-                    .frame(width: right - fold.upperBound - Self.inset, height: Self.height)
-                    .offset(x: fold.upperBound + Self.inset, y: top)
-            } else {
+                    .frame(width: spans[1].upperBound - spans[1].lowerBound, height: Self.height)
+                    .offset(x: spans[1].lowerBound, y: top)
+            } else if let span = spans.first {
                 glass {
                     VStack(alignment: .leading, spacing: 2) {
                         scrubber
                         numbers
                     }
                 }
-                .frame(width: max(0, right - left), height: Self.height)
-                .offset(x: left, y: top)
+                .frame(width: span.upperBound - span.lowerBound, height: Self.height)
+                .offset(x: span.lowerBound, y: top)
             }
         }
     }
