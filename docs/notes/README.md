@@ -20,5 +20,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `sync-in-app.md` (+ `sync-in-app/`) | step 13 | Position sync in the app: `BookPlaces` (one rule for every place line, the cover's pull reused by the reader), "Synced …" and "Not synced yet", Don't sync, debug switches, simulator checks in every posture, follow-ups |
 | `settings.md` (+ `settings/`) | step 14 | Settings: the list and its pages folded and unfolded, Sign out (ending the BookOrbit session too) and Remove server (what goes, what stays), Books on iPhone, Licences, simulator checks, follow-ups |
 | `reader-page.md` (+ `reader-page/`) | #17 | The real reader: the page edge to edge with the text kept out of the side column, margins and the hinge gutter, controls and taps, the per-page footer and the scrubber, sideways, the debug remote that replaced the spike's screens for the check tools |
+| `formats-check.md` (+ `formats-check/`) | step 15 | MOBI, AZW3 and FB2 ship: the bridge's second script-blocking layer, the restore guard and FB2 links, refusing DRM and unsupported files by their bytes, reading an imported file's details through a hidden page, each layer measured alone in the app, positions and folds |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

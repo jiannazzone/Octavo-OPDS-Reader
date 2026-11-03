@@ -1,0 +1,12 @@
+alice-in-wonderland.azw3: 19/19 identical (sections hardened: None)
+alice-in-wonderland.epub: 15/15 identical (sections hardened: None)
+alice-in-wonderland.fb2: 15/15 identical (sections hardened: None)
+alice-in-wonderland.mobi: 20/20 identical (sections hardened: None)
+frankenstein.azw3: 34/34 identical (sections hardened: None)
+frankenstein.epub: 32/32 identical (sections hardened: None)
+frankenstein.fb2: 32/32 identical (sections hardened: None)
+frankenstein.mobi: 35/35 identical (sections hardened: None)
+the-time-machine.azw3: 23/23 identical (sections hardened: None)
+the-time-machine.fb2: 20/20 identical (sections hardened: None)
+the-time-machine.mobi: 24/24 identical (sections hardened: None)
+total: 269/269 identical

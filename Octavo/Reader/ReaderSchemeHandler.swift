@@ -109,7 +109,13 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
                     let length = try handle.seekToEnd()
                     try handle.seek(toOffset: 0)
                     let mimeType = Self.mimeType(forPathExtension: file.pathExtension)
-                    let policy = file == bookFile ? Self.bookContentSecurityPolicy : Self.contentSecurityPolicy
+                    var policy: String? = file == bookFile ? Self.bookContentSecurityPolicy : Self.contentSecurityPolicy
+                    #if DEBUG
+                    // The formats check's controls: the reader without its
+                    // CSP, so the bridge's own layer is measured alone
+                    // (`docs/notes/formats-check.md`). The book keeps its own.
+                    if file != bookFile, UserDefaults.standard.bool(forKey: "readerWithoutCSP") { policy = nil }
+                    #endif
                     continuation.yield(.response(Self.response(url: url, status: 200, mimeType: mimeType, length: length, policy: policy)))
                     // Stream in chunks so a large book isn't held twice in memory.
                     while !Task.isCancelled, let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
@@ -127,18 +133,14 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
     /// `nosniff` makes WebKit refuse to run anything as a script or stylesheet
     /// unless its MIME type says it is one, so a book file crafted to also
     /// parse as JavaScript can't be executed.
-    private static func response(url: URL, status: Int, mimeType: String, length: UInt64, policy: String = contentSecurityPolicy) -> URLResponse {
-        HTTPURLResponse(
-            url: url,
-            statusCode: status,
-            httpVersion: "HTTP/1.1",
-            headerFields: [
-                "Content-Type": mimeType,
-                "Content-Length": String(length),
-                "Cache-Control": "no-store",
-                "Content-Security-Policy": policy,
-                "X-Content-Type-Options": "nosniff",
-            ]
-        )!
+    private static func response(url: URL, status: Int, mimeType: String, length: UInt64, policy: String? = contentSecurityPolicy) -> URLResponse {
+        var headers = [
+            "Content-Type": mimeType,
+            "Content-Length": String(length),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        ]
+        headers["Content-Security-Policy"] = policy
+        return HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!
     }
 }

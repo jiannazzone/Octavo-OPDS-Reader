@@ -12,7 +12,7 @@
 // visibleText/...`, called with `WebPage.callJavaScript`. Each returns a
 // promise that Swift awaits.
 
-import './foliate-js/view.js'
+import { makeBook } from './foliate-js/view.js'
 import * as CFI from './foliate-js/epubcfi.js'
 import { Overlayer } from './foliate-js/overlayer.js'
 import { searchMatcher } from './foliate-js/search.js'
@@ -759,6 +759,197 @@ const placeOnScreen = cfis => (Array.isArray(cfis) ? cfis : []).map(cfi => {
     }
 })
 
+// A second layer against book scripts, for every format (formats check,
+// step 15; `docs/notes/formats-check.md`). The reader's CSP is the first: it
+// blocks them on its own, and the section documents inherit it. This one
+// works on each section before foliate puts it in an iframe, so a lost or
+// weakened CSP still runs nothing. EPUB alone also has foliate's `load` hook
+// (in `open`); MOBI, KF8 and FB2 don't fire it.
+//
+// - Sanitize: every <script> (HTML or SVG) gets an inert type and loses its
+//   source; on* attributes and javascript:/vbscript: URLs go; frames,
+//   objects and embeds lose what they would load; SVG animations can't
+//   target a link or a handler; meta refresh, <base href> and XSLT
+//   stylesheets are disarmed. No node is added, removed or moved under
+//   <html>, so every CFI stays the same.
+// - A Content-Security-Policy <meta> first in <head>: no scripts, frames,
+//   objects or network at all. Only <head> changes, and CFIs go through
+//   <body>.
+const SCRIPT_TYPE_BLOCKED = 'application/x-octavo-blocked'
+const XLINK = 'http://www.w3.org/1999/xlink'
+const SECTION_POLICY = [
+    "default-src 'self' blob: data:",
+    "script-src 'none'",
+    "style-src 'self' 'unsafe-inline' blob: data:",
+    "img-src 'self' blob: data:",
+    "font-src 'self' blob: data:",
+    "media-src 'self' blob: data:",
+    "connect-src 'none'",
+    "object-src 'none'",
+    "frame-src 'none'",
+    "worker-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+].join('; ')
+const FRAMES = new Set(['iframe', 'frame', 'object', 'embed', 'applet', 'portal', 'fencedframe'])
+const FRAME_SOURCES = ['src', 'srcdoc', 'data', 'code', 'codebase', 'archive']
+const SVG_ANIMATIONS = new Set(['animate', 'set', 'animatemotion', 'animatetransform', 'discard'])
+// Control characters and spaces, which URL parsing strips anywhere in a
+// scheme (`java\tscript:`).
+const isScriptURL = value => /^(javascript|vbscript):/i.test(String(value).replace(/[\u0000- ]/g, ''))
+
+const sanitizeSection = doc => {
+    // <?xml-stylesheet?> outside the root: XSLT could build a new document.
+    for (const node of [...doc.childNodes])
+        if (node.nodeType === Node.PROCESSING_INSTRUCTION_NODE) node.remove()
+    // HTML only: DOMParser reads a <noscript>'s content with scripting off,
+    // as markup, but the iframe reads it with scripting on, as text up to
+    // the first `</noscript>`, which an attribute or a comment inside can
+    // carry (mutation XSS: what's checked here isn't what the iframe gets).
+    // With scripting on it shows nothing, so no position is ever inside it,
+    // and emptying it moves no CFI.
+    if (doc.contentType === 'text/html')
+        for (const el of [...doc.getElementsByTagName('noscript')]) el.replaceChildren()
+    for (const el of doc.getElementsByTagName('*')) {
+        const name = el.localName.toLowerCase()
+        for (const attr of [...el.attributes]) {
+            if (/^on/i.test(attr.localName) || isScriptURL(attr.value)) el.removeAttributeNode(attr)
+        }
+        if (name === 'script') {
+            el.setAttribute('type', SCRIPT_TYPE_BLOCKED)
+            el.removeAttribute('src')
+            el.removeAttribute('href')
+            el.removeAttributeNS(XLINK, 'href')
+        } else if (FRAMES.has(name)) {
+            for (const attr of FRAME_SOURCES) el.removeAttribute(attr)
+        } else if (SVG_ANIMATIONS.has(name)) {
+            // `<animate attributeName="href" values="…;javascript:…">`.
+            const target = el.getAttribute('attributeName') ?? ''
+            if (/(^|:)href$|^on/i.test(target)) el.removeAttribute('attributeName')
+        } else if (name === 'meta' && /refresh/i.test(el.getAttribute('http-equiv') ?? '')) {
+            el.removeAttribute('http-equiv')
+        } else if (name === 'base') {
+            el.removeAttribute('href')
+        }
+    }
+}
+
+const addSectionPolicy = doc => {
+    const head = doc.querySelector('head')
+    if (!head) return false
+    const meta = doc.createElementNS(head.namespaceURI, 'meta')
+    meta.setAttribute('http-equiv', 'Content-Security-Policy')
+    meta.setAttribute('content', SECTION_POLICY)
+    head.prepend(meta)
+    return true
+}
+
+// HTML is written back as HTML: an XML serialization escapes `>` in
+// <style>, which an HTML parser then reads as text.
+const serializeSection = (doc, type) => {
+    if (type !== 'text/html') return new XMLSerializer().serializeToString(doc)
+    const doctype = doc.doctype ? new XMLSerializer().serializeToString(doc.doctype) : ''
+    return doctype + doc.documentElement.outerHTML
+}
+
+const hardenSection = async (url, sectionIndex) => {
+    const blob = await (await fetch(url)).blob()
+    let type = blob.type || 'application/xhtml+xml'
+    const text = await blob.text()
+    let doc
+    try {
+        doc = new DOMParser().parseFromString(text, type)
+    } catch (e) {
+        // A type DOMParser can't read is no document foliate would render.
+        post('log', { level: 'warn', message: `Section ${sectionIndex}: not a document (${type})` })
+        return null
+    }
+    // Not well-formed XML. foliate's EPUB and KF8 loaders already switch such
+    // a section to HTML before it gets here, so this is a section they
+    // didn't. It's read as HTML too, the way foliate would, rather than
+    // left unsanitized: no section reaches an iframe without both layers.
+    if (doc.querySelector('parsererror') || !doc.documentElement) {
+        post('log', { level: 'warn', message: `Section ${sectionIndex}: not well-formed ${type}, read as HTML` })
+        type = 'text/html'
+        doc = new DOMParser().parseFromString(text, type)
+    }
+    sanitizeSection(doc)
+    addSectionPolicy(doc)
+    return URL.createObjectURL(new Blob([serializeSection(doc, type)], { type }))
+}
+
+// Wraps each section's `load` and `unload`. foliate's paginator loads a
+// section once on the way in and unloads it on the way out; EPUB's loader
+// revokes the section's resources then, so the hardened copy goes with it
+// and is made again from foliate's new one next time.
+const hardenBook = book => {
+    const release = ({ from, url }) => url.then(made => {
+        if (made && made !== from) URL.revokeObjectURL(made)
+    })
+    for (const [index, section] of (book.sections ?? []).entries()) {
+        if (typeof section.load !== 'function') continue
+        const load = section.load.bind(section)
+        const unload = section.unload?.bind(section)
+        // foliate's URL, the hardened one (a promise, so two loads at once
+        // share it) and how many loads it has had.
+        let made = null
+        section.load = async () => {
+            const from = await load()
+            if (typeof from !== 'string') return from
+            if (made?.from !== from) {
+                if (made) release(made)
+                made = { from, url: hardenSection(from, index).catch(() => null), refs: 0 }
+            }
+            made.refs++
+            const url = await made.url
+            if (url === null) throw new Error(`Section ${index} isn't a document`)
+            return url
+        }
+        section.unload = () => {
+            if (made && --made.refs <= 0) {
+                release(made)
+                made = null
+            }
+            unload?.()
+        }
+    }
+}
+
+// After going to a saved point, the page that comes back can end just
+// before it (KF8, formats spike: the point was the page's first line, and
+// page breaks moved by a line between saving and going back). The point is
+// then on the next page.
+const isCFI = target => typeof target === 'string' && target.startsWith('epubcfi(')
+const showPoint = async cfi => {
+    await settle()
+    const page = view.lastLocation?.cfi
+    if (!page) return
+    try {
+        if (CFI.compare(CFI.collapse(page, true), CFI.collapse(cfi)) < 0) {
+            await view.next()
+            await settle()
+        }
+    } catch {
+        // A CFI foliate can't compare: leave the page foliate chose.
+    }
+}
+const goToPoint = async target => {
+    const done = await view.goTo(target)
+    if (done && isCFI(target) && !view.isFixedLayout) await showPoint(target)
+    return done
+}
+
+// FB2 has no `isExternal`, so foliate hands every link to `link`, and a web
+// address becomes an internal jump that goes nowhere. Anything with a scheme
+// (not one of foliate's own blob: URLs) is reported like the other formats'
+// external links instead.
+const hasScheme = href => /^[a-z][a-z0-9+.-]*:/i.test(String(href).trim()) && !/^blob:/i.test(String(href).trim())
+const onLink = e => {
+    if (view?.book?.isExternal || !hasScheme(e.detail.href)) return
+    e.preventDefault()
+    post('externalLink', { href: e.detail.href })
+}
+
 // Try the CFI first, then the fraction, then the start of the book.
 // Fixed-layout books go by fraction first, like BookOrbit does.
 const restore = async (cfi, fraction) => {
@@ -769,13 +960,13 @@ const restore = async (cfi, fraction) => {
         return true
     }
     if (view.isFixedLayout && await byFraction()) return 'fraction'
-    if (cfi && await view.goTo(cfi)) return 'cfi'
+    if (cfi && await goToPoint(cfi)) return 'cfi'
     if (await byFraction()) return 'fraction'
     await view.init({ showTextStart: false })
     return 'start'
 }
 
-const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined, appearance: initialAppearance = undefined }) => {
+const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined, appearance: initialAppearance = undefined, harden = true }) => {
     if (view) {
         view.close()
         view.remove()
@@ -792,6 +983,7 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
         e.preventDefault()
         post('externalLink', { href: e.detail.href })
     })
+    view.addEventListener('link', onLink)
     document.body.append(view)
 
     const response = await fetch(url)
@@ -803,6 +995,9 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     view.book.transformTarget?.addEventListener('load', ({ detail }) => {
         if (detail.isScript) detail.allow = false
     })
+    // Before the first section loads. `harden: false` comes only from a
+    // DEBUG build's `-readerWithoutHarden` (the formats check's controls).
+    if (harden !== false) hardenBook(view.book)
     view.renderer.setAttribute('flow', 'paginated')
     if (initialAppearance) appearance = { css: String(initialAppearance.css ?? ''), background: String(initialAppearance.background ?? '') }
     applyAppearance()
@@ -961,6 +1156,74 @@ const showMatch = async cfi => {
     return true
 }
 
+// An imported file's details (Swift's `BookInspector`): what foliate reads
+// from it, in the same page and under the same CSP as the reader, without
+// laying anything out, so no section is ever rendered. foliate's shapes
+// differ by format (`docs/notes/formats-spike.md`, Metadata and covers):
+// strings, `{ lang: string }` maps, `{ name, sortAs }` people, arrays of
+// any of them.
+const COVER_LIMIT = 16 << 20
+const names = value => (Array.isArray(value) ? value : value ? [value] : [])
+    .map(person => typeof person === 'object' && person && 'name' in person ? plainText(person.name) : plainText(person))
+    .map(name => name?.trim())
+    .filter(Boolean)
+const firstText = value => Array.isArray(value) ? names(value)[0] ?? null : names([value])[0] ?? null
+const base64 = bytes => {
+    let text = ''
+    for (let i = 0; i < bytes.length; i += 0x2000) text += String.fromCharCode(...bytes.subarray(i, i + 0x2000))
+    return btoa(text)
+}
+const coverOf = async book => {
+    try {
+        const blob = await book.getCover?.()
+        if (!blob || !blob.size || blob.size > COVER_LIMIT) return null
+        return { data: base64(new Uint8Array(await blob.arrayBuffer())), type: blob.type || null }
+    } catch {
+        // FB2's cover is a data: URL foliate fetches, which the reader's CSP
+        // blocks; Swift reads that one from the file itself.
+        return null
+    }
+}
+// An EPUB whose encryption.xml lists anything but font obfuscation (which
+// foliate undoes) is locked by a store: Kobo's DRM, say, which leaves no
+// file of its own beside the book for `BookFileCheck` to see. foliate would
+// open it as scrambled text without an error.
+const FONT_OBFUSCATION = new Set(['http://www.idpf.org/2008/embedding', 'http://ns.adobe.com/pdf/enc#RC'])
+const XMLENC = 'http://www.w3.org/2001/04/xmlenc#'
+const isLocked = async book => {
+    if (!book.resources?.opf || typeof book.loadText !== 'function') return false
+    const text = await Promise.resolve(book.loadText('META-INF/encryption.xml')).catch(() => null)
+    if (!text) return false
+    const doc = new DOMParser().parseFromString(text, 'application/xml')
+    return Array.from(doc.getElementsByTagNameNS(XMLENC, 'EncryptionMethod'), el => el.getAttribute('Algorithm'))
+        .some(algorithm => !FONT_OBFUSCATION.has(algorithm))
+}
+
+const inspect = async ({ url, name }) => {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Couldn't load the book (${response.status})`)
+    const type = response.headers.get('Content-Type') ?? ''
+    const book = await makeBook(new File([await response.blob()], name, { type }))
+    try {
+        if (await isLocked(book)) return { drm: true }
+        const metadata = book.metadata ?? {}
+        const description = metadata.description
+        return {
+            title: plainText(metadata.title)?.trim() || null,
+            subtitle: plainText(metadata.subtitle)?.trim() || null,
+            authors: names(metadata.author),
+            publisher: firstText(metadata.publisher),
+            language: firstText(metadata.language),
+            published: typeof metadata.published === 'string' ? metadata.published.trim() || null : null,
+            description: typeof description === 'string' ? description : plainText(description),
+            sectionCount: book.sections?.length ?? 0,
+            cover: await coverOf(book),
+        }
+    } finally {
+        book.destroy?.()
+    }
+}
+
 // Swift awaits these; a rejection surfaces there as a thrown error, and is
 // also posted so it reaches the same error path as everything else.
 const reported = f => async (...args) => {
@@ -974,8 +1237,10 @@ const reported = f => async (...args) => {
 
 window.octavo = Object.freeze({
     open: reported(open),
+    inspect: reported(inspect),
     goTo: reported(async function goTo(cfi) {
-        return Boolean(await requireView().goTo(cfi))
+        requireView()
+        return Boolean(await goToPoint(cfi))
     }),
     goToFraction: reported(async function goToFraction(fraction) {
         await requireView().goToFraction(Math.max(0, Math.min(1, fraction)))

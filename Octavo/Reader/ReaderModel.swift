@@ -532,7 +532,7 @@ final class ReaderModel {
             let opening = await chooseOpeningPosition()
             openingPosition = opening
             let saved = opening.position
-            let options: [String: Any] = [
+            var options: [String: Any] = [
                 "url": ReaderSchemeHandler.bookURL(fileName: book.fileName).absoluteString,
                 "name": book.fileName,
                 "cfi": saved?.cfi ?? NSNull(),
@@ -540,6 +540,11 @@ final class ReaderModel {
                 "layout": layout.scriptArguments,
                 "appearance": appearance.scriptArguments,
             ]
+            #if DEBUG
+            // The formats check's controls: the bridge's second layer off
+            // (`docs/notes/formats-check.md`).
+            if UserDefaults.standard.bool(forKey: "readerWithoutHarden") { options["harden"] = false }
+            #endif
             sentLayout = layout
             sentAppearance = appearance
             do {
