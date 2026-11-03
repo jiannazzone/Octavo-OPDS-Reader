@@ -64,3 +64,7 @@ Turning a page cuts straight to the next one today (a swipe drags the page and s
 - To decide with mockups: a slide, a curl or a fade; whether book mode turns differently (each half of the spread turning its own way); speed; and Reduce Motion (a cross-fade or nothing).
 - foliate's paginator already has an `animated` attribute that slides a turn; a curl would be ours, over the web view.
 - Fits Phase 4 (first impressions) or after the panels (step 12).
+
+## An accent colour (Adam, 2026-11-03)
+
+Octavo has no accent colour of its own: no `AccentColor` asset and no tint set app-wide, so buttons, links, the scrubber and progress lines use iOS's default blue (rendered (0, 128, 245) on Paper and (41, 186, 255) on Night's glass). Pinned for later: whether Octavo gets its own.
