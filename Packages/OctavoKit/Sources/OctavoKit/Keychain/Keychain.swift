@@ -57,6 +57,29 @@ struct KeychainItem: Sendable {
         ]
     }
 
+    /// The accounts `service` has items for.
+    static func accounts(service: String) throws -> [String] {
+        let query: [CFString: Any] = [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: service,
+            kSecAttrSynchronizable: kSecAttrSynchronizableAny,
+            kSecUseDataProtectionKeychain: true,
+            kSecReturnAttributes: true,
+            kSecMatchLimit: kSecMatchLimitAll,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        switch status {
+        case errSecSuccess:
+            guard let items = result as? [[String: Any]] else { throw KeychainError(status: errSecDecode) }
+            return items.compactMap { $0[kSecAttrAccount as String] as? String }
+        case errSecItemNotFound:
+            return []
+        default:
+            throw KeychainError(status: status)
+        }
+    }
+
     /// Deletes every item of `service`, whatever its account.
     static func deleteAll(service: String) throws {
         let query: [CFString: Any] = [

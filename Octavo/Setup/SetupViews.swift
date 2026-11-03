@@ -490,7 +490,8 @@ private struct SetupChoice: View {
 }
 
 /// An address: the URL keyboard, no capitals or corrections, and "Not
-/// encrypted" under it for plain http (decision 25).
+/// encrypted" under it for plain http (decision 25), naming the risk on
+/// other networks (Adam, step 16).
 private struct AddressField: View {
     let prompt: String
     @Binding var address: String
@@ -505,7 +506,7 @@ private struct AddressField: View {
                 .submitLabel(.go)
                 .onSubmit(submit)
             if (try? ServerAddress.parse(address))?.isPlainHTTP == true {
-                Label("Not encrypted. Octavo uses http:// only at home or over a VPN.", systemImage: "lock.open")
+                Label("Not encrypted. On other networks, your password could be seen.", systemImage: "lock.open")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -637,7 +638,7 @@ struct SignInAgainScreen: View {
             return
         }
         error = nil
-        let host = URL(string: saved.address.replacingOccurrences(of: OPDSURLSecret.placeholder, with: "key"))?.host()
+        let host = URL(string: OPDSURLSecret.masked(saved.address))?.host()
         let password = password
         attempt.start { isCurrent in
             do {

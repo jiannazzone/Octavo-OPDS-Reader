@@ -65,15 +65,14 @@ struct DebugTrustSection: View {
             result = "Not an address."
             return
         }
-        let pin = try? pins.load()
-        let transport = ServerTransport(server: url, pin: pin)
+        let transport = ServerTransport(server: url, pins: pins)
         result = "Connecting…"
         do {
             let (data, response) = try await transport.data(for: URLRequest(url: url))
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             result = "HTTP \(status) · \(String(decoding: data.prefix(80), as: UTF8.self))"
         } catch {
-            if let question = TrustQuestion(error, trusted: pin) {
+            if let question = TrustQuestion(error, trusted: try? pins.load()) {
                 result = nil
                 self.question = question
             } else {

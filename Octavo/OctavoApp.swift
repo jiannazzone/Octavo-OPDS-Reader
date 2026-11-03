@@ -9,6 +9,9 @@ struct OctavoApp: App {
         // in UserDefaults can be read.
         if UIApplication.shared.isProtectedDataAvailable {
             try? ServerCredentials.removeLeftoversAfterInstall()
+            // Before the shell exists, so no setup has started storing yet.
+            try? KeychainSweep.run()
+            try? ServerStore().moveSecretsOut()
         }
     }
 

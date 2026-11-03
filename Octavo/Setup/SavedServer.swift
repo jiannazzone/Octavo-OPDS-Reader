@@ -13,7 +13,8 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
     var id: LibrarySourceID
     var kind: Kind
     /// BookOrbit: the server's root. OPDS: the catalog's address, any secret
-    /// it carries (Kavita's API key) written as `OPDSURLSecret.placeholder`.
+    /// it carries (Kavita's API key, a token in the query) written as a
+    /// placeholder (`OPDSURLSecret`).
     var address: String
     /// "BookOrbit", or the catalog's own name.
     var name: String
@@ -25,6 +26,11 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
     /// the iPhone keeps its own place and ignores the server's. Only counts
     /// while setup offers the choice (`offersSyncChoice`).
     var syncsProgress = false
+    /// Sign out was chosen, and nothing has signed in since. Saved before
+    /// the sign-in is deleted, so the launch sweep (`KeychainSweep`) deletes
+    /// it if the Keychain couldn't then. Optional, so a file saved before it
+    /// existed still reads.
+    var signedOut: Bool?
 
     /// Setup doesn't offer "Don't sync" for now (Adam, 2026-11-02): it skips
     /// the Reading progress step and every BookOrbit server syncs, whatever
@@ -47,7 +53,7 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
     /// "books.example.com", "nas.local:8083": the server, without the path
     /// (or a secret in it).
     var host: String {
-        let url = URL(string: address.replacingOccurrences(of: OPDSURLSecret.placeholder, with: "key"))
+        let url = URL(string: OPDSURLSecret.masked(address))
         return url.flatMap { url in url.host().map { host in url.port.map { "\(host):\($0)" } ?? host } } ?? address
     }
 
@@ -68,7 +74,7 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
             )
         case .opds:
             let secret = try? KeychainCatalogSecretStore(serverID: id.rawValue).load()
-            if address.contains(OPDSURLSecret.placeholder), secret == nil { return nil }
+            if OPDSURLSecret.isRedacted(address), secret == nil { return nil }
             guard let url = URL(string: secret?.restore(address) ?? address) else { return nil }
             let source = Self.opdsSource(id: id, url: url, scheme: authScheme, secret: secret)
             return LibraryServer(
@@ -80,22 +86,25 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
 
     static let deviceLabel = "Octavo"
 
+    /// The transports read the trusted certificate before their first
+    /// request; a Keychain that can't be read fails the request rather than
+    /// connecting without the pin (step 16).
     static func bookOrbitClient(id: LibrarySourceID, url: URL) -> BookOrbitClient {
-        let pin = try? KeychainCertificatePinStore(serverID: id.rawValue).load()
-        return BookOrbitClient(
+        BookOrbitClient(
             baseURL: url,
             tokenStore: KeychainBookOrbitTokenStore(serverID: id.rawValue),
             deviceLabel: deviceLabel,
-            transport: ServerTransport(server: url, pin: pin)
+            transport: ServerTransport(server: url, pins: KeychainCertificatePinStore(serverID: id.rawValue))
         )
     }
 
     static func opdsSource(id: LibrarySourceID, url: URL, scheme: HTTPAuthScheme?, secret: OPDSURLSecret?) -> OPDSSource {
-        let pin = try? KeychainCertificatePinStore(serverID: id.rawValue).load()
         let passwords = KeychainPasswordStore(serverID: id.rawValue)
         return OPDSSource(
             catalogURL: url,
-            transport: ServerTransport(server: url, pin: pin, passwords: passwords, authScheme: scheme),
+            transport: ServerTransport(
+                server: url, pins: KeychainCertificatePinStore(serverID: id.rawValue), passwords: passwords, authScheme: scheme
+            ),
             credentials: passwords,
             authScheme: scheme,
             secret: secret
@@ -114,8 +123,20 @@ nonisolated struct ServerStore: Sendable {
     }
 
     func load() -> SavedServer? {
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        return try? JSONDecoder().decode(SavedServer.self, from: data)
+        try? read()
+    }
+
+    /// The saved server, or `nil` if there's none. Throws if the file is
+    /// there but can't be read or decoded, which mustn't be taken for "no
+    /// server" (`KeychainSweep`).
+    func read() throws -> SavedServer? {
+        let data: Data
+        do {
+            data = try Data(contentsOf: fileURL)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        }
+        return try JSONDecoder().decode(SavedServer.self, from: data)
     }
 
     func save(_ server: SavedServer) throws {
@@ -135,6 +156,43 @@ nonisolated struct ServerStore: Sendable {
 /// trailing dot (`URL` writes an international name as `xn--`), and any
 /// `user:password@` moved out to the account fields. Whether the address
 /// may be used is `ServerTransport`'s to say, on every request.
+nonisolated extension ServerStore {
+    /// A server saved before step 16 recognised its address's secrets
+    /// (Stump's key, a token in the query, a query on a BookOrbit address)
+    /// has them moved out at launch: into the Keychain first, then the
+    /// address saved with placeholders, so a crash between the two leaves
+    /// the next launch to do it again.
+    func moveSecretsOut() throws {
+        guard var saved = try read() else { return }
+        switch saved.kind {
+        case .bookOrbit:
+            guard let url = URL(string: saved.address), url.query != nil else { return }
+            saved.address = url.withoutQuery.absoluteString
+        case .opds:
+            let store = KeychainCatalogSecretStore(serverID: saved.id.rawValue)
+            let kept = try store.load()
+            // A key that's gone already sends setup again; nothing to move.
+            if OPDSURLSecret.isRedacted(saved.address), kept == nil { return }
+            guard let url = URL(string: kept?.restore(saved.address) ?? saved.address),
+                  let found = OPDSURLSecret.detect(in: url) else { return }
+            let new = found.values.filter { !(kept?.values.contains($0) ?? false) }
+            guard !new.isEmpty, let merged = OPDSURLSecret(values: (kept?.values ?? []) + new) else { return }
+            try store.save(merged)
+            saved.address = merged.redact(url.absoluteString)
+        }
+        try save(saved)
+    }
+}
+
+nonisolated extension URL {
+    /// The same address with no query.
+    var withoutQuery: URL {
+        guard var components = URLComponents(url: self, resolvingAgainstBaseURL: true), components.query != nil else { return self }
+        components.query = nil
+        return components.url ?? self
+    }
+}
+
 nonisolated enum ServerAddress {
     struct Parsed: Equatable {
         var url: URL

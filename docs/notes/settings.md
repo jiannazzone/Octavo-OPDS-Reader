@@ -54,13 +54,13 @@ An independent review of the Sign out and Remove server path (tokens, Keychain, 
 | 1 | Medium | Kept books (the default) were taken for another BookOrbit server's books of the same file number: shown as downloaded, opened at the old place, the old server's unsent place and bookmarks sent to the new one | Fixed: `RemovedServer` (above). The full fix, a server in the storage key, waits for a second server |
 | 2 | Medium | Remove books too missed downloads still running, which then landed (and could open the reader over setup); a cancel just after the file landed left it | Fixed: `BookOpener.cancelAll`, the shell's pending opens cleared, a file that lands after a cancel is deleted |
 | 3 | Low | A refresh in flight during Sign out might leave the session alive on the server | Measured on v3.6.0: logout with the token a refresh just replaced still ends the session (the new refresh and access tokens get 401). No change |
-| 4 | Low | Keychain failures: `removeAll` stopped at the first failing item; an OPDS password delete failure kept it in memory; errors are swallowed | `removeAll` tries every item; OPDS sign-out clears memory even if the Keychain can't be. Errors still aren't shown: a launch sweep of Keychain items for servers that aren't saved (step 16) covers what's left |
+| 4 | Low | Keychain failures: `removeAll` stopped at the first failing item; an OPDS password delete failure kept it in memory; errors are swallowed | `removeAll` tries every item; OPDS sign-out clears memory even if the Keychain can't be. Errors still aren't shown: step 16's launch sweep deletes what's left (`KeychainSweep`, `docs/notes/network-trust.md`) |
 | 5 | Low | The logout could be suspended as the app leaves, and `timeoutInterval` doesn't bound the whole request | Fixed: it runs under an expiring activity with a 15 s deadline for the whole request |
 | 6 | Low | Records of the server's books without files stayed after Remove books too; places and bookmarks stay | Fixed for the records. Places and bookmarks stay for the same server's return and go when another server is added |
 | 7 | Info | Home could ask the old server's source for the new root's list after a switch | Fixed: checked again after the root loads |
 | 8 | Info | Test gaps | Added: sign-out during an OPDS password load, a different server after Remove, a running download. The shell's BookOrbit and OPDS branches run only against the stub source in app tests |
 | — | Medium (automated check) | The identity was the shown address (host and port) and account, so two BookOrbits behind one proxy, or two Kavita accounts, counted as one | Fixed: kind, full address and account; a catalog with a key never matches (a second automated check flagged a digest of the key written to `RemovedServer.json`, so nothing key-derived is kept). A server reinstalled at the same address with the same account still counts as the same |
-| 9 | Info | Kavita's API key, part of the catalog address, can't be revoked from the app; the page's signed-out state follows the banner, which Retry clears until the next failure | Open: whether to tell people the key stays valid on Kavita is Adam's call |
+| 9 | Info | Kavita's API key, part of the catalog address, can't be revoked from the app; the page's signed-out state follows the banner, which Retry clears until the next failure | Adam (step 16): no extra line in the Remove alert. The key is deleted from the iPhone; like a password it stays valid on the server |
 
 ## Tests
 
@@ -70,7 +70,7 @@ An independent review of the Sign out and Remove server path (tokens, Keychain, 
 
 ## Not done (follow-ups)
 
-- A Keychain error during Sign out or Remove server is swallowed, so a secret could stay until a reinstall; the launch sweep planned in step 16 would cover Remove server. A failed delete at Sign out signs the catalog (or BookOrbit, if the logout didn't arrive) back in at the next launch.
+- A Keychain error during Sign out or Remove server is still swallowed, but no longer lasts: step 16's launch sweep deletes a removed server's secrets, and Sign out notes `signedOut` in `Server.json` first, so the next launch deletes a sign-in the Keychain kept (`docs/notes/network-trust.md`, step 16).
 - The storage key is the file's ID alone (`StoredBookFiles`): a second server at once needs the server in it, with a migration of downloads, places and bookmarks.
 - Downloads made before `BooksOnIPhone` existed and since dropped from Continue reading aren't listed in Storage (nothing names them); Remove all downloads still deletes them. Only old development installs have them.
 - Step 15's bundled sample book must stay out of `serverDownloads` (today only imported books, `LibrarySourceID.files`, are excluded).

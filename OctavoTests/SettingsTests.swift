@@ -226,6 +226,35 @@ struct SignOutTests {
         #expect(model.library.server != nil)
     }
 
+    /// Step 16: Sign out is noted with the saved server before the
+    /// sign-in is deleted, so a Keychain that can't delete it now is
+    /// cleared at the next launch (`KeychainSweep`); signing in again
+    /// clears the note.
+    @Test func signingOutIsNotedUntilSignedInAgain() async throws {
+        let model = makeShell()
+        let id = SavedServer.newID()
+        defer { try? ServerCredentials.removeAll(serverID: id.rawValue) }
+        let catalog = try #require(URL(string: "http://nas.lan/opds"))
+        let passwords = KeychainPasswordStore(serverID: id.rawValue)
+        try await passwords.save(PasswordCredentials(username: "adam", password: "old"))
+        try model.servers.save(SavedServer(id: id, kind: .opds, address: catalog.absoluteString, name: "COPS", username: "adam", authScheme: .basic))
+        let source = OPDSSource(catalogURL: catalog, transport: OpenCatalog(), credentials: passwords, authScheme: .basic)
+        await model.library.connect(LibraryServer(id: id, name: "COPS", username: "adam", signsIn: true, source: source))
+
+        model.signOut()
+        #expect(model.servers.load()?.signedOut == true)
+        var waited = 0
+        while try await passwords.load() != nil, waited < 200 {
+            try await Task.sleep(for: .milliseconds(10))
+            waited += 1
+        }
+        #expect(try await passwords.load() == nil)
+
+        try await model.signInAgain(username: "adam", password: "new")
+        #expect(model.servers.load()?.signedOut == nil)
+        #expect(try await passwords.load()?.password == "new")
+    }
+
     @Test func aCatalogWithoutAPasswordHasNothingToSignOutOf() async {
         let model = makeShell()
         await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "COPS", source: StubLibrarySource()))
@@ -286,5 +315,19 @@ struct ThirdPartyNoticeTests {
 
     @Test func theAppBundlesThem() {
         #expect(ThirdPartyNotice.bundled().count == 5)
+    }
+}
+
+/// A catalog that answers every request with an empty feed.
+private struct OpenCatalog: HTTPTransport {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let feed = #"<feed xmlns="http://www.w3.org/2005/Atom"><title>COPS</title></feed>"#
+        let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil,
+                                       headerFields: ["Content-Type": "application/atom+xml;profile=opds-catalog"])!
+        return (Data(feed.utf8), response)
+    }
+
+    func download(for request: URLRequest, delegate: (any URLSessionTaskDelegate)?) async throws -> (URL, URLResponse) {
+        throw URLError(.unsupportedURL)
     }
 }

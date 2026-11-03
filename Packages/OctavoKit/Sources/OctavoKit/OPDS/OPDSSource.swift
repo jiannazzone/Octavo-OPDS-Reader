@@ -4,7 +4,8 @@ import Foundation
 ///
 /// Links, book and file IDs are the catalog's absolute URLs, so `feed`
 /// follows whatever the server links; a secret in them (Kavita's API key)
-/// is swapped for `OPDSURLSecret.placeholder` before they leave the source.
+/// is swapped for a placeholder (`OPDSURLSecret`) before they leave the
+/// source.
 /// The chips are the root feed's own entries, all of them, in the server's
 /// order (Adam, 2026-11-01). OPDS has no reading progress, so
 /// `continueReading` is `nil`; the reader's position stays on the iPhone.
@@ -151,12 +152,12 @@ public struct OPDSSource: LibrarySource {
     }
 
     /// A value this source handed out, back to a URL. Only absolute
-    /// http(s) URLs: anything else wasn't made here. The secret goes back in
+    /// http(s) URLs: anything else wasn't made here. The secrets go back in
     /// only for the catalog's own origin, so a link a catalog wrote with a
     /// literal placeholder can't carry it to another host.
     func resolve(_ raw: String) throws -> URL {
         var value = raw
-        if let secret, raw.contains(OPDSURLSecret.placeholder) {
+        if let secret, OPDSURLSecret.isRedacted(raw) {
             value = secret.restore(raw)
             guard let url = URL(string: value), OPDSClient.origin(of: url) == OPDSClient.origin(of: catalogURL) else {
                 throw LibraryError.invalidLink

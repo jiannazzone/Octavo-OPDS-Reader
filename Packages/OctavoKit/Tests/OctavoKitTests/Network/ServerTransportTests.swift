@@ -1,4 +1,6 @@
 import Foundation
+import Security
+import Synchronization
 @testable import OctavoKit
 import Testing
 
@@ -33,6 +35,31 @@ struct ServerTransportTests {
             try await transport.download(for: request, delegate: nil)
         }
         #expect(server.requests.count == 1)
+    }
+
+    /// Step 16: a saved server's pin is read before its first request. If
+    /// the Keychain can't be read, the request fails instead of going out
+    /// without the pin, and the next request reads it again.
+    @Test func failsClosedWhenThePinCantBeRead() async throws {
+        let server = homeServer { _ in .json("{}") }
+        let pins = FlakyPinStore(failures: 1, pin: nil)
+        let transport = ServerTransport(server: server.baseURL, pins: pins, policy: .testing(resolver), configuration: server.configuration)
+        let request = URLRequest(url: server.baseURL.appending(path: "opds"))
+
+        await #expect(throws: KeychainError(status: errSecInteractionNotAllowed)) {
+            try await transport.data(for: request)
+        }
+        await #expect(throws: KeychainError(status: errSecInteractionNotAllowed)) {
+            try await transport.download(for: request, delegate: nil)
+        }
+        #expect(server.requests.isEmpty)
+
+        pins.failures = 0
+        _ = try await transport.data(for: request)
+        _ = try await transport.data(for: request)
+        #expect(server.requests.count == 2)
+        // Read once it worked, then kept: a new pin needs a new transport.
+        #expect(pins.loads == 3)
     }
 
     /// Plain http whose real connection can't be checked (a stub protocol
@@ -148,10 +175,10 @@ struct ServerTransportTests {
     @Test func answersPasswordChallengesOnlyFromTheServer() async throws {
         func guardian(_ scheme: HTTPAuthScheme?) -> TaskGuard {
             TaskGuard(rules: TrustRules(
-                server: URL(string: "http://nas.lan:8083/opds")!, pin: nil,
+                server: URL(string: "http://nas.lan:8083/opds")!,
                 passwords: InMemoryPasswordStore(PasswordCredentials(username: "octavo", password: "secret")),
                 authScheme: scheme, policy: .testing(resolver)
-            ), inner: nil)
+            ), pin: nil, inner: nil)
         }
         let basicServer = guardian(.basic)
         let digestServer = guardian(.digest)
@@ -208,7 +235,7 @@ struct ServerTransportTests {
     @Test func internetServersReachTheirOwnHomeAddressOnly() async throws {
         resolver.set("rebind.example.net", ["192.168.1.1"])
         resolver.set("cdn.example.net", ["203.0.113.20"])
-        let rules = TrustRules(server: URL(string: "https://books.example.com/opds")!, pin: nil, passwords: nil,
+        let rules = TrustRules(server: URL(string: "https://books.example.com/opds")!, passwords: nil,
                                policy: .testing(resolver, verifiesConnections: true))
         try await rules.check(URL(string: "https://books.example.com/opds/new")!)
         try await rules.check(URL(string: "https://cdn.example.net/cover.jpg")!)
@@ -245,4 +272,32 @@ private final class NoSender: NSObject, URLAuthenticationChallengeSender {
     func use(_ credential: URLCredential, for challenge: URLAuthenticationChallenge) {}
     func continueWithoutCredential(for challenge: URLAuthenticationChallenge) {}
     func cancel(_ challenge: URLAuthenticationChallenge) {}
+}
+
+/// A pin store whose reads fail `failures` times, counting every read.
+private final class FlakyPinStore: CertificatePinStore {
+    private let state: Mutex<(failures: Int, loads: Int)>
+    private let pin: CertificatePin?
+
+    init(failures: Int, pin: CertificatePin?) {
+        state = Mutex((failures, 0))
+        self.pin = pin
+    }
+
+    var failures: Int {
+        get { state.withLock { $0.failures } }
+        set { state.withLock { $0.failures = newValue } }
+    }
+
+    var loads: Int { state.withLock { $0.loads } }
+
+    func load() throws -> CertificatePin? {
+        try state.withLock { state in
+            state.loads += 1
+            if state.failures > 0 { throw KeychainError(status: errSecInteractionNotAllowed) }
+            return pin
+        }
+    }
+
+    func save(_ pin: CertificatePin?) {}
 }

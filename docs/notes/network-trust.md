@@ -105,7 +105,7 @@ ATS stays on for the internet. `HomeNetworkPolicy` is the real check inside that
 - **Item settings:** `kSecClassGenericPassword`, one service per kind (BookOrbit tokens, server password, certificate pin), account = the server's ID (its `LibrarySourceID`). `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, not synchronizable.
 - **Consequence:** a new or restored iPhone signs in again. That's deliberate: refresh tokens rotate, so a restored copy would be stale anyway.
 - **Writes** are `SecItemUpdate`, falling back to `SecItemAdd` only on `errSecItemNotFound`, and retried on a duplicate. Nothing is ever deleted first.
-- **Sign out and Remove server:** `ServerCredentials.removeAll(serverID:)` clears all three kinds. `BookOrbitClient.signOut()` clears tokens.
+- **Sign out and Remove server:** `ServerCredentials.removeAll(serverID:)` clears all four kinds. `BookOrbitClient.signOut()` clears tokens. What a failed delete leaves goes at the next launch (step 16's sweep, below).
 - **Reinstall:** `ServerCredentials.removeLeftoversAfterInstall()` runs at launch when protected data is available. The marker is written only after the wipe succeeds.
 - **Token rotation:**
   - The refreshed credentials are saved before anything uses them.
@@ -192,6 +192,81 @@ The folded "changed" shot predates the red tint on the second button. Unfolding 
 - [x] Nothing logs or prints secrets (`PasswordCredentials` redacts; `BookOrbitCredentials` is never logged).
 - [x] Residual risks above are acceptable.
 
+## Step 16: security follow-up (2026-11-02)
+
+The leftovers from this review, step 14's and the setup review, all Low or Info. Built on branch `claude/security-follow-up-28ea8f`; measured on the simulator **iPhone Duo** (8C35AF6E-5F3F-48D7-A283-AEE894511947) and this Mac. **Network-trust changes: Adam signed off the review below on 2026-11-02** (through commit `2d955c7`).
+
+### 1. Is a server home by its name alone? (#9) No, measured
+
+`HomeNetworkPolicy.check` resolves every plain-http name before every request and redirect, and every address must be home; `verify` then checks where each request actually connected. The name rule only decides which names may *try* plain http (what ATS lets through). Measured with the real resolver, not reasoned:
+
+| Host | What it resolves to (this Mac, 2026-11-02) | ATS by shape | Result |
+|---|---|---|---|
+| `uz`, `tk`, `cm` (top-level domains with addresses of their own) | 91.212.89.8, 217.119.57.22, 195.24.205.60 | allowed (single label) | refused, `internetAddress`, before any connection |
+| `octavo-probe-public.local` (Bonjour answer from `dns-sd -P`, as a hostile device on the Wi-Fi could send) | 203.0.113.7 | allowed (`.local`) | refused; on the simulator in under 2 s, so no connection was tried (TEST-NET never answers) |
+| `octavo-probe-v6.local` | 2001:db8::7 | allowed | refused |
+| `octavo-probe-home.local` | 192.168.1.250 | allowed | allowed |
+| `MacBook-Pro.local` (this Mac) | 192.168.1.122, `fe80::…`, `fdb8:…`, global `2603:7001:f100:669:…` | allowed | allowed (the global IPv6 address is inside this network's /64), and BookOrbit at `:3300` loads through `ServerTransport` and its connection check |
+
+A search domain does the same to a single label (`nas` → `nas.example.com`); the Mac's own search domain is Tailscale's (`nas` → `nas.<tailnet>.ts.net` → 100.x, home only while the tunnel holds such an address). Tests: `HomeNetworkLiveTests` (Kit, `OCTAVO_LIVE_DNS=1`), `NetworkTrustLiveTests.namesAreJudgedByWhereTheyResolve` (app, `TEST_RUNNER_OCTAVO_LIVE_DNS=1` after `network-trust/mdns-probes.sh start`), `HomeNetworkPolicyTests.namesWithoutDotsStillHaveToResolveHome`.
+
+What *is* judged by the name alone, on purpose:
+- `ServerAddress.parse` adds `http://` to a scheme-less local name and `https://` otherwise: only the scheme; the transport still checks.
+- `TrustRules.serverIsLocal` (`isLocalAddress`): whether a server's pages may send the app to home addresses on other hosts (rule 5). An https server needs a certificate that passes: a local name can't get a public one, only a pin the person trusted, so it's their own server. (A `ts.net` name can have a real certificate, through `tailscale cert` or Funnel; it's still their server.)
+- The residual stays as it was: DNS answers that change between the check and the connection (rebinding) are caught only afterwards by `verify`, which can't unsend the request.
+
+### 2. The launch sweep (`Octavo/Setup/KeychainSweep.swift`)
+
+At launch, when protected data is available and right after the reinstall wipe, `KeychainSweep.run()` lists every account under the four Keychain services and deletes all of a server's items unless it's the saved server's (`ServerCredentials.removeAll(keeping:)`). That covers a Remove server whose Keychain delete failed and the secrets of a setup left before it finished (or whose `Server.json` save failed).
+- **Never on a guess:** `ServerStore.read()` tells "no file" (`nil`) from a file that can't be read or decoded (throws); a throw deletes nothing, and so does a Keychain that can't list its items. A file from before `signedOut` existed still decodes (the field is optional).
+- **Never a setup in progress:** it runs in `OctavoApp.init`, before the shell exists; setup stores its secrets under a new `server-<UUID>` per launch, so the only attempt IDs it can see are earlier processes' (abandoned).
+- **Sign out:** an account sweep can't tell a stale sign-in from a live one, so Sign out first writes `signedOut = true` to `Server.json`, then deletes. At launch the sweep deletes a signed-out server's tokens and password (`ServerCredentials.removeSignIn`), keeping its pin and catalog key. Sign in again clears the flag. If that save fails, the next launch signs out again: fail closed.
+- **Debug builds** keep accounts starting `debug-` (the local servers' fixed IDs, so launch arguments don't sign in on every launch). Release builds keep nothing but the saved server.
+
+### 3. A pin that can't be read fails closed
+
+`ServerTransport(server:pins:)` reads the pin from the server's `CertificatePinStore` before its first request, and keeps it once read. A read that throws fails that request with the `KeychainError` (the list shows its error and Retry reads again); it no longer turns into "no pin", which let iOS alone judge a self-signed server (and let an MDM or proxy root through). `SavedServer` and the debug trust section use it; `ServerTransport(server:pin:)` remains for a pin already in hand. A pin that no longer decodes (another build's format) now throws too, and stays in the Keychain, instead of being deleted as "no pin"; trusting the server again replaces it. A catalog key that can't be read still returns no server (`libraryServer() == nil`): closed, if not graceful.
+
+### 4. Secrets in a catalog's address
+
+What a typed address can carry, and where it goes now:
+
+| In the address | Who uses it | Kept |
+|---|---|---|
+| `user:password@` | Codex's docs, generic | Moved to the account fields at setup (step 8); the transport refuses it anyway |
+| `#fragment` | — | Dropped (step 8) |
+| `…/api/opds/<key>` | Kavita | Keychain, `{key}` in saved values (#8) |
+| `…/opds/<key>/v1.2/…` | Stump's router for readers without passwords | **Now** Keychain, `{key}` (a segment with a digit or `_`, as Stump's `stump_…_…` keys have, so `opds/discover/v1` isn't one) |
+| `?apikey=`, `?token=`, `?password=`, `;jsessionid=`, … (query items and path parameters whose name contains key, token, secret, pass, pw, auth, bearer, session, sig, jwt or otp, or is `sid` or `code`) | Bindery's `?apikey=`, servlet sessions, generic | **Now** Keychain, `{key2}` and on for more than one |
+| A query on a BookOrbit address | — | **Now** dropped: BookOrbit's address is its root |
+
+Komga takes its API key only in a header; Calibre-Web, COPS and calibre use Basic or Digest. `OPDSURLSecret` holds several values, each as written in the address, percent-encoding and all, so the saved address is restored exactly (`?token=abc%26def` decoded would become two query items). Links are redacted in that form, decoded and fully encoded, longest first so one secret inside another doesn't split it. The Keychain item stays a JSON string for one (step 8's format) and becomes an array for more. A server saved before this step has its address's secrets moved out at launch (`ServerStore.moveSecretsOut`: Keychain first, then `Server.json`). A value shorter than 8 characters can't be swapped out of the server's links safely and stays as typed, as does a secret in a form nobody has shown us. Logs: `os.Logger` interpolations are private unless marked public, and no marked one carries a URL with a secret; OPDS errors drop the failing URL; `NetworkTrustError` carries scheme, host and port only.
+
+### Independent security review (fresh subagent, given the code, 2026-11-02; signed off by Adam)
+
+Of commit `e7b1395`. **Nothing High or Medium.** It found no defect in item 1 (no policy change; `check` resolves every plain-http name), in the fail-closed transport itself (every production `ServerTransport` reads its pin first; a failed read isn't cached) or in the sweep beyond row 3, and no way to get a secret sent to another origin with placeholders.
+
+| # | Finding | Severity | Done |
+|---|---|---|---|
+| 1 | A secret was detected decoded but matched in the address only plain or fully encoded, so `?token=abc/def%3D%3D` (Python's, werkzeug's encoding) was saved as typed, and into `RemovedServer.json` | Low | Fixed: secrets are taken as written in the address; links are matched in that form, decoded and fully encoded (`keepsASecretAsItsWrittenInTheAddress`) |
+| 2 | Restore put back the decoded value: `abc%26def%3Dghi` came back as two query items, `%2B` as a space, `%23` as a fragment (same origin only) | Low | Fixed with 1: the written form is stored and restored, so the address comes back exactly |
+| 3 | A leftover item that wouldn't delete stopped the sweep before a signed-out server's sign-in went | Low | Fixed: both steps run, the first failure is thrown after |
+| 4 | A pin that no longer decodes was deleted and read as "no pin" (older helper) | Low | Fixed: it throws and stays (`anUndecodablePinFailsClosed`) |
+| 5 | Shapes not recognised (`?pw=`, `?bearer=`, `;jsessionid=`, Stump keys without a digit); no migration of servers saved earlier | Info | Added those; `moveSecretsOut` at launch. Values under 8 characters still stay as typed |
+| 6 | The live test's "refused in under 2 s" didn't prove nothing was sent for `uz`, a host that answers | Info | The test now counts the transport's tasks: none for the refused names, one for the Mac's own `.local` |
+
+### Checked by hand (iPhone Duo simulator, folded, local BookOrbit and COPS)
+- **Sweep keeps the saved server:** signed in to the saved BookOrbit (Sign in again, test account), relaunched: no banner, Home loads its books.
+- **Sign out survives a relaunch:** Sign out wrote `"signedOut":true` to `Server.json`; relaunched signed out; Sign in again removed the flag, and a relaunch stayed signed in.
+- **A query token stays out of saved data:** Remove server, then Add a server → OPDS catalog → `localhost:3320/feed?apikey=abcdefgh12345678` (the note below shows). Saved as `http://localhost:3320/feed?apikey={key}`; `abcdefgh12345678` appears in no file under Application Support or Preferences. After a relaunch COPS loads with the key from the Keychain. The app's data was then put back from a copy, so the next launch's sweep dropped COPS's key.
+
+![The note under an http address](network-trust/step16-not-encrypted.png) ![COPS after a relaunch](network-trust/step16-cops-key-after-relaunch.png)
+![Signed out after a relaunch](network-trust/step16-signed-out-after-relaunch.png) ![Signed in again, after a relaunch](network-trust/step16-signed-in-after-relaunch.png)
+
+### 5. Adam's wording (2026-11-02, from simulator mockups)
+- Remove server for a catalog with a key: **no extra line** (the key is deleted from the iPhone; like a password it stays valid on the server, which apps don't usually mention).
+- The note under an http address: **"Not encrypted. On other networks, your password could be seen."** (was "Octavo uses http:// only at home or over a VPN.").
+
 ## Tests and how to run them
 
 ```bash
@@ -203,6 +278,11 @@ OCTAVO_TRUST_HOST=localhost swift test --filter ServerTrustLiveTests
 # App (simulator): Keychain, ATS, live LAN (one BookOrbit sign-in)
 TEST_RUNNER_OCTAVO_LAN_BOOKORBIT=http://<Mac's Wi-Fi IP>:3300 TEST_RUNNER_OCTAVO_LAN_TRUST_HOST=<Mac's Wi-Fi IP> \
   xcodebuild test -project Octavo.xcodeproj -scheme Octavo -destination 'platform=iOS Simulator,name=Octavo Trust Duo,OS=27.1' -parallel-testing-enabled NO
+# Step 16: names judged by where they resolve (internet DNS and Bonjour)
+OCTAVO_LIVE_DNS=1 OCTAVO_LIVE_DNS_PORT=3300 swift test --filter HomeNetworkLiveTests
+docs/notes/network-trust/mdns-probes.sh start
+TEST_RUNNER_OCTAVO_LIVE_DNS=1 TEST_RUNNER_OCTAVO_LIVE_DNS_LOCAL_NAME=<LocalHostName>.local xcodebuild test … -parallel-testing-enabled NO
+docs/notes/network-trust/mdns-probes.sh stop
 ```
 
 ## Follow-ups
@@ -210,7 +290,7 @@ TEST_RUNNER_OCTAVO_LAN_BOOKORBIT=http://<Mac's Wi-Fi IP>:3300 TEST_RUNNER_OCTAVO
 - **#12, #16:**
   - Done in setup (step 8, `Octavo/Setup/`): the trust prompt as a setup step; typed addresses normalised (`ServerAddress`: a scheme added, http only for a home address; host lowercased without a trailing dot; IDNs as `xn--`; `user:pass@` moved to the account fields); the "Not encrypted" note under an http address; Kavita's key kept in the Keychain (`KeychainCatalogSecretStore`) and saved as `{key}`; secrets stored under a per-attempt ID, dropped when the address changes, so a certificate trusted for one server never applies to another.
   - Still to do (step 14): call `ServerCredentials.removeAll(serverID:)` on Remove server (setup's debug Disconnect does already).
-  - **Setup review (2026-11-02, read-only, nothing High).** Fixed on the branch: an address edited mid-try could take the earlier server's sign-in request and its auth scheme (each try is now replaced on any edit, and a replaced try's answer is dropped); `host@other` sent the typed BookOrbit password to `other` on the same tap (an account in the address now moves to the fields and nothing is sent until the next tap); Sign in again kept an unverified OPDS password when the check threw, and an unreadable old password became "none" (restored on every error; unreadable stops it); a home address typed with an account or trailing dot got https. Setup's tries also give up after 15 s (a name lookup has no time limit, and a port that doesn't answer waits a minute). Left for step 16: a Keychain read error at launch builds the server without its pin (fail closed); secrets from an abandoned setup stay until a reinstall; other in-address secrets are saved as typed; the "Not encrypted" note's wording.
+  - **Setup review (2026-11-02, read-only, nothing High).** Fixed on the branch: an address edited mid-try could take the earlier server's sign-in request and its auth scheme (each try is now replaced on any edit, and a replaced try's answer is dropped); `host@other` sent the typed BookOrbit password to `other` on the same tap (an account in the address now moves to the fields and nothing is sent until the next tap); Sign in again kept an unverified OPDS password when the check threw, and an unreadable old password became "none" (restored on every error; unreadable stops it); a home address typed with an account or trailing dot got https. Setup's tries also give up after 15 s (a name lookup has no time limit, and a port that doesn't answer waits a minute). Left for step 16, done there (above): a Keychain read error at launch builds the server without its pin (fail closed); secrets from an abandoned setup stay until a reinstall; other in-address secrets are saved as typed; the "Not encrypted" note's wording.
 - **#8:**
   - Wire `ServerTransport` and `KeychainPasswordStore`.
   - Keep Kavita's key out of saved URLs.

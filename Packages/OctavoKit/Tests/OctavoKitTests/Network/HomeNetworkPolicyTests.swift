@@ -188,6 +188,21 @@ struct HomeNetworkPolicyTests {
         #expect(await refusal("http://nat64.lan/") == .insecureAddress(host: "nat64.lan", reason: .internetAddress("64:ff9b::c0a8:105")))
     }
 
+    /// Step 16 (#9): a name without dots isn't home by its name alone. A
+    /// search domain (`nas` → `nas.example.com`) or a top-level domain with
+    /// an address of its own (`uz`, measured in `HomeNetworkLiveTests`) can
+    /// send it to the internet, and so can a hostile mDNS answer for a
+    /// `.local` name.
+    @Test func namesWithoutDotsStillHaveToResolveHome() async {
+        resolver.set("printer", ["203.0.113.30"])
+        resolver.set("uz", ["91.212.89.8"])
+        resolver.set("spoofed.local", ["203.0.113.7"])
+        #expect(await refusal("http://printer/") == .insecureAddress(host: "printer", reason: .internetAddress("203.0.113.30")))
+        #expect(await refusal("http://uz/") == .insecureAddress(host: "uz", reason: .internetAddress("91.212.89.8")))
+        #expect(await refusal("http://spoofed.local:3300/") == .insecureAddress(host: "spoofed.local", reason: .internetAddress("203.0.113.7")))
+        #expect(resolver.lookups == ["printer", "uz", "spoofed.local"])
+    }
+
     /// Away from home the same name's IPv6 address is no longer local.
     @Test func globalIPv6CountsOnlyOnItsOwnNetwork() async throws {
         let away = HomeNetworkPolicy.testing(resolver, networks: ["2001:db8:aaaa:1::1/64"])
