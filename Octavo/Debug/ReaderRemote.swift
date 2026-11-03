@@ -123,6 +123,9 @@ enum ReaderRemote {
         case "connectionReturned":
             shell.connection.connectionReturned()
             return nil
+        case "coverMotion":
+            guard let motion = shell.coverMotion else { return "no cover motion" }
+            return motion.debugState
         case "turnProbe":
             guard let reader else { return "no open reader" }
             return await TurnProbe.run(reader)

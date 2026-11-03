@@ -1,6 +1,8 @@
 import Foundation
 import Observation
 import OctavoKit
+import SwiftUI
+import UIKit
 
 /// The shell's state: the selected tab, each tab's screens and the shared
 /// states. It lives with the scene, which folding or unfolding moves between
@@ -527,8 +529,45 @@ final class ShellModel {
         if let source {
             library.bookOpened(SourcedBook(source: source, book: book.book))
         }
+        let motion = opensByUnfold ? nil : coverMotion(opening: book)
+        opensByUnfold = false
+        motion?.onFinished = { [weak self, weak motion] in
+            if self?.coverMotion === motion { self?.coverMotion = nil }
+        }
+        coverMotion = motion
         readingSource = source
         reading = book
+    }
+
+    // MARK: A book opening like a cover (decision 28)
+
+    /// The cover opening the book, drawn over the reader while it opens.
+    var coverMotion: ReaderCoverMotion?
+    /// The book is opening because the Duo unfolded on its screen: the fold
+    /// is the motion then (decision 10).
+    @ObservationIgnored private var opensByUnfold = false
+
+    /// From the book's own screen, its cover opens it; from anywhere else
+    /// the reader fades in as before.
+    private func coverMotion(opening book: OpenedBook) -> ReaderCoverMotion? {
+        guard reading == nil, case .cover(let shown)? = self[path: tab].top, shown.book.id == book.book.id,
+              let page = pages.existingPage(for: book.book.id), let frame = page.coverFrame,
+              let window = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows).first(where: \.isKeyWindow),
+              frame.width > 0, frame.height > 0,
+              let screen = window.snapshotView(afterScreenUpdates: false)
+        else { return nil }
+        let size = window.bounds.size
+        let appearance = UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance()
+        let darkMode = window.traitCollection.userInterfaceStyle == .dark
+        let thumbnail = library.covers.cachedImage(for: shown, size: .thumbnail)
+        return ReaderCoverMotion(
+            cover: page.cover ?? thumbnail, title: page.current.title, author: page.authorLine,
+            coverFrame: frame, windowSize: size, bookScreen: ReaderSnapshot(view: screen, frame: window.bounds),
+            // Cover | Details: the cover has half the screen or less.
+            spread: frame.width < size.width * 0.75,
+            reduceMotion: UIAccessibility.isReduceMotionEnabled,
+            paper: Color(hex: appearance.theme(darkMode: darkMode).background)
+        )
     }
 
     /// Sends the places that didn't reach the server (`BookPlaces.retryUnsent`):
@@ -594,6 +633,7 @@ final class ShellModel {
             guard reading == nil, case .cover(let book)? = self[path: tab].top,
                   opener.status(of: book.book) == .downloaded
             else { return }
+            opensByUnfold = true
             openBook(book)
         case .fold:
             guard let book = reading else { return }

@@ -219,6 +219,18 @@ extension ReaderModel {
 
     // MARK: Pictures
 
+    /// The pages as they are now, for a cover's motion (decision 28): each
+    /// half of a spread, or the one page.
+    func coverPages() -> ReaderCoverPages {
+        let paper = Color(hex: appearance.background)
+        guard let geometry else { return ReaderCoverPages(paper: paper) }
+        let size = geometry.size
+        let spine = layout.columns == 2 ? spine(in: geometry) : nil
+        let regions: ReaderTurn.Regions = spine == nil ? .whole : [.left, .right]
+        let taken = pictures(regions, size: size, spine: spine, afterScreenUpdates: true)
+        return ReaderCoverPages(left: taken?.left, right: taken?.right, whole: taken?.whole, spine: spine, paper: paper)
+    }
+
     /// The middle of foliate's gap between the pages: over the fold.
     private func spine(in geometry: ReaderGeometry) -> Double {
         let width = Double(geometry.size.width)

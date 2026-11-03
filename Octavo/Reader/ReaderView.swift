@@ -18,15 +18,34 @@ struct ReaderView: View {
     var listedPlace: SyncedPosition?
     /// Counts the times the connection came back (`ConnectionMonitor`).
     var connectionReturns = 0
+    /// The book has opened your place and it's drawn: pictures of its pages
+    /// for the cover's motion (`ReaderCoverMotion`), or `nil` if it couldn't
+    /// open.
+    var opened: (ReaderCoverPages?) -> Void = { _ in }
     let close: () -> Void
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
     @State private var model: ReaderModel?
+    @State private var reportedOpen = false
 
     var body: some View {
         ZStack {
             if let model {
                 ReaderScreen(model: model, connectionReturns: connectionReturns, close: close)
+                    // Once the book is open and its place has stopped moving
+                    // (a restore relocates a few times as it settles).
+                    .task(id: ReaderOpenedCheck(open: model.phase == .open, relocations: model.relocationCount)) {
+                        guard !reportedOpen, model.phase == .open, model.relocationCount > 0 else { return }
+                        try? await Task.sleep(for: .milliseconds(150))
+                        guard !Task.isCancelled, !reportedOpen else { return }
+                        reportedOpen = true
+                        opened(model.coverPages())
+                    }
+                    .onChange(of: model.phase) { _, phase in
+                        guard case .failed = phase, !reportedOpen else { return }
+                        reportedOpen = true
+                        opened(nil)
+                    }
             } else {
                 Color(.systemBackground)
                     .ignoresSafeArea()
@@ -47,6 +66,12 @@ struct ReaderView: View {
             Task { await model.close() }
         }
     }
+}
+
+/// What `ReaderView` watches to say the book has opened.
+private struct ReaderOpenedCheck: Equatable {
+    var open: Bool
+    var relocations: Int
 }
 
 /// The page, the column's buttons and the progress bar for one open book.
