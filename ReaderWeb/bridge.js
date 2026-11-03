@@ -9,7 +9,7 @@
 // `ReaderMessage.swift`; keep the two in step.
 //
 // Swift → JS: `window.octavo.open/goTo/goToFraction/next/prev/setLayout/
-// visibleText/...`, called with `WebPage.callJavaScript`. Each returns a
+// turn/visibleText/...`, called with `WebPage.callJavaScript`. Each returns a
 // promise that Swift awaits.
 
 import { makeBook } from './foliate-js/view.js'
@@ -114,6 +114,8 @@ let held = null
 // Counts relocations, so `settle` can tell when the paginator has stopped
 // moving.
 let relocations = 0
+// Called with each relocation's detail and message (`turn` waits on them).
+const relocationWatchers = new Set()
 
 const onRelocate = ({ detail }) => {
     relocations++
@@ -134,6 +136,7 @@ const onRelocate = ({ detail }) => {
             }
             : null,
     }
+    for (const watch of relocationWatchers) watch(detail, message)
     if (held) held.relocation = message
     else post('relocate', message)
 }
@@ -165,6 +168,23 @@ const detectTaps = (doc, onTap) => {
     })
 }
 
+// Page turns (decision 27). With any Page Turn but None, Swift draws each
+// turn from snapshots of the page: a tap, a key or the trackpad asks for one
+// with a `turn` message (a finger's swipe is Swift's own), and Swift then
+// turns the page under its snapshot with `turn` below. With None the page
+// turns itself, at once, and a swipe drags it as foliate's paginator does.
+let turnsAnimated = false
+
+// Sides are physical: `right` is the right-hand page going (foliate's
+// goRight), forward in a left-to-right book.
+const forwardSide = () => view?.book?.dir === 'rtl' ? 'left' : 'right'
+const backSide = () => forwardSide() === 'left' ? 'right' : 'left'
+const askTurn = side => {
+    if (!view) return
+    if (!turnsAnimated) return side === 'left' ? view.goLeft() : view.goRight()
+    post('turn', { side })
+}
+
 // Left and right turn pages the way the book reads (foliate's goLeft and
 // goRight), so in a right-to-left book the left half goes forward. The
 // middle is the middle of foliate's view: the spine of a spread, or the
@@ -173,8 +193,7 @@ const tap = x => {
     if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
     const box = view?.getBoundingClientRect()
     const middle = box ? box.left + box.width / 2 : innerWidth / 2
-    if (x < middle) view?.goLeft()
-    else view?.goRight()
+    askTurn(x < middle ? 'left' : 'right')
 }
 
 // A hardware keyboard turns pages (step 10): ← and → the way the book reads,
@@ -184,17 +203,17 @@ const tap = x => {
 // a selection, so it's left alone; while the controls cover the page a key
 // hides them, as a tap does.
 const KEY_TURNS = {
-    ArrowLeft: () => view?.goLeft(),
-    ArrowRight: () => view?.goRight(),
-    ArrowUp: () => view?.prev(),
-    PageUp: () => view?.prev(),
-    ArrowDown: () => view?.next(),
-    PageDown: () => view?.next(),
+    ArrowLeft: () => askTurn('left'),
+    ArrowRight: () => askTurn('right'),
+    ArrowUp: () => askTurn(backSide()),
+    PageUp: () => askTurn(backSide()),
+    ArrowDown: () => askTurn(forwardSide()),
+    PageDown: () => askTurn(forwardSide()),
 }
 const onKeyDown = e => {
     if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return
     if (e.shiftKey && e.key !== ' ') return
-    const turn = e.key === ' ' ? (e.shiftKey ? () => view?.prev() : () => view?.next()) : KEY_TURNS[e.key]
+    const turn = e.key === ' ' ? () => askTurn(e.shiftKey ? backSide() : forwardSide()) : KEY_TURNS[e.key]
     if (!turn) return
     e.preventDefault()
     if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
@@ -230,9 +249,36 @@ const onWheel = e => {
     if (Math.abs(distance) < WHEEL_DISTANCE) return
     wheel.turned = true
     if (tapMode.dismisses) return post('tap', { zone: 'dismiss' })
-    if (sideways) distance > 0 ? view?.goRight() : view?.goLeft()
-    else distance > 0 ? view?.next() : view?.prev()
+    if (sideways) askTurn(distance > 0 ? 'right' : 'left')
+    else askTurn(distance > 0 ? forwardSide() : backSide())
 }
+
+// A finger turning the page, while Swift draws the turns, is recognised in
+// UIKit (`ReaderSwipeRecognizer`): once a turn starts under the finger,
+// WebKit stops passing that touch to the page. Here foliate's own drag is
+// kept out of it: its listeners (on the document and the paginator) never
+// see a touch, and every move is prevented, as foliate does, so the page
+// never scrolls. Swift is told when text is selected, so a finger moving a
+// selection's handle doesn't turn the page.
+const muteTouch = e => {
+    if (!turnsAnimated) return
+    e.stopPropagation()
+    if (e.type === 'touchmove' && e.touches.length === 1) e.preventDefault()
+}
+// Capturing, on the section's document or the top window, so it runs
+// before foliate's listeners.
+const muteTouches = target => {
+    const options = { capture: true, passive: false }
+    for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) target.addEventListener(type, muteTouch, options)
+}
+let selecting = false
+const onSelectionChange = doc => () => {
+    const now = hasSelection(doc)
+    if (now === selecting) return
+    selecting = now
+    post('selection', { active: now })
+}
+const hasSelection = doc => !(doc?.getSelection?.()?.isCollapsed ?? true)
 
 const listenForTurns = doc => {
     doc.addEventListener('keydown', onKeyDown)
@@ -345,12 +391,15 @@ const onSectionLoad = ({ detail: { doc } }) => {
         if (frame) tap(frame.getBoundingClientRect().left + e.clientX)
     })
     listenForTurns(doc)
+    muteTouches(doc)
+    doc.addEventListener('selectionchange', onSelectionChange(doc))
 }
 
 // Taps outside the section's frame: the page's margins, and the side column
 // where the page runs under it.
 detectTaps(document, e => tap(e.clientX))
 listenForTurns(document)
+muteTouches(window)
 
 // Styles every book gets (step 11), as foliate's [before, after] pair.
 // Before the book's own, so a book that says otherwise wins: hyphenation in
@@ -487,6 +536,88 @@ const setLayout = async newLayout => {
     held = null
     if (pending) post('relocate', pending)
     return rendered
+}
+
+// Turns the page to `side` at once (foliate's paginator isn't `animated`),
+// under the snapshot Swift has laid over it, and resolves once the new page
+// is drawn: whether it moved (not at the book's start or end) and its
+// relocation, as JSON, for its footer. Across a section break that's the
+// new section's first relocation, not the blank page foliate scrolls to
+// while it loads the section.
+//
+// `hold` (a swipe, which may yet fall back) keeps the relocations back
+// until `endTurn`, so a turn that falls back is never saved or synced.
+//
+// One turn at a time: foliate ignores a turn while the last one finishes
+// (its paginator stays locked 100 ms after a turn), so each waits for the
+// one before.
+let turnQueue = Promise.resolve()
+let turnHeld = null
+const turn = (side, hold) => {
+    const ready = turnQueue.then(() => turnOnce(side, hold))
+    turnQueue = ready.then(result => result.done).catch(() => {})
+    const result = ready.then(({ moved, relocation }) => ({ moved, relocation }))
+    if (hold) turnHeld = { side, ready: result, held: null }
+    return result
+}
+const turnOnce = async (side, hold) => {
+    const v = requireView()
+    const r = v.renderer
+    const forward = (side === 'right') !== (v.book.dir === 'rtl')
+    if (forward ? r.atEnd : r.atStart) return { moved: false, relocation: null, done: Promise.resolve() }
+    // foliate goes to the next section from its last page, through the blank
+    // page after it (`#scrollNext`), and to the one before from its first.
+    const crossing = forward ? r.page + 1 >= r.pages - 1 : r.page - 1 <= 0
+    const section = v.lastLocation?.section?.current ?? null
+    if (hold) {
+        held = { relocation: held?.relocation ?? null }
+        if (turnHeld) turnHeld.held = held
+    }
+    let relocation = null
+    let watch
+    const relocated = new Promise(resolve => {
+        watch = (detail, message) => {
+            relocation = message
+            if (!crossing || (detail.section?.current ?? null) !== section) resolve(true)
+        }
+        relocationWatchers.add(watch)
+    })
+    const done = Promise.resolve(side === 'left' ? v.goLeft() : v.goRight())
+    const moved = await Promise.race([
+        relocated,
+        done.then(() => relocation !== null),
+        new Promise(resolve => setTimeout(() => resolve(relocation !== null), 2000)),
+    ])
+    // Two frames, so the new page has reached the screen. A new section's
+    // first relocation can still be measuring it, so the latest is sent.
+    if (moved) {
+        await nextFrame()
+        await nextFrame()
+    }
+    relocationWatchers.delete(watch)
+    return { moved, relocation: relocation ? JSON.stringify(relocation) : null, done }
+}
+
+// Ends a swipe's turn. `keep` posts the relocation `turn` held back;
+// otherwise the page turns back, still held, and as it's where it was,
+// nothing is posted. A fold's hold since (`hold`) keeps its own.
+const endTurn = async keep => {
+    const holding = turnHeld
+    turnHeld = null
+    if (!holding) return false
+    const { moved } = await holding.ready.catch(() => ({ moved: false }))
+    if (!keep && moved) {
+        await turnQueue
+        const back = holding.side === 'left' ? 'right' : 'left'
+        await (back === 'left' ? view?.goLeft() : view?.goRight())
+        await settle()
+    }
+    if (holding.held && held === holding.held) {
+        const pending = keep ? held.relocation : null
+        held = null
+        if (pending) post('relocate', pending)
+    }
+    return true
 }
 
 // Text boxes of the visible page in the top window's coordinates. Text only:
@@ -1061,6 +1192,8 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     view.addEventListener('create-overlay', onCreateOverlay)
     search = null
     shownMatch = null
+    selecting = false
+    turnHeld = null
     // foliate would `window.open` external links; hand them to Swift instead.
     view.addEventListener('external-link', e => {
         e.preventDefault()
@@ -1360,6 +1493,18 @@ window.octavo = Object.freeze({
     setTapMode: reported(async function setTapMode(mode) {
         tapMode = { dismisses: Boolean(mode?.dismisses) }
         return true
+    }),
+    // Whether Swift draws page turns (any Page Turn but None).
+    setTurnMode: reported(async function setTurnMode(mode) {
+        turnsAnimated = Boolean(mode?.animated)
+        return true
+    }),
+    // Resolves to `{ moved, relocation }` once the new page is drawn.
+    turn: reported(async function turn_(side, hold) {
+        return turn(side === 'left' ? 'left' : 'right', Boolean(hold))
+    }),
+    endTurn: reported(async function endTurn_(keep) {
+        return endTurn(Boolean(keep))
     }),
     layoutReport: reported(async function layoutReport_() {
         return layoutReport()

@@ -18,15 +18,40 @@ struct ReaderView: View {
     var listedPlace: SyncedPosition?
     /// Counts the times the connection came back (`ConnectionMonitor`).
     var connectionReturns = 0
+    /// The book has opened your place and it's drawn: pictures of its pages
+    /// for the cover's motion (`ReaderCoverMotion`), or `nil` if it couldn't
+    /// open.
+    var opened: (ReaderCoverPages?) -> Void = { _ in }
+    /// Back was tapped: pictures of the pages as they are, for the book to
+    /// close like a cover. `close` follows at once.
+    var closing: (ReaderCoverPages) -> Void = { _ in }
     let close: () -> Void
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
     @State private var model: ReaderModel?
+    @State private var reportedOpen = false
 
     var body: some View {
         ZStack {
             if let model {
-                ReaderScreen(model: model, connectionReturns: connectionReturns, close: close)
+                ReaderScreen(model: model, connectionReturns: connectionReturns) { [closing, close] in
+                    closing(model.coverPages())
+                    close()
+                }
+                    // Once the book is open and its place has stopped moving
+                    // (a restore relocates a few times as it settles).
+                    .task(id: ReaderOpenedCheck(open: model.phase == .open, relocations: model.relocationCount)) {
+                        guard !reportedOpen, model.phase == .open, model.relocationCount > 0 else { return }
+                        try? await Task.sleep(for: .milliseconds(150))
+                        guard !Task.isCancelled, !reportedOpen else { return }
+                        reportedOpen = true
+                        opened(model.coverPages())
+                    }
+                    .onChange(of: model.phase) { _, phase in
+                        guard case .failed = phase, !reportedOpen else { return }
+                        reportedOpen = true
+                        opened(nil)
+                    }
             } else {
                 Color(.systemBackground)
                     .ignoresSafeArea()
@@ -49,6 +74,12 @@ struct ReaderView: View {
     }
 }
 
+/// What `ReaderView` watches to say the book has opened.
+private struct ReaderOpenedCheck: Equatable {
+    var open: Bool
+    var relocations: Int
+}
+
 /// The page, the column's buttons and the progress bar for one open book.
 private struct ReaderScreen: View {
     let model: ReaderModel
@@ -57,6 +88,8 @@ private struct ReaderScreen: View {
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
     @AppStorage(ReaderAppearance.key) private var appearance = ReaderAppearance()
+    @AppStorage(ReaderPageTurn.key) private var pageTurn = ReaderPageTurn.standard
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.layoutDirection) private var layoutDirection
     /// The iPhone's own, read outside the reader's: the reader takes its
     /// theme's.
@@ -156,6 +189,12 @@ private struct ReaderScreen: View {
         }
         .onChange(of: margins, initial: true) { _, margins in
             model.margins = margins
+        }
+        .onChange(of: pageTurn, initial: true) { _, pageTurn in
+            model.pageTurn = pageTurn
+        }
+        .onChange(of: reduceMotion, initial: true) { _, reduceMotion in
+            model.reduceMotion = reduceMotion
         }
         .onChange(of: controls.coversPage || panel != nil, initial: true) { _, covers in
             model.coversPage = covers
@@ -535,19 +574,34 @@ private struct ReaderProgressBar: View {
 }
 
 /// The chapter and page in each page's bottom margin, outside the text
-/// (decision 7): one line per page, the chapter on the first and the numbers
-/// on the last, so a spread splits at the gutter. Under the fold's
-/// cross-fade; ignores touches.
+/// (decision 7). Under the fold's cross-fade; hidden while a page turns,
+/// whose pictures carry each page's own (`ReaderTurn`).
 struct ReaderFooter: View {
     let model: ReaderModel
 
     var body: some View {
-        if model.phase == .open, let geometry = model.geometry,
-           let columns = model.layout.textColumns(inReaderWidth: Double(geometry.size.width)),
+        if model.phase == .open, let geometry = model.geometry {
+            ReaderFooterLines(
+                place: ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.position?.fraction ?? 0),
+                layout: model.layout, geometry: geometry
+            )
+        }
+    }
+}
+
+/// Each page's footer line for `place`: one line per page, the chapter on
+/// the first and the numbers on the last, so a spread splits at the gutter.
+/// Ignores touches.
+struct ReaderFooterLines: View {
+    let place: ReaderPlace
+    let layout: ReaderLayout
+    let geometry: ReaderGeometry
+
+    var body: some View {
+        if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width)),
            let first = columns.first, let last = columns.last {
-            let place = ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.position?.fraction ?? 0)
             let spread = columns.count > 1
-            let centre = Double(geometry.size.height) - model.layout.bottomInset - ReaderLayout.verticalMargin / 2
+            let centre = Double(geometry.size.height) - layout.bottomInset - ReaderLayout.verticalMargin / 2
             Group {
                 if spread {
                     line(chapter: place.chapter, numbers: nil, in: first, centre: centre)

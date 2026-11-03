@@ -20,6 +20,9 @@ final class BookPage {
     private(set) var serverName: String?
     var isExpanded = false
     var showsFullDescription = false
+    /// Where the screen shows the cover, in the window's coordinates, for
+    /// the book opening like a cover (`ReaderCoverMotion`).
+    @ObservationIgnored var coverFrame: CGRect?
     /// Finished as last set on this screen, over what the server sent.
     private(set) var markedFinished: Bool?
     /// Setting finished didn't reach the server.

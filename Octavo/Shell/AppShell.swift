@@ -35,7 +35,9 @@ struct AppShell: View {
                 ReaderView(
                     book: book, bookmarkSync: model.readingBookmarkSync,
                     progressSync: model.readingProgressSync, listedPlace: model.readingListedPlace,
-                    connectionReturns: model.connection.returns
+                    connectionReturns: model.connection.returns,
+                    opened: { [motion = model.coverMotion] pages in motion?.readerOpened(pages) },
+                    closing: { model.readerClosing($0) }
                 ) { model.reading = nil }
                     // Another book is another reader: its own model, hooks
                     // and controls, and the old one closes (flushing its
@@ -45,7 +47,13 @@ struct AppShell: View {
                     // out keeps its web page attached, and an unfold
                     // meanwhile has SwiftUI rebuild that web view, which
                     // WebKit traps on (open, close, open again, unfold).
-                    .transition(.asymmetric(insertion: .opacity, removal: .identity))
+                    // Opened from its cover, it's there at once, under the
+                    // cover's motion.
+                    .transition(.asymmetric(insertion: model.coverMotion == nil ? .opacity : .identity, removal: .identity))
+            }
+            if let motion = model.coverMotion {
+                ReaderCoverMotionView(motion: motion)
+                    .transition(.identity)
             }
         }
         // Import from Files and the Library's +: the system's picker, no

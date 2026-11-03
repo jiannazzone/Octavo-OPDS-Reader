@@ -14,7 +14,8 @@ import WebKit
 ///
 /// On top of the page: each page's footer, in book mode the spine shadow (a
 /// setting, on by default), and the snapshot that covers a fold while it
-/// settles.
+/// settles. While a page turns (decision 27), its pictures: what lies still
+/// under the spine shadow, what moves over it.
 struct ReaderWebView: View {
     let model: ReaderModel
     /// The progress bar covers the footer's place while it shows.
@@ -36,8 +37,20 @@ struct ReaderWebView: View {
             } action: { geometry in
                 model.geometryChanged(geometry)
             }
+            // The web view itself, for the page turns' pictures and swipes.
+            .background { [snapshots = model.snapshots, swipes = model.swipes] in
+                ReaderWebViewFinder { web in
+                    snapshots.webView = web
+                    if let host = web?.superview { swipes.install(on: host) }
+                }
+            }
             .overlay(alignment: .topLeading) {
-                if showsFooter {
+                if let turn = model.turn {
+                    ReaderTurnBase(turn: turn)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if showsFooter, model.turn == nil {
                     ReaderFooter(model: model)
                 }
             }
@@ -45,6 +58,11 @@ struct ReaderWebView: View {
                 if showsSpineShadow, model.isBookMode, let page = model.geometry?.size,
                    let gap = model.layout.gap(inReaderWidth: Double(page.width)) {
                     ReaderSpineShadow(gap: gap, height: Double(page.height))
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if let turn = model.turn {
+                    ReaderTurnLeaf(turn: turn, progress: turn.progress)
                 }
             }
             .overlay(alignment: .topLeading) {

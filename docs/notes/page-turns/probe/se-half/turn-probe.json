@@ -1,0 +1,120 @@
+{
+  "exportedImage" : [
+    85.503875,
+    36.001,
+    36.582583
+  ],
+  "halfSnapshotView" : [
+    8.357,
+    2.2075,
+    2.23975,
+    3.095916,
+    2.847333
+  ],
+  "host" : "HostingView (0.0, 0.0, 951.0, 669.0)",
+  "snapshotView" : [
+    34.5615,
+    3.007167,
+    2.563541,
+    2.728459,
+    4.206542
+  ],
+  "turns" : [
+    {
+      "cover" : "none",
+      "crossesSection" : true,
+      "kind" : "within",
+      "relocatedAfter" : 30.165709,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 16.7)",
+        "021" : "before (0.0 \/ 16.7)",
+        "041" : "before (0.0 \/ 16.7)",
+        "071" : "neither (8.3 \/ 11.9)",
+        "100" : "after (16.7 \/ 0.0)",
+        "151" : "after (16.7 \/ 0.0)",
+        "253" : "after (16.7 \/ 0.0)",
+        "400" : "after (16.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "none",
+      "crossesSection" : true,
+      "kind" : "across",
+      "relocatedAfter" : 12.991375,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 16.7)",
+        "022" : "neither (8.3 \/ 11.9)",
+        "042" : "neither (8.3 \/ 11.9)",
+        "072" : "after (16.7 \/ 0.0)",
+        "102" : "after (16.7 \/ 0.0)",
+        "151" : "after (16.7 \/ 0.0)",
+        "251" : "after (16.7 \/ 0.0)",
+        "400" : "after (16.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "opaque",
+      "crossesSection" : false,
+      "kind" : "within",
+      "relocatedAfter" : 7.124875,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 13.7)",
+        "023" : "after (13.7 \/ 0.0)",
+        "040" : "after (13.7 \/ 0.0)",
+        "072" : "after (13.7 \/ 0.0)",
+        "101" : "after (13.7 \/ 0.0)",
+        "152" : "after (13.7 \/ 0.0)",
+        "252" : "after (13.7 \/ 0.0)",
+        "401" : "after (13.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "opaque",
+      "crossesSection" : true,
+      "kind" : "across",
+      "relocatedAfter" : 5.857166,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 17.3)",
+        "020" : "neither (7.5 \/ 12.2)",
+        "043" : "neither (7.5 \/ 12.2)",
+        "073" : "after (17.3 \/ 0.0)",
+        "103" : "after (17.3 \/ 0.0)",
+        "151" : "after (17.3 \/ 0.0)",
+        "252" : "after (17.3 \/ 0.0)",
+        "401" : "after (17.3 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "translucent",
+      "crossesSection" : false,
+      "kind" : "within",
+      "relocatedAfter" : 6.339916,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 13.7)",
+        "022" : "after (13.7 \/ 0.0)",
+        "041" : "after (13.7 \/ 0.0)",
+        "071" : "after (13.7 \/ 0.0)",
+        "101" : "after (13.7 \/ 0.0)",
+        "153" : "after (13.7 \/ 0.0)",
+        "252" : "after (13.7 \/ 0.0)",
+        "402" : "after (13.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "translucent",
+      "crossesSection" : true,
+      "kind" : "across",
+      "relocatedAfter" : 12.26725,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 16.4)",
+        "022" : "before (0.0 \/ 16.4)",
+        "043" : "neither (11.1 \/ 11.1)",
+        "071" : "after (16.4 \/ 0.0)",
+        "102" : "after (16.4 \/ 0.0)",
+        "151" : "after (16.4 \/ 0.0)",
+        "252" : "after (16.4 \/ 0.0)",
+        "403" : "after (16.4 \/ 0.0)"
+      }
+    }
+  ]
+}

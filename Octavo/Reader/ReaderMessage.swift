@@ -21,6 +21,12 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The user tapped while the controls cover the page (`"dismiss"`). See
     /// `ReaderTapMode`.
     case tap(zone: String)
+    /// A tap, a key or the trackpad asks for a page turn, which Swift draws
+    /// (any Page Turn but None; `ReaderPageTurn`).
+    case turn(side: ReaderTurnSide)
+    /// Text is selected in the page, or no longer is: a finger moving a
+    /// selection's handle mustn't turn the page.
+    case selection(active: Bool)
     /// The page's size in CSS px (= points), sent on load and whenever it
     /// changes.
     case viewport(width: Double, height: Double)
@@ -150,7 +156,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href, width, height, toc
+        case type, zone, level, message, href, width, height, toc, side, active
     }
 
     init(from decoder: any Decoder) throws {
@@ -169,6 +175,10 @@ nonisolated extension ReaderMessage: Decodable {
             self = .searchResults(try SearchBatch(from: decoder))
         case "tap":
             self = .tap(zone: try container.decodeIfPresent(String.self, forKey: .zone) ?? "middle")
+        case "turn":
+            self = .turn(side: try container.decode(ReaderTurnSide.self, forKey: .side))
+        case "selection":
+            self = .selection(active: try container.decodeIfPresent(Bool.self, forKey: .active) ?? false)
         case "viewport":
             self = .viewport(
                 width: try container.decode(Double.self, forKey: .width),

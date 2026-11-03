@@ -134,7 +134,7 @@ struct ReaderMessageTests {
     }
 
     @Test func unknownTypeIsNotAnError() throws {
-        #expect(try ReaderMessage.decode(#"{"type":"selection","text":"Mr. Darcy"}"#) == .unknown(type: "selection"))
+        #expect(try ReaderMessage.decode(#"{"type":"highlight","text":"Mr. Darcy"}"#) == .unknown(type: "highlight"))
     }
 
     @Test func rejectsNonStringBodies() {

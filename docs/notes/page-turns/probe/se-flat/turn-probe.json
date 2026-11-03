@@ -1,0 +1,120 @@
+{
+  "exportedImage" : [
+    45.32825,
+    39.039209,
+    38.510417
+  ],
+  "halfSnapshotView" : [
+    2.358791,
+    1.881834,
+    2.479875,
+    1.456042,
+    1.623625
+  ],
+  "host" : "HostingView (0.0, 0.0, 951.0, 669.0)",
+  "snapshotView" : [
+    11.322917,
+    2.475042,
+    2.439584,
+    1.978542,
+    2.223833
+  ],
+  "turns" : [
+    {
+      "cover" : "none",
+      "crossesSection" : true,
+      "kind" : "within",
+      "relocatedAfter" : 11.156292,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 16.7)",
+        "020" : "neither (8.3 \/ 11.9)",
+        "043" : "neither (8.3 \/ 11.9)",
+        "072" : "after (16.7 \/ 0.0)",
+        "101" : "after (16.7 \/ 0.0)",
+        "151" : "after (16.7 \/ 0.0)",
+        "251" : "after (16.7 \/ 0.0)",
+        "403" : "after (16.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "none",
+      "crossesSection" : true,
+      "kind" : "across",
+      "relocatedAfter" : 6.19675,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 16.7)",
+        "022" : "neither (8.3 \/ 11.9)",
+        "041" : "neither (8.3 \/ 11.9)",
+        "073" : "after (16.7 \/ 0.0)",
+        "103" : "after (16.7 \/ 0.0)",
+        "151" : "after (16.7 \/ 0.0)",
+        "251" : "after (16.7 \/ 0.0)",
+        "402" : "after (16.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "opaque",
+      "crossesSection" : false,
+      "kind" : "within",
+      "relocatedAfter" : 9.79425,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 13.7)",
+        "022" : "after (13.7 \/ 0.0)",
+        "042" : "after (13.7 \/ 0.0)",
+        "073" : "after (13.7 \/ 0.0)",
+        "102" : "after (13.7 \/ 0.0)",
+        "152" : "after (13.7 \/ 0.0)",
+        "251" : "after (13.7 \/ 0.0)",
+        "402" : "after (13.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "opaque",
+      "crossesSection" : true,
+      "kind" : "across",
+      "relocatedAfter" : 10.35625,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 17.3)",
+        "022" : "before (0.0 \/ 17.3)",
+        "042" : "neither (7.5 \/ 12.2)",
+        "070" : "neither (7.5 \/ 12.2)",
+        "100" : "neither (7.5 \/ 12.2)",
+        "150" : "neither (7.5 \/ 12.2)",
+        "252" : "neither (7.5 \/ 12.2)",
+        "409" : "after (17.3 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "translucent",
+      "crossesSection" : false,
+      "kind" : "within",
+      "relocatedAfter" : 7.310334,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 13.7)",
+        "022" : "before (0.0 \/ 13.7)",
+        "041" : "after (13.7 \/ 0.0)",
+        "072" : "after (13.7 \/ 0.0)",
+        "101" : "after (13.7 \/ 0.0)",
+        "151" : "after (13.7 \/ 0.0)",
+        "251" : "after (13.7 \/ 0.0)",
+        "402" : "after (13.7 \/ 0.0)"
+      }
+    },
+    {
+      "cover" : "translucent",
+      "crossesSection" : true,
+      "kind" : "across",
+      "relocatedAfter" : 8.685875,
+      "snapshots" : {
+        "000" : "before (0.0 \/ 16.4)",
+        "021" : "neither (11.1 \/ 11.1)",
+        "043" : "neither (11.1 \/ 11.1)",
+        "072" : "after (16.4 \/ 0.0)",
+        "103" : "after (16.4 \/ 0.0)",
+        "151" : "after (16.4 \/ 0.0)",
+        "252" : "after (16.4 \/ 0.0)",
+        "401" : "after (16.4 \/ 0.0)"
+      }
+    }
+  ]
+}

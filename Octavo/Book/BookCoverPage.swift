@@ -107,6 +107,7 @@ struct BookCoverArt: View {
             }
             .clipped()
             .animation(.easeOut(duration: 0.2), value: page.cover)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { page.coverFrame = $0 }
             .accessibilityElement()
             .accessibilityLabel(page.current.title.isEmpty ? "Cover" : "Cover of \(page.current.title)")
     }

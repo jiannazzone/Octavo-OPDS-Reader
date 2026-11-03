@@ -12,4 +12,5 @@ nonisolated enum ReaderSettings {
     static let alwaysShowControlsKey = "reader.alwaysShowControls"
     static let alwaysShowControlsDefault = false
     /// "Margins" (decision 8): `ReaderMargins.key`.
+    /// "Page Turn" (decision 27): `ReaderPageTurn.key`.
 }

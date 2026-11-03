@@ -23,6 +23,12 @@ import WebKit
 ///   unfold handoff.
 /// - `close`, `home`: closes the reader; `home` also closes the tabs' screens.
 /// - `goto` (`fraction` or `cfi`), `next`, `prev`.
+/// - `turn` (`side`: left or right): a tap's page turn, as the bridge asks.
+/// - `swipe` (`phase`: began, changed, ended or cancelled; `side`, `dx`,
+///   `velocity`): a finger's page turn, as `ReaderSwipeRecognizer` reports
+///   it, to hold a turn part way and look at it.
+/// - `turnState`: what the turn under way is doing, in the ack's message.
+/// - `pageTurn` (`name`): sets Page Turn, as Customize does.
 /// - `keyboard` (`on`: true or false): shows or hides the keyboard over the
 ///   reader, through a hidden text field, to check that it never moves the
 ///   page (the panels in #18 bring up a real one).
@@ -46,6 +52,10 @@ enum ReaderRemote {
         var layout: ReaderLayout?
         var script: String?
         var on: Bool?
+        var phase: String?
+        var side: String?
+        var dx: Double?
+        var velocity: Double?
     }
 
     struct Ack: Encodable {
@@ -112,6 +122,16 @@ enum ReaderRemote {
             return nil
         case "connectionReturned":
             shell.connection.connectionReturned()
+            return nil
+        case "coverMotion":
+            guard let motion = shell.coverMotion else { return "no cover motion" }
+            return motion.debugState
+        case "turnProbe":
+            guard let reader else { return "no open reader" }
+            return await TurnProbe.run(reader)
+        case "pageTurn":
+            guard let style = command.name.flatMap(ReaderPageTurn.init(rawValue:)) else { return "pageTurn needs name: automatic, slide, flip, fade or none" }
+            UserDefaults.standard.set(style.rawValue, forKey: ReaderPageTurn.key)
             return nil
         case "keyboard":
             guard reader != nil else { return "no open reader" }
@@ -199,6 +219,18 @@ enum ReaderRemote {
             reader.override(layout)
         case "watch":
             watchedCFI = command.cfi
+        case "turn":
+            guard let side = command.side.flatMap(ReaderTurnSide.init(rawValue:)) else { return "turn needs side" }
+            reader.handle(.turn(side: side))
+        case "swipe":
+            guard let phase = command.phase.flatMap(ReaderTurnSwipe.Phase.init(rawValue:)) else { return "swipe needs phase" }
+            let side = command.side.flatMap(ReaderTurnSide.init(rawValue:))
+            reader.swiped(.init(phase: phase, side: side, dx: command.dx ?? 0, velocity: command.velocity ?? 0))
+        case "turnState":
+            let motion = reader.pageTurn.motion(spread: reader.layout.columns == 2, reduceMotion: reader.reduceMotion)
+            let setting = "page turn \(reader.pageTurn.rawValue), reduce motion \(reader.reduceMotion) → \(motion.rawValue)"
+            guard let run = reader.turnRun else { return "\(setting); idle, last drawn after \(reader.lastTurnDrawnAfter ?? -1) ms, queued \(reader.queuedTurns.count), overlay \(reader.turn != nil); \(reader.swipes.debugState)" }
+            return "run \(run.id) \(run.side) \(run.motion) interactive \(run.interactive) moved \(String(describing: run.moved)) drawn \(run.drawn) target \(String(describing: run.target)) done \(run.animationDone) progress \(reader.turn?.progress ?? -1)"
         case "next": reader.next()
         case "prev": reader.previous()
         default: return "unknown command \(command.cmd)"
