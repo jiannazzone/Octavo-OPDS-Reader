@@ -194,7 +194,7 @@ The folded "changed" shot predates the red tint on the second button. Unfolding 
 
 ## Step 16: security follow-up (2026-11-02)
 
-The leftovers from this review, step 14's and the setup review, all Low or Info. Built on branch `claude/security-follow-up-28ea8f`; measured on the simulator **iPhone Duo** (8C35AF6E-5F3F-48D7-A283-AEE894511947) and this Mac. **Network-trust changes: Adam signs off the review below before merge.**
+The leftovers from this review, step 14's and the setup review, all Low or Info. Built on branch `claude/security-follow-up-28ea8f`; measured on the simulator **iPhone Duo** (8C35AF6E-5F3F-48D7-A283-AEE894511947) and this Mac. **Network-trust changes: Adam signed off the review below on 2026-11-02** (through commit `2d955c7`).
 
 ### 1. Is a server home by its name alone? (#9) No, measured
 
@@ -242,7 +242,7 @@ What a typed address can carry, and where it goes now:
 
 Komga takes its API key only in a header; Calibre-Web, COPS and calibre use Basic or Digest. `OPDSURLSecret` holds several values, each as written in the address, percent-encoding and all, so the saved address is restored exactly (`?token=abc%26def` decoded would become two query items). Links are redacted in that form, decoded and fully encoded, longest first so one secret inside another doesn't split it. The Keychain item stays a JSON string for one (step 8's format) and becomes an array for more. A server saved before this step has its address's secrets moved out at launch (`ServerStore.moveSecretsOut`: Keychain first, then `Server.json`). A value shorter than 8 characters can't be swapped out of the server's links safely and stays as typed, as does a secret in a form nobody has shown us. Logs: `os.Logger` interpolations are private unless marked public, and no marked one carries a URL with a secret; OPDS errors drop the failing URL; `NetworkTrustError` carries scheme, host and port only.
 
-### Independent security review (fresh subagent, given the code, 2026-11-02)
+### Independent security review (fresh subagent, given the code, 2026-11-02; signed off by Adam)
 
 Of commit `e7b1395`. **Nothing High or Medium.** It found no defect in item 1 (no policy change; `check` resolves every plain-http name), in the fail-closed transport itself (every production `ServerTransport` reads its pin first; a failed read isn't cached) or in the sweep beyond row 3, and no way to get a secret sent to another origin with placeholders.
 
