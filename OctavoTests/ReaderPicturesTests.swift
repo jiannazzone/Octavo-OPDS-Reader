@@ -65,6 +65,17 @@ struct ReaderPicturesTests {
     </body></html>
     """#
 
+    /// A pre-paginated page that places what it draws: a picture and a table
+    /// run out of a small box, past where the limits would stop them.
+    private static let fixedLayoutPage = #"""
+    <?xml version="1.0" encoding="UTF-8"?>
+    <html xmlns="http://www.w3.org/1999/xhtml"><head><title>Placed</title>
+    <meta name="viewport" content="width=1000, height=1400"/></head><body>
+    <div style="width: 100px;"><img id="placed" alt="" src="big.png" style="width: 800px; max-width: 800px;"/>
+    <table id="placed-table" style="width: 600px;"><tr><td><img alt="" src="small.png"/></td></tr></table></div>
+    </body></html>
+    """#
+
     private static func picture(width: Int, height: Int) -> Data {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -74,7 +85,7 @@ struct ReaderPicturesTests {
         }
     }
 
-    private static func book() throws -> URL {
+    private static func book(page: String = chapter, rendition: String = "") throws -> URL {
         let opf = """
         <?xml version="1.0" encoding="UTF-8"?>
         <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
@@ -82,6 +93,7 @@ struct ReaderPicturesTests {
         <dc:identifier id="id">urn:uuid:7b0c5b2e-0000-4000-8000-000000000002</dc:identifier>
         <dc:title>Pictures</dc:title>
         <meta property="dcterms:modified">2026-11-04T00:00:00Z</meta>
+        \(rendition)
         </metadata>
         <manifest>
         <item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>
@@ -97,7 +109,7 @@ struct ReaderPicturesTests {
             ("mimetype", Data("application/epub+zip".utf8)),
             ("META-INF/container.xml", Data(container.utf8)),
             ("OEBPS/content.opf", Data(opf.utf8)),
-            ("OEBPS/c1.xhtml", Data(chapter.utf8)),
+            ("OEBPS/c1.xhtml", Data(page.utf8)),
             ("OEBPS/big.png", picture(width: 1200, height: 800)),
             ("OEBPS/small.png", picture(width: 200, height: 100)),
         ]).write(to: url)
@@ -193,6 +205,23 @@ struct ReaderPicturesTests {
     @Test func aBoxOfTextKeepsItsWidth() async throws {
         let web = try await open(try Self.book(), at: .folded)
         #expect(try await measure(web).boxes["text-box"]?.width == 600)
+    }
+
+    // A fixed-layout page places its pictures itself, so nothing limits them.
+    @Test func fixedLayoutPagesKeepWhatTheyPlace() async throws {
+        let book = try Self.book(page: Self.fixedLayoutPage, rendition: #"<meta property="rendition:layout">pre-paginated</meta>"#)
+        let web = try await open(book, at: .folded)
+        let widths = try #require(try await web.callJavaScript("""
+            const view = document.querySelector('foliate-view')
+            const doc = view.renderer.getContents().map(content => content.doc).find(doc => doc?.getElementById('placed'))
+            await Promise.all([...doc.images].map(image => image.complete ? null
+                : new Promise(resolve => { image.onload = image.onerror = resolve })))
+            const width = id => doc.getElementById(id).getBoundingClientRect().width
+            return { fixed: view.isFixedLayout, picture: width('placed'), table: width('placed-table') }
+            """) as? [String: Any])
+        #expect(widths["fixed"] as? Bool == true)
+        #expect(widths["picture"] as? Double == 800)
+        #expect(widths["table"] as? Double == 600)
     }
 
     // Unfolding or turning the device lays the same document out again.

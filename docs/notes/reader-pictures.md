@@ -42,7 +42,7 @@ body :has(img, svg, video) {
 - A table box around a picture, a `table` or anything with `display: table`, gets `min(600px, 100%)` as its width, because WebKit ignores `max-width` on a table. A cell or column width needs nothing: a table with no width of its own shrinks them to fit (`<td width>`, `<td style>` and `<col width>` measured).
 - **Sizes of 200 pt or less stay in points** (`FITS_ANY_COLUMN`; the narrowest column is 274.5 pt). A percentage can't size a float or an inline-block around the picture, so the box would grow to the column and push the text out from beside it. Without this, a `max-width: 60px` picture in a float had a 328 pt box where the book's is 60 pt. A limit of 0 also stays for foliate, which reads it as none.
 - It runs before foliate sizes pictures, so the first layout is already right. The section's `load` event comes first (`paginator.js`, `#display`), and `PINNED.md` lists this among the things to check on an update.
-- Fixed-layout books are skipped: their pages place pictures themselves.
+- Fixed-layout books are skipped: their pages place pictures themselves. `ReaderPicturesTests` checks an oversized picture and table in a small box keep the sizes the page gave them.
 
 Both change styles only. The DOM is untouched, so every CFI stays as it was, though page breaks in a section with a picture move, as they do for any layout change.
 
