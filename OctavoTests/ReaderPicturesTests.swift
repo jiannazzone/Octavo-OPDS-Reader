@@ -6,9 +6,11 @@ import WebKit
 
 /// Pictures stay inside their text column, whatever size the book gives them
 /// or the box around them, through the real bridge and foliate in a page
-/// that's never shown (`docs/notes/reader-pictures.md`).
+/// that's never shown (`docs/notes/reader-pictures.md`). The tests share the
+/// page and reload it, because a new page takes about 1.6 s and a reload about
+/// 35 ms (`docs/notes/ci.md`). A reload starts the scripts again.
 @MainActor
-@Suite(.temporaryFiles, .timeLimit(.minutes(1)))
+@Suite(.temporaryFiles, .serialized, .timeLimit(.minutes(1)))
 struct ReaderPicturesTests {
     /// The reader's view in each posture, Medium margins.
     struct Page: Sendable, CustomTestStringConvertible {
@@ -85,7 +87,7 @@ struct ReaderPicturesTests {
         }
     }
 
-    private static func book(page: String = chapter, rendition: String = "") throws -> URL {
+    private static func book(page: String = chapter, rendition: String = "") -> Data {
         let opf = """
         <?xml version="1.0" encoding="UTF-8"?>
         <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
@@ -104,25 +106,37 @@ struct ReaderPicturesTests {
         </package>
         """
         let container = #"<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#
-        let url = URL.testDirectory.appending(path: "pictures.epub")
-        try StoredZip.make([
+        return StoredZip.make([
             ("mimetype", Data("application/epub+zip".utf8)),
             ("META-INF/container.xml", Data(container.utf8)),
             ("OEBPS/content.opf", Data(opf.utf8)),
             ("OEBPS/c1.xhtml", Data(page.utf8)),
             ("OEBPS/big.png", picture(width: 1200, height: 800)),
             ("OEBPS/small.png", picture(width: 200, height: 100)),
-        ]).write(to: url)
-        return url
+        ])
     }
+
+    private static let chapterBook = book()
+
+    /// Outlasts each test's temporary folder. The next run's sweep removes it.
+    private static let bookFile = URL.temporaryDirectory.appending(path: "\(TemporaryFiles.prefix)\(UUID().uuidString).epub")
+
+    private static let sharedPage: WebPage = {
+        var configuration = WebPage.Configuration()
+        configuration.urlSchemeHandlers[URLScheme(ReaderSchemeHandler.scheme)!] = ReaderSchemeHandler(bookFile: bookFile)
+        return WebPage(configuration: configuration)
+    }()
 
     /// The reader's page with `book` open at `page`'s size. The page has no
     /// window, so its style sheet sets the view's size.
-    private func open(_ book: URL, at page: Page) async throws -> WebPage {
-        var configuration = WebPage.Configuration()
-        configuration.urlSchemeHandlers[URLScheme(ReaderSchemeHandler.scheme)!] = ReaderSchemeHandler(bookFile: book)
-        let web = WebPage(configuration: configuration)
-        for try await _ in web.load(ReaderSchemeHandler.readerURL) {}
+    private func open(_ book: Data = chapterBook, at page: Page) async throws -> WebPage {
+        try book.write(to: Self.bookFile)
+        let web = Self.sharedPage
+        if web.url == nil {
+            for try await _ in web.load(ReaderSchemeHandler.readerURL) {}
+        } else {
+            for try await _ in web.reload() {}
+        }
         // The bridge is a module, which may finish after the document.
         while try await web.callJavaScript("return window.octavo !== undefined") as? Bool != true {
             try await Task.sleep(for: .milliseconds(20))
@@ -134,8 +148,8 @@ struct ReaderPicturesTests {
             """)
         try await size(web, to: page)
         _ = try await web.callJavaScript("return await window.octavo.open(options)", arguments: ["options": [
-            "url": ReaderSchemeHandler.bookURL(fileName: book.lastPathComponent).absoluteString,
-            "name": book.lastPathComponent,
+            "url": ReaderSchemeHandler.bookURL(fileName: Self.bookFile.lastPathComponent).absoluteString,
+            "name": Self.bookFile.lastPathComponent,
             "layout": ["columns": page.columns, "gapPercent": 7, "maxInlineSize": page.maxInlineSize],
         ] as [String: Any]])
         return web
@@ -179,7 +193,7 @@ struct ReaderPicturesTests {
 
     @Test(arguments: [Page.folded, .unfolded, .sideways])
     func picturesAndTheirBoxesFitTheColumn(page: Page) async throws {
-        let web = try await open(try Self.book(), at: page)
+        let web = try await open(at: page)
         let measured = try await measure(web)
         #expect(measured.tooWide.isEmpty, "\(measured.tooWide) in a column of \(measured.column)")
         // The illustration that started this: as wide as its box, which is as
@@ -190,7 +204,7 @@ struct ReaderPicturesTests {
 
     @Test(arguments: [Page.folded, .unfolded, .sideways])
     func picturesThatAlreadyFitKeepTheirSize(page: Page) async throws {
-        let web = try await open(try Self.book(), at: page)
+        let web = try await open(at: page)
         let measured = try await measure(web)
         #expect(try #require(measured.boxes["small-in-box"]).width == 200)
         #expect(abs(try #require(measured.boxes["percent-limit"]).width - measured.column * 0.4) < 0.5)
@@ -203,13 +217,13 @@ struct ReaderPicturesTests {
 
     // Text is laid out as the book says, only boxes with a picture change.
     @Test func aBoxOfTextKeepsItsWidth() async throws {
-        let web = try await open(try Self.book(), at: .folded)
+        let web = try await open(at: .folded)
         #expect(try await measure(web).boxes["text-box"]?.width == 600)
     }
 
     // A fixed-layout page places its pictures itself, so nothing limits them.
     @Test func fixedLayoutPagesKeepWhatTheyPlace() async throws {
-        let book = try Self.book(page: Self.fixedLayoutPage, rendition: #"<meta property="rendition:layout">pre-paginated</meta>"#)
+        let book = Self.book(page: Self.fixedLayoutPage, rendition: #"<meta property="rendition:layout">pre-paginated</meta>"#)
         let web = try await open(book, at: .folded)
         let widths = try #require(try await web.callJavaScript("""
             const view = document.querySelector('foliate-view')
@@ -226,7 +240,7 @@ struct ReaderPicturesTests {
 
     // Unfolding or turning the device lays the same document out again.
     @Test func picturesStillFitWhenThePageChangesSize() async throws {
-        let web = try await open(try Self.book(), at: .folded)
+        let web = try await open(at: .folded)
         let limit = try await measure(web).maxWidths["own-limit"]
         for page in [Page.unfolded, .sideways, .unfolded] {
             try await size(web, to: page)

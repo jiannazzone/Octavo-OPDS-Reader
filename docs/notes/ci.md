@@ -73,6 +73,32 @@ Four runs of what was then the App tests job, with the simulator booting before 
 
 Booting the simulator after the build was tried once (#52), and went back. Commit `1802bb3` on `main` still has the title "CI: boot the simulator after the build", but it only changes docs. The build took 41 s and the boot 75 s, but the Test step took 27 minutes and failed, and the job came within seconds of its 30-minute limit. WebKit's GPU process took 1,169 s to launch, against 1–5 s in the earlier runs that logged it, so `BookInspector` hit its 30 s limit and reported `.damaged`. One run doesn't prove the cause. It does suggest that a new runner's slow start goes with the simulator's first start, and that moving the boot doesn't remove it.
 
+## Test time (2026-11-04)
+
+The Test step grew from 1.6 minutes at `c1b4b19` to 8.6 at `a853701`, one run each, as `ReaderFixedLayoutTests` and `ReaderPicturesTests` grew. Between them they opened a book in a new `WebPage` 59 times a run. Now 9 of those are new pages and 50 are reloads. Before and after in turn on 'Octavo Faster CI Duo' (930C4032-9107-4E7B-98F3-95CE00807CBC), with the machine's load about 4:
+
+| | Before (2 runs) | After (3 runs) |
+|---|---|---|
+| All app tests (473, the same ones) | 104 s | 31 s |
+| `ReaderFixedLayoutTests` | 81 s | 19 s |
+| `ReaderPicturesTests` | 14.5 s | 2.8 s |
+| `BookInspectorTests`, not changed | 5.2 s | 5.2 s |
+
+These aren't measured on GitHub's runners yet.
+
+**What a new page costs:** about 0.4 s to load the reader and 1.15 s to open the book, plus about 4 s for the first page of a run. Nearly all of the 1.15 s is the first `application/xhtml+xml` frame in that page's WebKit process, even an empty one. An HTML frame takes 2 ms, and so does every XHTML frame after the first. I didn't find out why. Reloading takes about 15 ms to load the reader and 20 ms to open the book.
+
+**How the two suites use that:**
+
+- They keep one page and reload it for each test. They're `.serialized`, because plain `xcodebuild test` would otherwise run their tests at the same time on it.
+- A reload starts the scripts again, so nothing in the bridge or foliate carries over. With a `ReaderModel` it opens the way a new page does: the bridge's `ready`, `openBook`, then the saved position.
+- It doesn't reset the Swift model. A test that changes the model's settings, reads `lastError` or has a `sync` uses `openInItsOwnPage`. So do one open each from the start, a CFI and a fraction, to keep a new page's path covered.
+- A new test in these suites should use the suite's `open` unless one of those applies.
+
+**Checks:** I broke the reader 25 ways, one at a time: the picture rules, and the fixes and places listed in `fixed-layout.md`. The test that covers each one failed each time. The tests also pass in three shuffled orders.
+
+**`-parallel-testing-enabled NO` stays.** The history doesn't say why it was added. Without it, `xcodebuild` shuts down the simulator that CI boots during the build, to clone it. With it, the tests run one at a time. Plain `xcodebuild test` also passes, in 58 s here.
+
 ## Watch for
 
 - `AttemptTests` and any other test with short time limits may be flaky on a slower runner. `aServerThatDoesntAnswerTimesOut` expects a 50 ms limit to have fired after 150 ms.
