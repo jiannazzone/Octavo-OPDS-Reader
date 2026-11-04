@@ -78,3 +78,17 @@ Every cover fills its frame today and is cropped to it (`CoverImage`, `BookCover
 - **In between**: fill when a cover is close to its frame's shape and fit when it isn't; or let grid cells take each cover's own shape, as Apple Books does, with the covers lined up along the bottom.
 
 Decide per place: the small covers on shelves and grids, the large cover page, Home's book, and the cover in the opening motion.
+
+## The reader's left strip (Adam, 2026-11-03)
+
+Blank for now (decision 8), with the door left open. All of these apply only unfolded, and a tap in the strip would still turn back a page, except on the Go back button. Seen as pictures, none chosen:
+
+- **Page edges:** thin lines at the screen's edge that thicken as you read. How far through the book at a glance, with nothing to tap or read.
+- **Progress rail:** your place and chapter ticks down the strip. The most exact, but it repeats the glass bar and footer and is always on screen.
+- **Go back in the strip:** the "go back" from `docs/PLAN.md`, showing only after a jump or a scrub, with the page it returns to. Empty the rest of the time, and it needs another home when folded. It could go with page edges.
+- **Chapter down the side:** the chapter title running sideways, like a book's running head. Sideways text is slow to read.
+
+Turned down:
+
+- **Spreading the pages across the whole width:** the right page's text sits on the crease, and going half open re-lays out.
+- **A wider left page, with the divide on the fold** (393 | 309 pt at Medium): Adam's idea, which keeps the fold steady and works in book mode too. foliate's pages are CSS columns, always equal, so it takes a workaround: every column as wide as the left page, with invisible floats blocking the outer 84 pt of each right page. In a throwaway test on macOS WebKit with foliate's column styles (not foliate itself, and not iOS), text came out at exactly those widths with 10-14% fewer spreads across the five sample books, Pride and Prejudice with its floats off. Left on, a book's own floats break it (Pride and Prejudice went from 63 spreads to 111, with blank pages). The book's `clear` rules also have to go, pictures and tables are capped at 309 pt, and boxes with backgrounds run under the column. Adam decided against the workaround.
