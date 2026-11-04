@@ -236,7 +236,7 @@ Decided with mockups in the planning session (no Figma frames). This is step 17,
 ### Colour (Adam, 2026-11-03)
 
 31. **The accent is Ink**: `#34459E` in light mode and `#9FAEFF` in dark, in place of iOS's blue, for buttons, links, the scrubber, progress lines and lit controls. It keeps at least 7:1 on white, Paper, Sepia, Night and black, where iOS's blue falls to 3.2:1 on Sepia. Home, the Library and Settings keep the system's light and dark (decision 13).
-    - **Not built yet.**
+    - **Built (2026-11-03).** An `AccentColor` asset, the app's global accent. Switches stay iOS's green. Book links keep the themes' own colours. The signed-out banner uses it too.
 
 ### Text and theme (approved 2026-10-31)
 
