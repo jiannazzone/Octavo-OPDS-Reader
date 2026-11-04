@@ -563,11 +563,40 @@ private struct ReaderProgressBar: View {
         return ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction)
     }
 
-    private var scrubber: some View {
-        VStack(alignment: .leading, spacing: 0) {
+    /// The chapter's name between its buttons (decision 35), which keep a
+    /// finger's room without making the bar any taller.
+    private var chapterLine: some View {
+        let skip = model.chapterSkip
+        return HStack(spacing: 0) {
+            if skip.isAvailable { chapterButton(.back, isEnabled: skip.canGoBack) }
             Text(place.chapter ?? model.title ?? " ")
                 .font(.footnote.weight(.semibold))
                 .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if skip.isAvailable { chapterButton(.forward, isEnabled: skip.canGoForward) }
+        }
+    }
+
+    private func chapterButton(_ direction: ReaderChapterSkip.Direction, isEnabled: Bool) -> some View {
+        Button {
+            model.skipChapter(direction)
+        } label: {
+            Image(systemName: direction == .back ? "backward.end.fill" : "forward.end.fill")
+                .font(.footnote)
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isEnabled ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+        .disabled(!isEnabled)
+        .padding(direction == .back ? .leading : .trailing, -14)
+        .padding(.vertical, -13)
+        .accessibilityLabel(direction == .back ? "Previous Chapter" : "Next Chapter")
+    }
+
+    private var scrubber: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            chapterLine
             ReaderScrubber(value: fraction, chapters: model.toc.compactMap(\.fraction), total: model.location?.total) { chapter in
                 guard let scrub else { return }
                 relocationsAtRelease = model.relocationCount

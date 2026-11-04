@@ -54,6 +54,53 @@ extension ReaderModel {
         goTo(target: bookmark.cfi)
     }
 
+    // MARK: Chapter buttons
+
+    var chapterSkip: ReaderChapterSkip {
+        let page = ReaderPlace(chapter: nil, location: location, fraction: shownFraction)
+        var isOnFirstEntry = false
+        if let start = toc.first?.fraction.flatMap({ Self.page(at: $0, total: location?.total) }), let first = page.first, let last = page.last {
+            isOnFirstEntry = (first...last).contains(start)
+        }
+        return ReaderChapterSkip(count: toc.count, current: currentContentsRow, isOnFirstEntry: isOnFirstEntry)
+    }
+
+    /// Goes to the first of the buttons' places that moves the page.
+    func skipChapter(_ direction: ReaderChapterSkip.Direction) {
+        guard phase == .open, !isSkippingChapter else { return }
+        isSkippingChapter = true
+        Task {
+            defer { isSkippingChapter = false }
+            let rows = contentsRows
+            for index in chapterSkip.targets(direction) where rows.indices.contains(index) {
+                if await goToAndSeeIfThePageMoved(rows[index]) { return }
+            }
+        }
+    }
+
+    private func goToAndSeeIfThePageMoved(_ row: ReaderContentsRow) async -> Bool {
+        let before = relocation?.startCFI ?? relocation?.cfi
+        let count = relocationCount
+        if let href = row.href {
+            _ = try? await page.callJavaScript("return await window.octavo.goTo(target)", arguments: ["target": href])
+        } else if let fraction = row.fraction {
+            _ = try? await page.callJavaScript("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": fraction])
+        } else {
+            return false
+        }
+        // The relocations come after the call does, and a page settling on a
+        // spread can take a moment and report more than once.
+        var last = count
+        var quiet = 0
+        for _ in 0..<25 {
+            try? await Task.sleep(for: .milliseconds(20))
+            quiet = relocationCount == last ? quiet + 1 : 0
+            last = relocationCount
+            if last != count, quiet >= 3 { break }
+        }
+        return (relocation?.startCFI ?? relocation?.cfi) != before
+    }
+
     /// The Contents panel opening: what's in the section on screen placed
     /// again by its layout, so the page numbers match the footer after a
     /// font, margin or fold change.

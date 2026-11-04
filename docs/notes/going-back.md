@@ -44,6 +44,14 @@ Temporary changes, all reverted, driven with real drags (`touch_path`) on 'Octav
 - **The chapter's name between two 44 pt buttons** has 208 pt folded and 189 pt half open. Share of Contents entries that fit folded: Dungeon Anarchist's Cookbook 97%, Trust 98%, Green City Wars 94%, Standard Ebooks' Pride and Prejudice 100%, Moby-Dick 73%, Gutenberg's Pride and Prejudice 57%. Beside the scrubber, with its 296 pt: 97%, 100%, 100%, 100%, 91%, 87%.
 - **Contents sizes:** Green City Wars 38 entries (two levels), The Dungeon Anarchist's Cookbook 47, Standard Ebooks' Pride and Prejudice 65, Trust 69 (three levels), Moby-Dick 145.
 
+### Chapter buttons
+
+`ReaderChapterSkip` (`ReaderChapterSkipTests`), `ReaderModel.skipChapter`. Video: `going-back/videos/chapter-buttons-folded.mp4`.
+
+- **Places to try, not sums.** An entry's fraction can be a page or two out until its section is laid out, so working out "am I on this chapter's first page?" from it would go wrong. ⏮ goes to this chapter's start, and if the page didn't move, to the one before, up to three tries. ⏭ likewise, which also steps past a chapter or a "Part Two" starting on the spread already showing.
+- **Waiting for the page:** half open a move can report late and more than once, and an early look read as "didn't move", sending ⏮ a chapter too far. It now waits for the relocations to go quiet, up to 0.5 s.
+- **Checked** on Moby-Dick with real taps, folded and half open: partway through a chapter, ⏮ to its heading, ⏮ to the one before, ⏭ forward again. Not run on a book with nested contents, as Adam's three books are no longer in scratch, or on a fixed-layout book.
+
 ### Hold still to zoom
 
 Built in `ReaderScrubber.swift` (the slider) and `ReaderScrubberLine.swift` (the sums, `ReaderScrubberLineTests`). Checked on 'Octavo Navigation Duo' with real drags, folded, flat and half open, light and Night (`going-back/videos/scrubber-half-open.mp4`). A test build went on Adam's Duo; the ticks can only be felt there.

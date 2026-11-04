@@ -157,6 +157,8 @@ final class ReaderModel {
     /// This page's place went to the pusher while the server's was offered.
     @ObservationIgnored private var pushedSinceOffer = false
     @ObservationIgnored private var isCatchingUp = false
+    /// A chapter button's tap is finding its place (`skipChapter`).
+    @ObservationIgnored var isSkippingChapter = false
     @ObservationIgnored let cfiShape: ReaderMessage.CFIShape
     @ObservationIgnored private var pusher: DebouncedProgressPusher<ContinuousClock>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
