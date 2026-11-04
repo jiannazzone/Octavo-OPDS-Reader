@@ -271,7 +271,7 @@ Of commit `e7b1395`. **Nothing High or Medium.** It found no defect in item 1 (n
 
 ## The launch steps never ran (found and fixed 2026-11-03)
 
-Measured on the simulator **Octavo Launch Duo** (06647D0C-07CE-4113-9EB1-ADE752C32737, iOS 27.1). **A real device is unchecked.** **Network-trust change: needs Adam's sign-off before merge** (independent review below).
+Measured on the simulator **Octavo Launch Duo** (06647D0C-07CE-4113-9EB1-ADE752C32737, iOS 27.1). **A real device is unchecked.** **Network-trust change: Adam signed off the review below on 2026-11-03** (through commit `9598a5b`).
 
 **What was wrong.** The reinstall wipe, the sweep and `moveSecretsOut` sat in `OctavoApp.init` behind `if UIApplication.shared.isProtectedDataAvailable`, from the wipe's first commit (`cfe9dce`) on. They never ran: a reinstall's items stayed, and so did an abandoned setup's, a failed Remove server's and a failed Sign out's. Keychain items stayed `AfterFirstUnlockThisDeviceOnly`, and nothing ever sent them anywhere: no ID the app would use could reach them (setup always makes a new one).
 
@@ -320,7 +320,7 @@ An app test run on a simulator now sweeps that simulator's Keychain at launch, a
 
 **Why the wipe is still here.** With no saved server, the sweep alone would now delete the same items in a Release build. The wipe is kept because it sets the marker, which `TourRecord` reads, and clears `debug-` items after a reinstall.
 
-### Independent security review (fresh subagent, given the code, 2026-11-03)
+### Independent security review (fresh subagent, given the code, 2026-11-03; signed off by Adam)
 
 Of commit `5e6edb6` (rebased as `218ecb2`). **Nothing High.** It found no path where a launch deletes a secret the app still needs, beyond the documented fail-closed cases. It didn't run anything, so the simulator results above are ours, not its.
 
