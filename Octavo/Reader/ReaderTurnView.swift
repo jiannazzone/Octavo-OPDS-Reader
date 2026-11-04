@@ -44,6 +44,10 @@ struct ReaderTurn: Equatable {
     /// Once foliate has drawn the new page.
     var new: Pictures?
     var newPlace: ReaderPlace?
+    /// Only showing that the page turns (`ReaderModel.playTurnHint`): it
+    /// stays paper-coloured as it lifts, and casts a shadow, which is all
+    /// there is to see of a blank page.
+    var isHint = false
 
     var size: CGSize { geometry.size }
 
@@ -196,9 +200,10 @@ struct ReaderTurnLeaf: View, Animatable {
             }
             // Darker as it stands up from the page.
             Color.black
-                .opacity(0.18 * sin(angle * .pi / 180))
+                .opacity((turn.isHint ? 0.02 : 0.18) * sin(angle * .pi / 180))
         }
         .clipShape(ReaderTurnRegion(rect: leafRect))
+        .shadow(color: turn.isHint ? .black.opacity(0.28) : .clear, radius: turn.isHint ? 16 : 0)
         .rotation3DEffect(.degrees(direction * angle), axis: (x: 0, y: 1, z: 0), anchor: anchor, perspective: 0.35)
     }
 

@@ -123,6 +123,21 @@ struct SettingsList: View {
                 }
             }
             Section {
+                Button {
+                    shell.showTour()
+                } label: {
+                    HStack {
+                        Text("Show the tour")
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.forward")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(.rect)
+                }
+                .foregroundStyle(.primary)
+            }
+            Section {
                 LabeledContent("Version", value: AboutOctavo.version)
                 Link(destination: AboutOctavo.sourceCode) {
                     HStack {

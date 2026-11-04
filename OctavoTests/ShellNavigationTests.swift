@@ -71,7 +71,12 @@ enum SampleRoutes {
 /// A shell whose library and downloads keep their files in a temporary
 /// folder, not the app's.
 @MainActor
-func makeShell(opener: BookOpener? = nil, imported: ImportedBooks? = nil, importer: ((ImportedBooks) -> BookImporter)? = nil) -> ShellModel {
+func makeShell(
+    opener: BookOpener? = nil, imported: ImportedBooks? = nil,
+    // Not a new install, unless a test says it is.
+    tourRecord: TourRecord = .temporary(state: .played),
+    importer: ((ImportedBooks) -> BookImporter)? = nil
+) -> ShellModel {
     let folder = URL.testDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     // Never the app's own imported books.
     let imported = imported ?? ImportedBooks(directory: folder.appending(path: "Imported"))
@@ -87,7 +92,8 @@ func makeShell(opener: BookOpener? = nil, imported: ImportedBooks? = nil, import
         positions: ReadingPositionStore(directory: folder.appending(path: "ReadingPositions")),
         bookmarks: BookmarkStore(directory: folder.appending(path: "Bookmarks")),
         removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServer.json")),
-        importer: importer?(imported)
+        importer: importer?(imported),
+        tourRecord: tourRecord
     )
 }
 

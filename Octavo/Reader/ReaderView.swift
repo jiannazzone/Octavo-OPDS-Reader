@@ -26,6 +26,7 @@ struct ReaderView: View {
     /// close like a cover. `close` follows at once.
     var closing: (ReaderCoverPages) -> Void = { _ in }
     let close: () -> Void
+    @Environment(ShellModel.self) private var shell
     // Made in `.task` rather than `init`, so SwiftUI re-creating this view
     // doesn't spin up throwaway web pages.
     @State private var model: ReaderModel?
@@ -34,7 +35,7 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             if let model {
-                ReaderScreen(model: model, connectionReturns: connectionReturns) { [closing, close] in
+                ReaderScreen(model: model, connectionReturns: connectionReturns, tourStep: shell.tour?.step) { [closing, close] in
                     closing(model.coverPages())
                     close()
                 }
@@ -59,13 +60,19 @@ struct ReaderView: View {
         }
         .task(id: book.reader) {
             guard model?.book != book.reader else { return }
-            let bookmarks = ReaderBookmarks(bookID: book.reader.id, sync: bookmarkSync)
+            // A tour replayed from Settings saves nothing of its own
+            // (decision 30).
+            let replay = shell.tourReplayPlace
+            let bookmarks = ReaderBookmarks(bookID: book.reader.id, store: replay?.bookmarks ?? BookmarkStore(), sync: bookmarkSync)
             #if DEBUG
             let cfiShape = ReaderRemote.cfiShape
             #else
             let cfiShape = ReaderMessage.CFIShape.point
             #endif
-            model = ReaderModel(book: book.reader, sync: progressSync, fallback: listedPlace, bookmarks: bookmarks, cfiShape: cfiShape)
+            model = ReaderModel(
+                book: book.reader, store: replay?.positions ?? ReadingPositionStore(), sync: progressSync, fallback: listedPlace,
+                bookmarks: bookmarks, cfiShape: cfiShape
+            )
         }
         .onDisappear {
             guard let model else { return }
@@ -85,6 +92,7 @@ private struct ReaderScreen: View {
     let model: ReaderModel
     let connectionReturns: Int
     let close: () -> Void
+    @Environment(ShellModel.self) private var shell
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
     @AppStorage(ReaderAppearance.key) private var appearance = ReaderAppearance()
@@ -100,7 +108,24 @@ private struct ReaderScreen: View {
     @State private var panelButtonFrame: CGRect?
     /// How far the keyboard comes up over the reader, for Search's panel.
     @State private var keyboard: Double = 0
+    /// The sheet's height along the bottom of one page, for the tour's card.
+    @State private var sheetHeight: Double?
     @Environment(\.scenePhase) private var scenePhase
+
+    /// `tourStep`: a reader reopened mid-tour by an unfold puts back what the
+    /// step had up.
+    init(model: ReaderModel, connectionReturns: Int, tourStep: TourFlow.Step?, close: @escaping () -> Void) {
+        self.model = model
+        self.connectionReturns = connectionReturns
+        self.close = close
+        var controls = ReaderControls()
+        if tourStep?.showsControlsOnOpening == true { controls.show() }
+        if tourStep == .makeItYours {
+            controls.panelOpened()
+            _panel = State(initialValue: .textAndTheme)
+        }
+        _controls = State(initialValue: controls)
+    }
 
     var body: some View {
         NavigationStack {
@@ -147,25 +172,36 @@ private struct ReaderScreen: View {
                     if let panel, model.phase == .open, let geometry = model.geometry {
                         let fold = model.layout.columns == 2 ? model.layout.fold : nil
                         ReaderPanelFrame(geometry: geometry, fold: fold, source: panelButtonFrame, fillsSheet: panel != .textAndTheme, keyboard: keyboard) {
-                            switch panel {
-                            case .textAndTheme:
-                                ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
-                            case .contents:
-                                contentsPanel
-                            case .search:
-                                searchPanel
+                            Group {
+                                switch panel {
+                                case .textAndTheme:
+                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
+                                case .contents:
+                                    contentsPanel
+                                case .search:
+                                    searchPanel
+                                }
                             }
+                            .onGeometryChange(for: Double.self) { Double($0.size.height) } action: { sheetHeight = $0 }
                         }
                         // Another panel grows out of its own button.
                         .id(panel)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if let step = shell.tour?.step, model.phase == .open, shell.coverMotion == nil, let geometry = model.geometry {
+                        let onOnePage = panel != nil && !(model.layout.columns == 2 && model.layout.fold != nil)
+                        TourCardSlot(step: step, geometry: geometry, layout: model.layout, sheetHeight: onOnePage ? sheetHeight : nil)
+                            .id(step)
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: shell.tour?.step)
                 .ignoresSafeArea()
                 .accessibilityAction(named: Text(controls.showsBar ? "Hide Controls" : "Show Controls")) {
                     withAnimation { controls.toggle() }
                 }
                 .toolbar { buttons }
-                .toolbar(buttonsVisible || showsControlsButton ? .visible : .hidden, for: .navigationBar)
+                .toolbar(buttonsVisible || showsControlsButton || shell.tour != nil ? .visible : .hidden, for: .navigationBar)
         }
         // The column's buttons, the footer, the bar and the panel in the
         // page's colours. Here, not for the window, so `systemColorScheme`
@@ -201,6 +237,29 @@ private struct ReaderScreen: View {
         }
         .onChange(of: panel) { _, panel in
             if panel == .contents { Task { await model.placeOnScreen() } }
+        }
+        // The tour's Turn the page: the page lifts every few seconds until it's
+        // turned. Not while something covers it: a tap would only close that.
+        .task(id: hintsPageTurn) {
+            guard hintsPageTurn else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1.2))
+                guard !Task.isCancelled else { return }
+                await model.playTurnHint()
+                try? await Task.sleep(for: .seconds(1.3))
+            }
+        }
+        .onChange(of: tourReaderState, initial: true) { _, state in
+            shell.tourEvent(.reader(state))
+        }
+        .onChange(of: shell.tour?.step) { _, step in
+            // Done: on to the last card, with the page clear.
+            if step == .addYourBooks { backToReading() }
+            // A step may start with what it asks for already done.
+            shell.tourEvent(.reader(tourReaderState))
+            if let card = shell.tour?.step.card {
+                AccessibilityNotification.Announcement("\(card.title). \(card.message)").post()
+            }
         }
         // Another reader may have moved on while the app was away, or a
         // place may not have gone for want of a connection.
@@ -249,6 +308,7 @@ private struct ReaderScreen: View {
             model.onBookModeChange = { _ in
                 withAnimation(.easeOut(duration: 0.2)) { controls.wrappedValue.hide() }
             }
+            model.onPageTurned = { [weak shell] in shell?.tourEvent(.pageTurned) }
         }
         #if DEBUG
         .readerRemote(model)
@@ -256,6 +316,15 @@ private struct ReaderScreen: View {
     }
 
     private var darkMode: Bool { systemColorScheme == .dark }
+
+    private var hintsPageTurn: Bool {
+        shell.tour?.step == .turnThePage && model.phase == .open && shell.coverMotion == nil && !controls.coversPage && panel == nil
+    }
+
+    /// What the tour's steps in the book look at.
+    private var tourReaderState: TourFlow.ReaderState {
+        TourFlow.ReaderState(barVisible: controls.showsBar, buttonsVisible: controls.buttonsVisible, textPanelOpen: panel == .textAndTheme)
+    }
 
     /// A book that couldn't open keeps Back up, so there's a way out.
     private var buttonsVisible: Bool {
@@ -286,14 +355,23 @@ private struct ReaderScreen: View {
 
     /// The column's buttons (frame 08).
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
+        if shell.tour != nil {
+            ToolbarItem(placement: .topBarTrailing) {
+                TourSkipButton { shell.skipTour() }
+            }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        }
         if showsControlsButton, !buttonsVisible {
             ToolbarItem(placement: .topBarTrailing) { showControlsButton }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
             if buttonsVisible {
-                Button("Back", systemImage: "chevron.backward", action: close)
+                // Skip is the way out of the tour.
+                if shell.tour == nil {
+                    Button("Back", systemImage: "chevron.backward", action: close)
+                }
                 panelButton(.contents, title: "Contents", systemImage: "list.bullet")
-                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size")
+                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size", lit: shell.tour?.step.litButton == .textAndTheme)
                 panelButton(.search, title: "Search in Book", systemImage: "magnifyingglass")
                 let bookmarked = model.bookmarks.pageIsBookmarked
                 Button(bookmarked ? "Remove Bookmark" : "Bookmark", systemImage: bookmarked ? "bookmark.fill" : "bookmark") {
@@ -309,7 +387,9 @@ private struct ReaderScreen: View {
 
     /// A column button that opens `selected`, lit while it's open. Another
     /// panel's button switches to its own.
-    private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String) -> some View {
+    /// `lit`: the tour asks for this button next, so it's blue, as it's named
+    /// on the card (Adam, 2026-11-03).
+    private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String, lit: Bool = false) -> some View {
         Button(String(localized: title), systemImage: systemImage) {
             if panel != selected {
                 panelButtonFrame = Self.columnButtonFrame(titled: String(localized: title))
@@ -324,7 +404,7 @@ private struct ReaderScreen: View {
                 }
             }
         }
-        .tint(panel == selected ? .accentColor : nil)
+        .tint(panel == selected || lit ? .accentColor : nil)
         .accessibilityAddTraits(panel == selected ? .isSelected : [])
     }
 
@@ -417,7 +497,7 @@ private struct ReaderScreen: View {
         Button("Show Controls", systemImage: "ellipsis") {
             withAnimation(.easeOut(duration: 0.2)) { controls.show() }
         }
-        .tint(.secondary)
+        .tint(shell.tour?.step.litButton == .showControls ? .accentColor : .secondary)
     }
 }
 

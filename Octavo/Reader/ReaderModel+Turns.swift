@@ -85,7 +85,11 @@ extension ReaderModel {
     /// Returns the bridge call that ends a held turn, to run before `hold`.
     func finishTurnForFold() -> String? {
         queuedTurns.removeAll()
-        guard let run = turnRun else { return nil }
+        guard let run = turnRun else {
+            // A hint, if anything: it has nothing to end.
+            turn = nil
+            return nil
+        }
         turnRun = nil
         turn = nil
         guard run.interactive, run.target != 1 else { return nil }
@@ -129,7 +133,11 @@ extension ReaderModel {
 
     /// No pictures to draw (no web view to snapshot): foliate turns at once.
     private func turnWithoutPictures(_ side: ReaderTurnSide) {
-        call("return await window.octavo.turn(side, false)", arguments: ["side": side.rawValue])
+        guard phase == .open else { return }
+        Task {
+            let answer = try? await page.callJavaScript("return await window.octavo.turn(side, false)", arguments: ["side": side.rawValue]) as? [String: Any]
+            if answer?["moved"] as? Bool == true { onPageTurned?() }
+        }
     }
 
     /// Has foliate turn under the pictures, then takes the new page's.
@@ -211,10 +219,52 @@ extension ReaderModel {
     /// The pictures go, and the web view shows where the turn went. A turn
     /// asked for meanwhile starts.
     private func endTurn() {
+        if let turnRun, turnRun.target == 1, turnRun.moved == true { onPageTurned?() }
         turnRun = nil
         turn = nil
         guard !queuedTurns.isEmpty else { return }
         startTurn(queuedTurns.removeFirst(), interactive: false)
+    }
+
+    // MARK: A hint
+
+    /// The right page lifts a little and settles, showing that it turns (the
+    /// tour's Turn the page). Pictures only: foliate doesn't move, so nothing
+    /// is saved, and a real turn asked for meanwhile simply takes over.
+    func playTurnHint() async {
+        guard phase == .open, !isFolding, turnRun == nil, turn == nil, queuedTurns.isEmpty, let geometry,
+              let motion = pageTurn.hintMotion(spread: layout.columns == 2, reduceMotion: reduceMotion)
+        else { return }
+        let size = geometry.size
+        let spine = motion == .flip && layout.columns == 2 ? spine(in: geometry) : nil
+        let regions = ReaderTurn.regions(motion: motion, side: .right, size: size, spine: spine)
+        guard let old = pictures(regions.old, size: size, spine: spine, afterScreenUpdates: false) else { return }
+        turnCount += 1
+        let id = turnCount
+        turn = ReaderTurn(
+            id: id, motion: motion, side: .right, geometry: geometry, layout: layout, spine: spine,
+            paper: Color(hex: appearance.background), old: old,
+            oldPlace: ReaderPlace(chapter: chapter, location: location, fraction: position?.fraction ?? 0),
+            isHint: true
+        )
+        for target in [Self.turnHintLift(motion), 0] {
+            guard turn?.id == id, !Task.isCancelled else { break }
+            withAnimation(.easeInOut(duration: Self.turnHintDuration)) {
+                turn?.progress = target
+            }
+            try? await Task.sleep(for: .seconds(Self.turnHintDuration))
+        }
+        if turn?.id == id { turn = nil }
+    }
+
+    /// Seconds each way.
+    static let turnHintDuration = 0.45
+
+    /// How far a hint goes: about 45° of a flip, or a slide's 6%. Much less
+    /// of a flip shows no edge: the page rises towards you, still covering its
+    /// own place.
+    static func turnHintLift(_ motion: ReaderTurnMotion) -> Double {
+        motion == .flip ? 0.25 : 0.06
     }
 
     // MARK: Pictures

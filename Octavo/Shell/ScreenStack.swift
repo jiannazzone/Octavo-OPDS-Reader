@@ -18,6 +18,8 @@ struct ScreenStack<Root: View>: View {
     /// The Library's top screen has a + for Import from Files, above
     /// Settings (Adam, 2026-11-02).
     var importsBooks = false
+    /// The tour's Add your books has Skip, at its root (decision 30).
+    var skip: (() -> Void)?
     @ViewBuilder let root: () -> Root
     @Environment(ShellModel.self) private var shell
     /// `nil` until the stack has been laid out once.
@@ -77,6 +79,9 @@ struct ScreenStack<Root: View>: View {
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if path.routes.isEmpty {
+                        if let skip {
+                            TourSkipButton(action: skip)
+                        }
                         if importsBooks {
                             Button("Import from Files", systemImage: "plus") { shell.showFilePicker() }
                         }

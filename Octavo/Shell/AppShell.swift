@@ -21,9 +21,13 @@ struct AppShell: View {
     var body: some View {
         ZStack {
             Group {
-                if model.needsSetup {
-                    // No tabs, and nothing to skip to (decision 6).
-                    ScreenStack(tab: .setup, title: "Add your books", showsSettings: false) {
+                if model.showsSetup {
+                    // No tabs, and nothing to skip to (decision 6) unless
+                    // the tour brought you here.
+                    ScreenStack(
+                        tab: .setup, title: "Add your books", showsSettings: false,
+                        skip: model.addsBooksAfterTour ? { model.skipAddingBooks() } : nil
+                    ) {
                         SetupStart()
                     }
                 } else {
@@ -31,6 +35,11 @@ struct AppShell: View {
                 }
             }
             .accessibilityHidden(isCovered)
+            if model.tour != nil || model.tourWaitsForHinge {
+                TourScreen()
+                    .accessibilityHidden(model.reading != nil)
+                    .transition(.identity)
+            }
             if let book = model.reading {
                 ReaderView(
                     book: book, bookmarkSync: model.readingBookmarkSync,
@@ -70,7 +79,13 @@ struct AppShell: View {
             Task { await model.openSharedFile(url) }
         }
         .onHingeChange { old, new in
+            model.hingeReported(HingeTransition.Fold(new.hinge?.status))
             model.hingeChanged(HingeTransition(from: old, to: new))
+        }
+        // Nothing from the hinge by now: no fold on this iPhone (decision 29).
+        .task {
+            try? await Task.sleep(for: .seconds(0.75))
+            model.hingeStayedSilent()
         }
         .animation(.default, value: model.reading)
         .onChange(of: scenePhase) { _, phase in
@@ -85,7 +100,7 @@ struct AppShell: View {
     }
 
     private var isCovered: Bool {
-        model.reading != nil
+        model.reading != nil || model.tour != nil || model.tourWaitsForHinge
     }
 
     private var tabs: some View {
