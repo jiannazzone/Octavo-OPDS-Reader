@@ -7,7 +7,19 @@
 | Changes | `ubuntu-latest` | Decides whether tests are needed |
 | OctavoKit tests | `xcode-27` | `swift test` |
 | App tests | `xcode-27` | `xcodebuild` on an iPhone Duo, iOS 27.1 |
-| CI passed | `ubuntu-latest` | Fails unless the jobs that had to run passed. The one check for "Protect main" to require |
+| CI passed | `ubuntu-latest` | Fails unless the jobs that had to run passed. The one check "Protect main" requires |
+
+## Merging
+
+"Protect main" requires "CI passed" from GitHub Actions, so a pull request can't merge to `main` until it's green. Branches don't have to be up to date with `main` first, because that would make every merge re-run CI on the other open pull requests.
+
+To skip the wait, use auto-merge, which lands the pull request when the check passes:
+
+```bash
+gh pr merge <number> --auto --merge
+```
+
+The ruleset has no bypass, so if the runner is down or a test is flaky, nothing merges until the ruleset is edited.
 
 ## Runner
 
@@ -44,16 +56,30 @@ Measured on an 18-core Mac that was busy with other work, from a fresh clone eac
 
 The small change added one line to an app file and one to an OctavoKit file: 99 of 156 cacheable compile tasks hit. A change to a widely used OctavoKit file would hit less.
 
+## Timings on GitHub's runners (2026-11-04)
+
+Four runs of the App tests job, with the simulator booting before the build. Most of the job's time comes before compiling, and the first `xcodebuild` on a new runner is the largest part. The second one, in the Test step, printed its first output in 6–8 s.
+
+| Phase | No cache (2 runs) | Cached (2 runs) |
+|---|---|---|
+| First `xcodebuild` output | 346 s, 277 s | 354 s, 329 s |
+| Setup before compiling | 232 s, 118 s | 252 s, 176 s |
+| Compiling and linking | 157 s, 423 s | 61 s, 15 s |
+| Running the tests | 75 s, 65 s | 129 s, 52 s |
+| Whole job | 13m47s, 15m07s | 13m52s, 9m52s |
+
+Booting the simulator after the build was tried once (#52), and went back. The build took 41 s and the boot 75 s, but the Test step took 27 minutes and failed, and the job came within seconds of its 30-minute limit. WebKit's GPU process took 1,169 s to launch, against 1–5 s in the earlier runs that logged it, so `BookInspector` hit its 30 s limit and reported `.damaged`. One run doesn't prove the cause. It does suggest that a new runner's slow start goes with the simulator's first start, and that moving the boot doesn't remove it.
+
 ## Watch for
 
 - `AttemptTests` and any other test with short time limits may be flaky on a slower runner. `aServerThatDoesntAnswerTimesOut` expects a 50 ms limit to have fired after 150 ms.
+- A WebKit process that stalls on the runner makes `BookInspectorTests` fail with `.damaged`, which looks like a bad book but is a timeout. "CI passed" is required, so re-run before looking for a bug.
 - Some tests start requests to `localhost`, which nothing answers in CI. None waits for the answer.
-- Changing a pull request's base branch doesn't re-run CI, so its old result stays. This shouldn't come up while branches are cut from `main`. If a pull request is ever retargeted, re-run CI by hand. Adding the `edited` trigger would fix it, but would also re-run the tests on every title or description edit.
+- Changing a pull request's base branch doesn't re-run CI, so its old result stays. A stacked pull request is retargeted to `main` when the one below it merges, so re-run CI by hand if the result matters. Adding the `edited` trigger would fix it, but would also re-run the tests on every title or description edit.
 - A rebase merge pushes several commits at once, but a push's check reads only the last one. If that commit is docs-only, `main` skips the tests, though the pull request already ran them. Merge commits and squash merges aren't affected.
 - A pull request's own copy of `ci.yml` is what runs, so it can turn "CI passed" green without testing anything. Read every `.github/` change by hand.
 
 ## Still to do (#19)
 
-- Add "CI passed" to the "Protect main" ruleset once it has passed on a few real pull requests. Require it from GitHub Actions specifically, and decide whether branches must be up to date with `main` first.
 - Turn the foliate-update checks into one script and run them. They need the simulator and Docker together, so probably a self-hosted runner.
 - Run the OPDS source against `dev/opds` and the network-trust checks against `dev/trust`.

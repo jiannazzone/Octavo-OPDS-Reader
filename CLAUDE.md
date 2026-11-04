@@ -45,7 +45,7 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
   - `Config/Octavo-Info.plist` (ATS: local networking plus home-name and 100.64/10 exceptions, `docs/notes/network-trust.md`), `dev/bookorbit/` (local server), `docs/notes/` (engineering notes, indexed in its README).
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
 - **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask. Show the owner every GitHub issue as a draft before creating it.
-- On GitHub, `main` is protected by the ruleset "Protect main": changes land only through a pull request, and force pushes and branch deletion are blocked, with no bypass (owner included).
+- On GitHub, `main` is protected by the ruleset "Protect main": changes land only through a pull request with a green "CI passed" check, and force pushes and branch deletion are blocked, with no bypass (owner included). `gh pr merge <number> --auto --merge` lands a pull request when the check passes.
 - **Branching: GitHub flow.** One short-lived branch per task, cut from `main` and merged back by pull request with a merge commit. The spike's integration branch `spike/scaffold` is retired.
 - **CI** (`.github/workflows/ci.yml`, `docs/notes/ci.md`): `swift test` and the app's tests on GitHub's `xcode-27` runner, on every pull request and push to `main`. Changes to only `docs/`, `README.md` or `CLAUDE.md` skip the tests. It doesn't run the Docker checks yet (#19).
 - Spike tracker: `docs/SPIKE.md`.
