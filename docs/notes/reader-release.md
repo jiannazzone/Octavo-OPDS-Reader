@@ -35,7 +35,7 @@ Only `bridge.js` waits on frames. foliate-js's own `requestAnimationFrame` calls
 
 ## 2. The fix
 
-**`ReaderModel.close()`** sets `phase = .closed`, ends any fold under way and flushes pushes as before. `handle` drops every message once closed, and everything that talks to the page already checks `phase == .open`. `openBook` stops if the reader closed while it was asking the server, instead of opening the whole book in a page nobody can see. `ReaderView` starts `close()` with `Task.immediate`, so it's closed before the page's messages arrive.
+**`ReaderModel.close()`** gives a jump under way up to a second to land (`jumpsLanded`), so the book's screen hears of its trip. Then it sets `phase = .closed`, ends any fold under way and flushes pushes as before. `handle` drops every message once closed, and everything that talks to the page already checks `phase == .open`. `openBook` stops if the reader closed while it was asking the server, instead of opening the whole book in a page nobody can see. `ReaderView` starts `close()` with `Task.immediate`, so it's closed before the page's messages arrive.
 
 **`nextFrame` in `bridge.js`** gives up after a second. That covers a call already under way as the reader closes (a turn, a jump, a re-layout, an open), which `close()` can't stop. On screen a frame comes long before that, so nothing changes there. A closed page's calls end within a few seconds.
 
@@ -50,7 +50,7 @@ So the old hang was also why a close never moved the place: `applyLayout` shadow
 
 **Rule from here:** anything in `bridge.js` that a Swift call awaits has to finish without frames.
 
-**One trade-off:** a relocation that arrives after the close is dropped. A turn or a jump into a section still loading when Back is tapped isn't saved, and the book reopens on the page last seen.
+**One trade-off:** a relocation that arrives after the close is dropped. A turn into a section still loading when Back is tapped isn't saved, and neither is a jump that takes more than that second, and the book reopens on the page last seen.
 
 ## 3. Measured in the app
 
@@ -69,7 +69,7 @@ So the old hang was also why a close never moved the place: `applyLayout` shadow
 | Back after the background (`away`) | 1 | 1 | 0 |
 | BookOrbit, with its pull, push and cover motion (`synced`) | 3 | 3 | 0 |
 
-After the fix nearly every reader had gone 1 s after its close. Two closed mid-open lasted past that, and were gone by the next row. Before the fix, closes up to 600 ms into opening didn't leak, and those from 1 s on did.
+After the fix nearly every reader had gone 1 s after its close. In each run one or two closed mid-open or mid-turn lasted past that, and were gone by the next row. Before the fix, closes up to 600 ms into opening didn't leak, and those from 1 s on did.
 
 **Nothing else stops a reader** (`stays_open`): it still turns after opening folded, unfolding, half open, flat, landscape and back, and coming back from the background.
 
@@ -77,7 +77,7 @@ After the fix nearly every reader had gone 1 s after its close. Two closed mid-o
 
 ## 4. In tests
 
-`ReaderFixedLayoutTests`, content processes under this simulator every second:
+`ReaderFixedLayoutTests`, content processes under this simulator every second, before #58 had the suite share a page:
 
 | | Peak | At the end |
 |---|---|---|
@@ -86,7 +86,7 @@ After the fix nearly every reader had gone 1 s after its close. Two closed mid-o
 
 So tests and the app were held the same way. The suite's own `requestAnimationFrame` stand-in (`window.requestAnimationFrame = f => setTimeout(f, 16)`) goes in after the book opens, too late for a call already waiting.
 
-The suite's time didn't clearly change: 82.7 s with the fix against 82.1 s without, then 109.6 s against 94.0 s with the sampler running and other sessions loading the Mac. All 476 app tests pass. `goesAwayWithACallWaitingForAFrame` takes about 7 s: it opens a book and waits out the real limit.
+The suite's time didn't clearly change: 82.7 s with the fix against 82.1 s without, then 109.6 s against 94.0 s with the sampler running and other sessions loading the Mac. All 535 app tests pass after merging `main`. `goesAwayWithACallWaitingForAFrame` takes about 7 s: it opens a book and waits out the real limit.
 
 ## 5. Running it again
 

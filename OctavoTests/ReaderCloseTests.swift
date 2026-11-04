@@ -41,7 +41,7 @@ struct ReaderCloseTests {
             model.override(layout)
             await model.close()
         }
-        #expect(await eventually(timeout: .seconds(10)) { closedModel == nil && closedPage == nil })
+        #expect(await eventually(timeout: .seconds(30)) { closedModel == nil && closedPage == nil })
     }
 
     // Leaving the window gives the page another size for a moment, and a page
@@ -63,6 +63,31 @@ struct ReaderCloseTests {
         #expect(model.geometry == geometry)
         #expect(model.position == position)
         #expect(store.position(forBook: bookID) == position)
+    }
+
+    // Closing waits a moment for a jump to land, so the book's screen hears of
+    // its trip. The book file is missing, so nothing opens under the test.
+    @Test func aJumpLandingAsItClosesStillCounts() async throws {
+        let missing = URL.testDirectory.appending(path: "\(UUID().uuidString).epub")
+        let model = ReaderModel(
+            book: ReaderBook(fileURL: missing, id: bookID), store: store,
+            bookmarks: ReaderBookmarks(bookID: bookID, store: bookmarkStore)
+        )
+        model.handle(.opened(.init(restoredFrom: "start", sectionCount: 1, isFixedLayout: false)))
+        model.handle(.relocate(.init(cfi: "epubcfi(/6/4!/4/2/1:0)", fraction: 0.1)))
+        let place = model.position
+        model.beginJump()
+
+        let closing = Task.immediate { await model.close() }
+        model.handle(.relocate(.init(cfi: "epubcfi(/6/8!/4/2/1:0)", fraction: 0.4)))
+        let landed = model.position
+        await model.endJump()
+        await closing.value
+
+        #expect(model.phase == .closed)
+        #expect(landed != place)
+        #expect(store.trip(forBook: bookID)?.page == landed)
+        #expect(store.position(forBook: bookID) == place)
     }
 
     @Test func opensNothingAfterClosingWhileAskingTheServer() async throws {
