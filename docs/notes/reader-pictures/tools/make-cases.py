@@ -12,6 +12,8 @@ def png(width, height):
 
 big = '<img id="%s" alt="" src="big.png"%s/>'
 small = '<img id="%s" alt="" src="small.png"%s/>'
+small_limit = ' style="max-width: 60px;"'
+big_limit = ' style="max-width: 400px;"'
 caption = '<p>A caption long enough that it would run out of a box that is too wide for the column.</p>'
 cases = [
     # Project Gutenberg's own markup.
@@ -25,6 +27,18 @@ cases = [
     f'<figure style="width: 600px;">{big % ("wide-figure", "")}<figcaption>A caption for the figure, wide enough to show it.</figcaption></figure>',
     f'<table style="width: 600px;"><tr><td>{big % ("wide-table", "")}</td></tr></table>',
     f'<p style="width: 600px;">Words around a picture in a paragraph. {small % ("wide-paragraph", "")} More words after it, enough for a line or two.</p>',
+    f'<figure style="display: table; width: 600px;">{big % ("wide-display-table", "")}<figcaption>A caption held to the picture by its table box.</figcaption></figure>',
+    f'<div style="display: table; width: 600px; margin: 0 auto;">{big % ("wide-display-table-centred", "")}</div>',
+    f'<table><tr><td width="600">{big % ("wide-cell-attribute", "")}</td></tr></table>',
+    f'<table><tr><td style="width: 600px;">{big % ("wide-cell-style", "")}</td></tr></table>',
+    f'<table><col width="600"/><tr><td>{big % ("wide-col", "")}</td></tr></table>',
+    # A table with no width of its own, and two pictures side by side.
+    f'<table><tr><td>{big % ("auto-table", "")}</td></tr></table>',
+    f'<table><tr><td>{big % ("two-cells-left", "")}</td><td>{big % ("two-cells-right", "")}</td></tr></table>',
+    # A box that takes its size from a small picture: text wraps beside it.
+    f'<div style="float: left;">{big % ("float-small-limit", small_limit)}</div><p>Words that wrap beside a small picture, as many as it takes to show that they do.</p><p style="clear: both;"/>',
+    f'<span style="display: inline-block;">{big % ("inline-block-small-limit", small_limit)}</span>',
+    f'<div style="float: left;">{big % ("float-big-limit", big_limit)}</div><p style="clear: both;"/>',
     # The picture's own size.
     big % ("max-width-px", ' style="max-width: 800px;"'),
     big % ("max-width-class", ' class="capped"'),
@@ -36,6 +50,8 @@ cases = [
     big % ("max-width-percent", ' style="max-width: 40%;"'),
     small % ("plain-small", ""),
     big % ("plain-big", ""),
+    # foliate reads a limit of 0 as none.
+    big % ("zero-limit", ' style="max-width: 0;"'),
     # min-width beats max-width: left to the book.
     big % ("min-width", ' style="min-width: 600px;"'),
 ]

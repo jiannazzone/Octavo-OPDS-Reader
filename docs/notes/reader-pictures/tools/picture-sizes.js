@@ -40,8 +40,7 @@ const measure = picture => {
     }
     return {
         id: picture.id || null,
-        src: (picture.getAttribute('src') ?? picture.tagName).replace(/^.*[/_]/, ''),
-        parentWidth: picture.parentElement?.style?.width || null,
+        boxWidth: round(picture.parentElement.getBoundingClientRect().width),
         width: round(box.width),
         height: round(box.height),
         split,

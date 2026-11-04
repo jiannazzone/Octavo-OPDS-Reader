@@ -373,16 +373,23 @@ let guardsLinks = true
 // What BOOK_STYLES can't say, since it depends on the book's own value. A
 // limit the book sets on a picture in points stays, but not past its box:
 // foliate keeps a limit that's already set when it sizes pictures, which it
-// does after this, and a percentage needs no help. A table around a picture
-// keeps its width the same way: WebKit ignores `max-width` on a table. foliate
-// takes a limit of 0 to mean none, so it's left for foliate.
+// does after this, and a percentage needs no help. A table box around a
+// picture keeps its width the same way: WebKit ignores `max-width` on a table.
+// A size this small fits any column, so it stays in points. A percentage can't
+// size a float or an inline-block around the picture, which would grow to the
+// column and push the text out from beside it. That leaves a limit of 0 to
+// foliate too, which takes it to mean none.
+const FITS_ANY_COLUMN = 200
 const limitPicturesToTheirBoxes = doc => {
     const limit = (element, property, value) => {
-        if (value.endsWith('px') && value !== '0px') element.style.setProperty(property, `min(${value}, 100%)`, 'important')
+        if (value.endsWith('px') && parseFloat(value) > FITS_ANY_COLUMN) element.style.setProperty(property, `min(${value}, 100%)`, 'important')
     }
     const style = element => doc.defaultView.getComputedStyle(element)
     for (const picture of doc.body?.querySelectorAll('img, svg, video') ?? []) limit(picture, 'max-inline-size', style(picture).maxInlineSize)
-    for (const table of doc.body?.querySelectorAll('table:has(img, svg, video)') ?? []) limit(table, 'inline-size', style(table).inlineSize)
+    for (const box of doc.body?.querySelectorAll(':has(img, svg, video)') ?? []) {
+        const { display, inlineSize } = style(box)
+        if (display === 'table' || display === 'inline-table') limit(box, 'inline-size', inlineSize)
+    }
 }
 
 const onSectionLoad = ({ detail: { doc } }) => {

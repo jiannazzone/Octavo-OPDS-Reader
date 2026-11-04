@@ -36,6 +36,11 @@ struct ReaderPicturesTests {
         var columns: Int
         var boxes: [String: Box]
         var maxWidths: [String: String]
+
+        /// A box of text may run out of the column; a picture or its box may not.
+        var tooWide: [String: Box] {
+            boxes.filter { $0.key != "text-box" && $0.value.over > 0.5 }
+        }
     }
 
     private static let chapter = #"""
@@ -48,6 +53,11 @@ struct ReaderPicturesTests {
     <div class="figcenter" style="width: 550px;"><img id="small-in-box" alt="" src="small.png"/></div>
     <div id="margin-box" style="width: 30em; margin-left: 2em; padding: 0 1em;"><img id="margin" alt="" src="big.png"/></div>
     <table id="table-box" style="width: 800px;"><tr><td><img id="table" alt="" src="big.png"/></td></tr></table>
+    <figure id="table-display-box" style="display: table; width: 600px;"><img id="table-display" alt="" src="big.png"/></figure>
+    <table id="auto-table-box"><tr><td><img id="auto-table" alt="" src="big.png"/></td></tr></table>
+    <div id="small-float-box" style="float: left;"><img id="small-float" alt="" src="big.png" style="max-width: 60px;"/></div>
+    <p style="clear: both;">Text after the float.</p>
+    <img id="zero-limit" alt="" src="big.png" style="max-width: 0;"/>
     <img id="own-limit" alt="" src="big.png" style="max-width: 800px;"/>
     <img id="percent-limit" alt="" src="big.png" style="max-width: 40%;"/>
     <img id="plain" alt="" src="big.png"/>
@@ -127,8 +137,9 @@ struct ReaderPicturesTests {
             """, arguments: ["width": page.width, "height": page.height])
     }
 
-    /// Every element with an id: its width, and how far it runs past the
-    /// sides of the column it starts in.
+    /// Every element with an id: its width, and how far any part of it runs
+    /// past the sides of its column. A box that breaks across columns has a
+    /// rect in each.
     private func measure(_ web: WebPage) async throws -> Measured {
         let json = try #require(try await web.callJavaScript("""
             const { doc } = document.querySelector('foliate-view').renderer.getContents()[0]
@@ -140,9 +151,12 @@ struct ReaderPicturesTests {
             const start = parseFloat(root.paddingLeft)
             const boxes = {}, maxWidths = {}
             for (const element of doc.body.querySelectorAll('[id]')) {
-                const box = element.getClientRects()[0]
-                const left = (box.left - start) - Math.floor((box.left - start + 0.5) / pitch) * pitch
-                boxes[element.id] = { width: box.width, over: Math.max(left + box.width - column, -left, 0) }
+                const rects = [...element.getClientRects()]
+                const over = rects.map(box => {
+                    const left = (box.left - start) - Math.floor((box.left - start + 0.5) / pitch) * pitch
+                    return Math.max(left + box.width - column, -left, 0)
+                })
+                boxes[element.id] = { width: rects[0].width, over: Math.max(...over) }
                 maxWidths[element.id] = element.style.maxWidth
             }
             const columns = document.querySelector('foliate-view').renderer.heads?.length ?? 0
@@ -155,8 +169,7 @@ struct ReaderPicturesTests {
     func picturesAndTheirBoxesFitTheColumn(page: Page) async throws {
         let web = try await open(try Self.book(), at: page)
         let measured = try await measure(web)
-        let tooWide = measured.boxes.filter { $0.key != "text-box" && $0.value.over > 0.5 }
-        #expect(tooWide.isEmpty, "\(tooWide) in a column of \(measured.column)")
+        #expect(measured.tooWide.isEmpty, "\(measured.tooWide) in a column of \(measured.column)")
         // The illustration that started this: as wide as its box, which is as
         // wide as the book says or the column allows.
         #expect(measured.columns == page.columns)
@@ -170,6 +183,10 @@ struct ReaderPicturesTests {
         #expect(try #require(measured.boxes["small-in-box"]).width == 200)
         #expect(abs(try #require(measured.boxes["percent-limit"]).width - measured.column * 0.4) < 0.5)
         #expect(abs(try #require(measured.boxes["plain"]).width - measured.column) < 0.5)
+        // foliate takes a limit of 0 to mean none.
+        #expect(abs(try #require(measured.boxes["zero-limit"]).width - measured.column) < 0.5)
+        // A float takes its size from a small picture, so text can wrap beside it.
+        #expect(try #require(measured.boxes["small-float-box"]).width == 60)
     }
 
     // Text is laid out as the book says, only boxes with a picture change.
@@ -192,9 +209,10 @@ struct ReaderPicturesTests {
                 renderer.render()
                 """, arguments: ["columns": page.columns, "maxInlineSize": page.maxInlineSize])
             let measured = try await measure(web)
-            let tooWide = measured.boxes.filter { $0.key != "text-box" && $0.value.over > 0.5 }
-            #expect(tooWide.isEmpty, "\(tooWide) in a column of \(measured.column), \(page.name)")
+            #expect(measured.tooWide.isEmpty, "\(measured.tooWide) in a column of \(measured.column), \(page.name)")
             #expect(measured.maxWidths["own-limit"] == limit)
+            // A table with no width of its own isn't pinned to its first layout.
+            #expect(abs(try #require(measured.boxes["auto-table-box"]).width - measured.column) < 1)
         }
     }
 }
