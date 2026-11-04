@@ -58,7 +58,7 @@ struct ConnectionBanner: View {
     private var tint: Color {
         switch problem {
         case .unreachable: .orange
-        case .signedOut: .blue
+        case .signedOut: .accentColor
         }
     }
 }

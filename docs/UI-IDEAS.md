@@ -67,7 +67,7 @@ Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded
 
 ## An accent colour (Adam, 2026-11-03)
 
-Octavo has no accent colour of its own: no `AccentColor` asset and no tint set app-wide, so buttons, links, the scrubber and progress lines use iOS's default blue (rendered (0, 128, 245) on Paper and (41, 186, 255) on Night's glass). Pinned for later: whether Octavo gets its own.
+Octavo has no accent colour of its own: no `AccentColor` asset and no tint set app-wide, so buttons, links, the scrubber and progress lines use iOS's default blue (rendered (0, 128, 245) on Paper and (41, 186, 255) on Night's glass). Decided and built 2026-11-03: Ink (decision 31 in `docs/design/direction.md`).
 
 ## Covers that aren't 2:3: fill or fit? (Adam, 2026-11-03)
 
