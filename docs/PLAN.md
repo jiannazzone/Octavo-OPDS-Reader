@@ -44,6 +44,8 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - Should Home and the Library share the reader's colours (its theme: Paper, Sepia, Night), or keep the system's light and dark? (Adam, after step 12.)
 - The empty strip at the reader's left edge, unfolded (the mirror of the side column, about 84 pt, so the pages split on the hinge). Options: keep it as a margin; a quiet progress rail with chapter ticks; or, with Narrow margins and the Duo flat, let the pages spread across the whole width (text then crosses the crease, and going half open re-lays out). (Adam, after step 12.)
 - Graphical glitches in Settings: unfolded, the left column grows or bounces in from the edge as it opens (Adam, 2026-11-03, on his Duo). Not looked into yet.
+- A "go back" in the reading controls: back to where you were after a jump or a scrub (Adam, 2026-11-03, on his Duo), as in `docs/UI-IDEAS.md` (Reader progress). The controls' ‹ already closes the book.
+- Folded, it needs to be easier to dismiss the Customize pane (Adam, 2026-11-03, on his Duo). A tap on the screen is a small target there, and his opened the table of contents instead of closing the pane. Not looked into yet.
 
 ## What you'll see that isn't right yet
 
