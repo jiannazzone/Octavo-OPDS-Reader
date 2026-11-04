@@ -1,8 +1,8 @@
 # Going back after a jump (decision 33)
 
-Decision 33 in `docs/design/direction.md`. Written 2026-11-04 on 'Octavo Navigation Duo' (F7C03777-468D-4B9C-9E47-AAD7FF706A88, iPhone Duo, iOS 27.1 simulator), against the local BookOrbit v3.6.0. These are the measurements behind the design. Nothing is built yet.
+Decision 33 in `docs/design/direction.md`. Written 2026-11-04 on 'Octavo Navigation Duo' (F7C03777-468D-4B9C-9E47-AAD7FF706A88, iPhone Duo, iOS 27.1 simulator), against the local BookOrbit v3.6.0. These are the measurements behind the design, and what was found building decisions 33 and 35. Footnotes (34) aren't built.
 
-## What a jump does today
+## What a jump did before
 
 Moby-Dick (file 3), with the place on the server at 47.8%, driven with the debug remote's `goto`. That makes the same `ReaderModel.goTo(fraction:)` call as the scrubber.
 
@@ -12,7 +12,7 @@ Moby-Dick (file 3), with the place on the server at 47.8%, driven with the debug
 | Jump by CFI to Chapter 8 (as Contents does) | At once | 9.8% by 3.5 s |
 | Close and reopen | Opens at 9.8%, from the server | |
 
-Every jump goes through `moved(to:)`, which saves and hands the place to the pusher. A link in the book does too: foliate's `link` event calls `view.goTo`, and Swift only sees a relocation.
+Every jump went through `moved(to:)`, which saves and hands the place to the pusher. A link in the book did too: foliate's `link` event called `view.goTo`, and Swift only saw a relocation.
 
 - **Count turns, not relocations.** A scrub posted 5 relocations and a CFI jump 4.
 - **The controls can't hold the button.** They hide on the next tap, and after a choice in Contents or Search (`backToReading`).
@@ -68,13 +68,13 @@ Built in `ReaderScrubber.swift` (the slider) and `ReaderScrubberLine.swift` (the
 ## Notes in real books (decision 34)
 
 - **No test book has one:** no `noteref` or `doc-noteref`, and no superscript or numbered note link in the five samples, the bundled book, or Adam's three modern novels. Green City Wars' chapter headings do link back to its contents.
-- **Links today:** `detectTaps` leaves a tap on `a[href]` alone, foliate's `link` event goes to `onLink`, and foliate then calls `goTo`. That's where a note would be caught.
+- **Links:** `detectTaps` leaves a tap on `a[href]` alone, and foliate's `link` event goes to `onLink`, which hands it to Swift as a jump. That's where a note would be caught.
 - **foliate's `footnotes.js` isn't vendored** (`PINNED.md`). Reading a note from a parsed section, as `describePlace` does, runs no script.
 - **There's no standard:** other readers were reported to guess, or to show only a note's first paragraph.
 
 ## The way back
 
-Built so far: your place holds, "Back to page N", ✕, reading on, trips across closing and the fill (`ReaderTrip`, `ReaderModel+Trip`, `ReaderTripTests`). Videos: `going-back/videos/way-back-folded.mp4` (about twice real speed) and `trip-closing.mp4` (with the waits cut). Still to come: links in the book.
+Your place holds, "Back to page N", ✕, reading on, trips across closing, the fill and links in the book (`ReaderTrip`, `ReaderModel+Trip`, `ReaderTripTests`). Videos: `going-back/videos/way-back-folded.mp4` (about twice real speed), `trip-closing.mp4` and `links-unfolded.mp4` (with the waits cut).
 
 Measured on 'Octavo Navigation Duo' with real taps and drags, Moby-Dick (file 3) on the local BookOrbit, the server at 47.8%:
 
@@ -109,13 +109,23 @@ A trip is saved per book beside the positions (`ReadingPositionStore`, `Trips/`)
 - **The fill only redraws for a value that moves it.** Landing brings none, as the knob is already there, so the old fill stayed up. A nudge of the smallest step did nothing. `ReaderView` gives the slider a new `.id` when your place changes, and a slider made with the setting draws it right.
 - **Zoomed in, the fill's start stays where it was.** It keeps the point on the screen that your place had on the whole line, whether or not your place is in the zoomed window, and it's right again after letting go. Setting the neutral with the range was worse: it left a short, wrong fill after zooming out.
 
-## How the rest would be built
+### Links in the book
 
-A plan, for when Adam says to build it.
+`onLink` cancels foliate's own `goTo` and posts `link`, and Swift makes the jump, so your place holds before the page moves. No new way to reach anything: Swift calls the same `view.goTo` with the same address, and an address with a scheme still goes to `externalLink`, which the app ignores. Every script-blocking layer stays, and no foliate patch was needed.
 
-- **Links:** `bridge.js` tells Swift when a link in the book jumps, so it starts a trip.
-- **Files shared with other work:** `bridge.js` also changes in the fixed-layout session.
-- **Keep every script-blocking layer.** No foliate patch should be needed: foliate's own `history` isn't used, as a trip has to outlive the page.
+Measured with real taps on Moby-Dick's own contents page, the server at 0.4%:
+
+| What | Where it lands | On BookOrbit |
+|---|---|---|
+| Chapter 16, flat | Its heading, with "Back to page 3" | Still 0.4% |
+| Back | The contents page | Still 0.4% |
+| Chapter 5, then ✕ | Its page, the button gone | 8.4% |
+| A web address | Nowhere, no trip, nothing opens | Unchanged |
+| Chapter 2, folded, then Back | Its heading, then the contents page | Unchanged |
+| Etymology, folded, the controls up | Its heading, the controls stay, Back above the bar | Unchanged |
+
+- **A link you tapped can stay red when you come back to it.** Project Gutenberg's books colour `a:hover`, and on iOS a tapped link stays hovered until the next tap elsewhere. The tap itself hasn't changed, so this would have happened before too, but going back makes it easy to see.
+- **Not run:** a link inside the same spread, a book's note that links back, and links in a fixed-layout book, MOBI or FB2.
 
 ## Tools
 

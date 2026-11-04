@@ -270,9 +270,9 @@ Decided with mockups in the planning session (no Figma frames). This is step 17,
 
 ### Going back after a jump (Adam, 2026-11-04)
 
-Decided with pictures in the planning session (no Figma frames). Not built yet (`docs/PLAN.md`, To revisit). The measurements are in `docs/notes/going-back.md`.
+Decided with pictures in the planning session (no Figma frames). Decisions 33 and 35 are built; 34 isn't (`docs/PLAN.md`, To revisit). The measurements are in `docs/notes/going-back.md`.
 
-33. **Any jump offers the way back, and your place holds until you settle.** Today a jump saves the page you land on as your place and syncs it about 2 s later, so a look at a map moves your other devices too.
+33. **Any jump offers the way back, and your place holds until you settle.** Before this, a jump saved the page you landed on as your place and synced it about 2 s later, so a look at a map moved your other devices too.
     - **What starts it:** every jump: the scrubber, Contents, a bookmark, a search result or a link in the book. Not a page turn, a fold, a text size change, or Go on BookOrbit's capsule. A second jump keeps the same way back, to where you were before the first one.
     - **The button:** "Back to page 312" with ✕, in a glass capsule. It stays up with the controls hidden, since they go on the next tap. The number is the footer's.
     - **Where it sits:** at the bottom of the left page in every posture (over the blank strip and the column's button), in the chapter's place in the footer, so the page numbers stay. While the progress bar is up it sits just above the bar, half open above the bar's left piece. It goes while a panel is open, as the other capsules do.
@@ -284,6 +284,7 @@ Decided with pictures in the planning session (no Figma frames). Not built yet (
     - **With BookOrbit's capsule, both show** (Adam, over one waiting for the other): stacked folded, with Back at the bottom and BookOrbit's capsule above it, covering about two lines until you answer; one under each page unfolded and half open. Back goes to your place and BookOrbit's capsule stays. Go goes to BookOrbit's place and ends the trip. BookOrbit's ✕ keeps your place, and the trip carries on. Back's ✕, or the fifth turn, makes this page your place and answers BookOrbit's capsule too, as reading on does.
     - **With Search's bar:** unfolded and half open, Back under the left page and the bar under the right. Folded there's room for one, so Back waits until the search ends with ✕: stepping through matches is common, and a stack could cover the match.
     - **Fixed-layout books:** the same, going back by the saved CFI, not by fraction. Their own fix is in (#56, `docs/notes/fixed-layout.md`).
+    - **Built (2026-11-04).** `ReaderTrip`, `ReaderModel+Trip`. While you're zoomed in on a trip, the fill's start stays where your place sits on the whole line, until you let go. No right-to-left or fixed-layout book has been run through it, or VoiceOver.
 
 34. **A footnote opens where you are, without leaving the page.** Not built yet.
     - **Where:** open (flat or half open), a glass card on the other page from its mark, level with it, so the sentence you're reading stays in view (Adam, over a pop-up by the mark and over a panel like Contents). Folded, along the bottom above the footer, or at the top if the mark is down there.
@@ -293,7 +294,7 @@ Decided with pictures in the planning session (no Figma frames). Not built yet (
     - **Which links:** the ones a book marks as notes, and unmarked ones that look like a note's mark, to be tuned on real books. Any other link is a jump. A tap near a tiny mark counts, so a near miss doesn't turn the page.
     - **Still needed: a real book with notes.** None of the sample books, or the three real books Adam gave the covers session, has a single note link.
 
-35. **Chapter buttons beside the chapter's name, and a scrubber that zooms.** Not built yet.
+35. **Chapter buttons beside the chapter's name, and a scrubber that zooms.**
     - **Where:** ⏮ and ⏭ either side of the chapter's name on the progress bar, so the scrubber keeps its full width (Adam, over beside the scrubber and over a swipe on the page). Half open, in the left piece. Normal-sized targets: Adam caught that being beside the name doesn't make them smaller. The bar stays up, so you can keep tapping.
     - **⏮:** partway through a chapter, to its first page; on the first page, to the chapter before, as in a music player (Adam, over always the chapter before). **⏭:** the next chapter's first page.
     - **A chapter** is any entry in the book's Contents, so a "Part Two" page counts. A button dims when there's nowhere to go, and neither shows for a book with no Contents.
@@ -306,6 +307,7 @@ Decided with pictures in the planning session (no Figma frames). Not built yet (
       - **Letting go** lands on that page, or on a bar, that chapter's first page.
       - The pause (0.35 s), the 8 pt and how quick a move has to be can still change on the Duo.
     - **Detents that were turned down:** iOS's own, which are hard and keep you from pages inside a chapter, and a soft catch across the whole book, which takes 80% or more of the track in a book of 38 chapters or more. Zoomed in, chapters are far enough apart for a catch (`docs/notes/going-back.md`).
+    - **Built (2026-11-04).** `ReaderChapterSkip`, `ReaderScrubber`, `ReaderScrubberLine`. No book with nested contents has been run through the buttons since Adam's three went from scratch, nor a fixed-layout book.
 
 ### Settings (approved 2026-10-31)
 
