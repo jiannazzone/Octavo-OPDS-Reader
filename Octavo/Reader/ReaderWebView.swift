@@ -20,6 +20,8 @@ struct ReaderWebView: View {
     let model: ReaderModel
     /// The progress bar covers the footer's place while it shows.
     var showsFooter = true
+    /// The way back has the chapter's place in the footer (decision 33).
+    var hidesFooterChapter = false
     @AppStorage(ReaderSettings.bookModeShadowKey) private var showsSpineShadow = ReaderSettings.bookModeShadowDefault
 
     var body: some View {
@@ -51,7 +53,7 @@ struct ReaderWebView: View {
             }
             .overlay(alignment: .topLeading) {
                 if showsFooter, model.turn == nil {
-                    ReaderFooter(model: model)
+                    ReaderFooter(model: model, hidesChapter: hidesFooterChapter)
                 }
             }
             .overlay(alignment: .topLeading) {

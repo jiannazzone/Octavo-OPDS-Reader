@@ -36,6 +36,10 @@ final class ReaderScrubberSlider: UISlider {
     private static let stillPoints = 1.5
     /// The least time between ticks while passing chapters.
     private static let tickSpacing = 0.06
+    /// How long to wait for the slider to stop easing after the finger lifts,
+    /// between updates and in all.
+    private static let easeGap = 0.08
+    private static let easeLimit = 0.3
 
     var onChange: ((Double) -> Void)?
     var onRelease: ((Double?) -> Void)?
@@ -58,6 +62,10 @@ final class ReaderScrubberSlider: UISlider {
     private var lastTick: CFTimeInterval = 0
     private var lastChapter: Int?
     private var caught: Double?
+    /// This touch has moved the knob, so letting go goes somewhere.
+    private var didChange = false
+    /// The finger has lifted and the slider is still easing to where it was.
+    private var easingUntil: CFTimeInterval?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -149,43 +157,72 @@ final class ReaderScrubberSlider: UISlider {
     // MARK: Tracking
 
     @objc private func began() {
+        if easingUntil != nil { finishEasing() }
         selection.prepare()
         impact.prepare()
         stillAt = value
+        didChange = false
         speed.reset()
         lastChapter = line.chapterIndex(at: Double(value))
         waitForHold()
-        startLink()
     }
 
     @objc private func changed() {
         // The slider eases toward the finger, and goes on a moment after it
-        // lifts. Past that, the place has been chosen.
-        guard isTracking else { return }
+        // lifts, which is still where the finger was going. Past that, the
+        // place has been chosen.
+        guard isTracking || easingUntil != nil else { return }
         // The line is still narrowing: the finger hasn't said anything yet.
         if let zoom, zoom.to != Self.wholeBook {
             value = zoom.holding
             return
         }
+        didChange = true
         let raw = Double(value)
         let line = line
-        let perPoint = ReaderScrubberLine.length(of: shownRange) / max(line.travel, 1)
-        if abs(raw - Double(stillAt)) / perPoint >= Self.stillPoints {
-            waitForHold()
-            stillAt = value
+        if isTracking {
+            let perPoint = ReaderScrubberLine.length(of: shownRange) / max(line.travel, 1)
+            if abs(raw - Double(stillAt)) / perPoint >= Self.stillPoints {
+                waitForHold()
+                stillAt = value
+            }
+            if speed.moved(to: raw / perPoint, at: CACurrentMediaTime()), isZoomed, zoom == nil {
+                zoomOutFollowingTheFinger()
+            }
         }
-        let quick = speed.moved(to: raw / perPoint, at: CACurrentMediaTime())
-        if isZoomed, zoom == nil, quick {
-            zoomOutFollowingTheFinger()
-        } else if isZoomed {
+        if isZoomed {
             catchChapter(near: raw, on: line)
-        } else {
+        } else if isTracking {
             tickPassingChapters(at: raw, on: line)
         }
         onChange?(caught ?? Double(value))
+        if easingUntil != nil { waitForEaseToEnd() }
     }
 
     @objc private func released() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(holdEnded), object: nil)
+        // Pressed and lifted without moving: the page stays.
+        guard didChange else {
+            endTracking()
+            onCancel?()
+            return
+        }
+        easingUntil = CACurrentMediaTime() + Self.easeLimit
+        waitForEaseToEnd()
+    }
+
+    private func waitForEaseToEnd() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(finishEasing), object: nil)
+        guard let easingUntil, CACurrentMediaTime() < easingUntil else {
+            finishEasing()
+            return
+        }
+        perform(#selector(finishEasing), with: nil, afterDelay: Self.easeGap)
+    }
+
+    @objc private func finishEasing() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(finishEasing), object: nil)
+        easingUntil = nil
         let chapter = caught
         endTracking()
         onRelease?(chapter)
@@ -198,6 +235,8 @@ final class ReaderScrubberSlider: UISlider {
 
     private func endTracking() {
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(holdEnded), object: nil)
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(finishEasing), object: nil)
+        easingUntil = nil
         caught = nil
         guard isZoomed else {
             stopLink()
@@ -250,18 +289,19 @@ final class ReaderScrubberSlider: UISlider {
         zoom = nil
         caught = nil
         lastChapter = line.chapterIndex(at: Double(value))
+        stopLink()
         waitForHold()
         redrawMarks()
     }
 
     private func animateZoom(to target: ClosedRange<Float>, holding: Float) {
         isZoomed = true
+        startLink()
         guard !UIAccessibility.isReduceMotionEnabled else {
             finishZoom(at: target, holding: holding)
             return
         }
         zoom = (minimumValue...maximumValue, target, CACurrentMediaTime(), holding)
-        startLink()
     }
 
     private func finishZoom(at target: ClosedRange<Float>, holding: Float) {
@@ -270,11 +310,15 @@ final class ReaderScrubberSlider: UISlider {
         value = holding
         if target == Self.wholeBook {
             isZoomed = false
-            if isTracking { waitForHold() } else { stopLink() }
+            stopLink()
+            if isTracking { waitForHold() }
         } else if isTracking {
             // Held still right on a chapter's start.
             catchChapter(near: Double(value), on: line)
-            if let caught { onChange?(caught) }
+            if let caught {
+                didChange = true
+                onChange?(caught)
+            }
         }
         redrawMarks()
     }
@@ -292,9 +336,15 @@ final class ReaderScrubberSlider: UISlider {
         link = nil
     }
 
-    override func removeFromSuperview() {
+    /// A link retains the slider, and the slider its closures and so the
+    /// reader, so nothing here can outlive the slider's window.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window == nil else { return }
+        endTracking()
+        zoom = nil
+        isZoomed = false
         stopLink()
-        super.removeFromSuperview()
     }
 
     @objc private func frameFired() {

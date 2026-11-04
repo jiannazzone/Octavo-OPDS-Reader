@@ -171,10 +171,15 @@ let relocations = 0
 // Called with each relocation's detail and message (`turn` waits on them).
 const relocationWatchers = new Set()
 
+// Why the renderer last moved ('page' and 'snap' are turns), which foliate's
+// own relocate event leaves out.
+let lastRelocateReason = null
+
 const onRelocate = ({ detail }) => {
     relocations++
     const message = {
         cfi: detail.cfi ?? null,
+        reason: lastRelocateReason,
         blankPage: isBlankPage(detail.range),
         fraction: finiteOrNull(detail.fraction),
         tocLabel: detail.tocItem?.label?.trim() || null,
@@ -1343,6 +1348,7 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     guardsLinks = harden !== false
     if (guardsLinks) hardenBook(view.book)
     view.renderer.setAttribute('flow', 'paginated')
+    view.renderer.addEventListener('relocate', e => { lastRelocateReason = e.detail?.reason ?? null }, { capture: true })
     if (initialAppearance) appearance = { css: String(initialAppearance.css ?? ''), background: String(initialAppearance.background ?? '') }
     applyAppearance()
     if (initialLayout !== undefined) layout = initialLayout

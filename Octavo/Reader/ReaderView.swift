@@ -133,7 +133,7 @@ private struct ReaderScreen: View {
         NavigationStack {
             // The bars take the footer's place: the progress bar, the step
             // bar while stepping through search matches, or the server's place.
-            ReaderWebView(model: model, showsFooter: !controls.showsBar && footerBar == nil)
+            ReaderWebView(model: model, showsFooter: showsFooter, hidesFooterChapter: backBarIsUp)
                 .overlay { status }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
@@ -142,7 +142,7 @@ private struct ReaderScreen: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
-                    if showsBackBar, let trip = model.trip, let geometry = model.geometry,
+                    if backBarIsUp, let trip = model.trip, let geometry = model.geometry,
                        let left = model.layout.textColumns(inReaderWidth: Double(geometry.size.width))?.first?.lowerBound {
                         ReaderBackBar(trip: trip, back: model.goBack, stay: model.settleTrip)
                             .fixedSize()
@@ -150,7 +150,7 @@ private struct ReaderScreen: View {
                             .transition(.opacity)
                     }
                 }
-                .animation(.easeOut(duration: 0.2), value: showsBackBar && model.trip != nil)
+                .animation(.easeOut(duration: 0.2), value: backBarIsUp)
                 .animation(.easeOut(duration: 0.2), value: controls.showsBar)
                 .overlay(alignment: .topLeading) {
                     if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
@@ -176,7 +176,7 @@ private struct ReaderScreen: View {
                         }
                         .frame(width: max(0, right - left))
                         .padding(.leading, left)
-                        .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4)
+                        .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4 + (stacksOverBackBar ? ReaderBackBar.height + 6 : 0))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -332,9 +332,22 @@ private struct ReaderScreen: View {
 
     /// The way back stays up with the controls hidden (decision 33). Not
     /// under a panel, or on one page while Search's bar has the footer's place.
-    private var showsBackBar: Bool {
-        guard panel == nil, shell.tour == nil, model.phase == .open else { return false }
+    private var backBarIsUp: Bool {
+        guard model.trip != nil, panel == nil, shell.tour == nil, model.phase == .open else { return false }
         return !(model.search.isStepping && model.layout.columns != 2)
+    }
+
+    /// On one page, BookOrbit's capsule stacks above the way back (decision
+    /// 33). Open, they sit one under each page.
+    private var stacksOverBackBar: Bool {
+        guard backBarIsUp, model.layout.columns != 2, case .serverPlace = footerBar else { return false }
+        return true
+    }
+
+    /// The bars take the footer's place, except that on one page the way back
+    /// keeps the numbers beside it, with BookOrbit's capsule above.
+    private var showsFooter: Bool {
+        !controls.showsBar && (footerBar == nil || stacksOverBackBar)
     }
 
     /// In the footer's place, or just above the progress bar while it's up.
@@ -640,6 +653,15 @@ private struct ReaderProgressBar: View {
                 relocationsAtRelease = nil
             }
             .frame(height: 30)
+            // A jump that doesn't relocate (it landed on this page, or the
+            // place wouldn't open) mustn't leave the knob on it for good.
+            .task(id: relocationsAtRelease) {
+                guard relocationsAtRelease != nil else { return }
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                scrub = nil
+                relocationsAtRelease = nil
+            }
             .accessibilityLabel("Position in Book")
             .accessibilityValue(place.barLine(spread: false))
         }
@@ -724,12 +746,13 @@ private struct ReaderProgressBar: View {
 /// whose pictures carry each page's own (`ReaderTurn`).
 struct ReaderFooter: View {
     let model: ReaderModel
+    var hidesChapter = false
 
     var body: some View {
         if model.phase == .open, let geometry = model.geometry {
             ReaderFooterLines(
                 place: ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction),
-                layout: model.layout, geometry: geometry, hidesChapter: model.trip != nil
+                layout: model.layout, geometry: geometry, hidesChapter: hidesChapter
             )
         }
     }

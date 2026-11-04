@@ -92,6 +92,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
             var total: Int?
         }
 
+        /// Why the page moved, as foliate's renderer says. `nil` from an older
+        /// bridge.
+        var reason: String?
         /// The visible page as a range CFI (stock foliate).
         var cfi: String?
         /// `cfi` collapsed to a point at the start of the page, the shape
@@ -112,6 +115,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var sectionIndex: Int?
         var sectionCount: Int?
         var location: Location?
+
+        /// A page turn, by a tap or a swipe, rather than a jump or a new layout.
+        var isPageTurn: Bool { reason == "page" || reason == "snap" }
 
         /// Where the page is as the footer, the bar and the panels show it.
         var shownFraction: Double { pageFraction ?? fraction ?? 0 }

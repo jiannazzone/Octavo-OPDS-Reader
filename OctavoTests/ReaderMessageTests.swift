@@ -4,6 +4,14 @@ import Testing
 @testable import Octavo
 
 struct ReaderMessageTests {
+    @Test func onlyATurnsRelocationIsAPageTurn() {
+        for (reason, isTurn) in [("page", true), ("snap", true), ("anchor", false), ("navigation", false), (nil, false)] as [(String?, Bool)] {
+            var relocation = ReaderMessage.Relocation()
+            relocation.reason = reason
+            #expect(relocation.isPageTurn == isTurn)
+        }
+    }
+
     // A relocate message as bridge.js posted it while reading Pride and Prejudice.
     static let relocateJSON = """
     {"type":"relocate","cfi":"epubcfi(/6/4!/4/16/8/2,/2/2/3:0,/4/2/3:14)","fraction":0.011097344942887005,\

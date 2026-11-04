@@ -291,6 +291,7 @@ enum ReaderStateFile {
         var rangeCFI: String?
         var startCFI: String?
         var blankPage: Bool?
+        var reason: String?
         var fraction: Double?
         var tocLabel: String?
         var location: ReaderMessage.Relocation.Location?
@@ -349,6 +350,7 @@ enum ReaderStateFile {
             rangeCFI: model.relocation?.cfi,
             startCFI: model.relocation?.startCFI,
             blankPage: model.relocation?.blankPage,
+            reason: model.relocation?.reason,
             fraction: model.position?.fraction,
             tocLabel: model.tocLabel,
             location: model.location,

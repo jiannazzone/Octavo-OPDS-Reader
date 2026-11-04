@@ -60,12 +60,24 @@ extension ReaderModel {
         Task {
             let count = relocationCount
             if let cfi = trip.place.cfi {
-                _ = try? await page.callJavaScript("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi])
+                let went = try? await page.callJavaScript("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi]) as? Bool
+                // A place that won't open (another edition's): the way back stays.
+                guard went == true else {
+                    isGoingBack = false
+                    self.trip = trip
+                    return
+                }
             } else {
                 _ = try? await page.callJavaScript("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": trip.place.fraction])
             }
             await relocationsSettled(since: count)
-            wentBack()
+            // A quick tap on the page may have turned on from it meanwhile.
+            let isShowingPlace = await isShowing(trip.place)
+            if trip.place.cfi == nil || isShowingPlace {
+                wentBack()
+            } else {
+                wentBackAndTurned()
+            }
         }
     }
 
