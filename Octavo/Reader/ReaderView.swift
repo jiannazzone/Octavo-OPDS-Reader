@@ -250,6 +250,9 @@ private struct ReaderScreen: View {
         .onChange(of: reduceMotion, initial: true) { _, reduceMotion in
             model.reduceMotion = reduceMotion
         }
+        .onChange(of: scenePhase == .background, initial: true) { _, isInBackground in
+            model.isInBackground = isInBackground
+        }
         .onChange(of: controls.coversPage || panel != nil, initial: true) { _, covers in
             model.coversPage = covers
         }

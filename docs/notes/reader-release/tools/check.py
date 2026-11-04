@@ -175,7 +175,17 @@ def server_place(file_id):
 
 
 def compare(label, before, after):
-    print(f"{label:<28} {'same' if before == after else 'MOVED'}" + ("" if before == after else f"\n  before {before}\n  after  {after}"), flush=True)
+    print(f"{label:<36} {'same' if before == after else 'MOVED'}" + ("" if before == after else f"\n  before {before}\n  after  {after}"), flush=True)
+
+
+def read_on(remote, fields):
+    """A book open at a place in the middle of a chapter, already pushed."""
+    remote.open_book(fields)
+    remote.cmd({"cmd": "goto", "fraction": 0.37})
+    time.sleep(2)
+    remote.cmd({"cmd": "turn", "side": "left"})
+    # Past the push's debounce.
+    time.sleep(4)
 
 
 def place_kept(check):
@@ -184,20 +194,12 @@ def place_kept(check):
     remote.angle(180)
     time.sleep(3)
 
-    def read_on(fields):
-        remote.open_book(fields)
-        remote.cmd({"cmd": "goto", "fraction": 0.37})
-        time.sleep(2)
-        remote.cmd({"cmd": "turn", "side": "left"})
-        # Past the push's debounce.
-        time.sleep(4)
-
     for label, close, wait in (
         ("back", {"cmd": "back"}, 0),
         ("layout under way", None, 0),
         ("fold", None, 3),
     ):
-        read_on({"cmd": "openLocal", "name": "frankenstein.epub"})
+        read_on(remote, {"cmd": "openLocal", "name": "frankenstein.epub"})
         before = saved_places(remote)
         if close:
             remote.cmd(close)
@@ -217,7 +219,7 @@ def place_kept(check):
 
     remote.cmd({"cmd": "signin"})
     for label in ("back", "fold"):
-        read_on({"cmd": "open", "fileID": BOOKORBIT_FILE})
+        read_on(remote, {"cmd": "open", "fileID": BOOKORBIT_FILE})
         before = saved_places(remote), server_place(BOOKORBIT_FILE)
         print(f"  server has {before[1]}", flush=True)
         if label == "back":
@@ -269,7 +271,112 @@ def stays_open(check):
     check.report("after all", settled=(1,))
 
 
-SCENARIOS = {f.__name__: f for f in (plain, back, fixed, while_opening, while_turning, while_jumping, while_laying_out, folding, away, synced, place_kept, stays_open)}
+def places_of(saved):
+    return {name: place.get("position", {}).get("cfi") for name, place in saved.items()}
+
+
+def watch_saved(remote, seconds, seen):
+    """Adds each different set of saved places to `seen`, reading them every 0.2 s."""
+    end = time.time() + seconds
+    while time.time() < end:
+        try:
+            now = places_of(saved_places(remote))
+        except (json.JSONDecodeError, FileNotFoundError):
+            continue
+        if now != seen[-1]:
+            seen.append(now)
+        time.sleep(0.2)
+
+
+def left_the_app(check):
+    """Leaving the app moves no place, whether or not the phone folds meanwhile (docs/notes/reader-background.md)."""
+    remote = check.remote
+    remote.cmd({"cmd": "signin"})
+    for label, book, file_id in (
+        ("local", {"cmd": "openLocal", "name": "frankenstein.epub"}, None),
+        ("BookOrbit", {"cmd": "open", "fileID": BOOKORBIT_FILE}, BOOKORBIT_FILE),
+    ):
+        for fold_after in (None, 1, 5):
+            remote.angle(180)
+            time.sleep(3)
+            read_on(remote, book)
+            seen = [places_of(saved_places(remote))]
+            server = json.loads(server_place(file_id))["cfi"] if file_id else None
+            server_away = server
+            subprocess.run(["xcrun", "simctl", "launch", check.udid, "com.apple.Preferences"], capture_output=True)
+            watch_saved(remote, 8 if fold_after is None else fold_after, seen)
+            if file_id and fold_after is None:
+                server_away = json.loads(server_place(file_id))["cfi"]
+            if fold_after is not None:
+                remote.angle(0)
+                watch_saved(remote, 3, seen)
+            subprocess.run(["xcrun", "simctl", "launch", check.udid, "com.ianazzone.ereader"], capture_output=True)
+            watch_saved(remote, 4, seen)
+            moves = [[new for name, new in places.items() if seen[0].get(name) != new] for places in seen[1:]]
+            fold = "no fold" if fold_after is None else f"fold after {fold_after} s"
+            print(f"{label + ', ' + fold:<28} saved {'never changed' if not moves else f'CHANGED {len(moves)} times: {moves}'}; "
+                  f"ended {'same' if seen[-1] == seen[0] else 'MOVED'}", flush=True)
+            if file_id:
+                end = json.loads(server_place(file_id))["cfi"]
+                print(f"{'':<28} server {'same' if server == server_away == end else f'MOVED, away {server_away}, ended {end}'}", flush=True)
+            # `home`, so the unfold that starts the next round opens nothing.
+            remote.cmd({"cmd": "home"})
+            time.sleep(1)
+
+
+def changed_while_away(check):
+    """A real change made while the app is away is laid out when it comes back."""
+    remote = check.remote
+
+    def report(label):
+        state = remote.state()
+        layout = state["layout"]
+        before = state["relocations"]
+        remote.cmd({"cmd": "turn", "side": "left"})
+        time.sleep(2)
+        turned = remote.state()["relocations"] > before
+        print(f"{label:<28} columns {layout.get('columns')}, fold {layout.get('fold')}, page {state['geometry']['size']}, "
+              f"insets {layout['leftInset']}/{layout['rightInset']}/{layout['topInset']}, {'turns' if turned else 'STOPPED'}", flush=True)
+
+    def away_and_back(change):
+        subprocess.run(["xcrun", "simctl", "launch", check.udid, "com.apple.Preferences"], capture_output=True)
+        time.sleep(3)
+        change()
+        time.sleep(3)
+        subprocess.run(["xcrun", "simctl", "launch", check.udid, "com.ianazzone.ereader"], capture_output=True)
+        time.sleep(4)
+
+    hinge = os.environ.get("HINGE", "hinge")
+    remote.angle(180)
+    time.sleep(3)
+    check.open("frankenstein.epub")
+    report("unfolded, on screen")
+    subprocess.run([hinge, "-d", check.udid, "orient", "landscape-left"], capture_output=True)
+    time.sleep(4)
+    report("rotated on screen")
+    subprocess.run([hinge, "-d", check.udid, "orient", "portrait"], capture_output=True)
+    time.sleep(4)
+    away_and_back(lambda: subprocess.run([hinge, "-d", check.udid, "orient", "landscape-left"], capture_output=True))
+    report("rotated while away")
+    away_and_back(lambda: subprocess.run([hinge, "-d", check.udid, "orient", "portrait"], capture_output=True))
+    report("rotated back while away")
+    remote.cmd({"cmd": "home"})
+    remote.angle(0)
+    time.sleep(3)
+    check.open("frankenstein.epub")
+    report("folded, on screen")
+    away_and_back(lambda: remote.angle(180))
+    report("unfolded while away")
+    remote.screenshot(os.path.join(os.environ.get("OCTAVO_SHOTS", "/tmp"), "unfolded-while-away.png"))
+    remote.cmd({"cmd": "home"})
+    remote.angle(180)
+    time.sleep(3)
+    check.open("frankenstein.epub")
+    report("unfolded, on screen again")
+    remote.cmd({"cmd": "home"})
+
+
+SCENARIOS = {f.__name__: f for f in (plain, back, fixed, while_opening, while_turning, while_jumping, while_laying_out, folding, away, synced, place_kept, stays_open, left_the_app, changed_while_away)}
 
 if __name__ == "__main__":
     check = Check(sys.argv[1])

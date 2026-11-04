@@ -69,6 +69,17 @@ final class ReaderModel {
     var margins = ReaderMargins.standard {
         didSet { if margins != oldValue { relayout() } }
     }
+    /// iOS lays a backgrounded app out again for its snapshots, turned sideways
+    /// and back. Nobody reads that page, and laying out for it moves the place,
+    /// so size and hinge changes wait until the app is back
+    /// (`docs/notes/reader-background.md`).
+    var isInBackground = false {
+        didSet {
+            guard isInBackground != oldValue, !isInBackground else { return }
+            if let lastGeometry { updateGeometry(lastGeometry) }
+            relayout()
+        }
+    }
     /// Pre-paginated: pages drawn by the book, with no text to give margins.
     private(set) var isFixedLayout = false
     /// Narrow margins reach the page under the side column, which only suits
@@ -262,6 +273,7 @@ final class ReaderModel {
         if change.contains(.bookMode) { bookModeMayHaveChanged() }
         guard change.contains(.posture) else { return }
         log.debug("posture \(posture.rawValue, privacy: .public)")
+        guard !isInBackground else { return }
         // `.noHinge` is only the first report, before the hinge is known.
         if old != .noHinge, old.isFolded != posture.isFolded { beginFold(folded: posture.isFolded) }
         relayout()
@@ -304,6 +316,7 @@ final class ReaderModel {
     /// `geometry` with the page's own size, once the page has reported it,
     /// and the safe area.
     private func updateGeometry(_ geometry: ReaderGeometry) {
+        guard !isInBackground else { return }
         var geometry = geometry
         if let viewport { geometry.size = viewport }
         geometry.safeArea = safeArea
