@@ -64,6 +64,7 @@ Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded
 
 - **Curl as a Page Turn choice**: the corner peels over, as in Apple Books. Adam was tempted by it for open and left it out for now. It would draw from the same snapshots as the flip (or UIKit's page curl).
 - **Opening and closing** (decision 28) may change once Adam has seen it on his Duo. One idea: where Back doesn't land on the book's screen, the cover could shrink into its spot on Home or in a list instead of the reader fading.
+- **Leafing through to your place** (Adam, 2026-11-04): opening a book that isn't on page 1, some pages flip over, as if you're leafing through to where you left off. Not looked into yet. To decide: what the flipping pages show, how many there are and how long they take, what happens folded (where a turn slides), and whether it plays on every opening, including unfolding on a cover, which opens at once today.
 
 ## An accent colour (Adam, 2026-11-03)
 
