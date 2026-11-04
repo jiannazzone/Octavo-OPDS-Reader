@@ -28,7 +28,7 @@ extension ReaderModel {
         if jumpsUnderWay == 0 { jumpStartCount = relocationCount }
         jumpsUnderWay += 1
         guard trip == nil, tripToBe == nil, let place = savedPlace else { return }
-        tripToBe = ReaderTrip(place: place, placePage: ReaderPlace(chapter: nil, location: location, fraction: shownFraction).first)
+        tripToBe = ReaderTrip(place: place, placePage: ReaderPlace(chapter: nil, location: location, fraction: shownFraction).first, placeFraction: shownFraction)
     }
 
     /// The jump has landed. Landing on your own page isn't a trip.
@@ -46,7 +46,7 @@ extension ReaderModel {
             tripToBe = landed
             return
         }
-        landed.landed(on: position)
+        landed.landed(on: position, fraction: shownFraction)
         trip = landed
         tripFraction = shownFraction
     }
@@ -85,6 +85,7 @@ extension ReaderModel {
     /// page ends the trip.
     func tripMoved(to page: ReadingPosition) {
         trip?.page = page
+        trip?.pageFraction = shownFraction
         guard let place = trip?.place else { return }
         let asked = relocationCount
         Task {
@@ -103,6 +104,19 @@ extension ReaderModel {
         trip?.turned(from: tripFraction, to: now)
         tripFraction = now
         if trip?.hasReadOn == true { settleTrip() }
+    }
+
+    /// Opened at a place other than the saved trip's by its spelling. If the
+    /// page says it's the same place, the trip goes on; if another reader
+    /// moved your place, the trip ends here.
+    func resumeIfStillYourPlace(_ saved: ReaderTrip) async {
+        guard let page = saved.page?.cfi, await isShowing(saved.place) else {
+            forgetSavedTrip()
+            return
+        }
+        trip = saved
+        tripFraction = saved.pageFraction
+        runJump("return await window.octavo.goTo(cfi)", arguments: ["cfi": page])
     }
 
     /// Whether `place` is on the page showing, as foliate resolves it.

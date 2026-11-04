@@ -640,7 +640,7 @@ private struct ReaderProgressBar: View {
     private var scrubber: some View {
         VStack(alignment: .leading, spacing: 0) {
             chapterLine
-            ReaderScrubber(value: fraction, chapters: model.toc.compactMap(\.fraction), total: model.location?.total) { chapter in
+            ReaderScrubber(value: fraction, chapters: model.toc.compactMap(\.fraction), total: model.location?.total, neutral: model.trip?.placeFraction) { chapter in
                 guard let scrub else { return }
                 relocationsAtRelease = model.relocationCount
                 if let chapter, let href = model.toc.first(where: { $0.fraction == chapter })?.href {
@@ -652,6 +652,9 @@ private struct ReaderProgressBar: View {
                 scrub = nil
                 relocationsAtRelease = nil
             }
+            // A slider only redraws its fill for a new value, and a landing
+            // brings none, so a new place gets a new slider.
+            .id(model.trip?.placeFraction)
             .frame(height: 30)
             // A jump that doesn't relocate (it landed on this page, or the
             // place wouldn't open) mustn't leave the knob on it for good.

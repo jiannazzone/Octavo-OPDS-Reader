@@ -62,8 +62,6 @@ Built in `ReaderScrubber.swift` (the slider) and `ReaderScrubberLine.swift` (the
 - **Measured on Moby-Dick:** folded the window is about 33 pages, so 60 pt of finger moved about 7 pages. Unfolded it's about 75. Pages stepped one at a time (231 to 237, the chapter's name changing on the way), a catch held over about 3 pt either side, and letting go landed on the page: 49.7% to page 493 (the first run), then 59.3% to Chapter 75.
 - **Quick moves:** speed has to be read over about 120 ms and at least 12 pt, as touches arrive in bunches and a single pair read as a quick move. Zooming out while the finger is down is at once, so the knob follows the finger.
 - **To check when building:**
-  - That `TrackConfiguration(neutralValue:)` with no ticks leaves the knob free, for the trip's fill (decision 33), and how the fill behaves when your place is outside the zoomed window.
-  - Half open, which hasn't been run.
   - VoiceOver, which should keep the slider's own adjustments.
   - Catching only within the zoom: a bar closer than 6 pt to another shouldn't happen at 8 pt per page, but two chapters can start on one page.
 
@@ -76,7 +74,7 @@ Built in `ReaderScrubber.swift` (the slider) and `ReaderScrubberLine.swift` (the
 
 ## The way back
 
-Built so far: your place holds, "Back to page N", ✕ and reading on (`ReaderTrip`, `ReaderModel+Trip`, `ReaderTripTests`). Video: `going-back/videos/way-back-folded.mp4` (about twice real speed). Still to come: trips across closing, the fill, BookOrbit's capsule and links in the book.
+Built so far: your place holds, "Back to page N", ✕, reading on, trips across closing and the fill (`ReaderTrip`, `ReaderModel+Trip`, `ReaderTripTests`). Videos: `going-back/videos/way-back-folded.mp4` (about twice real speed) and `trip-closing.mp4` (with the waits cut). Still to come: links in the book.
 
 Measured on 'Octavo Navigation Duo' with real taps and drags, Moby-Dick (file 3) on the local BookOrbit, the server at 47.8%:
 
@@ -92,15 +90,31 @@ Measured on 'Octavo Navigation Duo' with real taps and drags, Moby-Dick (file 3)
 - **A jump starts with `beginJump` and ends with `endJump`,** which waits for the relocations to go quiet and asks `onPage` whether your place is showing. If it is, there's no trip, so a tiny scrub shows nothing.
 - **Which way a turn went** comes from the shown fraction before and after, so it doesn't depend on a book's direction (no right-to-left book has been run).
 
+### Across closing
+
+A trip is saved per book beside the positions (`ReadingPositionStore`, `Trips/`), only on the iPhone. Your place stays as it was, so `BookPlaces` and the opening rule still hold. Opening, a trip whose place matches where the rule opens the book reopens on the trip's page; otherwise it's dropped.
+
+| What | The book's screen | Opens at | On BookOrbit |
+|---|---|---|---|
+| Scrub to 76%, fold | "48% · Opens at 76%", fill from 48% to 76% | | Still 47.8% |
+| Unfold, or quit and open | | That page, with "Back to page 463" | Still 47.8% |
+| Back from there | | The same page as before, the trip's file gone | Still 47.8% |
+| Another reader moves the server to 83.2% | "83%", no "Opens at" | 83.2%, no button, the trip's file gone | 83.2% |
+
+### The fill
+
+`UISlider.TrackConfiguration(allowsTickValuesOnly: false, neutralValue:, ticks: [])`, on 'Octavo Navigation Duo' with real drags, flat, folded and half open. With no ticks the knob stays free.
+
+- **It can't go back to nil.** After `trackConfiguration = nil` the line stayed empty and the next drag didn't take. It's now always set, with a neutral of 0 when there's no trip, which looks like the plain slider.
+- **The fill only redraws for a value that moves it.** Landing brings none, as the knob is already there, so the old fill stayed up. A nudge of the smallest step did nothing. `ReaderView` gives the slider a new `.id` when your place changes, and a slider made with the setting draws it right.
+- **Zoomed in, the fill's start stays where it was.** It keeps the point on the screen that your place had on the whole line, whether or not your place is in the zoomed window, and it's right again after letting go. Setting the neutral with the range was worse: it left a short, wrong fill after zooming out.
+
 ## How the rest would be built
 
 A plan, for when Adam says to build it.
 
-- **A trip per book:** your place, the page you're on, and the turns forward since landing, saved beside the positions and only on the iPhone. `ReadingPositionStore` keeps your place, unchanged, so `BookPlaces` and the opening rule still hold, and a killed app loses nothing.
-- **`ReaderModel`:** Swift's own jumps start a trip, and `bridge.js` tells Swift when a link does. While away, `moved(to:)` updates the trip and doesn't save or push. Back goes by CFI and pushes nothing, like `goToServerPlace`. ✕ and the fifth turn save and push the page.
-- **Opening:** a trip whose place still matches where the rule opens the book reopens on the trip's page. Otherwise it's dropped.
-- **BookOrbit's capsule while away:** `keepThisPlace` sends your place, not the visible page, and `offeredOn` stops leaving the capsule on a trip's turns.
-- **Files shared with other work:** `bridge.js` also changes in the fixed-layout session. `BookSheet.swift` isn't touched by the covers pull request (#54).
+- **Links:** `bridge.js` tells Swift when a link in the book jumps, so it starts a trip.
+- **Files shared with other work:** `bridge.js` also changes in the fixed-layout session.
 - **Keep every script-blocking layer.** No foliate patch should be needed: foliate's own `history` isn't used, as a trip has to outlive the page.
 
 ## Tools

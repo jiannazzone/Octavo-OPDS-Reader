@@ -70,6 +70,39 @@ struct BookPlacesTests {
     // MARK: The place
 
     // Before a pull: the iPhone's place, else the list's percentage.
+    // MARK: Trips (decision 33)
+
+    private func tripFromTheIPhonesPlace() -> ReaderTrip {
+        var trip = ReaderTrip(place: Self.iPhonePlace, placePage: 487, placeFraction: 0.5)
+        trip.landed(on: ReadingPosition(cfi: "epubcfi(/6/30!/4/2)", fraction: 0.9), fraction: 0.9)
+        return trip
+    }
+
+    @Test func aTripShowsWhileItsPlaceIsWhereTheBookOpens() throws {
+        let places = places(FakeProgressSync())
+        try store.save(Self.iPhonePlace, forBook: key)
+        store.saveTrip(tripFromTheIPhonesPlace(), forBook: key)
+        #expect(places.trip(of: Self.book) == tripFromTheIPhonesPlace())
+        // The place line stays your place.
+        #expect(places.progress(of: Self.book) == 0.5)
+    }
+
+    @Test func noTripNoLine() throws {
+        let places = places(FakeProgressSync())
+        try store.save(Self.iPhonePlace, forBook: key)
+        #expect(places.trip(of: Self.book) == nil)
+    }
+
+    /// Another reader moved your place: the line shows the new place.
+    @Test func aTripDoesntShowOnceAnotherReaderMovedYourPlace() async throws {
+        try store.save(Self.iPhonePlace, forBook: key)
+        store.saveTrip(tripFromTheIPhonesPlace(), forBook: key)
+        let places = places(FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: .now)))
+        #expect(places.trip(of: Self.book) != nil)
+        places.refresh(Self.book)
+        #expect(await eventually { places.trip(of: Self.book) == nil })
+    }
+
     @Test func beforeAPullThePlaceIsTheIPhonesElseTheLists() throws {
         let places = places(FakeProgressSync())
         #expect(places.progress(of: Self.book) == 0.3)

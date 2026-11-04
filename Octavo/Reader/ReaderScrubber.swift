@@ -10,6 +10,8 @@ struct ReaderScrubber: UIViewRepresentable {
     /// Where each contents entry starts.
     var chapters: [Double]
     var total: Int?
+    /// Away on a trip, your place: the fill runs from it to the knob (decision 33).
+    var neutral: Double?
     /// Let go on `chapter`'s start, if it caught there, else on the value.
     var released: (_ chapter: Double?) -> Void
     /// The touch was taken away: the page stays where it is.
@@ -23,7 +25,7 @@ struct ReaderScrubber: UIViewRepresentable {
         slider.onChange = { value = $0 }
         slider.onRelease = released
         slider.onCancel = cancelled
-        slider.update(chapters: chapters, total: total)
+        slider.update(chapters: chapters, total: total, neutral: neutral)
         if !slider.isTracking, !slider.isZoomed { slider.value = Float(value) }
     }
 }
@@ -48,6 +50,7 @@ final class ReaderScrubberSlider: UISlider {
 
     private var chapters: [Double] = []
     private var total: Int?
+    private var neutral: Double?
     private let marks = CALayer()
     private let dots = CAShapeLayer()
     private let bars = CAShapeLayer()
@@ -76,6 +79,7 @@ final class ReaderScrubberSlider: UISlider {
         marks.addSublayer(dots)
         marks.addSublayer(bars)
         layer.insertSublayer(marks, at: 0)
+        applyNeutral()
         fade.startPoint = CGPoint(x: 0, y: 0.5)
         fade.endPoint = CGPoint(x: 1, y: 0.5)
         fade.colors = [UIColor.clear.cgColor, UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
@@ -86,11 +90,21 @@ final class ReaderScrubberSlider: UISlider {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("Not used") }
 
-    func update(chapters: [Double], total: Int?) {
+    func update(chapters: [Double], total: Int?, neutral: Double?) {
+        if neutral != self.neutral {
+            self.neutral = neutral
+            applyNeutral()
+        }
         guard chapters != self.chapters || total != self.total else { return }
         self.chapters = chapters
         self.total = total
         redrawMarks()
+    }
+
+    /// The system's own setting. No ticks, or the knob would land only on them.
+    /// It's always set: going back to none leaves the slider unable to track.
+    private func applyNeutral() {
+        trackConfiguration = UISlider.TrackConfiguration(allowsTickValuesOnly: false, neutralValue: Float(neutral ?? 0), ticks: [])
     }
 
     override func layoutSubviews() {

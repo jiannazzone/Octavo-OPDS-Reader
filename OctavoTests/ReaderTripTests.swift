@@ -50,18 +50,64 @@ struct ReaderTripTests {
         var trip = trip()
         for _ in 1...4 { trip.turned(from: 0.5, to: 0.51) }
         let glossary = ReadingPosition(cfi: "epubcfi(/6/40!/4/2)", fraction: 0.95)
-        trip.landed(on: glossary)
+        trip.landed(on: glossary, fraction: 0.95)
         #expect(trip.turns == 0)
         #expect(trip.page == glossary)
+        #expect(trip.pageFraction == 0.95)
         #expect(trip.place == place)
         #expect(trip.placePage == 312)
     }
 
-    /// Saved for reopening where you were looking.
-    @Test func aTripSurvivesSaving() throws {
+    @Test func theBooksScreenSaysWhereItOpens() {
+        var trip = trip()
+        trip.landed(on: trip.page, fraction: 0.905)
+        #expect(trip.opensAtLabel == "Opens at 90%")
+    }
+
+    // MARK: Saving
+
+    private func store() -> ReadingPositionStore {
+        ReadingPositionStore(directory: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
+    }
+
+    /// Reopening where you were looking.
+    @Test func aTripIsSavedPerBook() {
+        let store = store()
         var saved = trip()
         saved.turned(from: 0.5, to: 0.51)
-        let data = try JSONEncoder().encode(saved)
-        #expect(try JSONDecoder().decode(ReaderTrip.self, from: data) == saved)
+        store.saveTrip(saved, forBook: "book/1")
+        #expect(store.trip(forBook: "book/1") == saved)
+        #expect(store.trip(forBook: "book/2") == nil)
+    }
+
+    @Test func nilEndsATrip() {
+        let store = store()
+        store.saveTrip(trip(), forBook: "a")
+        store.saveTrip(nil, forBook: "a")
+        #expect(store.trip(forBook: "a") == nil)
+    }
+
+    @Test func aTripIsntTakenForAPosition() throws {
+        let store = store()
+        store.saveTrip(trip(), forBook: "a")
+        #expect(store.progress(forBook: "a") == nil)
+    }
+
+    @Test func removingABooksPositionEndsItsTrip() throws {
+        let store = store()
+        try store.save(place, forBook: "a")
+        store.saveTrip(trip(), forBook: "a")
+        store.removePosition(forBook: "a")
+        #expect(store.trip(forBook: "a") == nil)
+    }
+
+    /// Another server: only the kept books' trips stay.
+    @Test func removingOtherBooksEndsTheirTrips() {
+        let store = store()
+        store.saveTrip(trip(), forBook: "kept")
+        store.saveTrip(trip(), forBook: "gone")
+        store.removeAll(keeping: ["kept"])
+        #expect(store.trip(forBook: "kept") != nil)
+        #expect(store.trip(forBook: "gone") == nil)
     }
 }

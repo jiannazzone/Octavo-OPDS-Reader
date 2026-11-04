@@ -125,8 +125,7 @@ struct BookSheetSummary: View {
                 BookOpenButton(page: page, source: source, fillsWidth: false)
                     .fixedSize()
             }
-            ProgressView(value: place.progress ?? 0)
-                .accessibilityHidden(true)
+            BookPlaceLine(place: place)
         }
     }
 }
@@ -168,7 +167,11 @@ struct BookSummary: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(place.text)
-                if let status = place.status {
+                if let trip = place.trip {
+                    Spacer(minLength: 12)
+                    Text(trip.opensAtLabel)
+                        .lineLimit(1)
+                } else if let status = place.status {
                     Spacer(minLength: 12)
                     // Redrawn each minute, so "just now" moves on.
                     TimelineView(.everyMinute) { context in
@@ -179,9 +182,36 @@ struct BookSummary: View {
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
-            ProgressView(value: place.progress ?? 0)
-                .accessibilityHidden(true)
+            BookPlaceLine(place: place)
         }
+    }
+}
+
+/// The book's screen's thin line. On a trip the fill runs from your place to
+/// where the book opens, as the scrubber's does (decision 33).
+private struct BookPlaceLine: View {
+    let place: BookPlace
+
+    var body: some View {
+        Group {
+            if let trip = place.trip {
+                GeometryReader { proxy in
+                    let low = min(trip.placeFraction, trip.pageFraction)
+                    let high = max(trip.placeFraction, trip.pageFraction)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.quaternary)
+                        Capsule()
+                            .fill(.tint)
+                            .frame(width: max((high - low) * proxy.size.width, 4))
+                            .offset(x: low * proxy.size.width)
+                    }
+                }
+                .frame(height: 4)
+            } else {
+                ProgressView(value: place.progress ?? 0)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -193,6 +223,8 @@ struct BookPlace {
     /// A download or Mark finished that went wrong, in the place's stead.
     let problem: String?
     let status: BookPlaces.Status?
+    /// Away from your place, the book reopens where you were looking (decision 33).
+    let trip: ReaderTrip?
     private let finished: Bool
 
     init(page: BookPage, sourceID: LibrarySourceID, shell: ShellModel) {
@@ -201,16 +233,18 @@ struct BookPlace {
             progress: shell.places.progress(of: book),
             problem: Self.problem(BookOpenButton.state(of: page.current, in: shell), finishedFailed: page.finishedFailed),
             status: shell.places.status(of: book),
+            trip: shell.places.trip(of: book),
             finished: page.isFinished
         )
     }
 
     /// A finished book's bar is full; finished or a problem leaves out the
     /// sync.
-    init(progress: Double?, problem: String?, status: BookPlaces.Status?, finished: Bool) {
+    init(progress: Double?, problem: String?, status: BookPlaces.Status?, trip: ReaderTrip? = nil, finished: Bool) {
         self.progress = finished ? 1 : progress
         self.problem = problem
         self.status = problem == nil && !finished ? status : nil
+        self.trip = problem == nil && !finished ? trip : nil
         self.finished = finished
     }
 
@@ -233,6 +267,7 @@ struct BookPlace {
     /// The place and when it last synced on one line, as the folded sheet
     /// shows it: "48% · Synced just now".
     func line(now: Date) -> String {
+        if let trip { return "\(text) · \(trip.opensAtLabel)" }
         guard let status else { return text }
         return "\(text) · \(status.text(now: now))"
     }

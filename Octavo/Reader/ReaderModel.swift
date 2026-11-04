@@ -162,7 +162,13 @@ final class ReaderModel {
 
     // Going back after a jump (decision 33, `ReaderModel+Trip`).
     /// Away from your place. It stays saved as it was until you settle.
-    var trip: ReaderTrip?
+    var trip: ReaderTrip? {
+        didSet { if trip != oldValue { store.saveTrip(trip, forBook: book.id) } }
+    }
+    /// The saved trip this book is reopening on.
+    @ObservationIgnored private var tripToResume: ReaderTrip?
+    /// A saved trip whose place the rule's position may or may not be.
+    @ObservationIgnored private var tripToCheck: ReaderTrip?
     /// A jump under way, until it's landed somewhere other than your place.
     @ObservationIgnored var tripToBe: ReaderTrip?
     @ObservationIgnored var jumpsUnderWay = 0
@@ -543,7 +549,16 @@ final class ReaderModel {
             phase = .open
             openedCFI = position?.cfi
             hasMoved = false
+            if let tripToResume {
+                trip = tripToResume
+                tripFraction = shownFraction
+                self.tripToResume = nil
+            }
             didOpen()
+            if let tripToCheck {
+                self.tripToCheck = nil
+                Task { await resumeIfStillYourPlace(tripToCheck) }
+            }
             isFixedLayout = opened.isFixedLayout
             relayout()
             sendLayout()
@@ -614,7 +629,13 @@ final class ReaderModel {
         Task {
             let opening = await chooseOpeningPosition()
             openingPosition = opening
-            let saved = opening.position
+            // A trip reopens where you were looking, as long as the rule
+            // still opens at your place. Spelled differently, only the page
+            // can say (`resumeIfStillYourPlace`).
+            let savedTrip = store.trip(forBook: book.id)
+            tripToResume = savedTrip.flatMap { $0.page != nil && $0.place.cfi == opening.position?.cfi ? $0 : nil }
+            tripToCheck = tripToResume == nil ? savedTrip : nil
+            let saved = tripToResume?.page ?? opening.position
             var options: [String: Any] = [
                 "url": ReaderSchemeHandler.bookURL(fileName: book.fileName).absoluteString,
                 "name": book.fileName,
@@ -662,19 +683,26 @@ final class ReaderModel {
     }
 
     private func didOpen() {
-        guard let position else { return }
+        // Reopening on a trip, your place is what's saved, not this page.
+        guard let position = trip?.place ?? position else { return }
         let local = store.progress(forBook: book.id)
+        let chapter = trip != nil ? store.chapter(forBook: book.id) : nil
         switch openingPosition {
         case .local where local?.needsPush == true:
             // The device's unpushed position won; the backend should catch up.
-            save(position, needsPush: true)
+            save(position, needsPush: true, chapter: chapter)
             Task { await pusher?.submit(position) }
         case .remote:
             // The backend already has this spot.
-            save(position, needsPush: false, syncedAt: pulled ? .now : nil)
+            save(position, needsPush: false, syncedAt: pulled ? .now : nil, chapter: chapter)
         default:
-            save(position, needsPush: local?.needsPush ?? false)
+            save(position, needsPush: local?.needsPush ?? false, chapter: chapter)
         }
+    }
+
+    /// The saved trip's place wasn't what the rule opened at.
+    func forgetSavedTrip() {
+        store.saveTrip(nil, forBook: book.id)
     }
 
     private func moved(to relocation: ReaderMessage.Relocation) {
