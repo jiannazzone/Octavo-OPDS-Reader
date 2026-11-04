@@ -6,8 +6,15 @@ import WebKit
 
 /// Pre-paginated books through the bridge, in a page that's never shown
 /// (`docs/notes/fixed-layout.md`). Each opens a real book in a real page.
+///
+/// Most tests share one reader and reload its page, because a new page takes
+/// about 1.6 s and a reload about 35 ms (`docs/notes/ci.md`). A reload starts the
+/// scripts again and opens the book the way a new page does, from the bridge's
+/// `ready` to the saved position. It doesn't reset the Swift model, so a test
+/// that changes the model's settings, reads `lastError` or has a `sync` gets a
+/// page of its own.
 @MainActor
-@Suite(.temporaryFiles)
+@Suite(.temporaryFiles, .serialized)
 struct ReaderFixedLayoutTests {
     private let store = ReadingPositionStore(
         directory: URL.testDirectory.appending(path: "positions-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -57,7 +64,38 @@ struct ReaderFixedLayoutTests {
         ] + files)
     }
 
-    private func open(_ data: Data = book(), saved: ReadingPosition? = nil, sync: (any ProgressSync)? = nil) async throws -> ReaderModel {
+    private static let twelvePages = book()
+
+    /// The shared reader's files outlast each test's temporary folder. The next
+    /// run's sweep removes them.
+    private static let sharedFolder = URL.temporaryDirectory.appending(path: "\(TemporaryFiles.prefix)\(UUID().uuidString)", directoryHint: .isDirectory)
+    private static let sharedStore = ReadingPositionStore(directory: sharedFolder.appending(path: "positions", directoryHint: .isDirectory))
+    private static let sharedBookmarks = BookmarkStore(directory: sharedFolder.appending(path: "bookmarks", directoryHint: .isDirectory))
+    private static var sharedReader: ReaderModel?
+
+    /// `data` open in the shared reader, at `saved` or from the start.
+    private func open(_ data: Data = twelvePages, saved: ReadingPosition? = nil) async throws -> ReaderModel {
+        try FileManager.default.createDirectory(at: Self.sharedFolder, withIntermediateDirectories: true)
+        let book = ReaderBook(fileURL: Self.sharedFolder.appending(path: "fixed.epub"), id: "fixed")
+        try data.write(to: book.fileURL)
+        Self.sharedStore.removePosition(forBook: book.id)
+        if let saved { try Self.sharedStore.save(saved, forBook: book.id) }
+        guard let model = Self.sharedReader else {
+            let model = ReaderModel(book: book, store: Self.sharedStore, bookmarks: ReaderBookmarks(bookID: book.id, store: Self.sharedBookmarks))
+            Self.sharedReader = model
+            return try await opened(model)
+        }
+        for try await _ in model.page.reload() {}
+        // The old page's messages have stopped. The bridge's `ready` and first
+        // relocation came before this answers, so the model is on this open.
+        #expect(await eventuallyAsync(timeout: .seconds(30)) {
+            (try? await model.page.callJavaScript("return document.querySelector('foliate-view')?.lastLocation != null") as? Bool) == true
+        })
+        return try await opened(model)
+    }
+
+    /// `data` open in a new page, with a model of its own.
+    private func openInItsOwnPage(_ data: Data = twelvePages, saved: ReadingPosition? = nil, sync: (any ProgressSync)? = nil) async throws -> ReaderModel {
         let directory = URL.testDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appending(path: "fixed.epub")
@@ -67,6 +105,10 @@ struct ReaderFixedLayoutTests {
         let model = ReaderModel(
             book: book, store: store, sync: sync, bookmarks: ReaderBookmarks(bookID: book.id, store: bookmarkStore), pushDelay: .milliseconds(50)
         )
+        return try await opened(model)
+    }
+
+    private func opened(_ model: ReaderModel) async throws -> ReaderModel {
         let opened = await eventually(timeout: .seconds(30)) { model.phase != .loading && model.relocation != nil }
         #expect(opened, "\(model.phase) \(model.lastError ?? "")")
         // The page isn't on screen, so it draws no frames; these don't wait for one.
@@ -103,7 +145,7 @@ struct ReaderFixedLayoutTests {
     // MARK: Opening
 
     @Test func opensOnTheFirstPage() async throws {
-        let model = try await open()
+        let model = try await openInItsOwnPage()
         #expect(model.phase == .open)
         #expect(model.isFixedLayout)
         #expect(model.restoredFrom == "start")
@@ -114,8 +156,8 @@ struct ReaderFixedLayoutTests {
     // A relocation's fraction used to carry each open a page on.
     @Test func reopensOnTheSamePageEveryTime() async throws {
         var position = ReadingPosition(cfi: Self.cfi(5), fraction: 0.1)
-        for _ in 0..<3 {
-            let model = try await open(saved: position)
+        for time in 0..<3 {
+            let model = try await time == 0 ? openInItsOwnPage(saved: position) : open(saved: position)
             #expect(model.restoredFrom == "cfi")
             #expect(page(model) == 5)
             position = try #require(model.position)
@@ -157,7 +199,7 @@ struct ReaderFixedLayoutTests {
     @Test func aCFIThisBookDoesntHaveFallsBackToTheFraction() async throws {
         let bounds = try await fractions(try await open())
         let inside = (bounds[3] + bounds[4]) / 2
-        let model = try await open(saved: ReadingPosition(cfi: "epubcfi(/6/999)", fraction: inside))
+        let model = try await openInItsOwnPage(saved: ReadingPosition(cfi: "epubcfi(/6/999)", fraction: inside))
         #expect(model.restoredFrom == "fraction")
         #expect(page(model) == 3)
         let went: Bool? = try await script(model, "return await window.octavo.goTo('epubcfi(/6/999)')")
@@ -200,7 +242,7 @@ struct ReaderFixedLayoutTests {
     // `setLayout` called the paginator's `render`, which this renderer doesn't
     // have, so a fold's hold never ended.
     @Test func aFoldsHoldEnds() async throws {
-        let model = try await open()
+        let model = try await openInItsOwnPage()
         try await size(model, width: 300, height: 600)
         await go(model, toPage: 2)
         let held: Bool? = try await script(model, "return await window.octavo.hold()")
@@ -234,7 +276,7 @@ struct ReaderFixedLayoutTests {
     // Narrow margins reach under the side column, with nothing to keep the
     // page out of it.
     @Test func marginsDontMoveThePage() async throws {
-        let model = try await open()
+        let model = try await openInItsOwnPage()
         model.margins = .narrow
         model.safeAreaChanged(ReaderInsets(right: 84))
         model.hingeChanged(.closed, angle: 0)
@@ -344,7 +386,7 @@ struct ReaderFixedLayoutTests {
     // The footer needs the news of a re-layout; the server doesn't.
     @Test func aReLayoutDoesntPushThePlaceAgain() async throws {
         let sync = FakeProgressSync()
-        let model = try await open(sync: sync)
+        let model = try await openInItsOwnPage(sync: sync)
         try await size(model, width: 300, height: 600)
         await go(model, toPage: 5)
         #expect(await eventuallyAsync { await sync.pushes.count == 1 })
@@ -390,7 +432,7 @@ struct ReaderFixedLayoutTests {
     // after it is still this reader's own.
     @Test func aServerPlaceThatWontOpenDoesntSwallowTheNextPush() async throws {
         let sync = FakeProgressSync()
-        let model = try await open(sync: sync)
+        let model = try await openInItsOwnPage(sync: sync)
         await sync.set(remote: SyncedPosition(position: ReadingPosition(cfi: "epubcfi(/6/999)", fraction: 0.5), updatedAt: .now))
         await model.checkServerPlace()
         #expect(model.serverPlace != nil)
@@ -416,6 +458,7 @@ struct ReaderFixedLayoutTests {
         let model = try await open()
         model.pageTurn = .none
         #expect(model.swipes.isEnabled)
+        model.pageTurn = .standard
     }
 
     private func eventuallyAsync(timeout: Duration = .seconds(5), _ condition: () async -> Bool) async -> Bool {

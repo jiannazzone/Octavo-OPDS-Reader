@@ -5,8 +5,7 @@
 | Job | Runner | What it does |
 |---|---|---|
 | Changes | `ubuntu-latest` | Decides whether tests are needed |
-| OctavoKit tests | `xcode-27` | `swift test` |
-| App tests | `xcode-27` | `xcodebuild` on an iPhone Duo, iOS 27.1 |
+| Tests | `xcode-27` | `swift test`, then `xcodebuild` on an iPhone Duo, iOS 27.1 |
 | CI passed | `ubuntu-latest` | Fails unless the jobs that had to run passed. The one check "Protect main" requires |
 
 ## Merging
@@ -29,18 +28,20 @@ GitHub's `xcode-27` image lists Xcode 27.2, an iOS 27.1 runtime and the iPhone D
 
 The repo is public, so these standard runners should cost nothing. Pull requests from first-time and other outside contributors wait for approval, because the repo's setting is `all_external_contributors`.
 
+`swift test` and the app's tests share one job, so a run asks for one runner. They were two jobs until 2026-11-04. A run waited about 10 minutes for a runner, and on #57's run `41866624185` the OctavoKit job failed with "The job was not acquired by Runner of type hosted even after multiple attempts" while App tests passed, which turned the required check red. `swift test` goes first because it takes 1–2 minutes, so a failure there stops the run early. The app's results then wait until it's fixed. The job's limit is 35 minutes: the App tests job's 30, which one bad run nearly reached (see below), plus 5 for `swift test`.
+
 ## Docs-only changes
 
 A pull request compares its merge commit with the base. A push to `main` compares with where `main` was before the push, so every commit in it counts when a stack lands several at once. Tests are skipped only when every changed file is under `docs/`, or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a change with no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too.
 
 ## Build cache
 
-The App tests job turns on Xcode's compilation cache with `COMPILATION_CACHE_ENABLE_CACHING=YES`, in the workflow only, so local builds are unchanged. It keeps only `CompilationCache.noindex`, not the rest of DerivedData. Its entries are keyed by the compiler's input, not by file dates, so a fresh checkout still hits the cache and a stale result can't be reused the way it can with DerivedData.
+The Tests job turns on Xcode's compilation cache with `COMPILATION_CACHE_ENABLE_CACHING=YES`, in the workflow only, so local builds are unchanged. It keeps only `CompilationCache.noindex`, not the rest of DerivedData. Its entries are keyed by the compiler's input, not by file dates, so a fresh checkout still hits the cache and a stale result can't be reused the way it can with DerivedData.
 
 - Only pushes to `main` that run the tests save the cache, so a docs-only merge doesn't. A pull request restores it but never writes it, so the first build after the cache is empty is a full one.
 - The key holds the Xcode build and the month, so a new Xcode or a new month starts a fresh cache. Otherwise it would grow with every save, because each one keeps the old entries. The first build of a month is a full one until a merge to `main` that changes code saves again.
 - The DerivedData path has to stay the same between runs. The same code built at a different path hit only 99 of 156 tasks locally. `$RUNNER_TEMP` should be the same path on every GitHub run.
-- `OctavoKit tests` has no cache: it saved only a few seconds locally.
+- `swift test` has no cache: it saved only a few seconds locally.
 
 ## Signing
 
@@ -60,7 +61,7 @@ The small change added one line to an app file and one to an OctavoKit file: 99 
 
 ## Timings on GitHub's runners (2026-11-04)
 
-Four runs of the App tests job, with the simulator booting before the build. Most of the job's time comes before compiling, and the first `xcodebuild` on a new runner is the largest part. The second one, in the Test step, printed its first output in 6–8 s.
+Four runs of what was then the App tests job, with the simulator booting before the build. Most of the job's time comes before compiling, and the first `xcodebuild` on a new runner is the largest part. The second one, in the Test step, printed its first output in 6–8 s.
 
 | Phase | No cache (2 runs) | Cached (2 runs) |
 |---|---|---|
@@ -71,6 +72,32 @@ Four runs of the App tests job, with the simulator booting before the build. Mos
 | Whole job | 13m47s, 15m07s | 13m52s, 9m52s |
 
 Booting the simulator after the build was tried once (#52), and went back. Commit `1802bb3` on `main` still has the title "CI: boot the simulator after the build", but it only changes docs. The build took 41 s and the boot 75 s, but the Test step took 27 minutes and failed, and the job came within seconds of its 30-minute limit. WebKit's GPU process took 1,169 s to launch, against 1–5 s in the earlier runs that logged it, so `BookInspector` hit its 30 s limit and reported `.damaged`. One run doesn't prove the cause. It does suggest that a new runner's slow start goes with the simulator's first start, and that moving the boot doesn't remove it.
+
+## Test time (2026-11-04)
+
+The Test step grew from 1.6 minutes at `c1b4b19` to 8.6 at `a853701`, one run each, as `ReaderFixedLayoutTests` and `ReaderPicturesTests` grew. Between them they opened a book in a new `WebPage` 59 times a run. Now 9 of those are new pages and 50 are reloads. Before and after in turn on 'Octavo Faster CI Duo' (930C4032-9107-4E7B-98F3-95CE00807CBC), with the machine's load about 4:
+
+| | Before (2 runs) | After (3 runs) |
+|---|---|---|
+| All app tests (473, the same ones) | 104 s | 31 s |
+| `ReaderFixedLayoutTests` | 81 s | 19 s |
+| `ReaderPicturesTests` | 14.5 s | 2.8 s |
+| `BookInspectorTests`, not changed | 5.2 s | 5.2 s |
+
+These aren't measured on GitHub's runners yet.
+
+**What a new page costs:** about 0.4 s to load the reader and 1.15 s to open the book, plus about 4 s for the first page of a run. Nearly all of the 1.15 s is the first `application/xhtml+xml` frame in that page's WebKit process, even an empty one. An HTML frame takes 2 ms, and so does every XHTML frame after the first. I didn't find out why. Reloading takes about 15 ms to load the reader and 20 ms to open the book.
+
+**How the two suites use that:**
+
+- They keep one page and reload it for each test. They're `.serialized`, because plain `xcodebuild test` would otherwise run their tests at the same time on it.
+- A reload starts the scripts again, so nothing in the bridge or foliate carries over. With a `ReaderModel` it opens the way a new page does: the bridge's `ready`, `openBook`, then the saved position.
+- It doesn't reset the Swift model. A test that changes the model's settings, reads `lastError` or has a `sync` uses `openInItsOwnPage`. So do one open each from the start, a CFI and a fraction, to keep a new page's path covered.
+- A new test in these suites should use the suite's `open` unless one of those applies.
+
+**Checks:** I broke the reader 25 ways, one at a time: the picture rules, and the fixes and places listed in `fixed-layout.md`. The test that covers each one failed each time. The tests also pass in three shuffled orders.
+
+**`-parallel-testing-enabled NO` stays.** The history doesn't say why it was added. Without it, `xcodebuild` shuts down the simulator that CI boots during the build, to clone it. With it, the tests run one at a time. Plain `xcodebuild test` also passes, in 58 s here.
 
 ## Watch for
 

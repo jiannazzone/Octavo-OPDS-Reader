@@ -52,27 +52,13 @@ jobs:
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
-  kit:
-    name: OctavoKit tests
+  # One job, so a run asks for one runner.
+  tests:
+    name: Tests
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: xcode-27
-    timeout-minutes: 20
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - working-directory: Packages/OctavoKit
-        run: swift test
-
-  app:
-    name: App tests
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
-    runs-on: xcode-27
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
       DESTINATION: platform=iOS Simulator,name=iPhone Duo,OS=27.1
@@ -80,6 +66,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The quick one first, so a failure here stops the run early.
+      - name: OctavoKit tests
+        working-directory: Packages/OctavoKit
+        run: swift test
       # The key starts again each month, so the cache can't grow without limit.
       - id: cache
         run: |
@@ -105,7 +95,7 @@ jobs:
         with:
           path: ${{ env.DERIVED_DATA }}/CompilationCache.noindex
           key: ${{ steps.cache.outputs.prefix }}${{ github.sha }}
-      - name: Test
+      - name: App tests
         run: |
           xcodebuild test-without-building -project Octavo.xcodeproj -scheme Octavo \
             -destination "$DESTINATION" -derivedDataPath "$DERIVED_DATA" \
@@ -113,7 +103,7 @@ jobs:
 
   passed:
     name: CI passed
-    needs: [changes, kit, app]
+    needs: [changes, tests]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -121,11 +111,10 @@ jobs:
       - env:
           CHANGES: ${{ needs.changes.result }}
           CODE: ${{ needs.changes.outputs.code }}
-          KIT: ${{ needs.kit.result }}
-          APP: ${{ needs.app.result }}
+          TESTS: ${{ needs.tests.result }}
         run: |
-          echo "changes=$CHANGES code=$CODE kit=$KIT app=$APP"
+          echo "changes=$CHANGES code=$CODE tests=$TESTS"
           [ "$CHANGES" = success ] || exit 1
           if [ "$CODE" != false ]; then
-            [ "$KIT" = success ] && [ "$APP" = success ] || exit 1
+            [ "$TESTS" = success ] || exit 1
           fi
