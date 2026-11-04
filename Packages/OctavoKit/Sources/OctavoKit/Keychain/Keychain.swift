@@ -79,18 +79,6 @@ struct KeychainItem: Sendable {
             throw KeychainError(status: status)
         }
     }
-
-    /// Deletes every item of `service`, whatever its account.
-    static func deleteAll(service: String) throws {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrSynchronizable: kSecAttrSynchronizableAny,
-            kSecUseDataProtectionKeychain: true,
-        ]
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw KeychainError(status: status) }
-    }
 }
 
 public struct KeychainError: Error, Equatable, CustomStringConvertible {

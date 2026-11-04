@@ -45,7 +45,7 @@ Choices made while building, for Adam to overrule if he dislikes them on the Duo
 - **Unfinished** (`playing`) it starts again. A sample book that couldn't be copied (no room) goes back to `new` and setup shows for now.
 - **An install with no data and no marker** plays it, as there's nothing to tell it from a new one. Adam's Duo has places and a server, so it only plays from Settings.
 
-**The launch block in `OctavoApp.init` didn't run in this measurement.** A temporary probe on the simulator recorded `UIApplication.shared.isProtectedDataAvailable` as false in `App.init` on a fresh install and a second launch, and the marker was never written. So `settle()` there, `removeLeftoversAfterInstall()`, `KeychainSweep.run()` and `moveSecretsOut()` didn't run either. The tour doesn't depend on it: `shouldPlay` settles from `ShellModel`, once the app is up. The security steps do, and that's network-trust code, so it's left for its own session and Adam's sign-off. A real device is unchecked. `network-trust.md` records the sweep working on a simulator in step 16, which needs explaining too.
+**The launch steps didn't run when this was built.** A probe found them skipped in `App.init` and the marker never written. The tour didn't depend on them: `shouldPlay` settles from `ShellModel`, once the app is up. They now run from `didFinishLaunching` (`LaunchSteps`), with `settle()` still just before the marker; the reason and the fix are in `network-trust.md`, "The launch steps never ran".
 
 ### A replay touches nothing
 

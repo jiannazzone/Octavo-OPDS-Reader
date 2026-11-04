@@ -106,7 +106,7 @@ ATS stays on for the internet. `HomeNetworkPolicy` is the real check inside that
 - **Consequence:** a new or restored iPhone signs in again. That's deliberate: refresh tokens rotate, so a restored copy would be stale anyway.
 - **Writes** are `SecItemUpdate`, falling back to `SecItemAdd` only on `errSecItemNotFound`, and retried on a duplicate. Nothing is ever deleted first.
 - **Sign out and Remove server:** `ServerCredentials.removeAll(serverID:)` clears all four kinds. `BookOrbitClient.signOut()` clears tokens. What a failed delete leaves goes at the next launch (step 16's sweep, below).
-- **Reinstall:** `ServerCredentials.removeLeftoversAfterInstall()` runs at launch when protected data is available. The marker is written only after the wipe succeeds.
+- **Reinstall:** `ServerCredentials.removeLeftoversAfterInstall(hasSavedServer:)` runs at launch when protected data is available (`LaunchSteps`; it never really ran until 2026-11-03, see "The launch steps never ran"). The marker is written only after the wipe succeeds. A saved server without the marker isn't a reinstall: its sign-in stays.
 - **Token rotation:**
   - The refreshed credentials are saved before anything uses them.
   - Saves are chained, so they land in the order made. Sign-out bumps a generation number, so a refresh already in flight can't bring the session back.
@@ -219,7 +219,7 @@ What *is* judged by the name alone, on purpose:
 
 At launch, when protected data is available and right after the reinstall wipe, `KeychainSweep.run()` lists every account under the four Keychain services and deletes all of a server's items unless it's the saved server's (`ServerCredentials.removeAll(keeping:)`). That covers a Remove server whose Keychain delete failed and the secrets of a setup left before it finished (or whose `Server.json` save failed).
 - **Never on a guess:** `ServerStore.read()` tells "no file" (`nil`) from a file that can't be read or decoded (throws); a throw deletes nothing, and so does a Keychain that can't list its items. A file from before `signedOut` existed still decodes (the field is optional).
-- **Never a setup in progress:** it runs in `OctavoApp.init`, before the shell exists; setup stores its secrets under a new `server-<UUID>` per launch, so the only attempt IDs it can see are earlier processes' (abandoned).
+- **Never a setup in progress:** it runs in `didFinishLaunching` (`LaunchSteps`), before the shell exists and before anything can be tapped; setup stores its secrets under a new `server-<UUID>` per launch, so the only attempt IDs it can see are earlier processes' (abandoned).
 - **Sign out:** an account sweep can't tell a stale sign-in from a live one, so Sign out first writes `signedOut = true` to `Server.json`, then deletes. At launch the sweep deletes a signed-out server's tokens and password (`ServerCredentials.removeSignIn`), keeping its pin and catalog key. Sign in again clears the flag. If that save fails, the next launch signs out again: fail closed.
 - **Debug builds** keep accounts starting `debug-` (the local servers' fixed IDs, so launch arguments don't sign in on every launch). Release builds keep nothing but the saved server.
 
@@ -256,9 +256,11 @@ Of commit `e7b1395`. **Nothing High or Medium.** It found no defect in item 1 (n
 | 6 | The live test's "refused in under 2 s" didn't prove nothing was sent for `uz`, a host that answers | Info | The test now counts the transport's tasks: none for the refused names, one for the Mac's own `.local` |
 
 ### Checked by hand (iPhone Duo simulator, folded, local BookOrbit and COPS)
+**Correction (2026-11-03):** the launch steps never ran in this build, so none of these checks exercised the sweep or `moveSecretsOut`. They passed without them. The real runs are under "The launch steps never ran".
+
 - **Sweep keeps the saved server:** signed in to the saved BookOrbit (Sign in again, test account), relaunched: no banner, Home loads its books.
 - **Sign out survives a relaunch:** Sign out wrote `"signedOut":true` to `Server.json`; relaunched signed out; Sign in again removed the flag, and a relaunch stayed signed in.
-- **A query token stays out of saved data:** Remove server, then Add a server → OPDS catalog → `localhost:3320/feed?apikey=abcdefgh12345678` (the note below shows). Saved as `http://localhost:3320/feed?apikey={key}`; `abcdefgh12345678` appears in no file under Application Support or Preferences. After a relaunch COPS loads with the key from the Keychain. The app's data was then put back from a copy, so the next launch's sweep dropped COPS's key.
+- **A query token stays out of saved data:** Remove server, then Add a server → OPDS catalog → `localhost:3320/feed?apikey=abcdefgh12345678` (the note below shows). Saved as `http://localhost:3320/feed?apikey={key}`; `abcdefgh12345678` appears in no file under Application Support or Preferences. After a relaunch COPS loads with the key from the Keychain. The app's data was then put back from a copy. This note used to add that the next launch's sweep dropped COPS's key; that was never measured, and the sweep couldn't have run, so the key stayed.
 
 ![The note under an http address](network-trust/step16-not-encrypted.png) ![COPS after a relaunch](network-trust/step16-cops-key-after-relaunch.png)
 ![Signed out after a relaunch](network-trust/step16-signed-out-after-relaunch.png) ![Signed in again, after a relaunch](network-trust/step16-signed-in-after-relaunch.png)
@@ -266,6 +268,73 @@ Of commit `e7b1395`. **Nothing High or Medium.** It found no defect in item 1 (n
 ### 5. Adam's wording (2026-11-02, from simulator mockups)
 - Remove server for a catalog with a key: **no extra line** (the key is deleted from the iPhone; like a password it stays valid on the server, which apps don't usually mention).
 - The note under an http address: **"Not encrypted. On other networks, your password could be seen."** (was "Octavo uses http:// only at home or over a VPN.").
+
+## The launch steps never ran (found and fixed 2026-11-03)
+
+Measured on the simulator **Octavo Launch Duo** (06647D0C-07CE-4113-9EB1-ADE752C32737, iOS 27.1). **A real device is unchecked.** **Network-trust change: Adam signed off the review below on 2026-11-03** (through commit `9598a5b`).
+
+**What was wrong.** The reinstall wipe, the sweep and `moveSecretsOut` sat in `OctavoApp.init` behind `if UIApplication.shared.isProtectedDataAvailable`, from the wipe's first commit (`cfe9dce`) on. They never ran: a reinstall's items stayed, and so did an abandoned setup's, a failed Remove server's and a failed Sign out's. Keychain items stayed `AfterFirstUnlockThisDeviceOnly`, and nothing ever sent them anywhere: no ID the app would use could reach them (setup always makes a new one).
+
+**Why.** `App.init` runs before `UIApplicationMain`. A probe at each point, on a fresh install and a second launch:
+
+| | `sharedApplication` | `isProtectedDataAvailable` | `UIApplicationMain` on the stack | Keychain, `Server.json`, defaults |
+|---|---|---|---|---|
+| `App.init` | **nil** | **false** (a message to nil) | no | all readable |
+| `didFinishLaunching` | the app | true | yes | all readable |
+
+So the check was false because there was no application yet, whatever the state of the data. The order at launch, as measured (Apple doesn't document it for a SwiftUI app), is `App.init`, `didFinishLaunching`, `App.body`, the window's content, `ShellModel.init`.
+
+**What changed since step 16: nothing.** This note said the sweep dropped COPS's key on a simulator. Step 16's own commit (`2d955c7`), built with today's tools (Xcode dates from October 22), with an orphan item planted and a log added: "block SKIPPED" on both launches, and the orphan still there. That sentence was never measured, and the hand checks above pass with or without a sweep. The 2026-11-01 checklist's "cleared by … a reinstall (`KeychainTests`)" had the same gap: each test calls its function directly, so nothing tested launch itself.
+
+**The fix (`Octavo/Setup/LaunchSteps.swift`).** `OctavoAppDelegate.application(_:didFinishLaunchingWithOptions:)`, through `@UIApplicationDelegateAdaptor`, calls `LaunchSteps.run(protectedDataAvailable: application.isProtectedDataAvailable)`. The order is unchanged: `TourRecord.settle()`, the wipe, the sweep, `moveSecretsOut`.
+- **Before any setup stores:** the callback runs on the main thread, and nothing can be tapped until it returns. As measured, it also comes before the shell exists.
+- **Before the first unlock:** nothing runs, and the next launch does it (as before; the check now works). The same goes for a launch while locked, because `isProtectedDataAvailable` is false then too. They don't run later in the same process, which could reach a setup in progress.
+
+**Existing installs: the first run.** Every install so far has a saved server and no marker, which is what a reinstall looks like to the old check: its first real run would have deleted the live sign-in. `Server.json` goes with the app just as the marker does, so a saved server (readable or not) now means the install has run before, and only the marker is set (`removeLeftoversAfterInstall(hasSavedServer:)`). This also fixes a wipe that fails on the first launch and then deletes a server added since. It can't keep a stale secret: the sweep then removes everything but the saved server's items.
+
+| Install on its first launch of this build | What's deleted | What you see |
+|---|---|---|
+| A saved server, signed in | Other servers' items: failed Remove servers, abandoned setups | Nothing. Still signed in, no tour |
+| A saved server, signed out | Also its leftover tokens and password, if Sign out couldn't delete them | Nothing. Still signed out |
+| A catalog with a key still in its saved address | Nothing; the key moves to the Keychain and the address gets a placeholder | Nothing on a catalog like COPS, whose loading was checked. See "Left as it is" for one whose links repeat the key |
+| No saved server | Every item, including `debug-` ones in debug builds | Setup, as before. Debug launch arguments sign in again once (BookOrbit allows 5 logins a minute, so a script that reinstalls in a loop could hit that) |
+
+From now on a reinstall deletes the old items at its first launch, and what you see doesn't change: setup, as it was.
+
+**Checked on the simulator**, with Keychain rows counted in the simulator's database (uninstalling doesn't remove them there, so a reinstall's wipe is really tested):
+
+| Scenario | Before | After |
+|---|---|---|
+| Upgrade: step 16's build with a real BookOrbit sign-in and an orphan, then this build | 2 rows, no marker | 1 row, marker set, tour `played`; Home shows the server's books and places; the same on a second launch |
+| Signed out with tokens still stored (`signedOut` set by hand) | 1 row | 0 rows |
+| An older save: COPS at `…/feed?apikey=abcdefgh12345678` | 0 rows, key in `Server.json` | 1 row, address `…?apikey={key}`, key in no file under Application Support, Preferences or Documents; the Library loads from COPS |
+| Reinstall: delete the app, install again | 1 row | 0 rows, marker set, tour playing, no server; the same on a second launch |
+
+A cold Open in Octavo (`simctl openurl`) goes through the new delegate and imports the book, as on step 16's build. A file under `~/GitHub` fails with "couldn't be opened" on both builds, so use one in a temp folder for this check.
+
+Not run: a launch before the first unlock (the simulator has no passcode; `nothingRunsBeforeTheFirstUnlock` passes the check's answer in) and a Release build (its only difference here is that `debug-` items aren't kept).
+
+**Tests.** `launchRunsTheSteps`: this test host is the app, launched the real way, and `LaunchSteps.failedAtLaunch`, set only by the delegate, must say the steps ran and none failed. The marker and the tour's state last between runs, so they back that up but can't prove it. Five more in `KeychainTests` cover the steps together. Twelve deliberate breakages were each caught, including the original bug put back (`launchRunsTheSteps`), the wipe ignoring a saved server (`anInstallWithoutTheMarkerKeepsItsSavedServer`), the key's retry removed (`finishesMovingAKeyAlreadyInTheKeychain`) and the wipe ignoring its scope (`reinstallStartsSignedOut`).
+
+An app test run on a simulator now sweeps that simulator's Keychain at launch, as any launch does: `debug-` items and the saved server's stay, and anything else goes. The wipe's tests no longer delete every item on the simulator: they're scoped to their own (they used to sign out an app installed there, and could disturb other suites).
+
+**Why the wipe is still here.** With no saved server, the sweep alone would now delete the same items in a Release build. The wipe is kept because it sets the marker, which `TourRecord` reads, and clears `debug-` items after a reinstall.
+
+### Independent security review (fresh subagent, given the code, 2026-11-03; signed off by Adam)
+
+Of commit `5e6edb6` (rebased as `218ecb2`). **Nothing High.** It found no path where a launch deletes a secret the app still needs, beyond the documented fail-closed cases. It didn't run anything, so the simulator results above are ours, not its.
+
+| # | Finding | Severity | Done |
+|---|---|---|---|
+| 1 | `moveSecretsOut` didn't retry as its comment promised: with the key saved to the Keychain and `Server.json`'s save failed, the next launch saw nothing new and left the key in the address (and in backups) for good | Medium | Fixed: it finishes when the address still differs (`finishesMovingAKeyAlreadyInTheKeychain`) |
+| 2 | Only `Server.json` is cleaned. A catalog saved before step 16 whose key the old check missed, and whose links repeat it, keeps the key in `RecentBooks.json` and `BooksOnIPhone.json`, and Remove server writes it to `RemovedServer.json`. Links, and so book IDs, change after the move, so those rows stop matching downloads and places | Low | **Left as it is**: no release has shipped, so only a development install is affected. Only catalogs with `?apikey=`-style or Stump keys saved before step 16, not BookOrbit or Kavita |
+| 3 | `launchRunsTheSteps` could pass with launch broken: the marker and tour state last between runs, and a step that threw left no trace | Low | Fixed: `failedAtLaunch` names failed steps, the test requires none, failures go to the log (step name public, error private) |
+| 4 | The wipe ignored `scope`, so its tests deleted every Keychain item on the device, signing out an installed app and possibly disturbing parallel suites | Low | Fixed: the wipe takes `scope` and deletes through `removeAll(keeping:)`, which tries every item; `deleteAll(service:)` is gone |
+| 5 | If the app is killed between Sign out's flag and `auth/logout`, the sweep deletes the refresh token and the logout is never sent; the session lapses on the server | Info | Accepted |
+
+Checked, with no defect: Release builds only use `server-<UUID>` accounts equal to `saved.id` since setup's first commit; an unreadable `Server.json` deletes nothing; a marker set by a corrupt `Server.json` is harmless, because the sweep keeps trying and setup's next save replaces the file; `Server.json` and the marker share the app's lifetime through delete, Offload and backup; there are no other Keychain writers (no extensions, no background modes); the delegate implements only `didFinishLaunching`, sets no scene configuration and leaves `onOpenURL` with SwiftUI.
+
+Not verified anywhere: all of this on a real device, including a launch while locked; whether prewarming can reach `didFinishLaunching` (if it can while locked, the steps wait for a later process).
 
 ## Tests and how to run them
 

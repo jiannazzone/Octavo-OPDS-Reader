@@ -176,9 +176,13 @@ nonisolated extension ServerStore {
             guard let url = URL(string: kept?.restore(saved.address) ?? saved.address),
                   let found = OPDSURLSecret.detect(in: url) else { return }
             let new = found.values.filter { !(kept?.values.contains($0) ?? false) }
-            guard !new.isEmpty, let merged = OPDSURLSecret(values: (kept?.values ?? []) + new) else { return }
-            try store.save(merged)
-            saved.address = merged.redact(url.absoluteString)
+            guard let merged = new.isEmpty ? kept : OPDSURLSecret(values: (kept?.values ?? []) + new) else { return }
+            // Nothing new, but still in the address: the last try got as far
+            // as the Keychain.
+            let redacted = merged.redact(url.absoluteString)
+            guard redacted != saved.address else { return }
+            if !new.isEmpty { try store.save(merged) }
+            saved.address = redacted
         }
         try save(saved)
     }
