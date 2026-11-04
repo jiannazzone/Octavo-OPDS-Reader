@@ -23,7 +23,8 @@ jobs:
     outputs:
       code: ${{ steps.check.outputs.code }}
     steps:
-      # A pull request checks out its merge commit, whose first parent is the base.
+      # A pull request checks out its merge commit and a push the merged commit.
+      # Either way, the first parent is the base.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
@@ -32,17 +33,13 @@ jobs:
       # THIRD-PARTY-NOTICES.md. --no-renames lists both ends of a move, so moving
       # code into docs/ still runs the tests. If this step fails, so does CI passed.
       - id: check
-        env:
-          EVENT: ${{ github.event_name }}
         run: |
           code=true
-          if [ "$EVENT" = pull_request ]; then
-            files=$(git diff --no-renames --name-only HEAD^1 HEAD)
-            # The prefix stops a file name being read as a workflow command.
-            printf '%s\n' "$files" | sed 's/^/changed: /'
-            if ! printf '%s\n' "$files" | grep -qvE '^(docs/|README\.md$|CLAUDE\.md$)'; then
-              code=false
-            fi
+          files=$(git diff --no-renames --name-only HEAD^1 HEAD)
+          # The prefix stops a file name being read as a workflow command.
+          printf '%s\n' "$files" | sed 's/^/changed: /'
+          if ! printf '%s\n' "$files" | grep -qvE '^(docs/|README\.md$|CLAUDE\.md$)'; then
+            code=false
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
 

@@ -15,16 +15,16 @@ GitHub's `xcode-27` image lists Xcode 27.2, an iOS 27.1 runtime and the iPhone D
 
 The repo is public, so these standard runners should cost nothing. Pull requests from first-time and other outside contributors wait for approval, because the repo's setting is `all_external_contributors`.
 
-## Docs-only pull requests
+## Docs-only changes
 
-Tests are skipped only when every changed file is under `docs/`, or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a pull request that changes no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too.
+Pull requests and pushes to `main` use the same check, which compares the commit with its first parent. Tests are skipped only when every changed file is under `docs/`, or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a commit that changes no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too.
 
 ## Build cache
 
 The App tests job turns on Xcode's compilation cache with `COMPILATION_CACHE_ENABLE_CACHING=YES`, in the workflow only, so local builds are unchanged. It keeps only `CompilationCache.noindex`, not the rest of DerivedData. Its entries are keyed by the compiler's input, not by file dates, so a fresh checkout still hits the cache and a stale result can't be reused the way it can with DerivedData.
 
-- Only pushes to `main` save the cache. A pull request restores it but never writes it, so the first build after the cache is empty is a full one.
-- The key holds the Xcode build and the month, so a new Xcode or a new month starts a fresh cache. Otherwise it would grow with every save, because each one keeps the old entries. The first build of a month is a full one until a merge to `main` saves again.
+- Only pushes to `main` that run the tests save the cache, so a docs-only merge doesn't. A pull request restores it but never writes it, so the first build after the cache is empty is a full one.
+- The key holds the Xcode build and the month, so a new Xcode or a new month starts a fresh cache. Otherwise it would grow with every save, because each one keeps the old entries. The first build of a month is a full one until a merge to `main` that changes code saves again.
 - The DerivedData path has to stay the same between runs. The same code built at a different path hit only 99 of 156 tasks locally. `$RUNNER_TEMP` should be the same path on every GitHub run.
 - `OctavoKit tests` has no cache: it saved only a few seconds locally.
 
@@ -49,6 +49,7 @@ The small change added one line to an app file and one to an OctavoKit file: 99 
 - `AttemptTests` and any other test with short time limits may be flaky on a slower runner. `aServerThatDoesntAnswerTimesOut` expects a 50 ms limit to have fired after 150 ms.
 - Some tests start requests to `localhost`, which nothing answers in CI. None waits for the answer.
 - Changing a pull request's base branch doesn't re-run CI, so its old result stays. This shouldn't come up while branches are cut from `main`. If a pull request is ever retargeted, re-run CI by hand. Adding the `edited` trigger would fix it, but would also re-run the tests on every title or description edit.
+- A rebase merge pushes several commits at once, but a push's check reads only the last one. If that commit is docs-only, `main` skips the tests, though the pull request already ran them. Merge commits and squash merges aren't affected.
 - A pull request's own copy of `ci.yml` is what runs, so it can turn "CI passed" green without testing anything. Read every `.github/` change by hand.
 
 ## Still to do (#19)

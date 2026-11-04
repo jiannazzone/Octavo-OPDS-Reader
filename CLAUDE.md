@@ -47,7 +47,7 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
 - **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask. Show the owner every GitHub issue as a draft before creating it.
 - On GitHub, `main` is protected by the ruleset "Protect main": changes land only through a pull request, and force pushes and branch deletion are blocked, with no bypass (owner included).
 - **Branching: GitHub flow.** One short-lived branch per task, cut from `main` and merged back by pull request with a merge commit. The spike's integration branch `spike/scaffold` is retired.
-- **CI** (`.github/workflows/ci.yml`, `docs/notes/ci.md`): `swift test` and the app's tests on GitHub's `xcode-27` runner, on every pull request and push to `main`. Pull requests that change only `docs/`, `README.md` or `CLAUDE.md` skip the tests. It doesn't run the Docker checks yet (#19).
+- **CI** (`.github/workflows/ci.yml`, `docs/notes/ci.md`): `swift test` and the app's tests on GitHub's `xcode-27` runner, on every pull request and push to `main`. Changes to only `docs/`, `README.md` or `CLAUDE.md` skip the tests. It doesn't run the Docker checks yet (#19).
 - Spike tracker: `docs/SPIKE.md`.
 
 ## Architecture decisions
