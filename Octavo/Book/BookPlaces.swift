@@ -94,15 +94,10 @@ final class BookPlaces {
     func trip(of book: SourcedBook) -> ReaderTrip? {
         _ = revision
         guard let key = book.book.readableFile?.storageKey, let trip = store.trip(forBook: key),
-              let place = opening(of: book).position,
-              place.cfi == trip.place.cfi || abs(place.fraction - trip.place.fraction) < Self.samePlaceFraction
+              trip.isPlace(opening(of: book).position)
         else { return nil }
         return trip
     }
-
-    /// A place line can't resolve a CFI, so a server's spelling of the same
-    /// place is told apart by how close it is. About a page in a long book.
-    private static let samePlaceFraction = 0.002
 
     /// The sync line, for a book whose place syncs and has a place.
     func status(of book: SourcedBook) -> Status? {

@@ -2,13 +2,15 @@ import OctavoKit
 import SwiftUI
 
 /// Away from your place after a jump (decision 33): the scrubber, Contents, a
-/// bookmark, a chapter button or a search result. Your place stays saved as it
+/// bookmark, a chapter button, a search result or a link in the book. Your place stays saved as it
 /// was, here and on the server, until you settle: Back returns to it, and ✕
 /// or reading on makes the page you're on your place. Closing the book keeps
 /// the trip, on this iPhone only: it reopens where you were looking.
 nonisolated struct ReaderTrip: Codable, Equatable, Sendable {
     /// Page turns forward from where you landed that count as reading on.
     static let turnsToReadOn = 5
+    /// A place with no CFI (a percentage alone) is the same within this.
+    private static let samePercentage = 0.001
 
     /// Where you were before the first jump.
     var place: ReadingPosition
@@ -16,6 +18,9 @@ nonisolated struct ReaderTrip: Codable, Equatable, Sendable {
     var placePage: Int?
     /// Where it falls in the book, as the progress line shows it.
     var placeFraction = 0.0
+    /// How the server spells it, which isn't the page's own spelling if
+    /// another reader put it there.
+    var placeOnServer: String?
     /// Where you are now.
     var page: ReadingPosition?
     /// Where that falls in the book, as the progress line shows it.
@@ -35,6 +40,16 @@ nonisolated struct ReaderTrip: Codable, Equatable, Sendable {
     }
 
     var hasReadOn: Bool { turns >= Self.turnsToReadOn }
+
+    /// Whether `opening`, where the opening rule opens the book, is still your
+    /// place. If not, another reader moved it and the trip is over.
+    func isPlace(_ opening: ReadingPosition?) -> Bool {
+        guard let opening else { return false }
+        guard let cfi = opening.cfi else {
+            return place.cfi == nil && abs(opening.fraction - place.fraction) < Self.samePercentage
+        }
+        return cfi == place.cfi || cfi == placeOnServer
+    }
 
     /// "Back to page 312".
     var backLabel: String {

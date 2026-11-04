@@ -167,8 +167,8 @@ final class ReaderModel {
     }
     /// The saved trip this book is reopening on.
     @ObservationIgnored private var tripToResume: ReaderTrip?
-    /// A saved trip whose place the rule's position may or may not be.
-    @ObservationIgnored private var tripToCheck: ReaderTrip?
+    /// How the server spells your place, once it's known to hold it.
+    @ObservationIgnored var placeOnServer: String?
     /// A jump under way, until it's landed somewhere other than your place.
     @ObservationIgnored var tripToBe: ReaderTrip?
     @ObservationIgnored var jumpsUnderWay = 0
@@ -502,6 +502,7 @@ final class ReaderModel {
     /// Pushes any position still waiting for the debounce. Call when the
     /// reader goes away.
     func close() async {
+        await jumpsLanded()
         await pusher?.flush()
     }
 
@@ -555,10 +556,6 @@ final class ReaderModel {
                 self.tripToResume = nil
             }
             didOpen()
-            if let tripToCheck {
-                self.tripToCheck = nil
-                Task { await resumeIfStillYourPlace(tripToCheck) }
-            }
             isFixedLayout = opened.isFixedLayout
             relayout()
             sendLayout()
@@ -614,7 +611,7 @@ final class ReaderModel {
         case .externalLink(let href):
             log.notice("Ignored external link \(href, privacy: .public)")
         case .link(let href):
-            jump(to: href)
+            followLink(href)
         case .error(let error):
             lastError = error.message
             log.error("Reader script error (\(error.phase ?? "?", privacy: .public)): \(error.message, privacy: .public)")
@@ -632,11 +629,10 @@ final class ReaderModel {
             let opening = await chooseOpeningPosition()
             openingPosition = opening
             // A trip reopens where you were looking, as long as the rule
-            // still opens at your place. Spelled differently, only the page
-            // can say (`resumeIfStillYourPlace`).
+            // still opens at your place.
             let savedTrip = store.trip(forBook: book.id)
-            tripToResume = savedTrip.flatMap { $0.page != nil && $0.place.cfi == opening.position?.cfi ? $0 : nil }
-            tripToCheck = tripToResume == nil ? savedTrip : nil
+            tripToResume = savedTrip.flatMap { $0.page != nil && $0.isPlace(opening.position) ? $0 : nil }
+            if savedTrip != nil, tripToResume == nil { store.saveTrip(nil, forBook: book.id) }
             let saved = tripToResume?.page ?? opening.position
             var options: [String: Any] = [
                 "url": ReaderSchemeHandler.bookURL(fileName: book.fileName).absoluteString,
@@ -674,6 +670,7 @@ final class ReaderModel {
             let opening = OpeningPosition.choose(local: local, remote: remote)
             pulled = true
             serverCFI = remote?.position.cfi
+            if case .remote = opening { placeOnServer = serverCFI }
             let waited = FoldReport.milliseconds(since: started)
             syncStatus = "pulled \(remote?.position.cfi ?? "nothing") in \(waited) ms → \(opening.label)"
             return opening
@@ -702,11 +699,6 @@ final class ReaderModel {
         }
     }
 
-    /// The saved trip's place wasn't what the rule opened at.
-    func forgetSavedTrip() {
-        store.saveTrip(nil, forBook: book.id)
-    }
-
     private func moved(to relocation: ReaderMessage.Relocation) {
         // A blank page's CFI only names its section. Keep the last real page.
         guard relocation.blankPage != true else {
@@ -726,6 +718,7 @@ final class ReaderModel {
             isJumpingToServer = false
             openedCFI = position.cfi
             hasMoved = false
+            placeOnServer = serverCFI
             save(position, needsPush: false, syncedAt: .now)
             return
         }
@@ -788,6 +781,7 @@ final class ReaderModel {
     private func didPush(_ position: ReadingPosition) {
         lastPushedCFI = position.cfi
         serverCFI = position.cfi
+        placeOnServer = position.cfi
         pushCount += 1
         syncStatus = "pushed \(Date.now.formatted(date: .omitted, time: .standard))"
         try? store.markPushed(position, forBook: book.id)

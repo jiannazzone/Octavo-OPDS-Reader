@@ -92,7 +92,7 @@ Measured on 'Octavo Navigation Duo' with real taps and drags, Moby-Dick (file 3)
 
 ### Across closing
 
-A trip is saved per book beside the positions (`ReadingPositionStore`, `Trips/`), only on the iPhone. Your place stays as it was, so `BookPlaces` and the opening rule still hold. Opening, a trip whose place matches where the rule opens the book reopens on the trip's page; otherwise it's dropped.
+A trip is saved per book beside the positions (`ReadingPositionStore`, `Trips/`), only on the iPhone. Your place stays as it was, so `BookPlaces` and the opening rule still hold. Opening, a trip whose place is where the rule opens the book reopens on the trip's page; otherwise it's dropped. The server may hold your place in another spelling, if another reader put it there, so a trip records that spelling too (`placeOnServer`) and `ReaderTrip.isPlace` compares both. The reader and the book's screen use the same test, with no page to ask and no guess by distance.
 
 | What | The book's screen | Opens at | On BookOrbit |
 |---|---|---|---|
@@ -106,7 +106,7 @@ A trip is saved per book beside the positions (`ReadingPositionStore`, `Trips/`)
 `UISlider.TrackConfiguration(allowsTickValuesOnly: false, neutralValue:, ticks: [])`, on 'Octavo Navigation Duo' with real drags, flat, folded and half open. With no ticks the knob stays free.
 
 - **It can't go back to nil.** After `trackConfiguration = nil` the line stayed empty and the next drag didn't take. It's now always set, with a neutral of 0 when there's no trip, which looks like the plain slider.
-- **The fill only redraws for a value that moves it.** Landing brings none, as the knob is already there, so the old fill stayed up. A nudge of the smallest step did nothing. `ReaderView` gives the slider a new `.id` when your place changes, and a slider made with the setting draws it right.
+- **The fill only redraws for a value that moves it.** Landing brings none, as the knob is already there, so the old fill stayed up. A nudge of the smallest step did nothing. A bigger nudge in the same run loop didn't either. `ReaderView` gives the slider a new `.id` when your place changes, and a slider made with the setting draws it right. A finger on the old one is let go (`didMoveToWindow`), and with VoiceOver on the slider stays, so it keeps its focus and the fill catches up on the next move.
 - **Zoomed in, the fill's start stays where it was.** It keeps the point on the screen that your place had on the whole line, whether or not your place is in the zoomed window, and it's right again after letting go. Setting the neutral with the range was worse: it left a short, wrong fill after zooming out.
 
 ### Links in the book

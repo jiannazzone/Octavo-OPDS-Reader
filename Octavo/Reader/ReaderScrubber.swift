@@ -65,6 +65,8 @@ final class ReaderScrubberSlider: UISlider {
     private var lastTick: CFTimeInterval = 0
     private var lastChapter: Int?
     private var caught: Double?
+    /// A finger is on the slider.
+    private var isTouched = false
     /// This touch has moved the knob, so letting go goes somewhere.
     private var didChange = false
     /// The finger has lifted and the slider is still easing to where it was.
@@ -172,6 +174,7 @@ final class ReaderScrubberSlider: UISlider {
 
     @objc private func began() {
         if easingUntil != nil { finishEasing() }
+        isTouched = true
         selection.prepare()
         impact.prepare()
         stillAt = value
@@ -214,6 +217,7 @@ final class ReaderScrubberSlider: UISlider {
     }
 
     @objc private func released() {
+        isTouched = false
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(holdEnded), object: nil)
         // Pressed and lifted without moving: the page stays.
         guard didChange else {
@@ -243,6 +247,7 @@ final class ReaderScrubberSlider: UISlider {
     }
 
     @objc private func cancelled() {
+        isTouched = false
         endTracking()
         onCancel?()
     }
@@ -359,6 +364,11 @@ final class ReaderScrubberSlider: UISlider {
         zoom = nil
         isZoomed = false
         stopLink()
+        // A new slider took over under the finger, which no event will say.
+        // This comes during a view update, too soon to change its state.
+        guard isTouched, let onCancel else { return }
+        isTouched = false
+        Task { @MainActor in onCancel() }
     }
 
     @objc private func frameFired() {

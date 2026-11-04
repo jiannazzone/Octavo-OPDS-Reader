@@ -64,6 +64,34 @@ struct ReaderTripTests {
         #expect(trip.opensAtLabel == "Opens at 90%")
     }
 
+    // MARK: Your place
+
+    @Test func yourPlaceIsItsOwnSpellingOrTheServers() {
+        var trip = trip()
+        #expect(trip.isPlace(place))
+        let server = ReadingPosition(cfi: "epubcfi(/6/12!/4/8)", fraction: 0.32)
+        #expect(!trip.isPlace(server))
+        trip.placeOnServer = server.cfi
+        #expect(trip.isPlace(server))
+    }
+
+    /// A page away is still another reader's move.
+    @Test func aNearbyPlaceIsntYourPlace() {
+        #expect(!trip().isPlace(ReadingPosition(cfi: "epubcfi(/6/12!/4/4)", fraction: 0.3201)))
+    }
+
+    @Test func nothingToOpenAtIsntYourPlace() {
+        #expect(!trip().isPlace(nil))
+    }
+
+    /// A percentage alone goes by the number.
+    @Test func withNoCFIsItGoesByTheNumber() {
+        let percentage = ReaderTrip(place: ReadingPosition(cfi: nil, fraction: 0.32), placePage: nil)
+        #expect(percentage.isPlace(ReadingPosition(cfi: nil, fraction: 0.3201)))
+        #expect(!percentage.isPlace(ReadingPosition(cfi: nil, fraction: 0.5)))
+        #expect(!trip().isPlace(ReadingPosition(cfi: nil, fraction: 0.32)))
+    }
+
     // MARK: Saving
 
     private func store() -> ReadingPositionStore {

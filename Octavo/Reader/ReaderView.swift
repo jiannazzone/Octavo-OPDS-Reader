@@ -76,7 +76,10 @@ struct ReaderView: View {
         }
         .onDisappear {
             guard let model else { return }
-            Task { await model.close() }
+            Task {
+                await model.close()
+                shell.places.readerClosed()
+            }
         }
     }
 }
@@ -568,6 +571,7 @@ private struct ReaderProgressBar: View {
     /// Where the scrubber is while it's dragged, and after it's let go until
     /// the page gets there.
     @State private var scrub: Double?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @State private var relocationsAtRelease: Int?
 
     var body: some View {
@@ -653,8 +657,9 @@ private struct ReaderProgressBar: View {
                 relocationsAtRelease = nil
             }
             // A slider only redraws its fill for a new value, and a landing
-            // brings none, so a new place gets a new slider.
-            .id(model.trip?.placeFraction)
+            // brings none, so a new place gets a new slider. VoiceOver would
+            // lose its place on it, and keeps this one.
+            .id(voiceOverEnabled ? nil : model.trip?.placeFraction)
             .frame(height: 30)
             // A jump that doesn't relocate (it landed on this page, or the
             // place wouldn't open) mustn't leave the knob on it for good.

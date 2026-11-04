@@ -103,6 +103,18 @@ struct BookPlacesTests {
         #expect(await eventually { places.trip(of: Self.book) == nil })
     }
 
+    /// The server has your place in its own spelling: the same place.
+    @Test func aTripShowsWithYourPlaceInTheServersSpelling() async throws {
+        try store.save(Self.iPhonePlace, forBook: key)
+        var trip = tripFromTheIPhonesPlace()
+        trip.placeOnServer = Self.serverPlace.cfi
+        store.saveTrip(trip, forBook: key)
+        let places = places(FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: .now)))
+        places.refresh(Self.book)
+        #expect(await eventually { places.progress(of: Self.book) == Self.serverPlace.fraction })
+        #expect(places.trip(of: Self.book) == trip)
+    }
+
     @Test func beforeAPullThePlaceIsTheIPhonesElseTheLists() throws {
         let places = places(FakeProgressSync())
         #expect(places.progress(of: Self.book) == 0.3)

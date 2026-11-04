@@ -9,6 +9,13 @@ extension ReaderModel {
         runJump("return await window.octavo.goTo(target)", arguments: ["target": target])
     }
 
+    /// A link tapped in the book. Under a fold or a turn the page isn't
+    /// settled enough to say where it left from, and another tap will do.
+    func followLink(_ href: String) {
+        guard !isFolding, turnRun == nil else { return }
+        jump(to: href)
+    }
+
     func jump(toFraction fraction: Double) {
         runJump("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": fraction])
     }
@@ -28,7 +35,7 @@ extension ReaderModel {
         if jumpsUnderWay == 0 { jumpStartCount = relocationCount }
         jumpsUnderWay += 1
         guard trip == nil, tripToBe == nil, let place = savedPlace else { return }
-        tripToBe = ReaderTrip(place: place, placePage: ReaderPlace(chapter: nil, location: location, fraction: shownFraction).first, placeFraction: shownFraction)
+        tripToBe = ReaderTrip(place: place, placePage: ReaderPlace(chapter: nil, location: location, fraction: shownFraction).first, placeFraction: shownFraction, placeOnServer: placeOnServer)
     }
 
     /// The jump has landed. Landing on your own page isn't a trip.
@@ -37,7 +44,9 @@ extension ReaderModel {
         jumpsUnderWay -= 1
         guard jumpsUnderWay == 0, var landed = trip ?? tripToBe else { return }
         tripToBe = nil
-        if await isShowing(landed.place) {
+        // With no answer from the page, a page that never moved hasn't left.
+        let hasMoved = relocationCount != jumpStartCount
+        if await isShowing(landed.place) ?? !hasMoved {
             guard jumpsUnderWay == 0 else { return }
             trip = nil
             return
@@ -73,7 +82,7 @@ extension ReaderModel {
             await relocationsSettled(since: count)
             // A quick tap on the page may have turned on from it meanwhile.
             let isShowingPlace = await isShowing(trip.place)
-            if trip.place.cfi == nil || isShowingPlace {
+            if trip.place.cfi == nil || isShowingPlace != false {
                 wentBack()
             } else {
                 wentBackAndTurned()
@@ -84,12 +93,15 @@ extension ReaderModel {
     /// While away: where you are, and turning or scrubbing back onto your
     /// page ends the trip.
     func tripMoved(to page: ReadingPosition) {
-        trip?.page = page
-        trip?.pageFraction = shownFraction
-        guard let place = trip?.place else { return }
+        // As one change, as each is saved.
+        guard var moved = trip else { return }
+        moved.page = page
+        moved.pageFraction = shownFraction
+        trip = moved
+        let place = moved.place
         let asked = relocationCount
         Task {
-            guard await isShowing(place), asked == relocationCount, jumpsUnderWay == 0, trip?.place == place else { return }
+            guard await isShowing(place) == true, asked == relocationCount, jumpsUnderWay == 0, trip?.place == place else { return }
             trip = nil
             wentBack()
         }
@@ -106,24 +118,20 @@ extension ReaderModel {
         if trip?.hasReadOn == true { settleTrip() }
     }
 
-    /// Opened at a place other than the saved trip's by its spelling. If the
-    /// page says it's the same place, the trip goes on; if another reader
-    /// moved your place, the trip ends here.
-    func resumeIfStillYourPlace(_ saved: ReaderTrip) async {
-        guard let page = saved.page?.cfi, await isShowing(saved.place) else {
-            forgetSavedTrip()
-            return
+    /// Closing as a jump lands: the book's screen should hear of its trip. At
+    /// most a second.
+    func jumpsLanded() async {
+        for _ in 0..<50 where jumpsUnderWay > 0 {
+            try? await Task.sleep(for: .milliseconds(20))
         }
-        trip = saved
-        tripFraction = saved.pageFraction
-        runJump("return await window.octavo.goTo(cfi)", arguments: ["cfi": page])
     }
 
-    /// Whether `place` is on the page showing, as foliate resolves it.
-    private func isShowing(_ place: ReadingPosition) async -> Bool {
+    /// Whether `place` is on the page showing, as foliate resolves it. `nil` if
+    /// the page didn't answer.
+    private func isShowing(_ place: ReadingPosition) async -> Bool? {
         guard let cfi = place.cfi else { return false }
         let flags = try? await page.callJavaScript("return await window.octavo.onPage(cfis)", arguments: ["cfis": [cfi]]) as? [Bool]
-        return flags?.first == true
+        return flags?.first
     }
 
     /// Relocations come after a call does, and a page settling on a spread

@@ -146,7 +146,7 @@ struct ReaderMessageTests {
             == .link(href: "OEBPS/chapter-2.xhtml#note-1"))
     }
 
-    /// The message can't be told apart from a link with nowhere to go.
+    /// With nowhere to go there's no message to act on.
     @Test func aLinkWithNoAddressIsAnError() {
         #expect(throws: (any Error).self) { try ReaderMessage.decode(#"{"type":"link"}"#) }
     }
