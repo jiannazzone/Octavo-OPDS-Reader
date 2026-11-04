@@ -86,9 +86,9 @@ struct BookInfoPage: View {
     }
 }
 
-/// The cover image, filling its space and cropped to it: the shelf's
-/// small copy until the full one loads, else a plain background. A book
-/// without a cover shows its title from the start.
+/// The cover image in its space (`FittedCover`): the shelf's small copy
+/// until the full one loads, else a plain background. A book without a cover
+/// shows its title from the start.
 struct BookCoverArt: View {
     let page: BookPage
     var thumbnail: UIImage?
@@ -97,9 +97,7 @@ struct BookCoverArt: View {
         Color(.secondarySystemBackground)
             .overlay {
                 if let cover = page.cover ?? thumbnail {
-                    Image(uiImage: cover)
-                        .resizable()
-                        .scaledToFill()
+                    FittedCover(image: cover)
                         .transition(.opacity)
                 } else if page.book.cover == nil || page.coverFinished {
                     BookTitleCover(title: page.current.title, author: page.authorLine)

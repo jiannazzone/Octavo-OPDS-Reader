@@ -334,12 +334,10 @@ private struct ReaderCoverLeaf: View, Animatable {
         .allowsHitTesting(false)
     }
 
-    /// As the book's screen draws it: filling its frame, cropped.
+    /// As the book's screen draws it, so it doesn't jump as it starts to move.
     @ViewBuilder private var cover: some View {
         if let image = motion.cover {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
+            FittedCover(image: image)
         } else {
             BookTitleCover(title: motion.title, author: motion.author)
         }

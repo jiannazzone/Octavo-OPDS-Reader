@@ -36,6 +36,52 @@ struct CoverImage: View {
     }
 }
 
+/// A cover in its frame (decision 32): the whole cover on a blurred copy of
+/// itself. It takes the size it's given and overflows it, so whatever holds it
+/// clips.
+struct FittedCover: View {
+    let image: UIImage
+
+    /// A strip thinner than this would look like a glitch, and the crop that
+    /// replaces it doesn't show.
+    static let minimumStrip: CGFloat = 3
+
+    /// Whether `cover` fills `frame`, cropped, instead of fitting inside it.
+    static func fills(cover: CGSize, frame: CGSize) -> Bool {
+        guard cover.width > 0, cover.height > 0 else { return true }
+        let scale = min(frame.width / cover.width, frame.height / cover.height)
+        let strip = max(frame.width - cover.width * scale, frame.height - cover.height * scale) / 2
+        return strip < minimumStrip
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let frame = proxy.size
+            ZStack {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: frame.width, height: frame.height)
+                if !Self.fills(cover: image.size, frame: frame) {
+                    Color.clear
+                        .background {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .blur(radius: min(frame.width, frame.height) * 0.06, opaque: true)
+                        }
+                        .clipped()
+                    Color.black.opacity(0.18)
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                }
+            }
+            .frame(width: frame.width, height: frame.height)
+        }
+    }
+}
+
 /// Decoded covers in memory, keyed by library, image version and size, and
 /// one fetch per cover at a time.
 final class CoverCache {
