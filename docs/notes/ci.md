@@ -13,13 +13,15 @@
 
 "Protect main" requires "CI passed" from GitHub Actions, so a pull request can't merge to `main` until it's green. Branches don't have to be up to date with `main` first, because that would make every merge re-run CI on the other open pull requests.
 
+The ruleset allows merge commits only. It has no bypass, so if the runner is down or a test is flaky, nothing merges until the ruleset is edited.
+
 To skip the wait, use auto-merge, which lands the pull request when the check passes:
 
 ```bash
 gh pr merge <number> --auto --merge
 ```
 
-The ruleset has no bypass, so if the runner is down or a test is flaky, nothing merges until the ruleset is edited.
+That command hasn't been tried on a stacked pull request, and GitHub's docs say the older merge APIs can't merge a stack, so use the merge button there. Merging a stack's top pull request lands everything below it too: #51 and #52 landed a second apart, in one push.
 
 ## Runner
 
@@ -29,7 +31,7 @@ The repo is public, so these standard runners should cost nothing. Pull requests
 
 ## Docs-only changes
 
-Pull requests and pushes to `main` use the same check, which compares the commit with its first parent. Tests are skipped only when every changed file is under `docs/`, or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a commit that changes no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too.
+A pull request compares its merge commit with the base. A push to `main` compares with where `main` was before the push, so every commit in it counts when a stack lands several at once. Tests are skipped only when every changed file is under `docs/`, or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a change with no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too.
 
 ## Build cache
 
@@ -68,15 +70,14 @@ Four runs of the App tests job, with the simulator booting before the build. Mos
 | Running the tests | 75 s, 65 s | 129 s, 52 s |
 | Whole job | 13m47s, 15m07s | 13m52s, 9m52s |
 
-Booting the simulator after the build was tried once (#52), and went back. The build took 41 s and the boot 75 s, but the Test step took 27 minutes and failed, and the job came within seconds of its 30-minute limit. WebKit's GPU process took 1,169 s to launch, against 1–5 s in the earlier runs that logged it, so `BookInspector` hit its 30 s limit and reported `.damaged`. One run doesn't prove the cause. It does suggest that a new runner's slow start goes with the simulator's first start, and that moving the boot doesn't remove it.
+Booting the simulator after the build was tried once (#52), and went back. Commit `1802bb3` on `main` still has the title "CI: boot the simulator after the build", but it only changes docs. The build took 41 s and the boot 75 s, but the Test step took 27 minutes and failed, and the job came within seconds of its 30-minute limit. WebKit's GPU process took 1,169 s to launch, against 1–5 s in the earlier runs that logged it, so `BookInspector` hit its 30 s limit and reported `.damaged`. One run doesn't prove the cause. It does suggest that a new runner's slow start goes with the simulator's first start, and that moving the boot doesn't remove it.
 
 ## Watch for
 
 - `AttemptTests` and any other test with short time limits may be flaky on a slower runner. `aServerThatDoesntAnswerTimesOut` expects a 50 ms limit to have fired after 150 ms.
 - A WebKit process that stalls on the runner makes `BookInspectorTests` fail with `.damaged`, which looks like a bad book but is a timeout. "CI passed" is required, so re-run before looking for a bug.
 - Some tests start requests to `localhost`, which nothing answers in CI. None waits for the answer.
-- Changing a pull request's base branch doesn't re-run CI, so its old result stays. A stacked pull request is retargeted to `main` when the one below it merges, so re-run CI by hand if the result matters. Adding the `edited` trigger would fix it, but would also re-run the tests on every title or description edit.
-- A rebase merge pushes several commits at once, but a push's check reads only the last one. If that commit is docs-only, `main` skips the tests, though the pull request already ran them. Merge commits and squash merges aren't affected.
+- Changing a pull request's base branch doesn't re-run CI, so its old result stays. If a pull request is ever retargeted, re-run CI by hand. Adding the `edited` trigger would fix it, but would also re-run the tests on every title or description edit.
 - A pull request's own copy of `ci.yml` is what runs, so it can turn "CI passed" green without testing anything. Read every `.github/` change by hand.
 
 ## Still to do (#19)
