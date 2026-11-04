@@ -45,6 +45,19 @@ Temporary changes, all reverted, driven with real drags (`touch_path`) on 'Octav
 - **The chapter's name between two 44 pt buttons** has 208 pt folded and 189 pt half open. Share of Contents entries that fit folded: Dungeon Anarchist's Cookbook 97%, Trust 98%, Green City Wars 94%, Standard Ebooks' Pride and Prejudice 100%, Moby-Dick 73%, Gutenberg's Pride and Prejudice 57%. Beside the scrubber, with its 296 pt: 97%, 100%, 100%, 100%, 91%, 87%.
 - **Contents sizes:** Green City Wars 38 entries (two levels), The Dungeon Anarchist's Cookbook 47, Standard Ebooks' Pride and Prejudice 65, Trust 69 (three levels), Moby-Dick 145.
 
+### Hold still to zoom
+
+A test build, on 'Octavo Navigation Duo' with real drags and on Adam's Duo, not yet the real thing.
+
+- **It's the system's `UISlider`, moving freely, with its range narrowed.** After a 0.35 s pause, `minimumValue` and `maximumValue` animate over 0.22 s to a window around the knob, so the knob stays under the finger. Tracking carries on through the change. SwiftUI's `Slider` isn't used because the dots need `thumbRect` to line up.
+- **Measured on Moby-Dick:** folded the window is about 33 pages, so 60 pt of finger moved about 7 pages. Unfolded it's about 75. Pages stepped one at a time (231 to 237, the chapter's name changing on the way), a catch held over about 3 pt either side, and letting go landed on the page: 49.7% to page 493 (the first run), then 59.3% to Chapter 75.
+- **Quick moves:** speed has to be read over about 120 ms and at least 12 pt, as touches arrive in bunches and a single pair read as a quick move. Zooming out while the finger is down is at once, so the knob follows the finger.
+- **To check when building:**
+  - That `TrackConfiguration(neutralValue:)` with no ticks leaves the knob free, for the trip's fill (decision 33), and how the fill behaves when your place is outside the zoomed window.
+  - Half open, which hasn't been run.
+  - VoiceOver, which should keep the slider's own adjustments.
+  - Catching only within the zoom: a bar closer than 6 pt to another shouldn't happen at 8 pt per page, but two chapters can start on one page.
+
 ## Notes in real books (decision 34)
 
 - **No test book has one:** no `noteref` or `doc-noteref`, and no superscript or numbered note link in the five samples, the bundled book, or Adam's three modern novels. Green City Wars' chapter headings do link back to its contents.

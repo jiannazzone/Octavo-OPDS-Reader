@@ -283,13 +283,19 @@ Decided with pictures in the planning session (no Figma frames). Not built yet (
     - **Which links:** the ones a book marks as notes, and unmarked ones that look like a note's mark, to be tuned on real books. Any other link is a jump. A tap near a tiny mark counts, so a near miss doesn't turn the page.
     - **Still needed: a real book with notes.** None of the sample books, or the three real books Adam gave the covers session, has a single note link.
 
-35. **Chapter buttons beside the chapter's name.** Not built yet.
+35. **Chapter buttons beside the chapter's name, and a scrubber that zooms.** Not built yet.
     - **Where:** ⏮ and ⏭ either side of the chapter's name on the progress bar, so the scrubber keeps its full width (Adam, over beside the scrubber and over a swipe on the page). Half open, in the left piece. Normal-sized targets: Adam caught that being beside the name doesn't make them smaller. The bar stays up, so you can keep tapping.
     - **⏮:** partway through a chapter, to its first page; on the first page, to the chapter before, as in a music player (Adam, over always the chapter before). **⏭:** the next chapter's first page.
     - **A chapter** is any entry in the book's Contents, so a "Part Two" page counts. A button dims when there's nowhere to go, and neither shows for a book with no Contents.
     - **Skipping is a jump:** "Back to page 878" appears (decision 33).
     - **A tick you feel** as the scrubber passes each chapter (Adam). Only a real Duo can check it.
-    - **Being tried: how else the scrubber shows chapters.** Hard detents are out: they'd keep you from pages inside a chapter. A soft catch everywhere is out too, as it takes 80% or more of the track in a book of 38 chapters or more. Adam asked for a throwaway **hold still to zoom** to judge (`docs/notes/going-back.md`). Dots at chapters are undecided until then.
+    - **Hold still to zoom** (Adam's idea, kept after a test build on his Duo, over slowing down, dragging up off the bar, a second line and no zoom):
+      - **Across the whole book** the knob moves freely, with dots at chapters, kept at least 6 pt apart.
+      - **Hold still for a moment** and, with a tick, the line zooms in around your finger. Each dot is now a page, about 8 pt apart, and chapter starts are ink bars that catch the knob with a tick, 3 pt either side.
+      - **At the zoomed line's ends** it slides on through the book. **A quick move** zooms back out, and so does letting go.
+      - **Letting go** lands on that page, or on a bar, that chapter's first page.
+      - The pause (0.35 s), the 8 pt and how quick a move has to be can still change on the Duo.
+    - **Detents that were turned down:** iOS's own, which are hard and keep you from pages inside a chapter, and a soft catch across the whole book, which takes 80% or more of the track in a book of 38 chapters or more. Zoomed in, chapters are far enough apart for a catch (`docs/notes/going-back.md`).
 
 ### Settings (approved 2026-10-31)
 

@@ -56,7 +56,7 @@ Adam, while settling #8's start chip: "we definitely need a nicer empty state th
 From decisions 34 and 35. Seen as pictures, none chosen:
 
 - **Skipping by a swipe up or down on the page**: no controls to bring up, but nothing shows it's there and it's easy to do by accident. It could be added to the chapter buttons later.
-- **Other ways to zoom the scrubber**, if holding still doesn't work out: slowing down (the slower your finger, the finer), dragging up off the bar, or a second line for the chapter (half open, the chapter line that's already there made draggable).
+- **Other ways to zoom the scrubber**, if holding still ever needs replacing: slowing down (the slower your finger, the finer), dragging up off the bar, or a second line for the chapter (half open, the chapter line that's already there made draggable).
 - **A switch for pop-up notes in Customize**, if anyone would rather always jump. Go to Note covers it for now.
 
 ## The book-mode readout (Adam, 2026-11-03)
