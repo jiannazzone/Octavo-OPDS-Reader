@@ -25,6 +25,7 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `page-turns.md` (+ `page-turns/`) | 2026-11-03 | Page turns and opening a book (decisions 27, 28): snapshot and chapter-break measurements, turns drawn from snapshots over foliate, why swipes are recognised in UIKit, the position through turns and folds, the cover opening and closing, videos in every posture |
 | `tour.md` (+ `tour/`) | step 17 | The tour for a new install (decisions 29 and 30): the steps, how a new install is told apart and why it's decided once, a replay's throwaway place, Skip in the column, the WebKit trap on a fold, simulator checks, what to try on a Duo |
 | `layout-polish.md` (+ `layout-polish/`) | 2026-11-03 | The folded book sheet's compact resting state, the progress bar lined up with the text, Narrow's text drifting onto the hinge (WebKit's whole-point scrolling; fixed), the Night line (not reproduced, dropped for now) |
+| `reader-pictures.md` (+ `reader-pictures/`) | 2026-11-04 | Pictures fit their text column: why a box wider than the page cut them off, the fix in `bridge.js`, every sample book in every posture and margin, what's left alone |
 | `ci.md` | #19 | CI on pull requests: the jobs, why GitHub's `xcode-27` runner, which pull requests skip tests, the build cache, timings |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.
