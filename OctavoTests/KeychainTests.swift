@@ -101,12 +101,17 @@ struct KeychainTests {
         let defaults = UserDefaults.testSuite("keychain-test")
         let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
         try await tokens.save(BookOrbitCredentials(accessToken: "left over"))
+        // Outside the test's scope: an installed app's sign-in, other tests' items.
+        let neighbour = KeychainPasswordStore(serverID: serverID + "-other")
+        defer { try? ServerCredentials.removeAll(serverID: serverID + "-other") }
+        try await neighbour.save(PasswordCredentials(username: "u", password: "kept"))
 
-        try ServerCredentials.removeLeftoversAfterInstall(hasSavedServer: false, defaults: defaults)
+        try ServerCredentials.removeLeftoversAfterInstall(hasSavedServer: false, defaults: defaults) { $0 == serverID }
         #expect(try await tokens.load() == nil)
+        #expect(try await neighbour.load()?.password == "kept")
 
         try await tokens.save(BookOrbitCredentials(accessToken: "signed in after"))
-        try ServerCredentials.removeLeftoversAfterInstall(hasSavedServer: false, defaults: defaults)
+        try ServerCredentials.removeLeftoversAfterInstall(hasSavedServer: false, defaults: defaults) { $0 == serverID }
         #expect(try await tokens.load()?.accessToken == "signed in after")
         try ServerCredentials.removeAll(serverID: serverID)
     }
@@ -118,7 +123,7 @@ struct KeychainTests {
     /// that was always false, and every test here still passed because each
     /// calls its function directly.
     @MainActor @Test func launchRunsTheSteps() {
-        #expect(LaunchSteps.ranAtLaunch)
+        #expect(LaunchSteps.failedAtLaunch == [])
         // What they leave: the marker, and the tour's decision from before it.
         #expect(UserDefaults.standard.bool(forKey: ServerCredentials.installedKey))
         #expect(TourRecord().state != nil)
@@ -140,7 +145,7 @@ struct KeychainTests {
         try KeychainCertificatePinStore(serverID: id).save(CertificatePin(sha256: Data(repeating: 1, count: 32)))
         try await KeychainPasswordStore(serverID: abandoned).save(PasswordCredentials(username: "u", password: "p"))
 
-        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0.hasPrefix(prefix) })
+        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0.hasPrefix(prefix) } == [])
 
         #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
         #expect(try KeychainCertificatePinStore(serverID: id).load() != nil)
@@ -162,8 +167,9 @@ struct KeychainTests {
         try Data("{ not json".utf8).write(to: file)
         try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
 
-        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: ServerStore(fileURL: file)) { $0 == id })
+        let failed = LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: ServerStore(fileURL: file)) { $0 == id }
 
+        #expect(failed == [.sweep, .moveSecretsOut])
         #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
     }
 
@@ -175,14 +181,14 @@ struct KeychainTests {
         let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
         try await tokens.save(BookOrbitCredentials(accessToken: "left over"))
 
-        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0 == serverID })
+        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0 == serverID } == [])
         #expect(try await tokens.load() == nil)
         #expect(defaults.bool(forKey: ServerCredentials.installedKey))
         #expect(TourRecord(defaults: defaults).state == .new)
 
         try await tokens.save(BookOrbitCredentials(accessToken: "signed in after"))
         try store.save(SavedServer(id: LibrarySourceID(rawValue: serverID), kind: .bookOrbit, address: "http://nas.lan", name: "BookOrbit"))
-        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0 == serverID })
+        #expect(LaunchSteps.run(protectedDataAvailable: true, defaults: defaults, servers: store) { $0 == serverID } == [])
         #expect(try await tokens.load()?.accessToken == "signed in after")
         try ServerCredentials.removeAll(serverID: serverID)
     }
@@ -197,7 +203,7 @@ struct KeychainTests {
         try store.save(SavedServer(id: LibrarySourceID(rawValue: id + "-saved"), kind: .opds, address: address, name: "COPS"))
         try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
 
-        #expect(!LaunchSteps.run(protectedDataAvailable: false, defaults: defaults, servers: store) { $0 == id })
+        #expect(LaunchSteps.run(protectedDataAvailable: false, defaults: defaults, servers: store) { $0 == id } == nil)
 
         #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
         #expect(try store.read()?.address == address)

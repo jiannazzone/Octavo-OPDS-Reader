@@ -124,12 +124,15 @@ public enum ServerCredentials {
     /// never set it (builds from before it was set, or a delete that failed
     /// before the server was added). Its sign-in isn't a leftover: only the
     /// marker is set, and the launch sweep takes anything else.
-    public static func removeLeftoversAfterInstall(hasSavedServer: Bool, defaults: UserDefaults = .standard) throws {
+    ///
+    /// - Parameter scope: the servers it may delete from; tests narrow it to
+    ///   their own.
+    public static func removeLeftoversAfterInstall(
+        hasSavedServer: Bool, defaults: UserDefaults = .standard, scope: (String) -> Bool = { _ in true }
+    ) throws {
         guard !defaults.bool(forKey: installedKey) else { return }
         if !hasSavedServer {
-            for service in allServices {
-                try KeychainItem.deleteAll(service: service)
-            }
+            try removeAll { !scope($0) }
         }
         defaults.set(true, forKey: installedKey)
     }

@@ -282,7 +282,7 @@ Measured on the simulator **Octavo Launch Duo** (06647D0C-07CE-4113-9EB1-ADE752C
 | `App.init` | **nil** | **false** (a message to nil) | no | all readable |
 | `didFinishLaunching` | the app | true | yes | all readable |
 
-So the check was false because there was no application yet, whatever the state of the data. The order at launch is `App.init`, `didFinishLaunching`, `App.body`, the window's content, `ShellModel.init`.
+So the check was false because there was no application yet, whatever the state of the data. The order at launch, as measured (Apple doesn't document it for a SwiftUI app), is `App.init`, `didFinishLaunching`, `App.body`, the window's content, `ShellModel.init`.
 
 **What changed since step 16: nothing.** This note said the sweep dropped COPS's key on a simulator. Step 16's own commit (`2d955c7`), built with today's tools (Xcode dates from October 22), with an orphan item planted and a log added: "block SKIPPED" on both launches, and the orphan still there. That sentence was never measured, and the hand checks above pass with or without a sweep. The 2026-11-01 checklist's "cleared by … a reinstall (`KeychainTests`)" had the same gap: each test calls its function directly, so nothing tested launch itself.
 
@@ -296,7 +296,7 @@ So the check was false because there was no application yet, whatever the state 
 |---|---|---|
 | A saved server, signed in | Other servers' items: failed Remove servers, abandoned setups | Nothing. Still signed in, no tour |
 | A saved server, signed out | Also its leftover tokens and password, if Sign out couldn't delete them | Nothing. Still signed out |
-| A catalog with a key still in its saved address | Nothing; the key moves to the Keychain and the address gets a placeholder | Nothing. The catalog loads as before |
+| A catalog with a key still in its saved address | Nothing; the key moves to the Keychain and the address gets a placeholder | Nothing on a catalog like COPS, whose loading was checked. See "Left as it is" for one whose links repeat the key |
 | No saved server | Every item, including `debug-` ones in debug builds | Setup, as before. Debug launch arguments sign in again once (BookOrbit allows 5 logins a minute, so a script that reinstalls in a loop could hit that) |
 
 From now on a reinstall deletes the old items at its first launch, and what you see doesn't change: setup, as it was.
@@ -310,13 +310,31 @@ From now on a reinstall deletes the old items at its first launch, and what you 
 | An older save: COPS at `…/feed?apikey=abcdefgh12345678` | 0 rows, key in `Server.json` | 1 row, address `…?apikey={key}`, key in no file under Application Support, Preferences or Documents; the Library loads from COPS |
 | Reinstall: delete the app, install again | 1 row | 0 rows, marker set, tour playing, no server; the same on a second launch |
 
+A cold Open in Octavo (`simctl openurl`) goes through the new delegate and imports the book, as on step 16's build. A file under `~/GitHub` fails with "couldn't be opened" on both builds, so use one in a temp folder for this check.
+
 Not run: a launch before the first unlock (the simulator has no passcode; `nothingRunsBeforeTheFirstUnlock` passes the check's answer in) and a Release build (its only difference here is that `debug-` items aren't kept).
 
-**Tests.** `launchRunsTheSteps`: this test host is the app, launched the real way, so `LaunchSteps.ranAtLaunch` (set only by the delegate), the marker in the real defaults and the tour's state must all be there. Five more in `KeychainTests` cover the steps together. Ten deliberate breakages were each caught, including the original bug put back (`launchRunsTheSteps`) and the wipe ignoring a saved server (`anInstallWithoutTheMarkerKeepsItsSavedServer`).
+**Tests.** `launchRunsTheSteps`: this test host is the app, launched the real way, and `LaunchSteps.failedAtLaunch`, set only by the delegate, must say the steps ran and none failed. The marker and the tour's state last between runs, so they back that up but can't prove it. Five more in `KeychainTests` cover the steps together. Twelve deliberate breakages were each caught, including the original bug put back (`launchRunsTheSteps`), the wipe ignoring a saved server (`anInstallWithoutTheMarkerKeepsItsSavedServer`), the key's retry removed (`finishesMovingAKeyAlreadyInTheKeychain`) and the wipe ignoring its scope (`reinstallStartsSignedOut`).
 
-**The sweep could look at a live test.** An app test run on a simulator now sweeps that simulator's Keychain at launch, as any launch does. `reinstallStartsSignedOut` already wiped it, which also signs out an app installed there.
+An app test run on a simulator now sweeps that simulator's Keychain at launch, as any launch does: `debug-` items and the saved server's stay, and anything else goes. The wipe's tests no longer delete every item on the simulator: they're scoped to their own (they used to sign out an app installed there, and could disturb other suites).
 
 **Why the wipe is still here.** With no saved server, the sweep alone would now delete the same items in a Release build. The wipe is kept because it sets the marker, which `TourRecord` reads, and clears `debug-` items after a reinstall.
+
+### Independent security review (fresh subagent, given the code, 2026-11-03)
+
+Of commit `5e6edb6` (rebased as `218ecb2`). **Nothing High.** It found no path where a launch deletes a secret the app still needs, beyond the documented fail-closed cases. It didn't run anything, so the simulator results above are ours, not its.
+
+| # | Finding | Severity | Done |
+|---|---|---|---|
+| 1 | `moveSecretsOut` didn't retry as its comment promised: with the key saved to the Keychain and `Server.json`'s save failed, the next launch saw nothing new and left the key in the address (and in backups) for good | Medium | Fixed: it finishes when the address still differs (`finishesMovingAKeyAlreadyInTheKeychain`) |
+| 2 | Only `Server.json` is cleaned. A catalog saved before step 16 whose key the old check missed, and whose links repeat it, keeps the key in `RecentBooks.json` and `BooksOnIPhone.json`, and Remove server writes it to `RemovedServer.json`. Links, and so book IDs, change after the move, so those rows stop matching downloads and places | Low | **Left as it is**: no release has shipped, so only a development install is affected. Only catalogs with `?apikey=`-style or Stump keys saved before step 16, not BookOrbit or Kavita |
+| 3 | `launchRunsTheSteps` could pass with launch broken: the marker and tour state last between runs, and a step that threw left no trace | Low | Fixed: `failedAtLaunch` names failed steps, the test requires none, failures go to the log (step name public, error private) |
+| 4 | The wipe ignored `scope`, so its tests deleted every Keychain item on the device, signing out an installed app and possibly disturbing parallel suites | Low | Fixed: the wipe takes `scope` and deletes through `removeAll(keeping:)`, which tries every item; `deleteAll(service:)` is gone |
+| 5 | If the app is killed between Sign out's flag and `auth/logout`, the sweep deletes the refresh token and the logout is never sent; the session lapses on the server | Info | Accepted |
+
+Checked, with no defect: Release builds only use `server-<UUID>` accounts equal to `saved.id` since setup's first commit; an unreadable `Server.json` deletes nothing; a marker set by a corrupt `Server.json` is harmless, because the sweep keeps trying and setup's next save replaces the file; `Server.json` and the marker share the app's lifetime through delete, Offload and backup; there are no other Keychain writers (no extensions, no background modes); the delegate implements only `didFinishLaunching`, sets no scene configuration and leaves `onOpenURL` with SwiftUI.
+
+Not verified anywhere: all of this on a real device, including a launch while locked; whether prewarming can reach `didFinishLaunching` (if it can while locked, the steps wait for a later process).
 
 ## Tests and how to run them
 

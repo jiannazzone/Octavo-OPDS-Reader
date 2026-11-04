@@ -132,6 +132,21 @@ struct SavedServerTests {
         #expect(store.load()?.address == "https://books.example.com")
     }
 
+    /// A crash or a failed save after the Keychain: the next launch still
+    /// takes the key out of the saved address.
+    @Test func finishesMovingAKeyAlreadyInTheKeychain() throws {
+        let store = Self.temporaryStore()
+        let id = SavedServer.newID()
+        defer { try? ServerCredentials.removeAll(serverID: id.rawValue) }
+        let secrets = KeychainCatalogSecretStore(serverID: id.rawValue)
+        try secrets.save(OPDSURLSecret("abcdefgh12345678"))
+        try store.save(SavedServer(id: id, kind: .opds, address: "http://nas.lan/feed?apikey=abcdefgh12345678", name: "COPS"))
+
+        try store.moveSecretsOut()
+        #expect(store.load()?.address == "http://nas.lan/feed?apikey={key}")
+        #expect(try secrets.load()?.values == ["abcdefgh12345678"])
+    }
+
     /// BookOrbit's address is its root: a query typed with it goes.
     @Test func aBookOrbitAddressDropsItsQuery() throws {
         #expect(URL(string: "https://books.example.com/?token=abcdefgh")!.withoutQuery.absoluteString == "https://books.example.com/")
