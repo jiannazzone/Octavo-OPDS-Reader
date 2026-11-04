@@ -258,6 +258,16 @@ nonisolated enum SampleBook {
         )
     }
 
+    /// Where it opens the first time: Chapter I, past the title page and imprint
+    /// (Adam, 2026-11-03). Read off the bundled file, which doesn't change.
+    static let firstChapter = ReadingPosition(cfi: "epubcfi(/6/6!/4/2[chapter-1]/2)", fraction: 0.0066)
+
+    /// Starts the book at `firstChapter` in `store`, unless it has a place.
+    static func startAtFirstChapter(in store: ReadingPositionStore) {
+        guard let key = book.primaryFile?.storageKey, store.position(forBook: key) == nil else { return }
+        try? store.save(firstChapter, forBook: key, chapter: "I")
+    }
+
     /// The book in `store`, copied from the app's bundle if it isn't there.
     @discardableResult
     static func install(into store: ImportedBooks, now: Date = Date()) throws -> LibraryBook {

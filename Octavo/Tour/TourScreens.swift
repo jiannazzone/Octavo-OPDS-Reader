@@ -115,18 +115,16 @@ private struct TourCloseScreen: View {
 }
 
 /// Step 2: Pride and Prejudice's cover, under the side column and the camera
-/// as a book's screen has it, with the line low on it, just above the cover's
-/// own title. Unfolding opens it, the same gesture as every book afterwards
-/// (decision 10).
+/// as a book's screen has it, with the line low on it, centred on the cover
+/// (not on what the column leaves) and just above the cover's own title.
+/// Unfolding opens it, the same gesture as every book afterwards (decision 10).
 private struct TourCoverScreen: View {
     let line: String
 
     var body: some View {
         GeometryReader { proxy in
-            let full = proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
             ZStack(alignment: .bottom) {
                 TourCoverImage()
-                    .ignoresSafeArea()
                 Text(line)
                     .font(.headline)
                     .multilineTextAlignment(.center)
@@ -135,9 +133,10 @@ private struct TourCoverScreen: View {
                     .glassEffect(.regular, in: .capsule)
                     .padding(.horizontal, 16)
                     // The title's band takes the cover's bottom 22%.
-                    .padding(.bottom, max(16, full * 0.22 + 12 - proxy.safeAreaInsets.bottom))
+                    .padding(.bottom, proxy.size.height * 0.22 + 12)
             }
         }
+        .ignoresSafeArea()
     }
 }
 

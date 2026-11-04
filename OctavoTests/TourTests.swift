@@ -30,7 +30,7 @@ struct TourFlowTests {
     @Test func itStartsFromTheHinge() {
         #expect(TourFlow(fold: .open).step == .closeYourIPhone)
         #expect(TourFlow(fold: .closed).step == .cover)
-        #expect(TourFlow(fold: nil).step == .welcome)
+        #expect(TourFlow(fold: nil).step == .turnThePage)
     }
 
     @Test func theWholeTourInOrder() {
@@ -39,8 +39,7 @@ struct TourFlowTests {
         #expect(flow.step == .cover)
         #expect(flow.coverLine == "Open your iPhone to begin")
         flow.handle(.unfolded)
-        #expect(flow.step == .welcome)
-        flow.handle(.start)
+        #expect(flow.step == .turnThePage)
         #expect(flow.step == .turnThePage)
         flow.handle(.pageTurned)
         #expect(flow.step == .bringUpControls)
@@ -52,24 +51,19 @@ struct TourFlowTests {
         #expect(flow.step == .addYourBooks)
     }
 
-    @Test func continueWithoutClosingGoesStraightToWelcome() {
+    @Test func continueWithoutClosingGoesStraightToTheBook() {
         var flow = TourFlow(fold: .open)
         flow.handle(.continueWithoutClosing)
-        #expect(flow.step == .welcome)
+        #expect(flow.step == .turnThePage)
     }
 
     // A step only moves on for what it asks for.
     @Test func stepsIgnoreWhatTheyDoNotAskFor() {
         var flow = TourFlow(fold: .open)
-        flow.handle(.start)
-        flow.handle(.pageTurned)
-        #expect(flow.step == .closeYourIPhone)
-        flow.handle(.continueWithoutClosing)
         flow.handle(.pageTurned)
         flow.handle(.done)
-        flow.handle(.reader(.controls))
-        #expect(flow.step == .welcome)
-        flow.handle(.start)
+        #expect(flow.step == .closeYourIPhone)
+        flow.handle(.continueWithoutClosing)
         flow.handle(.reader(.controls))
         flow.handle(.done)
         #expect(flow.step == .turnThePage)
@@ -81,7 +75,6 @@ struct TourFlowTests {
     // A tap on the page hides the controls, and Aa with them.
     @Test func controlsHiddenOnMakeItYoursGoBackAStep() {
         var flow = TourFlow(fold: nil)
-        flow.handle(.start)
         flow.handle(.pageTurned)
         flow.handle(.reader(.controls))
         #expect(flow.step == .tapAa)
@@ -93,7 +86,6 @@ struct TourFlowTests {
 
     @Test func anotherPanelLeavesAaToTap() {
         var flow = TourFlow(fold: nil)
-        flow.handle(.start)
         flow.handle(.pageTurned)
         flow.handle(.reader(.controls))
         flow.handle(.reader(.otherPanel))
@@ -103,7 +95,6 @@ struct TourFlowTests {
     // With the panel already open from looking ahead, the step is done.
     @Test func aPanelOpenedEarlyCountsWhenItsStepComes() {
         var flow = TourFlow(fold: nil)
-        flow.handle(.start)
         flow.handle(.reader(.panel))
         #expect(flow.step == .turnThePage)
         flow.handle(.pageTurned)
@@ -115,7 +106,6 @@ struct TourFlowTests {
     // is what Make it yours asks for.
     @Test func thePanelOpenWhenBringUpControlsComesCounts() {
         var flow = TourFlow(fold: nil)
-        flow.handle(.start)
         flow.handle(.reader(.panel))
         flow.handle(.pageTurned)
         #expect(flow.step == .bringUpControls)
@@ -126,7 +116,6 @@ struct TourFlowTests {
     // Another panel hides the bar too: closing it brings the bar back.
     @Test func anotherPanelWaitsAtBringUpControls() {
         var flow = TourFlow(fold: nil)
-        flow.handle(.start)
         flow.handle(.pageTurned)
         flow.handle(.reader(.otherPanel))
         #expect(flow.step == .bringUpControls)
@@ -137,7 +126,6 @@ struct TourFlowTests {
     // Done is there as long as the card is, with or without the panel.
     @Test func closingThePanelKeepsTheCardWithDone() {
         var flow = TourFlow(fold: nil)
-        flow.handle(.start)
         flow.handle(.pageTurned)
         flow.handle(.reader(.controls))
         flow.handle(.reader(.panel))
@@ -148,11 +136,11 @@ struct TourFlowTests {
     }
 
     // Folding mid-tour closes the book; unfolding resumes at the same step.
-    @Test(arguments: [TourFlow.Event.start, .pageTurned, .reader(.controls), .reader(.panel), .done])
+    @Test(arguments: [TourFlow.Event.pageTurned, .reader(.controls), .reader(.panel), .done])
     func aFoldResumesAtTheSameStep(upTo last: TourFlow.Event) {
         var flow = TourFlow(fold: .closed)
         flow.handle(.unfolded)
-        for event in [TourFlow.Event.start, .pageTurned, .reader(.controls), .reader(.panel), .done] {
+        for event in [TourFlow.Event.pageTurned, .reader(.controls), .reader(.panel), .done] {
             flow.handle(event)
             if event == last { break }
         }
@@ -174,13 +162,12 @@ struct TourFlowTests {
         #expect(flow.coverLine == "Open your iPhone to begin")
     }
 
-    // The words are decision 29's, and what each step marks.
+    // The words are decision 29's, and what each step lights.
     @Test func cardsDotsAndRings() {
         typealias Step = TourFlow.Step
         #expect(Step.closeYourIPhone.card == nil)
         #expect(Step.cover.card == nil)
-        #expect(Step.welcome.card?.title == "Welcome to Octavo")
-        #expect(Step.welcome.card?.message == "Try things out on this book. It’s yours to keep.")
+        #expect(Step.turnThePage.card?.title == "Turn the page")
         #expect(Step.turnThePage.card?.message == "Tap the right page, or swipe. Tap the left page to go back.")
         #expect(Step.bringUpControls.card?.message == "Tap ··· whenever you need them.")
         #expect(Step.tapAa.card?.title == "Make it yours")
@@ -188,13 +175,37 @@ struct TourFlowTests {
         #expect(Step.makeItYours.card?.title == "The page changes as you go")
         #expect(Step.makeItYours.card?.message == "Come back to Aa any time.")
         #expect(Step.addYourBooks.card?.message == "From your server, or from Files.")
-        // Five dots; Make it yours is one step.
-        #expect([Step.welcome, .turnThePage, .bringUpControls, .tapAa, .makeItYours, .addYourBooks].map(\.dot) == [0, 1, 2, 3, 3, 4])
-        #expect(Step.turnThePage.ring == .rightPage)
-        #expect(Step.bringUpControls.ring == .columnButton(ReaderColumnButton.showControls))
-        #expect(Step.tapAa.ring == .columnButton(ReaderColumnButton.textAndTheme))
-        #expect(Step.welcome.ring == nil)
-        #expect(Step.makeItYours.ring == nil)
+        // Four dots; Make it yours is one step.
+        #expect(Step.dotCount == 4)
+        #expect([Step.turnThePage, .bringUpControls, .tapAa, .makeItYours, .addYourBooks].map(\.dot) == [0, 1, 2, 2, 3])
+        #expect(Step.bringUpControls.litButton == .showControls)
+        #expect(Step.tapAa.litButton == .textAndTheme)
+        #expect(Step.turnThePage.litButton == nil)
+        #expect(Step.makeItYours.litButton == nil)
+    }
+
+    // The button a sentence names stands out; the words themselves don't change.
+    @Test func theCardPicksOutTheButtonItNames() {
+        for step in [TourFlow.Step.bringUpControls, .tapAa, .makeItYours] {
+            let message = step.card?.message ?? ""
+            let words = TourCardWords.emphasized(message)
+            #expect(String(words.characters) == message)
+            #expect(words.runs.count == 3)
+        }
+        let plain = TourFlow.Step.turnThePage.card?.message ?? ""
+        #expect(TourCardWords.emphasized(plain).runs.count == 1)
+    }
+
+    // The page lifts as it would turn; with Reduce Motion, or a style with
+    // nothing to lift, it holds still.
+    @Test func thePageLiftsAsItTurnsOrHoldsStill() {
+        #expect(ReaderPageTurn.automatic.hintMotion(spread: true, reduceMotion: false) == .flip)
+        #expect(ReaderPageTurn.automatic.hintMotion(spread: false, reduceMotion: false) == .slide)
+        #expect(ReaderPageTurn.slide.hintMotion(spread: true, reduceMotion: false) == .slide)
+        #expect(ReaderPageTurn.flip.hintMotion(spread: true, reduceMotion: true) == nil)
+        #expect(ReaderPageTurn.automatic.hintMotion(spread: true, reduceMotion: true) == nil)
+        #expect(ReaderPageTurn.fade.hintMotion(spread: true, reduceMotion: false) == nil)
+        #expect(ReaderPageTurn.none.hintMotion(spread: true, reduceMotion: false) == nil)
     }
 }
 
@@ -291,7 +302,7 @@ struct TourShellTests {
     private func onTheLastCard(_ model: ShellModel) async -> ShellModel {
         model.hingeChanged(.unfold)
         #expect(await eventually { model.reading != nil })
-        for event in [TourFlow.Event.start, .pageTurned, .reader(.controls), .reader(.panel), .done] { model.tourEvent(event) }
+        for event in [TourFlow.Event.pageTurned, .reader(.controls), .reader(.panel), .done] { model.tourEvent(event) }
         #expect(model.tour?.step == .addYourBooks)
         return model
     }
@@ -314,7 +325,7 @@ struct TourShellTests {
     // Without a fold steps 1 and 2 drop out, and the book opens at once.
     @Test func withoutAFoldItStartsInTheBook() async {
         let model = started(fold: nil)
-        #expect(model.tour?.step == .welcome)
+        #expect(model.tour?.step == .turnThePage)
         #expect(await eventually { model.reading?.book.id == .sample })
     }
 
@@ -348,7 +359,7 @@ struct TourShellTests {
         let model = started()
         #expect(model.onIPhoneBooks().map(\.book.id) == [.sample])
         model.hingeChanged(.unfold)
-        #expect(model.tour?.step == .welcome)
+        #expect(model.tour?.step == .turnThePage)
         #expect(await eventually { model.reading?.book.id == .sample })
         #expect(model.library.continueReading.map(\.book.id) == [.sample])
         // The fold is the motion.
@@ -361,7 +372,6 @@ struct TourShellTests {
         let model = started()
         model.hingeChanged(.unfold)
         #expect(await eventually { model.reading != nil })
-        model.tourEvent(.start)
         model.tourEvent(.pageTurned)
         model.hingeChanged(.fold)
         #expect(model.reading == nil)
@@ -378,7 +388,7 @@ struct TourShellTests {
     @Test func theTourFollowsAReportWithoutAChange() async {
         let model = started()
         model.hingeReported(.open)
-        #expect(model.tour?.step == .welcome)
+        #expect(model.tour?.step == .turnThePage)
         #expect(await eventually { model.reading != nil })
         model.hingeReported(.closed)
         #expect(model.tour?.step == .cover)
@@ -388,7 +398,7 @@ struct TourShellTests {
         #expect(model.tour?.step == .cover)
         model.hingeReported(.open)
         model.hingeChanged(.unfold)
-        #expect(model.tour?.step == .welcome)
+        #expect(model.tour?.step == .turnThePage)
         #expect(await eventually { model.reading != nil })
     }
 
@@ -540,7 +550,7 @@ struct TourShellTests {
         model.hingeChanged(.unfold)
         #expect(await eventually { model.reading != nil })
         await model.importBooks([try ImportFixtures.drmMobi(in: folder)])
-        #expect(model.tour?.step == .welcome)
+        #expect(model.tour?.step == .turnThePage)
         #expect(model.reading != nil)
         #expect(model.importFailures == [ImportFailure(fileName: "Kindred.mobi", reason: .drmProtected)])
     }
@@ -594,7 +604,7 @@ struct TourShellTests {
     @Test func aReplayWithoutAFoldStartsInTheBook() async {
         let model = settings(fold: nil)
         model.showTour()
-        #expect(model.tour?.step == .welcome)
+        #expect(model.tour?.step == .turnThePage)
         #expect(await eventually { model.reading?.book.id == .sample })
     }
 
@@ -615,8 +625,19 @@ struct TourShellTests {
         #expect(model.library.continueReading.isEmpty)
     }
 
-    // A replay's reader has a place of its own, starting empty, that goes with
-    // the tour.
+    // A new install's book opens on Chapter I, and a place it already has stays.
+    @Test func theSampleBookStartsOnChapterOneOnce() throws {
+        let model = started()
+        let key = try #require(SampleBook.book.primaryFile?.storageKey)
+        #expect(model.places.store.position(forBook: key) == SampleBook.firstChapter)
+        let later = ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.2)
+        try model.places.store.save(later, forBook: key)
+        model.installSampleBook()
+        #expect(model.places.store.position(forBook: key) == later)
+    }
+
+    // A replay's reader has a place of its own, starting on Chapter I, that
+    // goes with the tour.
     @Test func aReplayNeverSavesAPlace() async throws {
         let model = settings(fold: .closed)
         model.showTour()
@@ -624,7 +645,7 @@ struct TourShellTests {
         #expect(await eventually { model.reading != nil })
         let place = try #require(model.tourReplayPlace)
         let id = try #require(model.reading).reader.id
-        #expect(place.positions.position(forBook: id) == nil)
+        #expect(place.positions.position(forBook: id) == SampleBook.firstChapter)
         let reader = ReaderModel(
             book: try #require(model.reading).reader, store: place.positions, bookmarks: ReaderBookmarks(bookID: id, store: place.bookmarks)
         )

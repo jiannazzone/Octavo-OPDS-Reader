@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The tour's card and rings (decision 29): SwiftUI over the reader, never in
-/// the book's page. Liquid Glass, at the bottom of the left page (or of the
+/// The tour's card (decision 29): SwiftUI over the reader, never in the book's
+/// page. Liquid Glass, at the bottom of the left page (or of the
 /// one page), in the same place for every step, clear of where the progress
 /// bar comes up.
 struct TourCardSlot: View {
@@ -50,7 +50,7 @@ private struct TourCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(card.title)
                         .font(.headline)
-                    Text(card.message)
+                    Text(TourCardWords.emphasized(card.message))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -75,8 +75,6 @@ private struct TourCard: View {
 
     @ViewBuilder private var buttons: some View {
         switch step {
-        case .welcome:
-            Button("Start") { shell.tourEvent(.start) }
         case .makeItYours:
             Button("Done") { shell.tourEvent(.done) }
         case .addYourBooks:
@@ -113,6 +111,22 @@ struct TourSkipButton: View {
     }
 }
 
+/// A card's sentence, with the button it names picked out, as the column has
+/// it: blue (Adam, 2026-11-03).
+nonisolated enum TourCardWords {
+    static let buttons = ["···", "Aa"]
+
+    static func emphasized(_ message: String) -> AttributedString {
+        var words = AttributedString(message)
+        for button in buttons {
+            guard let range = words.range(of: button) else { continue }
+            words[range].foregroundColor = .accentColor
+            words[range].font = .subheadline.weight(.semibold)
+        }
+        return words
+    }
+}
+
 /// How far along the tour is.
 struct TourDots: View {
     let current: Int
@@ -129,75 +143,5 @@ struct TourDots: View {
         }
         .accessibilityElement()
         .accessibilityLabel("Step \(current + 1) of \(count)")
-    }
-}
-
-/// The ring on what to tap, over the reader and its column, in the window's
-/// coordinates. A column button's frame comes from UIKit, looked up again
-/// while the ring shows: the buttons move in as the column comes up.
-struct TourRingLayer: View {
-    let target: TourRingTarget
-    let geometry: ReaderGeometry?
-    let layout: ReaderLayout
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var buttonFrame: CGRect?
-
-    var body: some View {
-        GeometryReader { proxy in
-            if let rect {
-                let origin = proxy.frame(in: .global).origin
-                TourRing(diameter: rect.size.width)
-                    // Starts over if the setting changes under it.
-                    .id(reduceMotion)
-                    .position(x: rect.midX - origin.x, y: rect.midY - origin.y)
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .task(id: target) {
-            guard case .columnButton(let title) = target else { return }
-            while !Task.isCancelled {
-                let frame = ReaderColumnButton.frame(titled: title)
-                if frame != buttonFrame { buttonFrame = frame }
-                try? await Task.sleep(for: .milliseconds(250))
-            }
-        }
-    }
-
-    /// A square around what to tap.
-    private var rect: CGRect? {
-        switch target {
-        case .rightPage:
-            guard let geometry else { return nil }
-            let width = Double(geometry.size.width)
-            let columns = layout.textColumns(inReaderWidth: width)
-            let column = columns?.last ?? (width / 2)...width
-            let across = (columns?.count ?? 1) > 1 ? 0.65 : 0.8
-            let x = column.lowerBound + across * (column.upperBound - column.lowerBound)
-            return CGRect(x: x - 25, y: Double(geometry.size.height) * 0.465 - 25, width: 50, height: 50)
-        case .columnButton:
-            guard let buttonFrame else { return nil }
-            let side = max(buttonFrame.width, buttonFrame.height) + 10
-            return CGRect(x: buttonFrame.midX - side / 2, y: buttonFrame.midY - side / 2, width: side, height: side)
-        }
-    }
-}
-
-/// Pulses outward from what to tap; with Reduce Motion it holds still.
-private struct TourRing: View {
-    let diameter: Double
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulsing = false
-
-    var body: some View {
-        Circle()
-            .stroke(Color.accentColor, lineWidth: 2)
-            .frame(width: diameter, height: diameter)
-            .scaleEffect(reduceMotion ? 1 : pulsing ? 1.4 : 0.85)
-            .opacity(reduceMotion ? 1 : pulsing ? 0 : 1)
-            .onAppear {
-                withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) { pulsing = true }
-            }
     }
 }
