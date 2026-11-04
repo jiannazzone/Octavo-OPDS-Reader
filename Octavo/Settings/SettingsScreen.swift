@@ -56,6 +56,8 @@ private struct SettingsPageView: View {
 /// background (the screen's, so the hinge between the pages matches).
 struct SettingsPageList<Content: View>: View {
     let title: String
+    /// Where the list starts, under a title that keeps its own margin.
+    var listLeading: CGFloat = 0
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -65,6 +67,7 @@ struct SettingsPageList<Content: View>: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
                 .contentMargins(.top, 4, for: .scrollContent)
+                .padding(.leading, listLeading)
         }
     }
 }
@@ -80,7 +83,11 @@ struct SettingsList: View {
     @AppStorage(LibrarySettings.titlesUnderCoversKey) private var titlesUnderCovers = false
 
     var body: some View {
-        SettingsPageList(title: "Settings") {
+        // Unfolded, the list starts at the page's margin by itself. Left at
+        // the screen's edge it gets that margin from the system, worked out
+        // again on every frame of the slide in: its rows stop at the margin
+        // while the rest of the screen carries on, and they shrink.
+        SettingsPageList(title: "Settings", listLeading: spread.isTwoPages ? SpreadMetrics.margin : 0) {
             if let server = library.server {
                 Section("Server") {
                     row(.server) {

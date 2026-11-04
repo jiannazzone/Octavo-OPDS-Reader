@@ -23,6 +23,15 @@ Step 14 of `docs/PLAN.md`, built 2026-11-02. Settings replaces the stand-in that
 - **The next server** (`ShellModel.forgetRemovedServer`, on connect): `RemovedServer.json` holds the removed server's identity (`LibraryServer.identity`: its kind, its full saved address with scheme, port and path, and the account; two servers behind one proxy differ by path). A catalog whose address carries a key (Kavita) never counts as the same server again, since two accounts differ only by their keys and nothing derived from a key is kept outside the Keychain. BookOrbit numbers files from 1 on every server, so another server's book 17 would otherwise find the removed one's file, place and bookmarks, and send that place and those bookmarks to the wrong server. The same server and account coming back (at a new ID) finds its books, places and bookmarks; any other server, or another account, finds none: the removed server's downloads, places, bookmarks and records are deleted then. Imported books are never touched.
 - **A server's late answers are dropped.** `LibraryModel` ignores roots, Home lists and errors that arrive after another connect or disconnect (`connection`), so the old server's failure (signed out, after Remove server) can't show its banner on the new one. Found when a debug connect followed a saved server whose tokens a test run had wiped.
 
+## The slide in (2026-11-04)
+
+Adam saw the left column grow or bounce from the edge, very briefly, as Settings opened unfolded (on his Duo, 2026-11-03). Measured frame by frame in a recording of the inner display (`simctl io … recordVideo`), reading the edges of the chosen row, on the simulator:
+
+- **Before:** the list's frame started at the screen's edge, and its rows filled it (455 pt wide) until its left edge came within 20 pt of where it stops. From there the rows' left edge stayed at x = 20 while their right edge, the title and the right page carried on, so the rows and their text shrank to 435 pt over the last 90 ms or so.
+- **Why:** at the screen's edge the list takes a left margin from the system, and that margin is worked out again on each frame of the slide. This is inferred from the measurements and from the fix, not read from UIKit. The right page, away from the edge, always moved as one piece.
+- **Now:** unfolded, `SettingsList` starts the list at `SpreadMetrics.margin` by itself (`SettingsPageList.listLeading`), under a title that keeps its own margin, so it never reaches that margin. The rows stay 435 pt wide through the slide, Back and a swipe (frame 12), and rest where they did (no differing pixels bar video noise, left of the side column).
+- **Folded** is untouched: `listLeading` is 0 there. It has a smaller version of the same thing, the rows stopping at x = 33 and shrinking by 10 pt, which Adam hasn't remarked on. `TrustServerView`'s list also sits at the screen's edge; not measured.
+
 ## Checked on the simulator
 
 `iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947), local BookOrbit v3.6.0 and the local OPDS servers.
@@ -44,6 +53,7 @@ Step 14 of `docs/PLAN.md`, built 2026-11-02. Settings replaces the stand-in that
 | 09 | Calibre-Web and COPS | No Reading progress row; Sign out only for Calibre-Web (password) |
 | 11 | Calibre-Web Sign out | Alert without the sync sentence; Sign in in its place |
 | — | Swipe a book in Storage | Removed, total updated |
+| 12 | Opening unfolded, before and after the slide's fix (`Octavo Settings Duo`, 43A383FE-1CAB-4349-AF2D-0D3D659F7EEC) | Rows 435 pt wide in every frame, from Home on the sample library and from the Library on local BookOrbit; Back and a swipe too. Half open, and after a fold and an unfold, the same as flat. Folded at rest, the same as before |
 
 ## Security review (2026-11-02)
 
