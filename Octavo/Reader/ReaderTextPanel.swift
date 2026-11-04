@@ -167,19 +167,30 @@ struct ReaderTextPanel: View {
 
     private var textSize: some View {
         HStack {
-            Button("Smaller Text", systemImage: "textformat.size.smaller") { appearance.stepText(by: -1) }
-                .disabled(!appearance.canShrinkText)
+            Button { appearance.stepText(by: -1) } label: {
+                textSizeLabel("Smaller Text", systemImage: "textformat.size.smaller")
+            }
+            .disabled(!appearance.canShrinkText)
             Spacer()
             Text(appearance.textScale.formatted(.percent.precision(.fractionLength(0))))
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("Larger Text", systemImage: "textformat.size.larger") { appearance.stepText(by: 1) }
-                .disabled(!appearance.canGrowText)
+            Button { appearance.stepText(by: 1) } label: {
+                textSizeLabel("Larger Text", systemImage: "textformat.size.larger")
+            }
+            .disabled(!appearance.canGrowText)
         }
         .labelStyle(.iconOnly)
         .font(.title3)
         .buttonStyle(.glass)
+    }
+
+    /// A glass button hugs its label, so the same frame keeps the two the
+    /// same size, whatever their symbols' shapes.
+    private func textSizeLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .frame(width: 24, height: 24)
     }
 
     private var customize: some View {
@@ -194,16 +205,14 @@ struct ReaderTextPanel: View {
                 .fixedSize()
             }
             LabeledContent("Line Spacing") {
-                HStack(spacing: 10) {
-                    Text(appearance.lineSpacing.map { $0.formatted(.number.precision(.fractionLength(1...2))) } ?? "Book’s")
-                        .monospacedDigit()
-                        .fixedSize()
-                        .foregroundStyle(.secondary)
-                    Button("Less Line Spacing", systemImage: "minus") { appearance.stepLineSpacing(by: -1) }
-                    Button("More Line Spacing", systemImage: "plus") { appearance.stepLineSpacing(by: 1) }
+                Picker("Line Spacing", selection: $appearance.lineSpacing) {
+                    Text("Book’s").tag(Double?.none)
+                    ForEach(ReaderAppearance.lineSpacings, id: \.self) { spacing in
+                        Text(spacing.formatted(.number.precision(.fractionLength(1...2)))).tag(Double?.some(spacing))
+                    }
                 }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.glass)
+                .pickerStyle(.menu)
+                .fixedSize()
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Margins")
