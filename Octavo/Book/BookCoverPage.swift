@@ -3,12 +3,12 @@ import SwiftUI
 
 /// A book's screen (`docs/design/direction.md`, A book's screen).
 ///
-/// - Folded, the cover fills the screen, running under the side column and
-///   the camera, with a glass sheet at the bottom: the title, the place,
-///   Download and Open; pulled up, the details. Tapping the cover while the
-///   details show returns to the strip.
-/// - Unfolded, Cover | Details: the cover fills the left page and the same
-///   summary and details sit on the right page.
+/// - Folded, the cover on its blur (`FittedCover`) fills the screen, running
+///   under the side column and the camera, with a glass sheet at the bottom:
+///   the title, the place, Download and Open; pulled up, the details. Tapping
+///   the cover while the details show returns to the strip.
+/// - Unfolded, Cover | Details: the cover on its blur fills the left page and
+///   the same summary and details sit on the right page.
 /// - Nothing is drawn behind the side column: the system's own glass
 ///   capsules (clock, Back, tabs) read on any cover.
 /// - Unfolding on this screen opens the book if it's on the iPhone
@@ -86,9 +86,9 @@ struct BookInfoPage: View {
     }
 }
 
-/// The cover image, filling its space and cropped to it: the shelf's
-/// small copy until the full one loads, else a plain background. A book
-/// without a cover shows its title from the start.
+/// The cover image in its space (`FittedCover`): the shelf's small copy
+/// until the full one loads, else a plain background. A book without a cover
+/// shows its title from the start.
 struct BookCoverArt: View {
     let page: BookPage
     var thumbnail: UIImage?
@@ -97,9 +97,7 @@ struct BookCoverArt: View {
         Color(.secondarySystemBackground)
             .overlay {
                 if let cover = page.cover ?? thumbnail {
-                    Image(uiImage: cover)
-                        .resizable()
-                        .scaledToFill()
+                    FittedCover(image: cover)
                         .transition(.opacity)
                 } else if page.book.cover == nil || page.coverFinished {
                     BookTitleCover(title: page.current.title, author: page.authorLine)

@@ -2,8 +2,8 @@ import OctavoKit
 import SwiftUI
 import UIKit
 
-/// A book's cover from its library, filling the view. A stand-in with the
-/// title shows while it loads, and for books without one.
+/// A book's cover from its library, in the view's frame (`FittedCover`). A
+/// stand-in with the title shows while it loads, and for books without one.
 struct CoverImage: View {
     let book: SourcedBook
     var size: LibraryCoverSize = .thumbnail
@@ -13,15 +13,13 @@ struct CoverImage: View {
     var body: some View {
         let image = loaded ?? library.covers.cachedImage(for: book, size: size)
             ?? (size == .full ? library.covers.cachedImage(for: book, size: .thumbnail) : nil)
-        // The image fills an overlay, so this view keeps the size it's
+        // The image is in an overlay, so this view keeps the size it's
         // given: a filled image is larger than that, which would push
         // anything aligned to this view (the cover strip) off the screen.
         Color.clear
             .overlay {
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
+                    FittedCover(image: image)
                 } else {
                     StandInCover(title: book.book.title, author: book.book.authors.first ?? "", seed: book.book.id.rawValue)
                 }
@@ -33,6 +31,50 @@ struct CoverImage: View {
             loaded = await library.coverImage(for: book, size: size)
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// A cover in its frame (decision 32): the whole cover on a blurred copy of
+/// itself. It takes the size it's given and a filled cover overflows it, so
+/// whatever holds it clips.
+struct FittedCover: View {
+    let image: UIImage
+
+    /// A strip thinner than this would look like a glitch, and the crop that
+    /// replaces it doesn't show.
+    static let minimumStrip: CGFloat = 3
+    /// The blur's radius, as a share of the frame's shorter side.
+    private static let blurShare: CGFloat = 0.06
+    /// How much the blurred copy is darkened, so the cover stands out from it.
+    private static let dimming = 0.18
+
+    /// Whether `cover` fills `frame`, cropped, instead of fitting inside it.
+    static func fills(cover: CGSize, frame: CGSize) -> Bool {
+        guard cover.width > 0, cover.height > 0 else { return true }
+        let scale = min(frame.width / cover.width, frame.height / cover.height)
+        let strip = max(frame.width - cover.width * scale, frame.height - cover.height * scale) / 2
+        return strip < minimumStrip
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let frame = proxy.size
+            let picture = Image(uiImage: image).resizable()
+            let filled = picture.scaledToFill().frame(width: frame.width, height: frame.height)
+            if Self.fills(cover: image.size, frame: frame) {
+                filled
+            } else {
+                ZStack {
+                    // Kept to the frame: a ZStack offers its children its own
+                    // size, so an overflowing copy would make the fit overflow.
+                    filled
+                        .blur(radius: min(frame.width, frame.height) * Self.blurShare, opaque: true)
+                        .clipped()
+                    Color.black.opacity(Self.dimming)
+                    picture.scaledToFit()
+                }
+            }
+        }
     }
 }
 

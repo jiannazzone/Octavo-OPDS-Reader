@@ -26,6 +26,7 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `going-back.md` | 2026-11-04 | Going back, footnotes and chapter skipping (decisions 33–35), designed and not built: what a jump does to the saved place today, fixed-layout books, the system slider’s neutral value and hard ticks, a soft catch measured, notes in real books, and how going back would be built |
 | `tour.md` (+ `tour/`) | step 17 | The tour for a new install (decisions 29 and 30): the steps, how a new install is told apart and why it's decided once, a replay's throwaway place, Skip in the column, the WebKit trap on a fold, simulator checks, what to try on a Duo |
 | `layout-polish.md` (+ `layout-polish/`) | 2026-11-03 | The folded book sheet's compact resting state, the progress bar lined up with the text, Narrow's text drifting onto the hinge (WebKit's whole-point scrolling; fixed), the Night line (not reproduced, dropped for now) |
+| `fixed-layout.md` (+ `fixed-layout/`) | 2026-11-04 | Pre-paginated EPUBs (and CBZ) in the reader: what stopped them opening and folding, what BookOrbit's web reader stores and does, why Octavo opens by CFI and pushes a percentage inside the page, foliate patch 0003, the script layers measured alone, simulator checks |
 | `ci.md` | #19 | CI on pull requests: the jobs, why GitHub's `xcode-27` runner, which pull requests skip tests, the build cache, timings |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

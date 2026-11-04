@@ -141,7 +141,7 @@ private struct TourCoverScreen: View {
 }
 
 /// The sample book's cover from the app's bundle, whether or not the book is
-/// on the shelf, filling its space and cropped to it.
+/// on the shelf, as a book's screen draws it (`FittedCover`).
 private struct TourCoverImage: View {
     @State private var cover = SampleBook.bundledCover.flatMap { UIImage(contentsOfFile: $0.path) }
 
@@ -149,9 +149,7 @@ private struct TourCoverImage: View {
         Color(.secondarySystemBackground)
             .overlay {
                 if let cover {
-                    Image(uiImage: cover)
-                        .resizable()
-                        .scaledToFill()
+                    FittedCover(image: cover)
                 } else {
                     BookTitleCover(title: SampleBook.book.title, author: "Jane Austen")
                 }

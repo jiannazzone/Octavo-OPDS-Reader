@@ -72,6 +72,7 @@ Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded
 
 - **Curl as a Page Turn choice**: the corner peels over, as in Apple Books. Adam was tempted by it for open and left it out for now. It would draw from the same snapshots as the flip (or UIKit's page curl).
 - **Opening and closing** (decision 28) may change once Adam has seen it on his Duo. One idea: where Back doesn't land on the book's screen, the cover could shrink into its spot on Home or in a list instead of the reader fading.
+- **Leafing through to your place** (Adam, 2026-11-04): opening a book that isn't on page 1, some pages flip over, as if you're leafing through to where you left off. Not looked into yet. To decide: what the flipping pages show, how many there are and how long they take, what happens folded (where a turn slides), and whether it plays on every opening, including unfolding on a cover, which opens at once today.
 
 ## An accent colour (Adam, 2026-11-03)
 
@@ -79,13 +80,9 @@ Octavo has no accent colour of its own: no `AccentColor` asset and no tint set a
 
 ## Covers that aren't 2:3: fill or fit? (Adam, 2026-11-03)
 
-Every cover fills its frame today and is cropped to it (`CoverImage`, `BookCoverArt`, and the cover that swings open in decision 28): 2:3 cells on the shelves and grids, the whole screen folded, the right half unfolded. A cover of another shape, such as a square one or a scanned comic, loses its edges, which can cut off a title or an author's name. Even a 2:3 cover loses about 20 pt top and bottom on the folded screen (466×678 pt).
+Every cover filled its frame and was cropped to it (`CoverImage`, `BookCoverArt`, and the cover that swings open in decision 28): 2:3 cells on the shelves and grids, the whole screen folded, the left page unfolded. A cover of another shape, such as a square one, loses its edges, which can cut off a title or an author's name. A true 2:3 cover loses about 10 pt top and bottom on the folded screen (466×678 pt) and 7 pt on the left page (455.5×669 pt).
 
-- **Fill** (today): no empty space, but the crop.
-- **Fit**: the whole cover always shows, and the space around it takes the cover's colours, as Apple Music does behind album art: a colour picked from the cover, or a blurred, enlarged copy of it. Core Image finds the colour (`CIAreaAverage`, or the colours along the cover's edges), so no new dependency.
-- **In between**: fill when a cover is close to its frame's shape and fit when it isn't; or let grid cells take each cover's own shape, as Apple Books does, with the covers lined up along the bottom.
-
-Decide per place: the small covers on shelves and grids, the large cover page, Home's book, and the cover in the opening motion.
+Decided 2026-11-04: every cover fits its frame on a blurred copy of itself, on a book's screen, Home and the shelves and grids, and the opening motion follows (decision 32 in `docs/design/direction.md`). Built the same day.
 
 ## The reader's left strip (Adam, 2026-11-03)
 
@@ -100,3 +97,12 @@ Turned down:
 
 - **Spreading the pages across the whole width:** the right page's text sits on the crease, and going half open re-lays out.
 - **A wider left page, with the divide on the fold** (393 | 309 pt at Medium): Adam's idea, which keeps the fold steady and works in book mode too. foliate's pages are CSS columns, always equal, so it takes a workaround: every column as wide as the left page, with invisible floats blocking the outer 84 pt of each right page. In a throwaway test on macOS WebKit with foliate's column styles (not foliate itself, and not iOS), text came out at exactly those widths with 10-14% fewer spreads across the five sample books, Pride and Prejudice with its floats off. Left on, a book's own floats break it (Pride and Prejudice went from 63 spreads to 111, with blank pages). The book's `clear` rules also have to go, pictures and tables are capped at 309 pt, and boxes with backgrounds run under the column. Adam decided against the workaround.
+
+## Fixed-layout books (parked 2026-11-04)
+
+Pre-paginated books open now (`docs/notes/fixed-layout.md`). What they show that hasn't been decided:
+
+- **A book with `rendition:spread="none"`, unfolded:** foliate shows one page in the middle of the screen, straight across the fold. Pairing the pages either side of the fold would keep them off it, and suits portrait pages, but it halves a landscape page that fills the screen across the fold today. BookOrbit's web reader offers the choice as a setting (Page spreads).
+- **The Text panel:** font, size, spacing, margins and justify do nothing on these pages, and themes colour only the space around them. BookOrbit's web reader hides the text controls for these books.
+- **Search:** going to a match works, but foliate's fixed-layout renderer has nothing to draw its highlight on.
+- **Folded and turned sideways:** two pages, by foliate's rule, not the one page text gets. Each is about the size one page would be there (297 pt wide, against 309).

@@ -560,7 +560,7 @@ private struct ReaderProgressBar: View {
         if let scrub {
             return ReaderPlace(fraction: scrub, toc: model.toc, total: model.location?.total)
         }
-        return ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.position?.fraction ?? 0)
+        return ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction)
     }
 
     private var scrubber: some View {
@@ -637,7 +637,7 @@ private struct ReaderProgressBar: View {
 
     private var fraction: Binding<Double> {
         Binding {
-            scrub ?? model.position?.fraction ?? 0
+            scrub ?? model.shownFraction
         } set: {
             relocationsAtRelease = nil
             scrub = $0
@@ -662,7 +662,7 @@ struct ReaderFooter: View {
     var body: some View {
         if model.phase == .open, let geometry = model.geometry {
             ReaderFooterLines(
-                place: ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.position?.fraction ?? 0),
+                place: ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction),
                 layout: model.layout, geometry: geometry
             )
         }
