@@ -76,7 +76,9 @@ struct ReaderView: View {
         }
         .onDisappear {
             guard let model else { return }
-            Task { await model.close() }
+            // Starts at once: the page's messages about leaving the window
+            // aren't far behind.
+            Task.immediate { await model.close() }
         }
     }
 }
@@ -311,7 +313,7 @@ private struct ReaderScreen: View {
             model.onPageTurned = { [weak shell] in shell?.tourEvent(.pageTurned) }
         }
         #if DEBUG
-        .readerRemote(model)
+        .readerRemote(model, back: close)
         #endif
     }
 
@@ -345,7 +347,7 @@ private struct ReaderScreen: View {
         switch model.phase {
         case .loading:
             ProgressView()
-        case .open:
+        case .open, .closed:
             EmptyView()
         case .failed(let message):
             ContentUnavailableView("Couldn’t Open", systemImage: "exclamationmark.triangle", description: Text(message))

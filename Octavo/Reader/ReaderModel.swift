@@ -21,6 +21,8 @@ final class ReaderModel {
         case loading
         case open
         case failed(String)
+        /// The reader has gone (`close`).
+        case closed
     }
 
     let book: ReaderBook
@@ -417,6 +419,7 @@ final class ReaderModel {
             _ = try? await Self.withTimeout(.milliseconds(300)) { await coverTask.value }
         }
         lastClosedCover = max(lastClosedCover, cover)
+        guard phase == .open else { return }
         let layout = ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins)
         self.layout = layout
         sentLayout = layout
@@ -478,9 +481,16 @@ final class ReaderModel {
         return try? await page.callJavaScript("return await window.octavo.visibleText(limit)", arguments: ["limit": limit]) as? String
     }
 
-    /// Pushes any position still waiting for the debounce. Call when the
-    /// reader goes away.
+    /// The reader went away: pushes any position still waiting for the
+    /// debounce, and that's the end of the page. Its web view leaves the
+    /// window and takes another size for a moment, so what the page says from
+    /// here isn't the reader's doing, and it draws no more frames, so a call
+    /// sent now would wait for one and keep this model and the page's web
+    /// process alive (`docs/notes/reader-release.md`).
     func close() async {
+        phase = .closed
+        foldTask?.cancel()
+        foldBatch = nil
         await pusher?.flush()
     }
 
@@ -516,6 +526,7 @@ final class ReaderModel {
     }
 
     func handle(_ message: ReaderMessage) {
+        guard phase != .closed else { return }
         switch message {
         case .ready:
             openBook()
@@ -597,6 +608,7 @@ final class ReaderModel {
         phase = .loading
         Task {
             let opening = await chooseOpeningPosition()
+            guard phase != .closed else { return }
             openingPosition = opening
             let saved = opening.position
             var options: [String: Any] = [
@@ -617,7 +629,7 @@ final class ReaderModel {
             do {
                 _ = try await page.callJavaScript("return await window.octavo.open(options)", arguments: ["options": options])
             } catch {
-                phase = .failed(lastError ?? error.localizedDescription)
+                if phase != .closed { phase = .failed(lastError ?? error.localizedDescription) }
             }
         }
     }

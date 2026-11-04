@@ -40,6 +40,12 @@ import WebKit
 ///   file then says whether the visible page contains it), `js` (`script`: a
 ///   function body run in the reader page; its result goes to
 ///   `spike-js.json`).
+/// - `back`: what the reader's Back button does.
+/// - `closeAfter` (ms, with any command): closes the reader that long after
+///   the command, without waiting for what it started.
+/// - `liveReaders`: of the readers opened since launch, how many models, web
+///   pages and web views are still alive, and their content processes, in
+///   the ack's message (`docs/notes/reader-release.md`).
 ///
 /// Where the reader is goes to `spike-state.json` after every move;
 /// hinge, region and scene events go to `spike-events.jsonl` (`DebugEvents`).
@@ -59,6 +65,7 @@ enum ReaderRemote {
         var side: String?
         var dx: Double?
         var velocity: Double?
+        var closeAfter: Int?
     }
 
     struct Ack: Encodable {
@@ -71,13 +78,59 @@ enum ReaderRemote {
     static weak var reader: ReaderModel?
     /// A CFI the state file checks the visible page against.
     static var watchedCFI: String?
+    /// Every reader opened since launch, without keeping any of them.
+    private static var opened: [OpenedReader] = []
     /// The CFI shape the next reader saves and syncs.
     static var cfiShape = ReaderMessage.CFIShape.point
+
+    private final class OpenedReader {
+        weak var model: ReaderModel?
+        weak var page: WebPage?
+        weak var webView: WKWebView?
+
+        init(_ model: ReaderModel) {
+            self.model = model
+            page = model.page
+        }
+    }
+
+    static func track(_ model: ReaderModel) {
+        guard !opened.contains(where: { $0.model === model }) else { return }
+        opened.append(OpenedReader(model))
+    }
+
+    private static var liveReaders: String {
+        for reader in opened where reader.webView == nil {
+            reader.webView = reader.model?.snapshots.webView
+        }
+        // `_webProcessIdentifier` is WebKit's own, for its tests.
+        let processes = opened.compactMap { $0.webView?.value(forKey: "_webProcessIdentifier") as? Int }
+        let live = LiveReaders(
+            opened: opened.count,
+            models: opened.count { $0.model != nil },
+            pages: opened.count { $0.page != nil },
+            webViews: opened.count { $0.webView != nil },
+            processes: processes,
+            // For `leaks --traceTree=<address> <pid>`.
+            addresses: opened.compactMap { $0.model.map { "\(Unmanaged.passUnretained($0).toOpaque())" } }
+        )
+        return (try? JSONEncoder().encode(live)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+    }
+
+    private struct LiveReaders: Encodable {
+        var opened: Int
+        var models: Int
+        var pages: Int
+        var webViews: Int
+        var processes: [Int]
+        var addresses: [String]
+    }
 
     static let commandURL = URL.documentsDirectory.appending(path: "spike-command.json")
     static let ackURL = URL.documentsDirectory.appending(path: "spike-ack.json")
     static let scriptResultURL = URL.documentsDirectory.appending(path: "spike-js.json")
     static let keyboardNotification = Notification.Name("ReaderRemote.keyboard")
+    static let backNotification = Notification.Name("ReaderRemote.back")
 
     /// Runs commands until the task is cancelled.
     static func run(shell: ShellModel) async {
@@ -87,6 +140,10 @@ enum ReaderRemote {
             try? FileManager.default.removeItem(at: commandURL)
             guard let command = try? JSONDecoder().decode(Command.self, from: data) else { continue }
             let failure = await handle(command, shell: shell)
+            if let closeAfter = command.closeAfter {
+                try? await Task.sleep(for: .milliseconds(closeAfter))
+                shell.reading = nil
+            }
             let ack = Ack(id: command.id, ok: failure == nil, message: failure)
             try? JSONEncoder().encode(ack).write(to: ackURL, options: .atomic)
         }
@@ -96,6 +153,11 @@ enum ReaderRemote {
     private static func handle(_ command: Command, shell: ShellModel) async -> String? {
         if ["signin", "open", "openLocal", "detail", "home"].contains(command.cmd) { shell.debugEndTour() }
         switch command.cmd {
+        case "liveReaders":
+            return liveReaders
+        case "back":
+            NotificationCenter.default.post(name: backNotification, object: nil)
+            return nil
         case "tour":
             if command.name == "show" { shell.showTour() }
             return shell.debugTourState
@@ -249,13 +311,14 @@ enum ReaderRemote {
 extension View {
     /// DEBUG ONLY. Hands `model` to `ReaderRemote`, writes the state file on
     /// every move, and logs the reader's hinge and region events.
-    func readerRemote(_ model: ReaderModel) -> some View {
-        modifier(ReaderRemoteHook(model: model))
+    func readerRemote(_ model: ReaderModel, back: @escaping () -> Void) -> some View {
+        modifier(ReaderRemoteHook(model: model, back: back))
     }
 }
 
 private struct ReaderRemoteHook: ViewModifier {
     let model: ReaderModel
+    let back: () -> Void
     @State private var text = ""
     @FocusState private var keyboard: Bool
 
@@ -273,7 +336,11 @@ private struct ReaderRemoteHook: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: ReaderRemote.keyboardNotification)) { note in
                 keyboard = note.userInfo?["on"] as? Bool ?? false
             }
-            .task { ReaderRemote.reader = model }
+            .onReceive(NotificationCenter.default.publisher(for: ReaderRemote.backNotification)) { _ in back() }
+            .task {
+                ReaderRemote.reader = model
+                ReaderRemote.track(model)
+            }
             .task(id: ReaderStateFile.Key(model)) {
                 await ReaderStateFile.write(model)
             }

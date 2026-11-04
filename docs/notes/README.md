@@ -27,6 +27,7 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `layout-polish.md` (+ `layout-polish/`) | 2026-11-03 | The folded book sheet's compact resting state, the progress bar lined up with the text, Narrow's text drifting onto the hinge (WebKit's whole-point scrolling; fixed), the Night line (not reproduced, dropped for now) |
 | `reader-pictures.md` (+ `reader-pictures/`) | 2026-11-04 | Pictures fit their text column: why a box wider than the page cut them off, the fix in `bridge.js`, every sample book in every posture and margin, what's left alone |
 | `fixed-layout.md` (+ `fixed-layout/`) | 2026-11-04 | Pre-paginated EPUBs (and CBZ) in the reader: what stopped them opening and folding, what BookOrbit's web reader stores and does, why Octavo opens by CFI and pushes a percentage inside the page, foliate patch 0003, the script layers measured alone, simulator checks |
+| `reader-release.md` (+ `reader-release/`) | 2026-11-04 | A closed reader goes away: the frame wait that kept every closed book's model, page and web process alive, in the app and in tests, the fix, every way out measured before and after, why the place holds |
 | `ci.md` | #19 | CI on pull requests: the jobs, why GitHub's `xcode-27` runner, which pull requests skip tests, the build cache, timings |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.
