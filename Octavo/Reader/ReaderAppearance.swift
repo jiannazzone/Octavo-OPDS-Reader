@@ -8,7 +8,7 @@ nonisolated struct ReaderAppearance: Equatable, Sendable, Codable {
     var font = ReaderFont.book
     /// A share of the book's own size; A− and A+ step through `textScales`.
     var textScale = 1.0
-    /// Line height in lines; `nil` keeps the book's own.
+    /// Line height in lines, one of `lineSpacings`; `nil` keeps the book's own.
     var lineSpacing: Double?
     var justify = true
     /// Night while the iPhone is in Dark Mode, whatever the theme (decision
@@ -33,14 +33,6 @@ nonisolated struct ReaderAppearance: Equatable, Sendable, Codable {
     mutating func stepText(by steps: Int) {
         let index = Self.textScales.lastIndex { $0 <= textScale } ?? 0
         textScale = Self.textScales[min(max(index + steps, 0), Self.textScales.count - 1)]
-    }
-
-    /// − and + for line spacing, from the middle when it's the book's own.
-    mutating func stepLineSpacing(by steps: Int) {
-        let spacings = Self.lineSpacings
-        let current = lineSpacing.flatMap { spacing in spacings.lastIndex { $0 <= spacing } }
-        let index = (current ?? spacings.count / 2) + steps
-        lineSpacing = spacings[min(max(index, 0), spacings.count - 1)]
     }
 
     /// What the bridge applies after the book's own styles, and the page's

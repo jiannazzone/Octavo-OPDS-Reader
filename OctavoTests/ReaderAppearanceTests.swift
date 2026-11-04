@@ -31,17 +31,16 @@ struct ReaderAppearanceTests {
         #expect(!appearance.canGrowText)
     }
 
-    @Test func lineSpacingStartsFromTheMiddleStep() {
-        var appearance = ReaderAppearance()
-        #expect(appearance.lineSpacing == nil)
-        appearance.stepLineSpacing(by: 1)
-        #expect(appearance.lineSpacing == 1.65)
+    // The menu's first choice: nothing of a chosen spacing stays, on the page
+    // or saved.
+    @Test func lineSpacingGoesBackToTheBooks() throws {
+        var appearance = ReaderAppearance(lineSpacing: 1.65)
+        #expect(appearance.script(darkMode: false).css.contains("line-height: 1.65;"))
 
-        var tighter = ReaderAppearance()
-        tighter.stepLineSpacing(by: -1)
-        #expect(tighter.lineSpacing == 1.35)
-        tighter.stepLineSpacing(by: -5)
-        #expect(tighter.lineSpacing == ReaderAppearance.lineSpacings.first)
+        appearance.lineSpacing = nil
+        #expect(!appearance.script(darkMode: false).css.contains("line-height"))
+        let saved = try #require(ReaderAppearance(rawValue: appearance.rawValue))
+        #expect(saved.lineSpacing == nil)
     }
 
     // MARK: CSS
