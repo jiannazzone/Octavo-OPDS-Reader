@@ -33,6 +33,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The user followed a link out of the book. The bridge has already
     /// stopped foliate from opening it.
     case externalLink(href: String)
+    /// The user tapped a link inside the book. The bridge has stopped foliate
+    /// from following it, so it's Swift's jump to make (decision 33).
+    case link(href: String)
     case error(ScriptError)
     /// A `console.error`/`console.warn` line from foliate-js.
     case log(level: String, message: String)
@@ -198,6 +201,8 @@ nonisolated extension ReaderMessage: Decodable {
             )
         case "externalLink":
             self = .externalLink(href: try container.decode(String.self, forKey: .href))
+        case "link":
+            self = .link(href: try container.decode(String.self, forKey: .href))
         case "error":
             self = .error(try ScriptError(from: decoder))
         case "log":

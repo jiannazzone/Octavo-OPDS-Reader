@@ -1285,12 +1285,13 @@ const goToPoint = async target => {
 // FB2 has no `isExternal`, so foliate hands every link to `link`, and a web
 // address becomes an internal jump that goes nowhere. Anything with a scheme
 // (not one of foliate's own blob: URLs) is reported like the other formats'
-// external links instead.
+// external links instead. A link inside the book is a jump, which Swift makes,
+// as your place has to hold before the page moves (decision 33).
 const hasScheme = href => /^[a-z][a-z0-9+.-]*:/i.test(String(href).trim()) && !/^blob:/i.test(String(href).trim())
 const onLink = e => {
-    if (view?.book?.isExternal || !hasScheme(e.detail.href)) return
     e.preventDefault()
-    post('externalLink', { href: e.detail.href })
+    const isExternal = !view?.book?.isExternal && hasScheme(e.detail.href)
+    post(isExternal ? 'externalLink' : 'link', { href: e.detail.href })
 }
 
 // Try the CFI first, then the fraction, then the start of the book. A

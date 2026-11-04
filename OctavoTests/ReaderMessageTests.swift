@@ -141,6 +141,16 @@ struct ReaderMessageTests {
             == .externalLink(href: "https://www.gutenberg.org/ebooks/1342"))
     }
 
+    @Test func decodesALinkInsideTheBook() throws {
+        #expect(try ReaderMessage.decode(#"{"type":"link","href":"OEBPS/chapter-2.xhtml#note-1"}"#)
+            == .link(href: "OEBPS/chapter-2.xhtml#note-1"))
+    }
+
+    /// The message can't be told apart from a link with nowhere to go.
+    @Test func aLinkWithNoAddressIsAnError() {
+        #expect(throws: (any Error).self) { try ReaderMessage.decode(#"{"type":"link"}"#) }
+    }
+
     @Test func unknownTypeIsNotAnError() throws {
         #expect(try ReaderMessage.decode(#"{"type":"highlight","text":"Mr. Darcy"}"#) == .unknown(type: "highlight"))
     }

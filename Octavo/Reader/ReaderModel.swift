@@ -613,6 +613,8 @@ final class ReaderModel {
             if let geometry { updateGeometry(geometry) }
         case .externalLink(let href):
             log.notice("Ignored external link \(href, privacy: .public)")
+        case .link(let href):
+            jump(to: href)
         case .error(let error):
             lastError = error.message
             log.error("Reader script error (\(error.phase ?? "?", privacy: .public)): \(error.message, privacy: .public)")
