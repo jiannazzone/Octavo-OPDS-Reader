@@ -19,12 +19,11 @@ Every jump goes through `moved(to:)`, which saves and hands the place to the pus
 
 ## Fixed-layout books
 
-Measured with a 12-page pre-paginated EPUB made locally. Their own fix is a separate session (`make-fixed-layout-epubs`).
+Measured before #56 with a 12-page pre-paginated EPUB made locally. #56 fixed what stopped these books opening and folding (`fixed-layout.md`), so what's left for going back is short:
 
-- **They don't open today.** "Couldn't Open": `renderer.setStyles` doesn't exist on the fixed-layout renderer (`bridge.js`, since 522014f). With `setStyles?.(...)` as a temporary change, they open.
-- **A fold then breaks.** `applyLayout` calls `renderer.render()`, which doesn't exist there, so the fold's hold never ends.
-- **Going back has to use the CFI.** By the saved CFI it landed on the same page, folded and unfolded. By fraction it landed one page late every time: a relocation reports the section's end (`fraction: 0, size: 1`), and `goToFraction` of that is the next section. `restore` goes by fraction first, so each open creeps forward a page.
-- **`onPage` is always false there**, as the section-level CFI collapses to a point. "Back on your page" needs `CFI.compare` of the two points. A jump inside the same spread posts no relocation.
+- **Going back has to use the CFI.** By the saved CFI it landed on the same page, folded and unfolded. By fraction it landed one page late every time, as a relocation reports the section's end. `restore` now tries the CFI first too.
+- **"Back on your page" can use `onPage`** in every book: since #56 it goes by the page's section there.
+- **Check once built:** a jump inside the same spread posted no relocation before #56, so a trip shouldn't start from one.
 
 ## The line
 

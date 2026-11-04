@@ -273,7 +273,7 @@ Decided with pictures in the planning session (no Figma frames). Not built yet (
     - **The book's screen says where it opens:** "48% · Opens at 90%", in place of "Synced just now". So every place line still tells the truth. Home's and Search's rows keep showing your place.
     - **With BookOrbit's capsule, both show** (Adam, over one waiting for the other): stacked folded, with Back at the bottom and BookOrbit's capsule above it, covering about two lines until you answer; one under each page unfolded and half open. Back goes to your place and BookOrbit's capsule stays. Go goes to BookOrbit's place and ends the trip. BookOrbit's ✕ keeps your place, and the trip carries on. Back's ✕, or the fifth turn, makes this page your place and answers BookOrbit's capsule too, as reading on does.
     - **With Search's bar:** unfolded and half open, Back under the left page and the bar under the right. Folded there's room for one, so Back waits until the search ends with ✕: stepping through matches is common, and a stack could cover the match.
-    - **Fixed-layout books:** the same, going back by the saved CFI, not by fraction. They need their own fix first (`docs/notes/going-back.md`).
+    - **Fixed-layout books:** the same, going back by the saved CFI, not by fraction. Their own fix is in (#56, `docs/notes/fixed-layout.md`).
 
 34. **A footnote opens where you are, without leaving the page.** Not built yet.
     - **Where:** open (flat or half open), a glass card on the other page from its mark, level with it, so the sentence you're reading stays in view (Adam, over a pop-up by the mark and over a panel like Contents). Folded, along the bottom above the footer, or at the top if the mark is down there.
