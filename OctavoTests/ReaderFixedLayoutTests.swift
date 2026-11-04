@@ -18,9 +18,9 @@ struct ReaderFixedLayoutTests {
 
     /// Twelve 1000×1400 pages whose files differ in size, as a real book's do
     /// (foliate's fractions count bytes). Page 5 tries to run a script.
-    private static func book(spread: String = "auto") -> Data {
-        let items = (1...12).map { #"<item id="p\#($0)" href="p\#($0).xhtml" media-type="application/xhtml+xml"/>"# }.joined()
-        let refs = (1...12).map { #"<itemref idref="p\#($0)"/>"# }.joined()
+    private static func book(spread: String = "auto", pages: Int = 12) -> Data {
+        let items = (1...pages).map { #"<item id="p\#($0)" href="p\#($0).xhtml" media-type="application/xhtml+xml"/>"# }.joined()
+        let refs = (1...pages).map { #"<itemref idref="p\#($0)"/>"# }.joined()
         let opf = """
         <?xml version="1.0" encoding="UTF-8"?>
         <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
@@ -38,7 +38,7 @@ struct ReaderFixedLayoutTests {
         """
         let nav = #"<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Contents</title></head><body><nav epub:type="toc"><ol><li><a href="p1.xhtml">Front</a></li><li><a href="p4.xhtml">Middle</a></li></ol></nav></body></html>"#
         let container = #"<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#
-        let pages = (1...12).map { number -> (String, Data) in
+        let files = (1...pages).map { number -> (String, Data) in
             let filler = (0..<(number * number * 20)).map { "word\($0)" }.joined(separator: " ")
             let script = number == 5 ? "<script>document.documentElement.setAttribute('data-ran', 'script')</script>" : ""
             let page = """
@@ -54,17 +54,19 @@ struct ReaderFixedLayoutTests {
             ("META-INF/container.xml", Data(container.utf8)),
             ("OEBPS/content.opf", Data(opf.utf8)),
             ("OEBPS/nav.xhtml", Data(nav.utf8)),
-        ] + pages)
+        ] + files)
     }
 
-    private func open(_ data: Data = book(), saved: ReadingPosition? = nil) async throws -> ReaderModel {
+    private func open(_ data: Data = book(), saved: ReadingPosition? = nil, sync: (any ProgressSync)? = nil) async throws -> ReaderModel {
         let directory = URL.testDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appending(path: "fixed.epub")
         try data.write(to: url)
         let book = ReaderBook(fileURL: url, id: "fixed")
         if let saved { try store.save(saved, forBook: book.id) }
-        let model = ReaderModel(book: book, store: store, bookmarks: ReaderBookmarks(bookID: book.id, store: bookmarkStore))
+        let model = ReaderModel(
+            book: book, store: store, sync: sync, bookmarks: ReaderBookmarks(bookID: book.id, store: bookmarkStore), pushDelay: .milliseconds(50)
+        )
         let opened = await eventually(timeout: .seconds(30)) { model.phase != .loading && model.relocation != nil }
         #expect(opened, "\(model.phase) \(model.lastError ?? "")")
         // The page isn't on screen, so it draws no frames; these don't wait for one.
@@ -335,6 +337,95 @@ struct ReaderFixedLayoutTests {
         await go(model, toPage: 3)
         let first = try #require(ReaderChapterProgress(place: place(model), toc: model.toc))
         #expect(first.pagesLeft == 8)
+    }
+
+    // MARK: Review of #56
+
+    // The footer needs the news of a re-layout; the server doesn't.
+    @Test func aReLayoutDoesntPushThePlaceAgain() async throws {
+        let sync = FakeProgressSync()
+        let model = try await open(sync: sync)
+        try await size(model, width: 300, height: 600)
+        await go(model, toPage: 5)
+        #expect(await eventuallyAsync { await sync.pushes.count == 1 })
+        let count = model.relocationCount
+        try await size(model, width: 800, height: 500)
+        try await setLayout(model, ReaderLayout(columns: 2))
+        #expect(await eventually { model.relocationCount > count })
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(await sync.pushes.count == 1)
+        // Left unsent, it could beat another reader's newer place at the next open.
+        #expect(store.progress(forBook: "fixed")?.needsPush == false)
+    }
+
+    // Turning back would land on the spread's other side.
+    @Test func aSwipeThatFallsBackEndsOnItsOwnPage() async throws {
+        let model = try await open()
+        try await size(model, width: 800, height: 500)
+        await go(model, toPage: 7)
+        let index: Int? = try await script(model, """
+        await window.octavo.turn('right', true)
+        await window.octavo.endTurn(false)
+        return document.querySelector('foliate-view').renderer.index
+        """)
+        #expect(index == 7)
+        #expect(model.position?.cfi == Self.cfi(7))
+    }
+
+    @Test func theLastSpreadSavesTheLastPage() async throws {
+        let model = try await open(Self.book(pages: 13))
+        try await size(model, width: 800, height: 500)
+        await go(model, toPage: 11)
+        #expect(model.position?.cfi == Self.cfi(12))
+        #expect(model.position?.fraction == 1)
+        // One page at a time, the page before the last is its own place.
+        let folded = try await open(Self.book(pages: 13))
+        try await size(folded, width: 300, height: 600)
+        await go(folded, toPage: 11)
+        #expect(folded.position?.cfi == Self.cfi(11))
+        #expect(try #require(folded.position?.fraction) < 1)
+    }
+
+    // Go can fail if the server's place is from another edition. The turn
+    // after it is still this reader's own.
+    @Test func aServerPlaceThatWontOpenDoesntSwallowTheNextPush() async throws {
+        let sync = FakeProgressSync()
+        let model = try await open(sync: sync)
+        await sync.set(remote: SyncedPosition(position: ReadingPosition(cfi: "epubcfi(/6/999)", fraction: 0.5), updatedAt: .now))
+        await model.checkServerPlace()
+        #expect(model.serverPlace != nil)
+        model.goToServerPlace()
+        try await Task.sleep(for: .milliseconds(500))
+        await go(model, toPage: 3)
+        #expect(await eventuallyAsync { await sync.pushes.last?.cfi == Self.cfi(3) })
+    }
+
+    @Test func twoColumnsAreTwoPagesWhateverTheShape() async throws {
+        let model = try await open()
+        try await size(model, width: 300, height: 600)
+        await go(model, toPage: 5)
+        try await setLayout(model, ReaderLayout(columns: 2))
+        // `setLayout` gives the view back its own size.
+        try await size(model, width: 300, height: 600)
+        let shown: [Bool]? = try await script(model, "return await window.octavo.onPage(cfis)", arguments: ["cfis": [5, 6].map(Self.cfi)])
+        #expect(shown == [true, true])
+    }
+
+    // foliate's fixed-layout renderer has no swipes of its own.
+    @Test func swipesStayOnWithPageTurnNone() async throws {
+        let model = try await open()
+        model.pageTurn = .none
+        #expect(model.swipes.isEnabled)
+    }
+
+    private func eventuallyAsync(timeout: Duration = .seconds(5), _ condition: () async -> Bool) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        while await !condition() {
+            guard clock.now < deadline else { return false }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return true
     }
 
     // MARK: Scripts

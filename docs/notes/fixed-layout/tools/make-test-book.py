@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """A small pre-paginated EPUB for checking the reader (docs/notes/fixed-layout.md).
 
-Twelve 1000x1400 pages, each with a big page number. The pages' files differ in
+Twelve 1000x1400 pages by default, each with a big page number. The pages' files differ in
 size on purpose, as a real book's do, because foliate's fractions and locations
 count bytes. Page 5 runs a script and an onload handler that would mark the
 page if they ever ran.
 
-    make-test-book.py OUT.epub [--spread auto|none|both] [--title TITLE]
+    make-test-book.py OUT.epub [--spread auto|none|both] [--title TITLE] [--pages N]
 """
 import argparse
 import zipfile
@@ -54,13 +54,13 @@ body {{ background: {COLORS[number % len(COLORS)]}; font-family: Georgia, serif;
 """
 
 
-def opf(spread, title):
+def opf(spread, title, pages):
     scripted = ' properties="scripted"'
     items = "\n".join(
         f'    <item id="p{n}" href="p{n}.xhtml" media-type="application/xhtml+xml"{scripted if n == 5 else ""}/>'
-        for n in range(1, 13)
+        for n in range(1, pages + 1)
     )
-    refs = "\n".join(f'    <itemref idref="p{n}"/>' for n in range(1, 13))
+    refs = "\n".join(f'    <itemref idref="p{n}"/>' for n in range(1, pages + 1))
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -104,14 +104,15 @@ def main():
     parser.add_argument("out")
     parser.add_argument("--spread", default="auto", choices=["auto", "none", "both", "landscape", "portrait"])
     parser.add_argument("--title", default=None)
+    parser.add_argument("--pages", type=int, default=12)
     args = parser.parse_args()
     title = args.title or f"Fixed layout test ({args.spread})"
     with zipfile.ZipFile(args.out, "w") as z:
         z.writestr(zipfile.ZipInfo("mimetype"), "application/epub+zip", zipfile.ZIP_STORED)
         z.writestr("META-INF/container.xml", CONTAINER, zipfile.ZIP_DEFLATED)
-        z.writestr("OEBPS/content.opf", opf(args.spread, title), zipfile.ZIP_DEFLATED)
+        z.writestr("OEBPS/content.opf", opf(args.spread, title, args.pages), zipfile.ZIP_DEFLATED)
         z.writestr("OEBPS/nav.xhtml", nav(), zipfile.ZIP_DEFLATED)
-        for n in range(1, 13):
+        for n in range(1, args.pages + 1):
             z.writestr(f"OEBPS/p{n}.xhtml", page(n), zipfile.ZIP_DEFLATED)
 
 

@@ -60,9 +60,10 @@ The reader reuses a pull up to 5 minutes old (`BookPlaces`), so reopening a book
 - **Which page of a spread is "the place"** is foliate's `#side`: the left after turning forward, the right after turning back. Both show unfolded, and folded the reader opens on that one.
 - **Unfolded and turned sideways** it's one page across the fold (597×835 pt), as decision 12 has it for text.
 - **Folded and turned sideways, it shows two pages** of 297×416 pt, because foliate's rule goes by the view's shape and has no setting for that. One page there would be 309×432 pt, as height limits both, so I left it, against "one page folded". It's in `docs/UI-IDEAS.md`.
-- **A swipe that falls back on a spread** ends on the same two pages with the model's position unchanged, though foliate's `#side` is now the right-hand page. A fold closes the reader and reopens from the model's position, so nothing reads it.
+- **A swipe that falls back** goes back to its own page, not with the opposite turn, which lands on a spread's other side (`#side`) and would be saved at the next re-layout.
+- **A spread holding the book's last page saves that page,** at 100%, whichever side foliate is on. Otherwise an even book read unfolded ends on the page before the last and never reaches 100% on the server. Folded, the page before the last is still its own place.
 
-Reopening: four times folded on page 6, three on page 9, three unfolded on 8–9, all exact, and from `cfi` each time. Turning with Page Turn None, and swipes kept and fallen back, folded and unfolded, went to the right pages. With Narrow margins, the page stays out of the side column folded (0–382 pt) and unfolded (84–867 pt).
+Reopening: four times folded on page 6, three on page 9, three unfolded on 8–9, all exact, and from `cfi` each time. Swipes kept and fallen back, folded and unfolded, went to the right pages. With Page Turn None, foliate's fixed-layout renderer has no swipes of its own, so `ReaderSwipeRecognizer` stays on for these books: a swipe turns at once, with no drag. With Narrow margins, the page stays out of the side column folded (0–382 pt) and unfolded (84–867 pt).
 
 ## Going to a page in the same spread (patch 0003)
 
@@ -91,7 +92,7 @@ Foliate's locations and fractions count bytes, so a 12-page book said "9 of 80 �
 - **Footer, bar, contents, search and bookmarks** count the book's pages: "6 of 12 · 50%" folded, "6–7 of 12 · 58%" on a spread, with the percentage at the end of the last page shown. `fixedPlace` sends them in the relocation, and `sectionFractions` places the contents and search results the same way.
 - **The slider moves by pages,** and goes to the page its label names (`goToFraction`, which only the reader's own controls call).
 - **What's saved and synced doesn't change:** `Relocation.fraction` still counts bytes, as the web reader needs it to. The footer reads `shownFraction`. So Home, a book's screen and the server-place capsule keep BookOrbit's percentage, which can differ a little on a book whose page files are uneven: page 6 of the test book says 50% in the footer and 16% on Home, and real books should be much closer.
-- **A re-layout reports itself:** the renderer says nothing when a fold changes the pages on screen, so `setLayout` posts the relocation again.
+- **A re-layout reports itself:** the renderer says nothing when a fold changes the pages on screen, so `setLayout` posts the relocation again. `ReaderModel` doesn't save a repeat, for any book. The pusher already skipped an unchanged place, but the save left it marked unsent with a new time, which could beat another reader's newer place at the next open.
 - **Section starts are 1e-7 inside the page,** because a page's place is its end, which is otherwise exactly the next page's start, and would name the next chapter on a chapter's last page.
 - **Folded and sideways** shows two pages with one column, so the footer says "6 of 12" for 6–7. It's a rare posture and part of the parked question in `docs/UI-IDEAS.md`.
 

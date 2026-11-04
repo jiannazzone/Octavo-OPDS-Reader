@@ -10,7 +10,8 @@ import UIKit
 /// A swipe starts once the finger has moved about 10 pt, mostly sideways,
 /// before a press would select text, and not while text is selected (a
 /// finger moving a selection's handle). Off with Page Turn set to None,
-/// when foliate's paginator drags the page itself.
+/// when foliate's paginator drags the page itself, except on fixed-layout
+/// books, whose renderer doesn't.
 final class ReaderSwipeRecognizer: NSObject, UIGestureRecognizerDelegate {
     /// A press held longer than this before moving is selecting text.
     static let pressDuration: TimeInterval = 0.3

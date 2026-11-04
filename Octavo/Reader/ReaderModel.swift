@@ -307,7 +307,9 @@ final class ReaderModel {
     /// the book has opened.
     private func sendTurnMode() {
         let animated = pageTurn.isAnimated
-        swipes.isEnabled = animated
+        // Off with None, when foliate's paginator takes swipes itself. Its
+        // fixed-layout renderer has none, so those stay here.
+        swipes.isEnabled = animated || isFixedLayout
         guard phase == .open, animated != sentTurnMode else { return }
         sentTurnMode = animated
         call("return await window.octavo.setTurnMode(mode)", arguments: ["mode": ["animated": animated]])
@@ -546,7 +548,10 @@ final class ReaderModel {
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
             location = relocation.location
-            if !isRestoring {
+            // A repeat isn't a move (a fixed-layout page re-laid out reports
+            // itself for the footer): saving it would mark it unsent, with a
+            // new time that could beat another reader's newer place.
+            if !isRestoring, relocation.position(cfiShape) != previous?.position(cfiShape) {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.
                 if !pageTurn.isAnimated, foldBatch == nil, relocation.cfi != previous?.cfi { onPageTurned?() }
@@ -759,7 +764,12 @@ final class ReaderModel {
         guard let place = serverPlace, let cfi = place.position.cfi else { return }
         serverPlace = nil
         isJumpingToServer = true
-        goTo(cfi: cfi)
+        Task {
+            // It may not open (another edition's place), and the next turn is
+            // then this reader's own.
+            let went = try? await page.callJavaScript("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi]) as? Bool
+            if went != true { isJumpingToServer = false }
+        }
         // A fold or a text change since the offer re-laid out the page and
         // sent its place; the server's goes back.
         if pushedSinceOffer, let pusher { Task { await pusher.submit(place.position) } }
