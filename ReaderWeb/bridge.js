@@ -571,7 +571,16 @@ const layoutState = () => {
     return JSON.stringify([width, height, attributes])
 }
 
-const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)))
+// A page off screen draws no frames (its reader has closed), and a Swift call
+// that never ends keeps the reader's model and web process alive for good
+// (docs/notes/reader-release.md). So nothing waits long for one.
+const nextFrame = () => new Promise(resolve => {
+    const late = setTimeout(resolve, 1000)
+    requestAnimationFrame(() => {
+        clearTimeout(late)
+        setTimeout(resolve, 0)
+    })
+})
 
 // Waits until the paginator has stopped relocating for a few frames: after a
 // render it re-scrolls to its anchor, and again once the section's body has

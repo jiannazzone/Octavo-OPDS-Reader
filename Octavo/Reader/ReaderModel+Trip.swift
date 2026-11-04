@@ -42,7 +42,8 @@ extension ReaderModel {
     func endJump() async {
         await relocationsSettled(since: jumpStartCount)
         jumpsUnderWay -= 1
-        guard jumpsUnderWay == 0, var landed = trip ?? tripToBe else { return }
+        // Closed before it landed: the page never came, so there's no trip.
+        guard phase != .closed, jumpsUnderWay == 0, var landed = trip ?? tripToBe else { return }
         tripToBe = nil
         // With no answer from the page, a page that never moved hasn't left.
         let hasMoved = relocationCount != jumpStartCount
