@@ -1,6 +1,6 @@
 # The tour for a new install (step 17)
 
-Decisions 29 and 30 in `docs/design/direction.md`. Built 2026-11-03 on `iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947, iOS 27.1 simulator), driven with Hinge and real taps, plus the debug remote's `tour` command. Not yet tried on a real Duo. Screenshots are in `tour/screenshots/`, videos in `tour/videos/`.
+Decisions 29 and 30 in `docs/design/direction.md`. Built 2026-11-03 on `iPhone Duo` (8C35AF6E-5F3F-48D7-A283-AEE894511947, iOS 27.1 simulator), driven with Hinge and real taps, plus the debug remote's `tour` command. Adam tried a replay on his Duo the same day ("all good"); a true new install on a Duo is still untried, as that means deleting the app and its data. Screenshots are in `tour/screenshots/`, videos in `tour/videos/`.
 
 ## What it does
 
