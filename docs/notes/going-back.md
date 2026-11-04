@@ -31,8 +31,26 @@ Measured with a 12-page pre-paginated EPUB made locally. Their own fix is a sepa
 Tried in `ReaderProgressBar` as a temporary change, reverted, on real pages at 90% and 3%, folded and flat.
 
 - **`Slider(value:in:neutralValue:)` does it natively** (iOS 26): the fill runs from the neutral value to the knob, in either direction, on the glass. The book's screen can use the same slider without its knob, as the book-mode readout already does.
-- **A tick doesn't work on the scrubber.** `SliderTick` locks the knob onto its ticks: at page 876 the knob sat on the tick at 47.8%. UIKit's track configuration has `allowsTickValuesOnly`, defaulting to YES; SwiftUI's `Slider` doesn't take that setting. So there's no native mark for your place.
+- **A tick doesn't work on the scrubber.** `SliderTick` locks the knob onto its ticks: at page 876 the knob sat on the tick at 47.8%. So there's no native mark for your place.
 - Not yet seen: whether the knob slides home along the line when Back is tapped.
+
+## Chapters on the scrubber (decision 35)
+
+Temporary changes, all reverted, driven with real drags (`touch_path`) on 'Octavo Navigation Duo', folded.
+
+- **iOS's own detents are hard.** `UISlider.TrackConfiguration` draws dots under the track, but even with `allowsTickValuesOnly: false` every value the slider reported was a tick: 8 of 8 on Moby-Dick (35 ticks) and 4 of 4 on Standard Ebooks' Pride and Prejudice. SwiftUI's `Slider` has no such setting. With ticks, a page inside a chapter can't be reached.
+- **A soft catch on the plain slider works.** The knob stays with the finger: setting `value` during tracking doesn't make it lag, and the raw value kept moving 0.0034 per point. Letting go in a catch landed on that chapter's start.
+- **But it takes most of the track.** With 3 pt either side and dots at least 6 pt apart, Moby-Dick was caught for 37 samples of 44. The folded track travels 259 pt, so 38 chapters are 6.8 pt apart (88% caught), 69 are thinned to 7.5 pt (80%) and 12 are 21.6 pt (28%). 1 pt either side frees it, but that's about what a finger can hold.
+- **1 pt of scrubber is about 4 of Moby-Dick's 974 pages** folded (259 pt of travel), and 1.6 flat (604 pt).
+- **The chapter's name between two 44 pt buttons** has 208 pt folded and 189 pt half open. Share of Contents entries that fit folded: Dungeon Anarchist's Cookbook 97%, Trust 98%, Green City Wars 94%, Standard Ebooks' Pride and Prejudice 100%, Moby-Dick 73%, Gutenberg's Pride and Prejudice 57%. Beside the scrubber, with its 296 pt: 97%, 100%, 100%, 100%, 91%, 87%.
+- **Contents sizes:** Green City Wars 38 entries (two levels), The Dungeon Anarchist's Cookbook 47, Standard Ebooks' Pride and Prejudice 65, Trust 69 (three levels), Moby-Dick 145.
+
+## Notes in real books (decision 34)
+
+- **No test book has one:** no `noteref` or `doc-noteref`, and no superscript or numbered note link in the five samples, the bundled book, or Adam's three modern novels. Green City Wars' chapter headings do link back to its contents.
+- **Links today:** `detectTaps` leaves a tap on `a[href]` alone, foliate's `link` event goes to `onLink`, and foliate then calls `goTo`. That's where a note would be caught.
+- **foliate's `footnotes.js` isn't vendored** (`PINNED.md`). Reading a note from a parsed section, as `describePlace` does, runs no script.
+- **There's no standard:** other readers were reported to guess, or to show only a note's first paragraph.
 
 ## How it would be built
 

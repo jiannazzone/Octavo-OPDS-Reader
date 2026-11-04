@@ -51,6 +51,14 @@ Adam, while settling #8's start chip: "we definitely need a nicer empty state th
 - **Real page numbers.** The numbers are foliate's 1,500-character locations, so a page turn doesn't always change them. Counting real pages for the current layout means paginating the whole book after every fold and text change; the Contents panel (#18, "page numbers for the current layout") meets the same question.
 - **Footer on or off**, as a Customize setting, if anyone wants the page bare.
 
+## Scrubber and notes: ideas not chosen (2026-11-04)
+
+From decisions 34 and 35. Seen as pictures, none chosen:
+
+- **Skipping by a swipe up or down on the page**: no controls to bring up, but nothing shows it's there and it's easy to do by accident. It could be added to the chapter buttons later.
+- **Other ways to zoom the scrubber**, if holding still doesn't work out: slowing down (the slower your finger, the finer), dragging up off the bar, or a second line for the chapter (half open, the chapter line that's already there made draggable).
+- **A switch for pop-up notes in Customize**, if anyone would rather always jump. Go to Note covers it for now.
+
 ## The book-mode readout (Adam, 2026-11-03)
 
 Half open, the bar's right-hand piece shows the chapter's progress: pages left in the chapter over a line through it, and the book's page numbers (`ReaderBarReadout.chapter`). Adam wants it customizable later:

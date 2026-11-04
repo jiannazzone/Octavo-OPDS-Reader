@@ -275,6 +275,22 @@ Decided with pictures in the planning session (no Figma frames). Not built yet (
     - **With Search's bar:** unfolded and half open, Back under the left page and the bar under the right. Folded there's room for one, so Back waits until the search ends with ✕: stepping through matches is common, and a stack could cover the match.
     - **Fixed-layout books:** the same, going back by the saved CFI, not by fraction. They need their own fix first (`docs/notes/going-back.md`).
 
+34. **A footnote opens where you are, without leaving the page.** Not built yet.
+    - **Where:** open (flat or half open), a glass card on the other page from its mark, level with it, so the sentence you're reading stays in view (Adam, over a pop-up by the mark and over a panel like Contents). Folded, along the bottom above the footer, or at the top if the mark is down there.
+    - **What it holds:** the whole note, however many paragraphs, in your font, size and theme, with **Go to Note** and **✕** (Adam, over no ✕). A long note grows to the height of the page, then scrolls.
+    - **Closing:** ✕ or a tap anywhere else, which doesn't turn the page. A swipe closes it and turns.
+    - **It isn't a jump:** your place stays and there's no Back button. Go to Note is a jump, so it opens the note where it sits in the book, with "Back to page 876" (decision 33).
+    - **Which links:** the ones a book marks as notes, and unmarked ones that look like a note's mark, to be tuned on real books. Any other link is a jump. A tap near a tiny mark counts, so a near miss doesn't turn the page.
+    - **Still needed: a real book with notes.** None of the sample books, or the three real books Adam gave the covers session, has a single note link.
+
+35. **Chapter buttons beside the chapter's name.** Not built yet.
+    - **Where:** ⏮ and ⏭ either side of the chapter's name on the progress bar, so the scrubber keeps its full width (Adam, over beside the scrubber and over a swipe on the page). Half open, in the left piece. Normal-sized targets: Adam caught that being beside the name doesn't make them smaller. The bar stays up, so you can keep tapping.
+    - **⏮:** partway through a chapter, to its first page; on the first page, to the chapter before, as in a music player (Adam, over always the chapter before). **⏭:** the next chapter's first page.
+    - **A chapter** is any entry in the book's Contents, so a "Part Two" page counts. A button dims when there's nowhere to go, and neither shows for a book with no Contents.
+    - **Skipping is a jump:** "Back to page 878" appears (decision 33).
+    - **A tick you feel** as the scrubber passes each chapter (Adam). Only a real Duo can check it.
+    - **Being tried: how else the scrubber shows chapters.** Hard detents are out: they'd keep you from pages inside a chapter. A soft catch everywhere is out too, as it takes 80% or more of the track in a book of 38 chapters or more. Adam asked for a throwaway **hold still to zoom** to judge (`docs/notes/going-back.md`). Dots at chapters are undecided until then.
+
 ### Settings (approved 2026-10-31)
 
 24. **A lean Settings tab** (redone with Adam on 2026-11-02, under Settings in the library pass above; Settings is a button, not a tab):

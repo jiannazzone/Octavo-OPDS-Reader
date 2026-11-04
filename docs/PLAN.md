@@ -45,6 +45,8 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] The empty strip at the reader's left edge, unfolded (the mirror of the side column, about 84 pt, so the pages split on the hinge). Stays blank for now, with the door left open (Adam, 2026-11-03; decision 8). The ideas are parked in `docs/UI-IDEAS.md`.
 - Graphical glitches in Settings: unfolded, the left column grows or bounces in from the edge as it opens (Adam, 2026-11-03, on his Duo). Not looked into yet.
 - A way back after a jump or a scrub (Adam, 2026-11-03, on his Duo). The controls' ‹ already closes the book, so it's its own button. Decided 2026-11-04 (decision 33 in `docs/design/direction.md`), not built yet: "Back to page 312" with ✕ at the bottom of the left page, your place holding until you settle, and a trip that survives closing, shown by the progress line's fill (`docs/notes/going-back.md`).
+- Footnotes without leaving the page (Adam, 2026-11-04). Decided (decision 34), not built yet: a card on the facing page, or along the bottom folded, with Go to Note and ✕. Building it needs a real book with notes, as none of the test books has any.
+- Skipping by chapter (Adam, 2026-11-04). Decided (decision 35), not built yet: ⏮ and ⏭ beside the chapter's name, and a tick you feel as the scrubber passes a chapter. Dots and a zoom on the scrubber are still being tried.
 - Folded, it needs to be easier to dismiss the Customize pane (Adam, 2026-11-03, on his Duo). A tap on the screen is a small target there, and his opened the table of contents instead of closing the pane. Not looked into yet.
 
 ## What you'll see that isn't right yet
