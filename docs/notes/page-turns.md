@@ -99,7 +99,7 @@ The bridge first tracked swipes with touch events and posted their progress. It 
 ## 7. Follow-ups
 
 - **Set the speeds and the 100 ms wait on a real Duo**, and see the opening and closing there (decision 28 is provisional). Turning back waited 61–192 ms for its page here, forward 56–83 ms.
-- **Back lands on the screen the book was opened over**, so the closing plays only when that's the book's screen (pinned in `docs/PLAN.md`).
+- **Back lands on the screen the book was opened over**, so the closing plays only when that's the book's screen (Adam's decision, 2026-11-03).
 - **A layout change during a held swipe** (a text-size change can't happen mid-swipe, but a late `setLayout` could) would post the held relocation early. Not seen; worth a guard if it ever is.
 - **Opening and closing pictures leave out the page's footer**, and the controls vanish as the book closes.
 - Once, after many quick open/close cycles driven by the remote, Open did nothing until a relaunch. Not reproduced.
