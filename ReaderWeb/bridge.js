@@ -426,6 +426,28 @@ const collapseBlankPageBreaks = doc => {
 // measures the layer whole.
 let guardsLinks = true
 
+// What BOOK_STYLES can't say, since it depends on the book's own value. A
+// limit the book sets on a picture in points stays, but not past its box:
+// foliate keeps a limit that's already set when it sizes pictures, which it
+// does after this, and a percentage needs no help. A table box around a
+// picture keeps its width the same way: WebKit ignores `max-width` on a table.
+// A size this small fits any column, so it stays in points. A percentage can't
+// size a float or an inline-block around the picture, which would grow to the
+// column and push the text out from beside it. That leaves a limit of 0 to
+// foliate too, which takes it to mean none.
+const FITS_ANY_COLUMN = 200
+const limitPicturesToTheirBoxes = doc => {
+    const limit = (element, property, value) => {
+        if (value.endsWith('px') && parseFloat(value) > FITS_ANY_COLUMN) element.style.setProperty(property, `min(${value}, 100%)`, 'important')
+    }
+    const style = element => doc.defaultView.getComputedStyle(element)
+    for (const picture of doc.body?.querySelectorAll('img, svg, video') ?? []) limit(picture, 'max-inline-size', style(picture).maxInlineSize)
+    for (const box of doc.body?.querySelectorAll(':has(img, svg, video)') ?? []) {
+        const { display, inlineSize } = style(box)
+        if (display === 'table' || display === 'inline-table') limit(box, 'inline-size', inlineSize)
+    }
+}
+
 const onSectionLoad = ({ detail: { doc } }) => {
     // A click on a link foliate doesn't intercept (an SVG or MathML link,
     // an image map's area) goes nowhere: the hardening layer already took
@@ -442,6 +464,8 @@ const onSectionLoad = ({ detail: { doc } }) => {
         }
     }, true)
     collapseBlankPageBreaks(doc)
+    // A fixed-layout page places its pictures itself.
+    if (!view.isFixedLayout) limitPicturesToTheirBoxes(doc)
     detectTaps(doc, e => {
         const frame = doc.defaultView?.frameElement
         if (!frame) return
@@ -466,7 +490,10 @@ muteTouches(window)
 // off it. After the book's own: preformatted text wraps. Project Gutenberg
 // sets verse in <pre>, and a line that doesn't wrap runs out of its column,
 // over the spine and onto the next page (and the page before's overflow
-// shows at this one's edge).
+// shows at this one's edge). And a box around a picture stays inside its
+// column: foliate limits a picture to 100% of its box, and Project Gutenberg's
+// boxes are as wide as the printed picture (`docs/notes/reader-pictures.md`).
+// Only boxes around pictures, so pages of text lay out as the book says.
 const BOOK_STYLES = [`
 p, li, blockquote, dd {
     -webkit-hyphens: auto;
@@ -481,6 +508,9 @@ html {
 `, `
 pre {
     white-space: pre-wrap !important;
+}
+body :has(img, svg, video) {
+    max-inline-size: -webkit-fill-available !important;
 }
 `]
 
