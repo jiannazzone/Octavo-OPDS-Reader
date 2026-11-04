@@ -82,8 +82,6 @@ jobs:
           path: ${{ env.DERIVED_DATA }}/CompilationCache.noindex
           key: ${{ steps.cache.outputs.prefix }}${{ github.sha }}
           restore-keys: ${{ steps.cache.outputs.prefix }}
-      # Boots while the build runs, so the tests don't have to wait for it.
-      - run: xcrun simctl boot "iPhone Duo"
       - name: Build
         run: |
           xcodebuild build-for-testing -project Octavo.xcodeproj -scheme Octavo \
@@ -96,6 +94,10 @@ jobs:
         with:
           path: ${{ env.DERIVED_DATA }}/CompilationCache.noindex
           key: ${{ steps.cache.outputs.prefix }}${{ github.sha }}
+      # After the build, so the two don't compete for the runner. bootstatus waits
+      # for the boot to finish, so its time shows up as this step's.
+      - name: Boot simulator
+        run: xcrun simctl bootstatus "iPhone Duo" -b
       - name: Test
         run: |
           xcodebuild test-without-building -project Octavo.xcodeproj -scheme Octavo \
