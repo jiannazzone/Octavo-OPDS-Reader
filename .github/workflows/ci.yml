@@ -1,0 +1,125 @@
+# Tests on every pull request (#19; docs/notes/ci.md).
+# "CI passed" is the one check for the "Protect main" ruleset to require, because
+# a required check that never runs would block a docs-only pull request for good.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.check.outputs.code }}
+    steps:
+      # A pull request checks out its merge commit, whose first parent is the base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      # Only exact paths count as docs, because tests read other files, such as
+      # THIRD-PARTY-NOTICES.md. --no-renames lists both ends of a move, so moving
+      # code into docs/ still runs the tests. If this step fails, so does CI passed.
+      - id: check
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          code=true
+          if [ "$EVENT" = pull_request ]; then
+            files=$(git diff --no-renames --name-only HEAD^1 HEAD)
+            # The prefix stops a file name being read as a workflow command.
+            printf '%s\n' "$files" | sed 's/^/changed: /'
+            if ! printf '%s\n' "$files" | grep -qvE '^(docs/|README\.md$|CLAUDE\.md$)'; then
+              code=false
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  kit:
+    name: OctavoKit tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - working-directory: Packages/OctavoKit
+        run: swift test
+
+  app:
+    name: App tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      DESTINATION: platform=iOS Simulator,name=iPhone Duo,OS=27.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The key starts again each month, so the cache can't grow without limit.
+      - id: cache
+        run: |
+          xcode=$(xcodebuild -version | awk 'END { print $3 }')
+          echo "prefix=compilation-cache-$xcode-$(date -u +%Y-%m)-" >> "$GITHUB_OUTPUT"
+          echo "DERIVED_DATA=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DERIVED_DATA }}/CompilationCache.noindex
+          key: ${{ steps.cache.outputs.prefix }}${{ github.sha }}
+          restore-keys: ${{ steps.cache.outputs.prefix }}
+      # Boots while the build runs, so the tests don't have to wait for it.
+      - run: xcrun simctl boot "iPhone Duo"
+      - name: Build
+        run: |
+          xcodebuild build-for-testing -project Octavo.xcodeproj -scheme Octavo \
+            -destination "$DESTINATION" -derivedDataPath "$DERIVED_DATA" \
+            COMPILATION_CACHE_ENABLE_CACHING=YES \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
+      # Only main saves, so a pull request can't change what later builds reuse.
+      - if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.DERIVED_DATA }}/CompilationCache.noindex
+          key: ${{ steps.cache.outputs.prefix }}${{ github.sha }}
+      - name: Test
+        run: |
+          xcodebuild test-without-building -project Octavo.xcodeproj -scheme Octavo \
+            -destination "$DESTINATION" -derivedDataPath "$DERIVED_DATA" \
+            -parallel-testing-enabled NO -collect-test-diagnostics never
+
+  passed:
+    name: CI passed
+    needs: [changes, kit, app]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          KIT: ${{ needs.kit.result }}
+          APP: ${{ needs.app.result }}
+        run: |
+          echo "changes=$CHANGES code=$CODE kit=$KIT app=$APP"
+          [ "$CHANGES" = success ] || exit 1
+          if [ "$CODE" != false ]; then
+            [ "$KIT" = success ] && [ "$APP" = success ] || exit 1
+          fi
