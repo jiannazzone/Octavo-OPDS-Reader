@@ -46,9 +46,11 @@ Temporary changes, all reverted, driven with real drags (`touch_path`) on 'Octav
 
 ### Hold still to zoom
 
-A test build, on 'Octavo Navigation Duo' with real drags and on Adam's Duo, not yet the real thing.
+Built in `ReaderScrubber.swift` (the slider) and `ReaderScrubberLine.swift` (the sums, `ReaderScrubberLineTests`). Checked on 'Octavo Navigation Duo' with real drags, folded, flat and half open, light and Night (`going-back/videos/scrubber-half-open.mp4`). A test build went on Adam's Duo; the ticks can only be felt there.
 
 - **It's the system's `UISlider`, moving freely, with its range narrowed.** After a 0.35 s pause, `minimumValue` and `maximumValue` animate over 0.22 s to a window around the knob, so the knob stays under the finger. Tracking carries on through the change. SwiftUI's `Slider` isn't used because the dots need `thumbRect` to line up.
+- **The slider eases toward the finger,** and keeps sending `valueChanged` for a moment after it lifts. Those came after the release and left a stale value that the next press went to, so `changed` ignores everything once tracking ends.
+- **Letting go on a bar** goes by the contents entry's href, which lands on the heading: Moby-Dick's Chapter 60 from a catch at 50.2%. `goToFraction` of the bar's own fraction can land a page or two on, as a fraction is only placed by characters until its section has been laid out.
 - **Measured on Moby-Dick:** folded the window is about 33 pages, so 60 pt of finger moved about 7 pages. Unfolded it's about 75. Pages stepped one at a time (231 to 237, the chapter's name changing on the way), a catch held over about 3 pt either side, and letting go landed on the page: 49.7% to page 493 (the first run), then 59.3% to Chapter 75.
 - **Quick moves:** speed has to be read over about 120 ms and at least 12 pt, as touches arrive in bunches and a single pair read as a quick move. Zooming out while the finger is down is at once, so the knob follows the finger.
 - **To check when building:**

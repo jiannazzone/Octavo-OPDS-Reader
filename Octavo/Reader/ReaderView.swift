@@ -568,12 +568,19 @@ private struct ReaderProgressBar: View {
             Text(place.chapter ?? model.title ?? " ")
                 .font(.footnote.weight(.semibold))
                 .lineLimit(1)
-            Slider(value: fraction, in: 0...1) { editing in
-                guard !editing, let scrub else { return }
+            ReaderScrubber(value: fraction, chapters: model.toc.compactMap(\.fraction), total: model.location?.total) { chapter in
+                guard let scrub else { return }
                 relocationsAtRelease = model.relocationCount
-                model.goTo(fraction: scrub)
+                if let chapter, let href = model.toc.first(where: { $0.fraction == chapter })?.href {
+                    model.goTo(target: href)
+                } else {
+                    model.goTo(fraction: scrub)
+                }
+            } cancelled: {
+                scrub = nil
+                relocationsAtRelease = nil
             }
-            .controlSize(.mini)
+            .frame(height: 30)
             .accessibilityLabel("Position in Book")
             .accessibilityValue(place.barLine(spread: false))
         }
