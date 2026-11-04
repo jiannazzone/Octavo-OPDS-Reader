@@ -159,6 +159,19 @@ final class ReaderModel {
     @ObservationIgnored private var isCatchingUp = false
     /// A chapter button's tap is finding its place (`skipChapter`).
     @ObservationIgnored var isSkippingChapter = false
+
+    // Going back after a jump (decision 33, `ReaderModel+Trip`).
+    /// Away from your place. It stays saved as it was until you settle.
+    var trip: ReaderTrip?
+    /// A jump under way, until it's landed somewhere other than your place.
+    @ObservationIgnored var tripToBe: ReaderTrip?
+    @ObservationIgnored var jumpsUnderWay = 0
+    /// How many relocations there had been when the jump started.
+    @ObservationIgnored var jumpStartCount = 0
+    /// Back is under way: the page it lands on is your place, already saved.
+    @ObservationIgnored var isGoingBack = false
+    /// Where the page was at the last turn, to tell which way a turn went.
+    @ObservationIgnored var tripFraction = 0.0
     @ObservationIgnored let cfiShape: ReaderMessage.CFIShape
     @ObservationIgnored private var pusher: DebouncedProgressPusher<ContinuousClock>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -556,14 +569,14 @@ final class ReaderModel {
             if !isRestoring, relocation.position(cfiShape) != previous?.position(cfiShape) {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.
-                if !pageTurn.isAnimated, foldBatch == nil, relocation.cfi != previous?.cfi { onPageTurned?() }
+                if !pageTurn.isAnimated, foldBatch == nil, relocation.cfi != previous?.cfi { pageTurned() }
                 moved(to: relocation)
             }
             // A turn's new page, measured again since its pictures came.
             if turnRun?.drawn == true, turn?.newPlace != nil {
                 turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.shownFraction)
             }
-            if serverPlace != nil { Task { await serverPlaceMayBeLeft() } }
+            if serverPlace != nil, trip == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
             onControlsTap?(zone)
@@ -670,6 +683,12 @@ final class ReaderModel {
             return
         }
         let position = relocation.position(cfiShape)
+        // Your place stays as it is until you settle.
+        if jumpsUnderWay > 0 || isGoingBack { return }
+        if trip != nil {
+            tripMoved(to: position)
+            return
+        }
         if isJumpingToServer {
             // As when opening: the server has this place, and pushing the
             // page's start would move it back a little.
@@ -688,6 +707,33 @@ final class ReaderModel {
             if serverPlace != nil { pushedSinceOffer = true }
             Task { await pusher.submit(position) }
         }
+    }
+
+    /// Where a jump leaves from: your saved place, the last real page if
+    /// the page showing is blank.
+    var savedPlace: ReadingPosition? {
+        store.position(forBook: book.id) ?? position
+    }
+
+    /// ✕, or reading on: the page you're on is your place now, and syncs.
+    func settleTrip() {
+        guard trip != nil else { return }
+        trip = nil
+        guard let position, relocation?.blankPage != true else { return }
+        hasMoved = true
+        save(position, needsPush: sync != nil)
+        if let pusher {
+            if serverPlace != nil { pushedSinceOffer = true }
+            Task { await pusher.submit(position) }
+        }
+    }
+
+    /// Back has landed: this is your place, saved and sent as it was, so
+    /// repeats of it aren't a move.
+    func wentBack() {
+        isGoingBack = false
+        openedCFI = position?.cfi
+        hasMoved = false
     }
 
     private func save(_ position: ReadingPosition, needsPush: Bool, syncedAt: Date? = nil) {

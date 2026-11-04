@@ -44,6 +44,8 @@ struct ReaderTurn: Equatable {
     /// Once foliate has drawn the new page.
     var new: Pictures?
     var newPlace: ReaderPlace?
+    /// The way back sits in the chapter's place in the footer (decision 33).
+    var hidesChapter = false
     /// Only showing that the page turns (`ReaderModel.playTurnHint`): it
     /// stays paper-coloured as it lifts, and casts a shadow, which is all
     /// there is to see of a blank page.
@@ -165,7 +167,7 @@ struct ReaderTurnLeaf: View, Animatable {
     private var fade: some View {
         ZStack(alignment: .topLeading) {
             if let newPlace = turn.newPlace {
-                ReaderFooterLines(place: newPlace, layout: turn.layout, geometry: turn.geometry)
+                ReaderFooterLines(place: newPlace, layout: turn.layout, geometry: turn.geometry, hidesChapter: turn.hidesChapter)
                     .opacity(progress)
             }
             ReaderTurnPage(turn: turn, picture: turn.old.whole, place: turn.oldPlace)
@@ -262,7 +264,7 @@ private struct ReaderTurnUncovered: View {
                     .transition(.opacity)
             }
             if let place = turn.newPlace {
-                ReaderFooterLines(place: place, layout: turn.layout, geometry: turn.geometry)
+                ReaderFooterLines(place: place, layout: turn.layout, geometry: turn.geometry, hidesChapter: turn.hidesChapter)
             }
         }
         .frame(width: turn.size.width, height: turn.size.height, alignment: .topLeading)
@@ -284,7 +286,7 @@ struct ReaderTurnPage: View {
                     .frame(width: picture.frame.width, height: picture.frame.height)
                     .offset(x: picture.frame.minX, y: picture.frame.minY)
             }
-            ReaderFooterLines(place: place, layout: turn.layout, geometry: turn.geometry)
+            ReaderFooterLines(place: place, layout: turn.layout, geometry: turn.geometry, hidesChapter: turn.hidesChapter)
         }
         .frame(width: turn.size.width, height: turn.size.height, alignment: .topLeading)
     }

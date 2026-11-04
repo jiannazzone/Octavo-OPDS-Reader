@@ -42,16 +42,16 @@ extension ReaderModel {
         ReaderPlace(fraction: fraction, toc: [], total: total).first
     }
 
-    func goTo(_ row: ReaderContentsRow) {
+    func jump(to row: ReaderContentsRow) {
         if let href = row.href {
-            goTo(target: href)
+            jump(to: href)
         } else if let fraction = row.fraction {
-            goTo(fraction: fraction)
+            jump(toFraction: fraction)
         }
     }
 
-    func goTo(_ bookmark: LocalBookmark) {
-        goTo(target: bookmark.cfi)
+    func jump(to bookmark: LocalBookmark) {
+        jump(to: bookmark.cfi)
     }
 
     // MARK: Chapter buttons
@@ -69,12 +69,14 @@ extension ReaderModel {
     func skipChapter(_ direction: ReaderChapterSkip.Direction) {
         guard phase == .open, !isSkippingChapter else { return }
         isSkippingChapter = true
+        beginJump()
         Task {
-            defer { isSkippingChapter = false }
             let rows = contentsRows
             for index in chapterSkip.targets(direction) where rows.indices.contains(index) {
-                if await goToAndSeeIfThePageMoved(rows[index]) { return }
+                if await goToAndSeeIfThePageMoved(rows[index]) { break }
             }
+            isSkippingChapter = false
+            await endJump()
         }
     }
 
@@ -88,16 +90,7 @@ extension ReaderModel {
         } else {
             return false
         }
-        // The relocations come after the call does, and a page settling on a
-        // spread can take a moment and report more than once.
-        var last = count
-        var quiet = 0
-        for _ in 0..<25 {
-            try? await Task.sleep(for: .milliseconds(20))
-            quiet = relocationCount == last ? quiet + 1 : 0
-            last = relocationCount
-            if last != count, quiet >= 3 { break }
-        }
+        await relocationsSettled(since: count)
         return (relocation?.startCFI ?? relocation?.cfi) != before
     }
 
@@ -154,7 +147,7 @@ extension ReaderModel {
     func showMatch(_ index: Int) {
         guard search.matches.indices.contains(index) else { return }
         search.show(index)
-        call("return await window.octavo.showMatch(cfi)", arguments: ["cfi": search.matches[index].cfi])
+        runJump("return await window.octavo.showMatch(cfi)", arguments: ["cfi": search.matches[index].cfi])
     }
 
     /// ✕ on the step bar: the highlight goes and the search with it.

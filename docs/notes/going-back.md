@@ -74,7 +74,25 @@ Built in `ReaderScrubber.swift` (the slider) and `ReaderScrubberLine.swift` (the
 - **foliate's `footnotes.js` isn't vendored** (`PINNED.md`). Reading a note from a parsed section, as `describePlace` does, runs no script.
 - **There's no standard:** other readers were reported to guess, or to show only a note's first paragraph.
 
-## How it would be built
+## The way back
+
+Built so far: your place holds, "Back to page N", ✕ and reading on (`ReaderTrip`, `ReaderModel+Trip`, `ReaderTripTests`). Video: `going-back/videos/way-back-folded.mp4` (about twice real speed). Still to come: trips across closing, the fill, BookOrbit's capsule and links in the book.
+
+Measured on 'Octavo Navigation Duo' with real taps and drags, Moby-Dick (file 3) on the local BookOrbit, the server at 47.8%:
+
+| What | Saved on the iPhone | On BookOrbit |
+|---|---|---|
+| Scrub to 78% | Still Chapter 55, 47.7% | Still 47.8% after 3.5 s |
+| One turn, then Back | Back on the same page | Untouched, same timestamp |
+| ⏭ to Chapter 56, then ✕ | Chapter 56, 48.3% | 48.3% |
+| ⏭ to Chapter 57, then 4 turns | Still Chapter 56 | Still 48.3% |
+| The 5th turn | Chapter 58, 49.3%, the button gone | 49.3% |
+
+- **Jumps go through `jump`, not `goTo`,** so the debug remote's `goto`, which the check tools rely on to save and push, still does.
+- **A jump starts with `beginJump` and ends with `endJump`,** which waits for the relocations to go quiet and asks `onPage` whether your place is showing. If it is, there's no trip, so a tiny scrub shows nothing.
+- **Which way a turn went** comes from the shown fraction before and after, so it doesn't depend on a book's direction (no right-to-left book has been run).
+
+## How the rest would be built
 
 A plan, for when Adam says to build it.
 
