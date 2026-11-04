@@ -74,7 +74,7 @@ Octavo has no accent colour of its own: no `AccentColor` asset and no tint set a
 
 Every cover filled its frame and was cropped to it (`CoverImage`, `BookCoverArt`, and the cover that swings open in decision 28): 2:3 cells on the shelves and grids, the whole screen folded, the left page unfolded. A cover of another shape, such as a square one, loses its edges, which can cut off a title or an author's name. A true 2:3 cover loses about 10 pt top and bottom on the folded screen (466×678 pt) and 7 pt on the left page (455.5×669 pt).
 
-Decided 2026-11-04: every cover fits its frame on a blurred copy of itself, on a book's screen, Home and the shelves and grids, and the opening motion follows (decision 32 in `docs/design/direction.md`). Not built yet.
+Decided 2026-11-04: every cover fits its frame on a blurred copy of itself, on a book's screen, Home and the shelves and grids, and the opening motion follows (decision 32 in `docs/design/direction.md`). Built the same day.
 
 ## The reader's left strip (Adam, 2026-11-03)
 

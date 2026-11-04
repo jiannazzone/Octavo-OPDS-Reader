@@ -1,5 +1,6 @@
-import CoreGraphics
+import SwiftUI
 import Testing
+import UIKit
 @testable import Octavo
 
 /// When a cover fills its frame instead of fitting on its blur (decision 32).
@@ -36,5 +37,37 @@ struct FittedCoverTests {
 
     @Test func anImageWithoutASizeFills() {
         #expect(FittedCover.fills(cover: .zero, frame: foldedScreen))
+    }
+
+    /// The view, not just the rule. A solid red cover: its strips show the
+    /// darkened blur, so the top of the frame is darker than the middle.
+    @MainActor @Test func aSquareCoverSitsInsideItsFrame() throws {
+        let cover = try draw(solidRed: CGSize(width: 100, height: 100))
+        #expect(try red(cover, x: 50, y: 5) < red(cover, x: 50, y: 75))
+    }
+
+    @MainActor @Test func aCoverThatFillsHasNoStrips() throws {
+        let cover = try draw(solidRed: CGSize(width: 100, height: 150))
+        #expect(try red(cover, x: 50, y: 5) == red(cover, x: 50, y: 75))
+    }
+
+    /// `coverSize` drawn by `FittedCover` in a 100×150 frame.
+    @MainActor private func draw(solidRed coverSize: CGSize) throws -> CGImage {
+        let cover = UIGraphicsImageRenderer(size: coverSize).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(origin: .zero, size: coverSize))
+        }
+        let renderer = ImageRenderer(content: FittedCover(image: cover).frame(width: 100, height: 150).clipped())
+        return try #require(renderer.cgImage)
+    }
+
+    private func red(_ image: CGImage, x: Int, y: Int) throws -> UInt8 {
+        var pixel: [UInt8] = [0, 0, 0, 0]
+        let context = try #require(CGContext(
+            data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        context.draw(image, in: CGRect(x: -x, y: y + 1 - image.height, width: image.width, height: image.height))
+        return pixel[0]
     }
 }
