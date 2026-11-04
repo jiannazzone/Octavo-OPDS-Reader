@@ -101,14 +101,20 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         /// `bridge.js` `isBlankPage`). Not worth saving or syncing.
         var blankPage: Bool?
         /// Progress through the whole book. foliate reports 0...1; `nil` if it
-        /// couldn't compute one (JSON has no NaN).
+        /// couldn't compute one (JSON has no NaN). What's saved and synced.
         var fraction: Double?
+        /// How far through the book's own pages, on a fixed-layout book, where
+        /// `fraction` counts bytes (`bridge.js` `fixedPlace`).
+        var pageFraction: Double?
         var tocLabel: String?
         /// The contents entry the page is in (`TOCEntry.href`).
         var tocHref: String?
         var sectionIndex: Int?
         var sectionCount: Int?
         var location: Location?
+
+        /// Where the page is as the footer, the bar and the panels show it.
+        var shownFraction: Double { pageFraction ?? fraction ?? 0 }
 
         /// The position with the page's range CFI.
         var position: ReadingPosition { position(.range) }

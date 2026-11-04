@@ -108,6 +108,60 @@ const isBlankPage = range => {
     return Boolean(container && container === container.ownerDocument?.body)
 }
 
+// Where a fixed-layout page sits in the book, to save and sync. foliate
+// reports the section's end, which is the next section's start: going back by
+// it lands a page late, and BookOrbit's web reader only goes by this number on
+// these books (`docs/notes/fixed-layout.md`). So it's a point just inside the
+// section, past what its percentage's rounding can move. The last page is 1.
+const FIXED_PAGE_MARGIN = 1e-5
+const fixedPageFraction = detail => {
+    const index = detail.section?.current
+    const fractions = view.getSectionFractions()
+    const [start, end] = [fractions[index], fractions[index + 1]]
+    if (start === undefined || end === undefined) return finiteOrNull(detail.fraction)
+    if (index === fractions.length - 2) return 1
+    return finiteOrNull(end - Math.min((end - start) / 2, FIXED_PAGE_MARGIN))
+}
+
+// The sections on screen in fixed layout: the spread's pages, or just the one
+// while one shows (foliate's own rule; `applyAttributes` sets `spread`).
+const fixedPagesShown = () => {
+    const { renderer, book } = view
+    const current = renderer.index
+    const { width, height } = renderer.getBoundingClientRect()
+    if (renderer.spread !== 'both' && renderer.spread !== 'portrait' && height > width) return [current]
+    const spread = renderer.getSpreadOf(book.sections[current])?.index
+    return [current - 1, current, current + 1]
+        .filter(index => book.sections[index] && renderer.getSpreadOf(book.sections[index])?.index === spread)
+}
+
+// A fixed-layout page's relocation. For the footer, the bar and the panels:
+// the book's own pages, as foliate's locations count bytes, with the place at
+// the end of the last page on screen, like a reflowing page's. To save and
+// sync: foliate's page in the spread, except that a spread holding the book's
+// last page has no further turn, so reading it is finishing the book, whichever
+// side foliate is on.
+const fixedPlace = detail => {
+    const shown = fixedPagesShown()
+    const total = view.book.sections.length
+    const last = shown.at(-1)
+    return {
+        ...(last === total - 1 ? { cfi: view.getCFI(last), fraction: 1 } : { fraction: fixedPageFraction(detail) }),
+        location: { current: shown[0], next: last, total },
+        pageFraction: (last + 1) / total,
+    }
+}
+
+// Where each section starts, for those same places. On fixed layout it's a
+// hair inside the page, so a page's place (its end) falls before the next
+// page's start.
+const FIXED_PAGE_START = 1e-7
+const sectionFractions = () => {
+    if (!view.isFixedLayout) return view.getSectionFractions()
+    const total = view.book.sections.length
+    return Array.from({ length: total + 1 }, (_, index) => index / total + FIXED_PAGE_START)
+}
+
 // While a fold is held (see `hold`), relocations are kept back and only the
 // last one is posted once the new layout has settled.
 let held = null
@@ -121,7 +175,6 @@ const onRelocate = ({ detail }) => {
     relocations++
     const message = {
         cfi: detail.cfi ?? null,
-        startCFI: startOf(detail.cfi),
         blankPage: isBlankPage(detail.range),
         fraction: finiteOrNull(detail.fraction),
         tocLabel: detail.tocItem?.label?.trim() || null,
@@ -135,7 +188,9 @@ const onRelocate = ({ detail }) => {
                 total: finiteOrNull(detail.location.total),
             }
             : null,
+        ...(view.isFixedLayout ? fixedPlace(detail) : {}),
     }
+    message.startCFI = startOf(message.cfi)
     for (const watch of relocationWatchers) watch(detail, message)
     if (held) held.relocation = message
     else post('relocate', message)
@@ -364,8 +419,9 @@ const collapseBlankPageBreaks = doc => {
 }
 
 // Section documents live in iframes that are wider than the screen (one
-// column per page) and scrolled by the paginator, so the tap is converted to
-// the top window's coordinates before deciding which side it was on.
+// column per page) and scrolled by the paginator, or scaled to fit (fixed
+// layout), so the tap is converted to the top window's coordinates before
+// deciding which side it was on.
 // Part of the hardening layer (`open`'s `harden`), so the DEBUG switch
 // measures the layer whole.
 let guardsLinks = true
@@ -412,7 +468,9 @@ const onSectionLoad = ({ detail: { doc } }) => {
     if (!view.isFixedLayout) limitPicturesToTheirBoxes(doc)
     detectTaps(doc, e => {
         const frame = doc.defaultView?.frameElement
-        if (frame) tap(frame.getBoundingClientRect().left + e.clientX)
+        if (!frame) return
+        const box = frame.getBoundingClientRect()
+        tap(box.left + e.clientX * (view?.isFixedLayout && frame.offsetWidth ? box.width / frame.offsetWidth : 1))
     })
     listenForTurns(doc)
     muteTouches(doc)
@@ -460,7 +518,8 @@ body :has(img, svg, video) {
 // goes after the book's own, and the colour of the page around the text.
 let appearance = { css: '', background: '' }
 const applyAppearance = () => {
-    view?.renderer.setStyles([BOOK_STYLES[0], BOOK_STYLES[1] + appearance.css])
+    // Fixed layout has no such thing: its pages are as the book drew them.
+    view?.renderer.setStyles?.([BOOK_STYLES[0], BOOK_STYLES[1] + appearance.css])
     document.documentElement.style.background = appearance.background
 }
 
@@ -489,6 +548,13 @@ const applyAttributes = () => {
     set('max-column-count-portrait', layout?.columns)
     set('gap', layout?.gapPercent === null || layout?.gapPercent === undefined ? null : `${layout.gapPercent}%`)
     set('max-inline-size', layout?.maxInlineSize === null || layout?.maxInlineSize === undefined ? null : `${layout.maxInlineSize}px`)
+    // Fixed layout takes its page count from the view's shape and the book's
+    // `rendition:spread`, and the hinge decides here: `landscape` is one page
+    // in a portrait view, `both` is two in any. foliate reads `spread` on each
+    // render. Folded and sideways still gets two, as the shape is landscape.
+    if (view.isFixedLayout) {
+        renderer.spread = layout?.columns === 1 ? 'landscape' : layout?.columns === 2 ? 'both' : view.book.rendition?.spread
+    }
 }
 
 // The paginator's attributes and size, to tell whether anything changed.
@@ -535,8 +601,12 @@ const applyLayout = async () => {
     }
     const changed = layoutState() !== before
     // A changed column count doesn't always resize anything, so the render
-    // is explicit. Re-rendering keeps the paginator's anchor.
-    if (changed) renderer.render()
+    // is explicit. Re-rendering keeps the paginator's anchor. Fixed layout has
+    // no `render`; setting its zoom (to what it's fitting already) does it.
+    if (changed) {
+        if (view.isFixedLayout) renderer.setAttribute('zoom', 'fit-page')
+        else renderer.render()
+    }
     return changed
 }
 
@@ -560,6 +630,9 @@ const setLayout = async newLayout => {
     const ending = held
     const rendered = await applyLayout()
     if (rendered) await settle()
+    // Fixed layout reports nothing when it re-lays out, and the pages on
+    // screen may have changed.
+    if (rendered && view.isFixedLayout && view.lastLocation) onRelocate({ detail: view.lastLocation })
     // Held again meanwhile (folded back): the next `setLayout` ends it.
     if (held !== ending) return rendered
     const pending = held?.relocation
@@ -601,7 +674,7 @@ const turnOnce = async (side, hold) => {
     const section = v.lastLocation?.section?.current ?? null
     if (hold) {
         held = { relocation: held?.relocation ?? null }
-        if (turnHeld) turnHeld.held = held
+        if (turnHeld) Object.assign(turnHeld, { held, page: r.index })
     }
     let relocation = null
     let watch
@@ -639,7 +712,9 @@ const endTurn = async keep => {
     if (!keep && moved) {
         await turnQueue
         const back = holding.side === 'left' ? 'right' : 'left'
-        await (back === 'left' ? view?.goLeft() : view?.goRight())
+        // On fixed layout, turning back lands on the spread's other side.
+        if (view?.isFixedLayout) await view.goTo(holding.page)
+        else await (back === 'left' ? view?.goLeft() : view?.goRight())
         await settle()
     }
     if (holding.held && held === holding.held) {
@@ -715,6 +790,10 @@ const layoutReport = () => {
 const locate = cfi => {
     const current = requireView().lastLocation?.cfi
     if (!current || !cfi) return null
+    if (view.isFixedLayout) {
+        const contains = onPage([cfi])[0]
+        return { contains, afterStart: contains, beforeEnd: contains }
+    }
     const point = CFI.collapse(cfi)
     const afterStart = CFI.compare(CFI.collapse(current), point) <= 0
     const beforeEnd = CFI.compare(point, CFI.collapse(current, true)) <= 0
@@ -739,7 +818,7 @@ const anchorToPage = async () => {
 // progress bar, and its href and depth for the Contents panel. Entries whose
 // target doesn't resolve are left out.
 const tocFractions = () => {
-    const fractions = view.getSectionFractions?.() ?? []
+    const fractions = sectionFractions()
     const entries = []
     const walk = (items, depth) => {
         for (const item of items ?? []) {
@@ -803,7 +882,7 @@ const characterFraction = (doc, range) => {
 
 // A section's place in the book: its start, plus `within` of its share.
 const bookFraction = (index, within) => {
-    const fractions = view.getSectionFractions()
+    const fractions = sectionFractions()
     const start = fractions[index] ?? 0
     const end = fractions[index + 1] ?? 1
     return finiteOrNull(Math.min(Math.max(start + within * (end - start), 0), 1))
@@ -888,6 +967,18 @@ const onPage = cfis => {
     const current = requireView().lastLocation?.cfi
     const list = Array.isArray(cfis) ? cfis : []
     if (!current) return list.map(() => false)
+    // A fixed-layout page's CFI names only its section, so it has no range to
+    // fall in.
+    if (view.isFixedLayout) {
+        const shown = fixedPagesShown()
+        return list.map(cfi => {
+            try {
+                return shown.includes(view.resolveCFI(String(cfi)).index)
+            } catch {
+                return false
+            }
+        })
+    }
     const start = CFI.collapse(current)
     const end = CFI.collapse(current, true)
     return list.map(cfi => {
@@ -909,14 +1000,15 @@ const describePlace = async cfi => {
     const { index, anchor } = v.resolveCFI(String(cfi))
     const loaded = loadedDoc(index)
     const doc = loaded ?? await v.book.sections[index].createDocument()
-    const range = toRange(doc, anchor(doc))
+    // A fixed-layout page's CFI names only its section: the whole page.
+    const range = toRange(doc, v.isFixedLayout ? doc.body ?? doc.documentElement : anchor(doc))
     const within = (loaded ? layoutFraction(range) : null) ?? characterFraction(doc, range)
     const body = doc.body ?? doc.documentElement
     const after = doc.createRange()
     after.setStart(range.startContainer, range.startOffset)
     after.setEnd(body, body.childNodes.length)
     const excerpt = after.toString().replace(/\s+/g, ' ').trim().slice(0, 160)
-    const tocItem = await v.getTOCItemOf(String(cfi))
+    const tocItem = v.isFixedLayout ? v.getProgressOf(index)?.tocItem : await v.getTOCItemOf(String(cfi))
     return {
         fraction: bookFraction(index, within),
         chapter: plainText(tocItem?.label)?.trim() || null,
@@ -1179,7 +1271,9 @@ const showPoint = async cfi => {
 }
 const goToPoint = async target => {
     const done = await view.goTo(target)
-    if (done && isCFI(target) && !view.isFixedLayout) await showPoint(target)
+    // Fixed layout says nothing when the book has no such section.
+    if (view.isFixedLayout) return view.book.sections[done?.index] ? done : undefined
+    if (done && isCFI(target)) await showPoint(target)
     return done
 }
 
@@ -1194,16 +1288,19 @@ const onLink = e => {
     post('externalLink', { href: e.detail.href })
 }
 
-// Try the CFI first, then the fraction, then the start of the book.
-// Fixed-layout books go by fraction first, like BookOrbit does.
+// Try the CFI first, then the fraction, then the start of the book. A
+// fixed-layout page's CFI names its section, so it's exact there too, whatever
+// BookOrbit's web reader makes of it (`docs/notes/fixed-layout.md`). A fraction
+// on a section's end, within a server's rounding, is that section's page.
+const SECTION_END_ROUNDING = 1e-6
 const restore = async (cfi, fraction) => {
     const byFraction = async () => {
         if (fraction === null || fraction <= 0) return false
-        await view.goToFraction(Math.min(fraction, 1))
+        const target = Math.min(fraction, 1)
+        await view.goToFraction(view.isFixedLayout ? Math.max(target - SECTION_END_ROUNDING, 0) : target)
         await anchorToPage()
         return true
     }
-    if (view.isFixedLayout && await byFraction()) return 'fraction'
     if (cfi && await goToPoint(cfi)) return 'cfi'
     if (await byFraction()) return 'fraction'
     await view.init({ showTextStart: false })
@@ -1496,7 +1593,17 @@ window.octavo = Object.freeze({
         return Boolean(await goToPoint(cfi))
     }),
     goToFraction: reported(async function goToFraction(fraction) {
-        await requireView().goToFraction(Math.max(0, Math.min(1, fraction)))
+        const target = Math.max(0, Math.min(1, fraction))
+        const v = requireView()
+        // From the bar and the contents, which count a fixed-layout book's
+        // pages (`fixedPlace`), not from a saved position, which counts bytes
+        // (`restore`).
+        if (v.isFixedLayout) {
+            const total = v.book.sections.length
+            await v.goTo(Math.min(Math.floor(target * total), total - 1))
+            return true
+        }
+        await v.goToFraction(target)
         await anchorToPage()
         return true
     }),

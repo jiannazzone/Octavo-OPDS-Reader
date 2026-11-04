@@ -7,7 +7,7 @@ import Foundation
 /// Page numbers are foliate's locations: the book cut into pieces of 1,500
 /// characters, the same on every device and in every layout (so they don't
 /// move when the phone folds), though a turn doesn't always change the
-/// number.
+/// number. A fixed-layout book's are its own pages.
 nonisolated struct ReaderPlace: Equatable, Sendable {
     var chapter: String?
     /// The first location shown, from 1.

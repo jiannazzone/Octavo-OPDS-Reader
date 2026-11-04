@@ -30,7 +30,7 @@ The reader's own CSP (every `octavo://` response) is unchanged and stays the fir
 
 ### 2. The restore guard (`goToPoint`)
 
-After going to a saved point (opening, `goTo` with a CFI), if the visible page ends before the point, turn one page. It fixes the spike's KF8 miss (P&P chapter LV came back one page early) and the straddle the sync spike described, for every format. Fixed-layout books go by fraction, as before.
+After going to a saved point (opening, `goTo` with a CFI), if the visible page ends before the point, turn one page. It fixes the spike's KF8 miss (P&P chapter LV came back one page early) and the straddle the sync spike described, for every format. Fixed-layout pages have no point to miss: their CFI names the section (`fixed-layout.md`).
 
 ### 3. FB2 external links
 

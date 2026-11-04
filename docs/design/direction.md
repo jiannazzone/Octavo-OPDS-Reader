@@ -68,8 +68,8 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **A quiet card with ✕ that never returns once dismissed** (remembered on the iPhone) is the pattern for an optional nudge that isn't the screen's point, like "Have a server?" under the Library's grid. Use it elsewhere when a hint or suggestion would otherwise stay on screen for good. It never replaces an empty screen's invitation (decision 22) or a problem's banner.
 
 ### A book's screen
-- **Folded:** the cover fills the screen, with a compact sheet at rest (Adam, 2026-11-03, about half its old height): the title on one line, the place under it ("48% · Synced just now"), **Open** as a capsule on the right of both, and a thin progress line below. A problem takes the place's line and wraps to two lines if it needs to (Adam: it's important information). Pull it up for the author, **Mark finished** and the details.
-- **Unfolded:** Cover | Details, the cover on the left page and the same details on the right.
+- **Folded:** the whole cover on a blurred copy of itself fills the screen (decision 32), with a compact sheet at rest (Adam, 2026-11-03, about half its old height): the title on one line, the place under it ("48% · Synced just now"), **Open** as a capsule on the right of both, and a thin progress line below. A problem takes the place's line and wraps to two lines if it needs to (Adam: it's important information). Pull it up for the author, **Mark finished** and the details.
+- **Unfolded:** Cover | Details, the cover on its blur filling the left page and the same details on the right.
 - **Open is Download until the book is on the iPhone** (Adam, 2026-11-01): Download, then a ring with Cancel while it downloads, then Open. A problem shows on the place line, with Try again on the button. Downloading doesn't open the book.
 - **The place is where the book opens, with when it last synced beside it** (step 13, Adam 2026-11-02): on the place's own line, at the right ("Synced just now", "Synced 5 minutes ago", "Synced yesterday", "Synced Oct 28"), or "Not synced yet, will retry" while a place waits to be sent. A book whose place doesn't sync (an OPDS catalog) shows nothing there.
 - **Mark finished** goes to BookOrbit as its `read` status (un-marking sends `reading`, which BookOrbit records as `rereading`); an OPDS server keeps no such mark, so the iPhone keeps it. A finished book's place line says Finished.
@@ -238,6 +238,16 @@ Decided with mockups in the planning session (no Figma frames). This is step 17,
 
 31. **The accent is Ink**: `#34459E` in light mode and `#9FAEFF` in dark, in place of iOS's blue, for buttons, links, the scrubber, progress lines and lit controls. It keeps at least 7:1 on white, Paper, Sepia, Night and black, where iOS's blue falls to 3.2:1 on Sepia. Home, the Library and Settings keep the system's light and dark (decision 13).
     - **Built (2026-11-03).** An `AccentColor` asset, the app's global accent. Switches stay iOS's green. Book links keep the themes' own colours. The signed-out banner uses it too.
+
+### Covers (Adam, 2026-11-04)
+
+32. **Every cover fits on a blur.** A cover shows whole in its frame, on a blurred copy of itself: on a book's screen, folded and unfolded, on Home's current book, and on shelves, grids and rows. Frames stay as they are (the screen, the left page, 2:3 cells), so rows stay even, the check and ring stay in the frame's corner, and nothing moves when a cover loads.
+    - **A strip under about 3 pt fills instead:** a sliver that thin looks like a glitch, and the crop doesn't show. In the cells on shelves and grids, that's most ordinary covers.
+    - **The opening motion follows:** decision 28 draws the same picture, with the cover and its blur swinging as one. So do series stacks and the tour's cover. Stand-ins for books without artwork (`StandInCover`, `BookTitleCover`) don't change, and neither do authors' photos.
+    - **Folded, the sheet and side column still sit over the cover,** as before, so they can hide what's under them, often an author's name.
+    - **Turned down:** filling, which cuts a square cover's title; filling covers close to the frame's shape and fitting the rest, a line to tune for no clear gain once seen with the blur; a flat colour from the cover, a heavy block on bright covers; and cells taking each cover's own shape, as Apple Books does, with uneven tops and a check that moves.
+    - **Measured:** the frames are 0.687 wide folded (466×678 pt), 0.681 on the left page (455.5×669 pt) and 0.667 in cells. About ten real books run from 0.635 to 0.725, none of them square. The square pictures were real covers cropped to shape. On BookOrbit, Calibre-Web, COPS, Komga and Kavita a thumbnail has its full cover's shape (within 0.005), so a cover doesn't jump when the full one loads. Kavita serves every cover at 320×455 (0.703), so its covers show 4 pt strips in grid cells.
+    - **Built (2026-11-04).** `FittedCover`, used by `CoverImage`, `BookCoverArt`, the opening motion and the tour's cover. Checked on the simulator, folded, unfolded and half open, with real covers and test books with covers 0.50 wide, square and 1.33 wide. Adam tried it on the Duo the same day: the covers look right and the blur is smooth, so it stays drawn live rather than cached. Still to check: a real square book or comic.
 
 ### Text and theme (approved 2026-10-31)
 

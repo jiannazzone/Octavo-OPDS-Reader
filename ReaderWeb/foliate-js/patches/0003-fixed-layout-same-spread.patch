@@ -1,0 +1,32 @@
+From: Octavo (local foliate-js patch set)
+Subject: [PATCH 0003] fixed-layout: report going to the other page of a spread
+
+Going to a page of the spread already open (a contents entry, a bookmark, a
+saved place) shows that page when one page shows at a time, but leaves #side
+on the old one and reports nothing. So the host's position stays on the old
+page, and the next resize puts the old page back.
+
+Keeps #side and reports the location, as going to any other spread does.
+
+Checked on the Duo simulator (docs/notes/fixed-layout.md, "Going to a page in
+the same spread"): folded on page 6, going to page 7 reported nothing without
+this patch and a resize went back to page 6; with it, page 7 was reported and
+stayed.
+
+Applies on top of 0002. Apply from the repo root:
+  git apply --directory=ReaderWeb/foliate-js ReaderWeb/foliate-js/patches/0003-fixed-layout-same-spread.patch
+---
+diff --git a/fixed-layout.js b/fixed-layout.js
+index c582aba..2f87edd 100644
+--- a/fixed-layout.js
++++ b/fixed-layout.js
+@@ -265,7 +265,9 @@ export class FixedLayout extends HTMLElement {
+     async goToSpread(index, side, reason) {
+         if (index < 0 || index > this.#spreads.length - 1) return
+         if (index === this.#index) {
++            this.#side = side
+             this.#render(side)
++            this.#reportLocation(reason)
+             return
+         }
+         this.#index = index
