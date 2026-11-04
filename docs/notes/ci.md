@@ -68,11 +68,12 @@ Four runs of the App tests job, with the simulator booting before the build. Mos
 | Running the tests | 75 s, 65 s | 129 s, 52 s |
 | Whole job | 13m47s, 15m07s | 13m52s, 9m52s |
 
-The simulator now boots after the build, in case the two were competing for the runner. Whether that helps, and how much of the first launch is just a cold runner, isn't measured yet.
+Booting the simulator after the build was tried once (#52), and went back. The build took 41 s and the boot 75 s, but the Test step took 27 minutes and failed, and the job came within seconds of its 30-minute limit. WebKit's GPU process took 1,169 s to launch, against 1–5 s in the earlier runs that logged it, so `BookInspector` hit its 30 s limit and reported `.damaged`. One run doesn't prove the cause. It does suggest that a new runner's slow start goes with the simulator's first start, and that moving the boot doesn't remove it.
 
 ## Watch for
 
 - `AttemptTests` and any other test with short time limits may be flaky on a slower runner. `aServerThatDoesntAnswerTimesOut` expects a 50 ms limit to have fired after 150 ms.
+- A WebKit process that stalls on the runner makes `BookInspectorTests` fail with `.damaged`, which looks like a bad book but is a timeout. "CI passed" is required, so re-run before looking for a bug.
 - Some tests start requests to `localhost`, which nothing answers in CI. None waits for the answer.
 - Changing a pull request's base branch doesn't re-run CI, so its old result stays. A stacked pull request is retargeted to `main` when the one below it merges, so re-run CI by hand if the result matters. Adding the `edited` trigger would fix it, but would also re-run the tests on every title or description edit.
 - A rebase merge pushes several commits at once, but a push's check reads only the last one. If that commit is docs-only, `main` skips the tests, though the pull request already ran them. Merge commits and squash merges aren't affected.
