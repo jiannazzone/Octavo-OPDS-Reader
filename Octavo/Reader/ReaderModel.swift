@@ -47,6 +47,8 @@ final class ReaderModel {
     /// Counts relocations, including ones that repeat the same page (a fold
     /// re-lays out the page without moving the position).
     private(set) var relocationCount = 0
+    /// Where the page is as the reader shows it. `position` is what's saved.
+    var shownFraction: Double { relocation?.shownFraction ?? 0 }
 
     // Layout, decided from the fold. See `ReaderLayout`.
     /// The hinge's posture and angle, and whether that's book mode.
@@ -552,7 +554,7 @@ final class ReaderModel {
             }
             // A turn's new page, measured again since its pictures came.
             if turnRun?.drawn == true, turn?.newPlace != nil {
-                turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.fraction ?? 0)
+                turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.shownFraction)
             }
             if serverPlace != nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }

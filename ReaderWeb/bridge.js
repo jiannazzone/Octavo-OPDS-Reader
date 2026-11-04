@@ -134,6 +134,28 @@ const fixedPagesShown = () => {
     return book.sections.flatMap((section, index) => renderer.getSpreadOf(section)?.index === spread ? [index] : [])
 }
 
+// What the footer, the bar and the panels show for fixed layout: the book's
+// own pages, as foliate's locations and fractions count bytes. The place is
+// the end of the last page on screen, like a reflowing page's.
+const fixedPlace = () => {
+    const shown = fixedPagesShown()
+    const total = view.book.sections.length
+    return {
+        location: { current: shown[0], next: shown.at(-1), total },
+        pageFraction: (shown.at(-1) + 1) / total,
+    }
+}
+
+// Where each section starts, for those same places. On fixed layout it's a
+// hair inside the page, so a page's place (its end) falls before the next
+// page's start.
+const FIXED_PAGE_START = 1e-7
+const sectionFractions = () => {
+    if (!view.isFixedLayout) return view.getSectionFractions()
+    const total = view.book.sections.length
+    return Array.from({ length: total + 1 }, (_, index) => index / total + FIXED_PAGE_START)
+}
+
 // While a fold is held (see `hold`), relocations are kept back and only the
 // last one is posted once the new layout has settled.
 let held = null
@@ -161,6 +183,7 @@ const onRelocate = ({ detail }) => {
                 total: finiteOrNull(detail.location.total),
             }
             : null,
+        ...(view.isFixedLayout ? fixedPlace() : {}),
     }
     for (const watch of relocationWatchers) watch(detail, message)
     if (held) held.relocation = message
@@ -568,6 +591,9 @@ const setLayout = async newLayout => {
     const ending = held
     const rendered = await applyLayout()
     if (rendered) await settle()
+    // Fixed layout reports nothing when it re-lays out, and the pages on
+    // screen may have changed.
+    if (rendered && view.isFixedLayout && view.lastLocation) onRelocate({ detail: view.lastLocation })
     // Held again meanwhile (folded back): the next `setLayout` ends it.
     if (held !== ending) return rendered
     const pending = held?.relocation
@@ -751,7 +777,7 @@ const anchorToPage = async () => {
 // progress bar, and its href and depth for the Contents panel. Entries whose
 // target doesn't resolve are left out.
 const tocFractions = () => {
-    const fractions = view.getSectionFractions?.() ?? []
+    const fractions = sectionFractions()
     const entries = []
     const walk = (items, depth) => {
         for (const item of items ?? []) {
@@ -815,7 +841,7 @@ const characterFraction = (doc, range) => {
 
 // A section's place in the book: its start, plus `within` of its share.
 const bookFraction = (index, within) => {
-    const fractions = view.getSectionFractions()
+    const fractions = sectionFractions()
     const start = fractions[index] ?? 0
     const end = fractions[index + 1] ?? 1
     return finiteOrNull(Math.min(Math.max(start + within * (end - start), 0), 1))
@@ -1526,7 +1552,15 @@ window.octavo = Object.freeze({
         return Boolean(await goToPoint(cfi))
     }),
     goToFraction: reported(async function goToFraction(fraction) {
-        await requireView().goToFraction(Math.max(0, Math.min(1, fraction)))
+        const target = Math.max(0, Math.min(1, fraction))
+        const v = requireView()
+        // The bar counts a fixed-layout book's pages (`fixedPlace`).
+        if (v.isFixedLayout) {
+            const total = v.book.sections.length
+            await v.goTo(Math.min(Math.floor(target * total), total - 1))
+            return true
+        }
+        await v.goToFraction(target)
         await anchorToPage()
         return true
     }),

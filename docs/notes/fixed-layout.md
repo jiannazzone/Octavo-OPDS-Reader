@@ -84,11 +84,23 @@ Page 5 of the test book has an inline script and an `onload`, both of which woul
 | CSP alone | Nothing |
 | Both, as shipped | Nothing |
 
+## The footer counts the book's pages
+
+Foliate's locations and fractions count bytes, so a 12-page book said "9 of 80 · 16%" on page 6. Adam approved page numbers on 2026-11-04.
+
+- **Footer, bar, contents, search and bookmarks** count the book's pages: "6 of 12 · 50%" folded, "6–7 of 12 · 58%" on a spread, with the percentage at the end of the last page shown. `fixedPlace` sends them in the relocation, and `sectionFractions` places the contents and search results the same way.
+- **The slider moves by pages,** and goes to the page its label names (`goToFraction`, which only the reader's own controls call).
+- **What's saved and synced doesn't change:** `Relocation.fraction` still counts bytes, as the web reader needs it to. The footer reads `shownFraction`. So Home, a book's screen and the server-place capsule keep BookOrbit's percentage, which can differ a little on a book whose page files are uneven: page 6 of the test book says 50% in the footer and 16% on Home, and real books should be much closer.
+- **A re-layout reports itself:** the renderer says nothing when a fold changes the pages on screen, so `setLayout` posts the relocation again.
+- **Section starts are 1e-7 inside the page,** because a page's place is its end, which is otherwise exactly the next page's start, and would name the next chapter on a chapter's last page.
+- **Folded and sideways** shows two pages with one column, so the footer says "6 of 12" for 6–7. It's a rare posture and part of the parked question in `docs/UI-IDEAS.md`.
+
+Checked on the simulator: folded, unfolded and half open, a turn in each, the contents panel (Front 1, Middle 4, Back 9, as the book has them), the bar and its slider at 58%. Pushes after the change were the same byte-based percentages as before.
+
 ## Not done
 
 - **Search has no highlight on these books:** foliate's fixed-layout renderer has no overlays. Going to a match works.
 - **`rendition:spread="none"` unfolded** puts one page straight across the fold, and **the Text panel's text controls** do nothing here. Both are in `docs/UI-IDEAS.md`, for the owner.
-- **The footer's numbers** aren't pages yet: they're foliate's locations, which count bytes, so a 12-page book says "9 of 80". A choice for the owner.
 - **Real fixed-layout books and a real Duo:** only the test book so far, in the simulator. Downloading one needs the owner's OK.
 
 ## Tools

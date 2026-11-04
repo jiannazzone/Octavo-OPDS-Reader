@@ -263,6 +263,80 @@ struct ReaderFixedLayoutTests {
         #expect(await eventually(timeout: .seconds(10)) { page(model) == 4 })
     }
 
+    // MARK: The footer
+
+    private func setLayout(_ model: ReaderModel, _ layout: ReaderLayout) async throws {
+        let _: Bool? = try await script(model, "return await window.octavo.setLayout(layout)", arguments: ["layout": layout.scriptArguments])
+    }
+
+    private func place(_ model: ReaderModel) -> ReaderPlace {
+        ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction)
+    }
+
+    @Test func theFooterCountsTheBooksPages() async throws {
+        let model = try await open()
+        try await size(model, width: 300, height: 600)
+        await go(model, toPage: 5)
+        #expect(place(model).footer(spread: false) == "6 of 12 · 50%")
+        #expect(place(model).barLine(spread: false) == "Page 6 of 12 · 50%")
+        // What's saved still suits BookOrbit: this page's share of the bytes.
+        let saved = try #require(model.position?.fraction)
+        #expect(saved < 0.2)
+    }
+
+    // A re-layout shows more pages, which foliate doesn't report.
+    @Test func unfoldingCountsTheSpread() async throws {
+        let model = try await open()
+        try await size(model, width: 300, height: 600)
+        await go(model, toPage: 5)
+        let count = model.relocationCount
+        let layout = ReaderLayout(columns: 2, gapPercent: 7, maxInlineSize: 392, leftInset: 84, rightInset: 84)
+        // Two pages take a wider view than this page has: a spread's own shape.
+        try await size(model, width: 800, height: 500)
+        try await setLayout(model, layout)
+        #expect(await eventually { model.relocationCount > count })
+        #expect(place(model).footer(spread: true) == "6–7 of 12 · 58%")
+        #expect(model.position?.cfi == Self.cfi(5))
+    }
+
+    @Test func theLastPageIsAllOfTheBook() async throws {
+        let model = try await open()
+        await go(model, toPage: 11)
+        #expect(place(model).percent == "100%")
+    }
+
+    // The slider's label and where it lands have to agree.
+    @Test(arguments: [(0.0, 0), (0.3, 3), (0.5, 6), (0.99, 11), (1.0, 11)])
+    func theBarGoesByPages(fraction: Double, index: Int) async throws {
+        let model = try await open()
+        try await size(model, width: 300, height: 600)
+        await go(model, toPage: 1)
+        let total = try #require(model.location?.total)
+        #expect(ReaderModel.page(at: fraction, total: total) == index + 1)
+        model.goTo(fraction: fraction)
+        #expect(await eventually(timeout: .seconds(10)) { page(model) == index })
+    }
+
+    @Test func theContentsCountTheBooksPages() async throws {
+        let model = try await open()
+        #expect(await eventually(timeout: .seconds(10)) { model.toc.count == 2 })
+        #expect(model.contentsRows.map(\.page) == [1, 4])
+    }
+
+    // A chapter's last page, whose end is where the next chapter starts, is
+    // still in its chapter.
+    @Test func aChaptersLastPageIsInIt() async throws {
+        let model = try await open()
+        try await size(model, width: 300, height: 600)
+        #expect(await eventually(timeout: .seconds(10)) { model.toc.count == 2 })
+        await go(model, toPage: 2)
+        let last = try #require(ReaderChapterProgress(place: place(model), toc: model.toc))
+        #expect(last.pagesLeft == 0)
+        await go(model, toPage: 3)
+        let first = try #require(ReaderChapterProgress(place: place(model), toc: model.toc))
+        #expect(first.pagesLeft == 8)
+    }
+
     // MARK: Scripts
 
     @Test func aBooksScriptsNeverRun() async throws {

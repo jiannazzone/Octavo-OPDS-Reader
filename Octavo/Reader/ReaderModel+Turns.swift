@@ -113,7 +113,7 @@ extension ReaderModel {
         turn = ReaderTurn(
             id: run.id, motion: motion, side: side, geometry: geometry, layout: layout, spine: spine,
             paper: Color(hex: appearance.background), old: old,
-            oldPlace: ReaderPlace(chapter: chapter, location: location, fraction: position?.fraction ?? 0)
+            oldPlace: ReaderPlace(chapter: chapter, location: location, fraction: shownFraction)
         )
         Task { await turnUnderPictures(run, regions: regions.new, size: size, spine: spine) }
         // A tap's turn waits for the new page, which is drawn about 50 ms
@@ -157,7 +157,7 @@ extension ReaderModel {
             let relocation = (answer?["relocation"] as? String).flatMap {
                 try? JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data($0.utf8))
             }
-            let place = relocation.map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.fraction ?? 0) }
+            let place = relocation.map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.shownFraction) }
             let new = pictures(regions, size: size, spine: spine, afterScreenUpdates: true) ?? ReaderTurn.Pictures()
             // Fades in only over the page's colour, if the turn is moving.
             let fadesIn = run.target != nil || (run.interactive && turn?.progress ?? 0 > 0)
@@ -244,7 +244,7 @@ extension ReaderModel {
         turn = ReaderTurn(
             id: id, motion: motion, side: .right, geometry: geometry, layout: layout, spine: spine,
             paper: Color(hex: appearance.background), old: old,
-            oldPlace: ReaderPlace(chapter: chapter, location: location, fraction: position?.fraction ?? 0),
+            oldPlace: ReaderPlace(chapter: chapter, location: location, fraction: shownFraction),
             isHint: true
         )
         for target in [Self.turnHintLift(motion), 0] {
