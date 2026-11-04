@@ -159,6 +159,27 @@ final class ReaderModel {
     /// This page's place went to the pusher while the server's was offered.
     @ObservationIgnored private var pushedSinceOffer = false
     @ObservationIgnored private var isCatchingUp = false
+    /// A chapter button's tap is finding its place (`skipChapter`).
+    @ObservationIgnored var isSkippingChapter = false
+
+    // Going back after a jump (decision 33, `ReaderModel+Trip`).
+    /// Away from your place. It stays saved as it was until you settle.
+    var trip: ReaderTrip? {
+        didSet { if trip != oldValue { store.saveTrip(trip, forBook: book.id) } }
+    }
+    /// The saved trip this book is reopening on.
+    @ObservationIgnored private var tripToResume: ReaderTrip?
+    /// How the server spells your place, once it's known to hold it.
+    @ObservationIgnored var placeOnServer: String?
+    /// A jump under way, until it's landed somewhere other than your place.
+    @ObservationIgnored var tripToBe: ReaderTrip?
+    @ObservationIgnored var jumpsUnderWay = 0
+    /// How many relocations there had been when the jump started.
+    @ObservationIgnored var jumpStartCount = 0
+    /// Back is under way: the page it lands on is your place, already saved.
+    @ObservationIgnored var isGoingBack = false
+    /// Where the page was at the last turn, to tell which way a turn went.
+    @ObservationIgnored var tripFraction = 0.0
     @ObservationIgnored let cfiShape: ReaderMessage.CFIShape
     @ObservationIgnored private var pusher: DebouncedProgressPusher<ContinuousClock>?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -488,6 +509,7 @@ final class ReaderModel {
     /// sent now would wait for one and keep this model and the page's web
     /// process alive (`docs/notes/reader-release.md`).
     func close() async {
+        await jumpsLanded()
         phase = .closed
         foldTask?.cancel()
         foldBatch = nil
@@ -539,6 +561,11 @@ final class ReaderModel {
             phase = .open
             openedCFI = position?.cfi
             hasMoved = false
+            if let tripToResume {
+                trip = tripToResume
+                tripFraction = shownFraction
+                self.tripToResume = nil
+            }
             didOpen()
             isFixedLayout = opened.isFixedLayout
             relayout()
@@ -565,14 +592,15 @@ final class ReaderModel {
             if !isRestoring, relocation.position(cfiShape) != previous?.position(cfiShape) {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.
-                if !pageTurn.isAnimated, foldBatch == nil, relocation.cfi != previous?.cfi { onPageTurned?() }
+                if !pageTurn.isAnimated, relocation.isPageTurn, foldBatch == nil, relocation.cfi != previous?.cfi { pageTurned() }
                 moved(to: relocation)
             }
             // A turn's new page, measured again since its pictures came.
             if turnRun?.drawn == true, turn?.newPlace != nil {
                 turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.shownFraction)
             }
-            if serverPlace != nil { Task { await serverPlaceMayBeLeft() } }
+            // Away, your place hasn't been left.
+            if serverPlace != nil, trip == nil, tripToBe == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
             onControlsTap?(zone)
@@ -593,6 +621,8 @@ final class ReaderModel {
             if let geometry { updateGeometry(geometry) }
         case .externalLink(let href):
             log.notice("Ignored external link \(href, privacy: .public)")
+        case .link(let href):
+            followLink(href)
         case .error(let error):
             lastError = error.message
             log.error("Reader script error (\(error.phase ?? "?", privacy: .public)): \(error.message, privacy: .public)")
@@ -610,7 +640,12 @@ final class ReaderModel {
             let opening = await chooseOpeningPosition()
             guard phase != .closed else { return }
             openingPosition = opening
-            let saved = opening.position
+            // A trip reopens where you were looking, as long as the rule
+            // still opens at your place.
+            let savedTrip = store.trip(forBook: book.id)
+            tripToResume = savedTrip.flatMap { $0.page != nil && $0.isPlace(opening.position) ? $0 : nil }
+            if savedTrip != nil, tripToResume == nil { store.saveTrip(nil, forBook: book.id) }
+            let saved = tripToResume?.page ?? opening.position
             var options: [String: Any] = [
                 "url": ReaderSchemeHandler.bookURL(fileName: book.fileName).absoluteString,
                 "name": book.fileName,
@@ -647,6 +682,7 @@ final class ReaderModel {
             let opening = OpeningPosition.choose(local: local, remote: remote)
             pulled = true
             serverCFI = remote?.position.cfi
+            if case .remote = opening { placeOnServer = serverCFI }
             let waited = FoldReport.milliseconds(since: started)
             syncStatus = "pulled \(remote?.position.cfi ?? "nothing") in \(waited) ms → \(opening.label)"
             return opening
@@ -658,18 +694,20 @@ final class ReaderModel {
     }
 
     private func didOpen() {
-        guard let position else { return }
+        // Reopening on a trip, your place is what's saved, not this page.
+        guard let position = trip?.place ?? position else { return }
         let local = store.progress(forBook: book.id)
+        let chapter = trip != nil ? store.chapter(forBook: book.id) : nil
         switch openingPosition {
         case .local where local?.needsPush == true:
             // The device's unpushed position won; the backend should catch up.
-            save(position, needsPush: true)
+            save(position, needsPush: true, chapter: chapter)
             Task { await pusher?.submit(position) }
         case .remote:
             // The backend already has this spot.
-            save(position, needsPush: false, syncedAt: pulled ? .now : nil)
+            save(position, needsPush: false, syncedAt: pulled ? .now : nil, chapter: chapter)
         default:
-            save(position, needsPush: local?.needsPush ?? false)
+            save(position, needsPush: local?.needsPush ?? false, chapter: chapter)
         }
     }
 
@@ -680,12 +718,19 @@ final class ReaderModel {
             return
         }
         let position = relocation.position(cfiShape)
+        // Your place stays as it is until you settle.
+        if jumpsUnderWay > 0 || isGoingBack { return }
+        if trip != nil {
+            tripMoved(to: position)
+            return
+        }
         if isJumpingToServer {
             // As when opening: the server has this place, and pushing the
             // page's start would move it back a little.
             isJumpingToServer = false
             openedCFI = position.cfi
             hasMoved = false
+            placeOnServer = serverCFI
             save(position, needsPush: false, syncedAt: .now)
             return
         }
@@ -693,6 +738,10 @@ final class ReaderModel {
             guard position.cfi != openedCFI else { return }
             hasMoved = true
         }
+        saveAndSend(position)
+    }
+
+    private func saveAndSend(_ position: ReadingPosition) {
         save(position, needsPush: sync != nil)
         if let pusher {
             if serverPlace != nil { pushedSinceOffer = true }
@@ -700,9 +749,42 @@ final class ReaderModel {
         }
     }
 
-    private func save(_ position: ReadingPosition, needsPush: Bool, syncedAt: Date? = nil) {
+    /// Where a jump leaves from: your saved place, the last real page if
+    /// the page showing is blank.
+    var savedPlace: ReadingPosition? {
+        store.position(forBook: book.id) ?? position
+    }
+
+    /// ✕, or reading on: the page you're on is your place now, and syncs.
+    func settleTrip() {
+        guard trip != nil else { return }
+        trip = nil
+        // This place answers BookOrbit's capsule too, as reading on does.
+        serverPlace = nil
+        guard let position, relocation?.blankPage != true else { return }
+        hasMoved = true
+        saveAndSend(position)
+    }
+
+    /// Back has landed: this is your place, saved and sent as it was, so
+    /// repeats of it aren't a move.
+    func wentBack() {
+        isGoingBack = false
+        openedCFI = position?.cfi
+        hasMoved = false
+    }
+
+    /// Back landed, and a page turn has already gone on from it.
+    func wentBackAndTurned() {
+        isGoingBack = false
+        hasMoved = true
+        guard let position, relocation?.blankPage != true else { return }
+        saveAndSend(position)
+    }
+
+    private func save(_ position: ReadingPosition, needsPush: Bool, syncedAt: Date? = nil, chapter: String? = nil) {
         do {
-            try store.save(position, forBook: book.id, needsPush: needsPush, chapter: tocLabel, syncedAt: syncedAt)
+            try store.save(position, forBook: book.id, needsPush: needsPush, chapter: chapter ?? tocLabel, syncedAt: syncedAt)
         } catch {
             log.error("Couldn't save reading position: \(error)")
         }
@@ -711,6 +793,7 @@ final class ReaderModel {
     private func didPush(_ position: ReadingPosition) {
         lastPushedCFI = position.cfi
         serverCFI = position.cfi
+        placeOnServer = position.cfi
         pushCount += 1
         syncStatus = "pushed \(Date.now.formatted(date: .omitted, time: .standard))"
         try? store.markPushed(position, forBook: book.id)
@@ -741,7 +824,9 @@ final class ReaderModel {
         else { return }
         let asked = relocationCount
         let flags = try? await page.callJavaScript("return await window.octavo.onPage(cfis)", arguments: ["cfis": [cfi]]) as? [Bool]
-        guard asked == relocationCount, pushes == pushCount, let onPage = flags?.first else { return }
+        guard asked == relocationCount, pushes == pushCount, let flag = flags?.first else { return }
+        // Away, the page showing isn't your place, so it says nothing.
+        let onPage = trip == nil && flag
         serverCFI = cfi
         log.debug("server's place \(cfi, privacy: .public) \(onPage ? "is on this page" : "offered")")
         guard !onPage else { return }
@@ -753,7 +838,7 @@ final class ReaderModel {
             position: remote.position,
             fraction: remote.position.fraction > 0 ? remote.position.fraction : place?.fraction ?? 0,
             chapter: place?.chapter,
-            offeredOn: pageStart
+            offeredOn: trip?.place.cfi ?? pageStart
         )
     }
 
@@ -775,12 +860,18 @@ final class ReaderModel {
     func goToServerPlace() {
         guard let place = serverPlace, let cfi = place.position.cfi else { return }
         serverPlace = nil
+        // The server's place is your place now, so a trip ends with this.
+        let tripSoFar = trip
+        trip = nil
         isJumpingToServer = true
         Task {
             // It may not open (another edition's place), and the next turn is
             // then this reader's own.
             let went = try? await page.callJavaScript("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi]) as? Bool
-            if went != true { isJumpingToServer = false }
+            if went != true {
+                isJumpingToServer = false
+                trip = tripSoFar
+            }
         }
         // A fold or a text change since the offer re-laid out the page and
         // sent its place; the server's goes back.
@@ -791,9 +882,10 @@ final class ReaderModel {
     func keepThisPlace() {
         guard serverPlace != nil else { return }
         serverPlace = nil
-        guard let position, let pusher else { return }
-        save(position, needsPush: true)
-        Task { await pusher.submit(position) }
+        // Away, what stays is your place, not the page you're looking at.
+        guard let kept = trip?.place ?? position, let pusher else { return }
+        save(kept, needsPush: true, chapter: trip != nil ? store.chapter(forBook: book.id) : nil)
+        Task { await pusher.submit(kept) }
     }
 
     /// Reading on from the page it was offered on leaves the server's place

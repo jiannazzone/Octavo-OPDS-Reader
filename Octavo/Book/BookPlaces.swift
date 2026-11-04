@@ -88,6 +88,17 @@ final class BookPlaces {
         opening(of: book).position?.fraction
     }
 
+    /// The trip `book` reopens on (decision 33), while its place is still
+    /// where the rule opens. Another reader moving it ends the trip when the
+    /// book opens; here the place line just shows the new place.
+    func trip(of book: SourcedBook) -> ReaderTrip? {
+        _ = revision
+        guard let key = book.book.readableFile?.storageKey, let trip = store.trip(forBook: key),
+              trip.isPlace(opening(of: book).position)
+        else { return nil }
+        return trip
+    }
+
     /// The sync line, for a book whose place syncs and has a place.
     func status(of book: SourcedBook) -> Status? {
         _ = revision

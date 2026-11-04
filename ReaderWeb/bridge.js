@@ -171,10 +171,15 @@ let relocations = 0
 // Called with each relocation's detail and message (`turn` waits on them).
 const relocationWatchers = new Set()
 
+// Why the renderer last moved ('page' and 'snap' are turns), which foliate's
+// own relocate event leaves out.
+let lastRelocateReason = null
+
 const onRelocate = ({ detail }) => {
     relocations++
     const message = {
         cfi: detail.cfi ?? null,
+        reason: lastRelocateReason,
         blankPage: isBlankPage(detail.range),
         fraction: finiteOrNull(detail.fraction),
         tocLabel: detail.tocItem?.label?.trim() || null,
@@ -1289,12 +1294,13 @@ const goToPoint = async target => {
 // FB2 has no `isExternal`, so foliate hands every link to `link`, and a web
 // address becomes an internal jump that goes nowhere. Anything with a scheme
 // (not one of foliate's own blob: URLs) is reported like the other formats'
-// external links instead.
+// external links instead. A link inside the book is a jump, which Swift makes,
+// as your place has to hold before the page moves (decision 33).
 const hasScheme = href => /^[a-z][a-z0-9+.-]*:/i.test(String(href).trim()) && !/^blob:/i.test(String(href).trim())
 const onLink = e => {
-    if (view?.book?.isExternal || !hasScheme(e.detail.href)) return
     e.preventDefault()
-    post('externalLink', { href: e.detail.href })
+    const isExternal = !view?.book?.isExternal && hasScheme(e.detail.href)
+    post(isExternal ? 'externalLink' : 'link', { href: e.detail.href })
 }
 
 // Try the CFI first, then the fraction, then the start of the book. A
@@ -1352,6 +1358,7 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     guardsLinks = harden !== false
     if (guardsLinks) hardenBook(view.book)
     view.renderer.setAttribute('flow', 'paginated')
+    view.renderer.addEventListener('relocate', e => { lastRelocateReason = e.detail?.reason ?? null }, { capture: true })
     if (initialAppearance) appearance = { css: String(initialAppearance.css ?? ''), background: String(initialAppearance.background ?? '') }
     applyAppearance()
     if (initialLayout !== undefined) layout = initialLayout
