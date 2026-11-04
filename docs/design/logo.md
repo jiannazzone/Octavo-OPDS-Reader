@@ -54,9 +54,9 @@ See `logo/refinement.svg`.
 Measurements are percentages of the 1024 px canvas.
 
 - **Background** (set in Icon Composer, not exported): `#F2E8D5`.
-- **Card** (`1 Card.svg`): `#E6CF96`, outline and rules `#3A2A1A` (outline 1.5%, rules 1%), corner radius 4.5%. 56% wide (x 22–78%), top 12%, rules at 24, 34, 44, 54 and 64%, bottom 74%, date column at x 40%. Two stamps `#8B2E23` in the date column of rows 1 and 2 (12 × 4%, turned −4° and +3°). The whole card is turned −6° about (50%, 62%) and raised 2%. The notch shade is a gradient of `#3A2A1A` from 0 to 38% opacity, filling the notch opening.
-- **Pocket** (`2 Pocket.svg`): `#B98C55`, x 12–88%, top at 37% to the bottom edge, top corners 3%. The thumb notch is a 9.6% radius arc centred at x 50%, reaching 46.5%.
-- **Lettering** (`3 Lettering.svg`): EB Garamond, outlined. "8" Medium at 44% size, centred at x 42%, baseline 88%, `#F7EEDC`. "vo" Medium Italic at 22%, centred at x 63%, baseline 69%, `#5E1F17`.
+- **Card** (`1 Card.svg`): `#E6CF96`, outline and rules `#3A2A1A` (outline 1.5%, rules 1%), landscape-leaning (about 72% wide, aspect about 1.16; it was 56% wide and portrait), still turned −6° and raised 2%. Two stamps `#8B2E23` in the date column of rows 1 and 2, larger than before. The notch shade is a gradient of `#3A2A1A` from 0 to 38% opacity, filling the notch opening. The exact shapes are the Figma Light variant (Card art), exported as is.
+- **Pocket** (`2 Pocket.svg`): `#B98C55`, **full width** (x 0–100%; it was 12–88%), top at 37% to the bottom edge, top corners 3%. The thumb notch is a 9.6% radius arc centred at x 50%, reaching 46.5%.
+- **Lettering** (`3 Lettering.svg`): EB Garamond, outlined. "8" Medium at 44% size, centred at x 43.5%, baseline 88%, `#F7EEDC`. "vo" Medium Italic at 22%, centred at x 64.5%, baseline 69%, `#5E1F17`.
 - **Stamp** (`3a`, `3b`): two copies of the lettering, `#7A5730` moved up 4 px and `#DDBB86` moved down 4 px, behind the letters.
 
 **Icon Composer settings:** iOS only. Three groups, back to front:
