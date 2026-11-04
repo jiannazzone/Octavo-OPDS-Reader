@@ -167,7 +167,7 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
     - **Sign-in errors** appear under the fields ("That username or password didn't work.").
     - **No pop-up alerts**, except to confirm deleting or removing something.
     - A position that didn't sync shows "Not synced yet, will retry" on the strip's sync line. It's retried while the app is open (Adam, 2026-11-02): at launch, when the app comes back and when the connection does. Not in the background.
-    - **Another reader moved on while a book was open** (Adam, 2026-11-02): coming back to the app offers the server's place in a capsule where the footer is, "BookOrbit: 62% · Chapter 80", with Go and ✕. Turning the page or ✕ keeps this iPhone's place. Built: `docs/notes/sync-in-app.md`.
+    - **Another reader moved on while a book was open** (Adam, 2026-11-02): coming back to the app offers the server's place in a capsule where the footer is, "BookOrbit: 62% · Chapter 80", with Go and ✕. Turning the page or ✕ keeps this iPhone's place. Built: `docs/notes/sync-in-app.md`. With the way back up, both show (decision 33).
     - **Downloading** shows on the strip too: "Downloading · 42%", "Opens when it's done.", a progress bar and Cancel.
 
 ### Reader and the Duo (approved 2026-10-31)
@@ -257,6 +257,23 @@ Decided with mockups in the planning session (no Figma frames). This is step 17,
 
 19. **Results by chapter, then step through.** The Search button opens a glass sheet: the search field, the match count and results grouped by chapter with their surrounding words. Tapping a result shows the page with the match highlighted and a small bar: ‹ 3 of 128 ›; tapping the count returns to the list, ✕ ends the search. foliate's built-in search supplies the matches, their excerpts and CFIs.
     - **Built (step 12, 2026-11-02).** The panel opens like the others: out of its button unfolded, a sheet folded, staying above the keyboard. It searches once typing pauses (two letters or more, or anything on Return), ignoring case and accents, and results arrive a chapter at a time, each with its page; it stops at 1,000 matches ("1,000+"). Reopening Search keeps the last search, scrolled to the match shown. The step bar sits under the page (under the right page of a spread, off the hinge) in the footer's place; ✕ clears the search. The matches come from foliate's matcher, but the bridge walks the book itself, so a match is named after its chapter, not its file (`docs/notes/reader-page.md`).
+
+### Going back after a jump (Adam, 2026-11-04)
+
+Decided with pictures in the planning session (no Figma frames). Not built yet (`docs/PLAN.md`, To revisit). The measurements are in `docs/notes/going-back.md`.
+
+33. **Any jump offers the way back, and your place holds until you settle.** Today a jump saves the page you land on as your place and syncs it about 2 s later, so a look at a map moves your other devices too.
+    - **What starts it:** every jump: the scrubber, Contents, a bookmark, a search result or a link in the book. Not a page turn, a fold, a text size change, or Go on BookOrbit's capsule. A second jump keeps the same way back, to where you were before the first one.
+    - **The button:** "Back to page 312" with ✕, in a glass capsule. It stays up with the controls hidden, since they go on the next tap. The number is the footer's.
+    - **Where it sits:** at the bottom of the left page in every posture (over the blank strip and the column's button), in the chapter's place in the footer, so the page numbers stay. While the progress bar is up it sits just above the bar, half open above the bar's left piece. It goes while a panel is open, as the other capsules do.
+    - **While you're away:** your place doesn't move, on this iPhone or on the server. You can bookmark as usual.
+    - **What clears it:** Back, which returns to your place. ✕, which makes this page your place and syncs it. **5 page turns forward** from where you landed, which do the same: turning back doesn't count, and another jump starts the count again. Turning or scrubbing back onto your page. The 5 may change once it's been used on the Duo.
+    - **A trip survives closing:** folding, Back, quitting or a crash, and the book reopens where you were looking, with the button still up (Adam, over forgetting the trip, and over closing counting as staying). It's kept on this iPhone only and never syncs. If another reader moves your place meanwhile, the trip ends and the book opens at the new place.
+    - **The line shows the trip** (Adam's idea): while you're away the fill runs only from your place to where you are, in either direction, on the scrubber and on the book's screen, using the system slider's own neutral value. Half open it's the bar's left piece. Adam chose this over a dotted trail, which would mean building our own scrubber.
+    - **The book's screen says where it opens:** "48% · Opens at 90%", in place of "Synced just now". So every place line still tells the truth. Home's and Search's rows keep showing your place.
+    - **With BookOrbit's capsule, both show** (Adam, over one waiting for the other): stacked folded, with Back at the bottom and BookOrbit's capsule above it, covering about two lines until you answer; one under each page unfolded and half open. Back goes to your place and BookOrbit's capsule stays. Go goes to BookOrbit's place and ends the trip. BookOrbit's ✕ keeps your place, and the trip carries on. Back's ✕, or the fifth turn, makes this page your place and answers BookOrbit's capsule too, as reading on does.
+    - **With Search's bar:** unfolded and half open, Back under the left page and the bar under the right. Folded there's room for one, so Back waits until the search ends with ✕: stepping through matches is common, and a stack could cover the match.
+    - **Fixed-layout books:** the same, going back by the saved CFI, not by fraction. They need their own fix first (`docs/notes/going-back.md`).
 
 ### Settings (approved 2026-10-31)
 
