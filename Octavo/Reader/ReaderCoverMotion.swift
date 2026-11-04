@@ -5,8 +5,8 @@ import UIKit
 /// his Duo). From a book's screen, unfolded, the cover moves from the left
 /// page onto the right one and swings over the spine, landing as the left
 /// page of your place, the right page uncovered beneath it: the same motion
-/// as a flip. Folded, the cover fills the screen and swings away to the
-/// left, uncovering your page. With Reduce Motion the book's screen fades
+/// as a flip. Folded, the cover on its blur fills the screen and swings away
+/// to the left, uncovering your page. With Reduce Motion the book's screen fades
 /// into the page. The cover rests where it is until the reader has opened
 /// your place, so the wait for the book is part of the motion.
 ///

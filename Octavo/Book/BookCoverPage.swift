@@ -3,12 +3,12 @@ import SwiftUI
 
 /// A book's screen (`docs/design/direction.md`, A book's screen).
 ///
-/// - Folded, the cover fills the screen, running under the side column and
-///   the camera, with a glass sheet at the bottom: the title, the place,
-///   Download and Open; pulled up, the details. Tapping the cover while the
-///   details show returns to the strip.
-/// - Unfolded, Cover | Details: the cover fills the left page and the same
-///   summary and details sit on the right page.
+/// - Folded, the cover on its blur (`FittedCover`) fills the screen, running
+///   under the side column and the camera, with a glass sheet at the bottom:
+///   the title, the place, Download and Open; pulled up, the details. Tapping
+///   the cover while the details show returns to the strip.
+/// - Unfolded, Cover | Details: the cover on its blur fills the left page and
+///   the same summary and details sit on the right page.
 /// - Nothing is drawn behind the side column: the system's own glass
 ///   capsules (clock, Back, tabs) read on any cover.
 /// - Unfolding on this screen opens the book if it's on the iPhone

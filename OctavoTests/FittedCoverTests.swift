@@ -46,6 +46,11 @@ struct FittedCoverTests {
         #expect(try red(cover, x: 50, y: 5) < red(cover, x: 50, y: 75))
     }
 
+    @MainActor @Test func aNarrowCoverSitsInsideItsFrame() throws {
+        let cover = try draw(solidRed: CGSize(width: 50, height: 150))
+        #expect(try red(cover, x: 5, y: 75) < red(cover, x: 50, y: 75))
+    }
+
     @MainActor @Test func aCoverThatFillsHasNoStrips() throws {
         let cover = try draw(solidRed: CGSize(width: 100, height: 150))
         #expect(try red(cover, x: 50, y: 5) == red(cover, x: 50, y: 75))

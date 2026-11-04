@@ -43,6 +43,10 @@ struct FittedCover: View {
     /// A strip thinner than this would look like a glitch, and the crop that
     /// replaces it doesn't show.
     static let minimumStrip: CGFloat = 3
+    /// The blur's radius, as a share of the frame's shorter side.
+    private static let blurShare: CGFloat = 0.06
+    /// How much the blurred copy is darkened, so the cover stands out from it.
+    private static let dimming = 0.18
 
     /// Whether `cover` fills `frame`, cropped, instead of fitting inside it.
     static func fills(cover: CGSize, frame: CGSize) -> Bool {
@@ -64,9 +68,9 @@ struct FittedCover: View {
                     // Kept to the frame: a ZStack offers its children its own
                     // size, so an overflowing copy would make the fit overflow.
                     filled
-                        .blur(radius: min(frame.width, frame.height) * 0.06, opaque: true)
+                        .blur(radius: min(frame.width, frame.height) * Self.blurShare, opaque: true)
                         .clipped()
-                    Color.black.opacity(0.18)
+                    Color.black.opacity(Self.dimming)
                     picture.scaledToFit()
                 }
             }
