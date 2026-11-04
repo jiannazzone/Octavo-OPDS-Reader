@@ -233,6 +233,11 @@ Decided with mockups in the planning session (no Figma frames). This is step 17,
     - **Show the tour** in Settings, above About, plays it from the beginning and returns to Settings. If the sample book was removed, the tour still opens it but doesn't put it back on the shelf, so "This book cannot be recovered" stays true.
     - **Built (2026-11-03, `docs/notes/tour.md`).** Add your books from the tour is setup's first screen with Skip in the column. On a replay with a server already connected, Add books opens the Files picker (Adam, over a one-choice Add your books): Octavo holds one server, so the server choices would replace it. An unfinished tour starts again at the next launch. A file opened in Octavo as a new install's first launch lands on the Library with that book and no tour (Adam, over the tour next launch or first), with the sample book on Home. Since the sample book counts as a book, Remove server with it still on the iPhone lands on Home, where Skip does (Adam, over Add your books); with no books at all it's setup, as before.
 
+### Colour (Adam, 2026-11-03)
+
+31. **The accent is Ink**: `#34459E` in light mode and `#9FAEFF` in dark, in place of iOS's blue, for buttons, links, the scrubber, progress lines and lit controls. It keeps at least 7:1 on white, Paper, Sepia, Night and black, where iOS's blue falls to 3.2:1 on Sepia. Home, the Library and Settings keep the system's light and dark (decision 13).
+    - **Not built yet.**
+
 ### Text and theme (approved 2026-10-31)
 
 13. **A compact panel, Customize one step in.** The "Aa" button opens a Liquid Glass sheet (where available) so the page shows through while you adjust. Front: the four themes and A−/A+. Customize: font, line spacing, margins, page turn (decision 27), justify, Match Dark Mode, Book-mode shadow, Always show controls. These reading choices live only here, not in Settings. Unfolded, the panel covers the right page and the left page shows each change live.
