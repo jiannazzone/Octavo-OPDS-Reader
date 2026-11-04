@@ -64,6 +64,7 @@ Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded
 
 - **Curl as a Page Turn choice**: the corner peels over, as in Apple Books. Adam was tempted by it for open and left it out for now. It would draw from the same snapshots as the flip (or UIKit's page curl).
 - **Opening and closing** (decision 28) may change once Adam has seen it on his Duo. One idea: where Back doesn't land on the book's screen, the cover could shrink into its spot on Home or in a list instead of the reader fading.
+- **Leafing through to your place** (Adam, 2026-11-04): opening a book that isn't on page 1, some pages flip over, as if you're leafing through to where you left off. Not looked into yet. To decide: what the flipping pages show, how many there are and how long they take, what happens folded (where a turn slides), and whether it plays on every opening, including unfolding on a cover, which opens at once today.
 
 ## An accent colour (Adam, 2026-11-03)
 
@@ -71,13 +72,9 @@ Octavo has no accent colour of its own: no `AccentColor` asset and no tint set a
 
 ## Covers that aren't 2:3: fill or fit? (Adam, 2026-11-03)
 
-Every cover fills its frame today and is cropped to it (`CoverImage`, `BookCoverArt`, and the cover that swings open in decision 28): 2:3 cells on the shelves and grids, the whole screen folded, the right half unfolded. A cover of another shape, such as a square one or a scanned comic, loses its edges, which can cut off a title or an author's name. Even a 2:3 cover loses about 20 pt top and bottom on the folded screen (466×678 pt).
+Every cover filled its frame and was cropped to it (`CoverImage`, `BookCoverArt`, and the cover that swings open in decision 28): 2:3 cells on the shelves and grids, the whole screen folded, the left page unfolded. A cover of another shape, such as a square one, loses its edges, which can cut off a title or an author's name. A true 2:3 cover loses about 10 pt top and bottom on the folded screen (466×678 pt) and 7 pt on the left page (455.5×669 pt).
 
-- **Fill** (today): no empty space, but the crop.
-- **Fit**: the whole cover always shows, and the space around it takes the cover's colours, as Apple Music does behind album art: a colour picked from the cover, or a blurred, enlarged copy of it. Core Image finds the colour (`CIAreaAverage`, or the colours along the cover's edges), so no new dependency.
-- **In between**: fill when a cover is close to its frame's shape and fit when it isn't; or let grid cells take each cover's own shape, as Apple Books does, with the covers lined up along the bottom.
-
-Decide per place: the small covers on shelves and grids, the large cover page, Home's book, and the cover in the opening motion.
+Decided 2026-11-04: every cover fits its frame on a blurred copy of itself, on a book's screen, Home and the shelves and grids, and the opening motion follows (decision 32 in `docs/design/direction.md`). Built the same day.
 
 ## The reader's left strip (Adam, 2026-11-03)
 
