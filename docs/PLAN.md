@@ -43,6 +43,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - Closing the sample book lands on the Library, not its cover (Adam, 2026-11-03). Today the reader's Back shows whatever screen it was opened over: the sample book read from setup closes onto the Library's On iPhone, a book from Home's Continue reading onto Home. Only folding closes onto the book's own screen (`ShellModel.closeToItsScreen`). Decision 28's closing (the page swings back as the cover, which shrinks into its place) needs the book's screen there, so it plays only where Back already lands on it; elsewhere the reader fades as before. Should Back always land on the book's screen?
 - Should Home and the Library share the reader's colours (its theme: Paper, Sepia, Night), or keep the system's light and dark? (Adam, after step 12.)
 - The empty strip at the reader's left edge, unfolded (the mirror of the side column, about 84 pt, so the pages split on the hinge). Options: keep it as a margin; a quiet progress rail with chapter ticks; or, with Narrow margins and the Duo flat, let the pages spread across the whole width (text then crosses the crease, and going half open re-lays out). (Adam, after step 12.)
+- Graphical glitches in Settings: unfolded, the left column grows or bounces in from the edge as it opens (Adam, 2026-11-03, on his Duo). Not looked into yet.
 
 ## What you'll see that isn't right yet
 
