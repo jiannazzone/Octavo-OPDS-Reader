@@ -76,7 +76,10 @@ struct ReaderView: View {
         }
         .onDisappear {
             guard let model else { return }
-            Task { await model.close() }
+            Task {
+                await model.close()
+                shell.places.readerClosed()
+            }
         }
     }
 }
@@ -108,6 +111,8 @@ private struct ReaderScreen: View {
     @State private var panelButtonFrame: CGRect?
     /// How far the keyboard comes up over the reader, for Search's panel.
     @State private var keyboard: Double = 0
+    /// The progress bar's height, for the way back to sit above it.
+    @State private var barHeight = 0.0
     /// The sheet's height along the bottom of one page, for the tour's card.
     @State private var sheetHeight: Double?
     @Environment(\.scenePhase) private var scenePhase
@@ -131,14 +136,25 @@ private struct ReaderScreen: View {
         NavigationStack {
             // The bars take the footer's place: the progress bar, the step
             // bar while stepping through search matches, or the server's place.
-            ReaderWebView(model: model, showsFooter: !controls.showsBar && footerBar == nil)
+            ReaderWebView(model: model, showsFooter: showsFooter, hidesFooterChapter: backBarIsUp)
                 .overlay { status }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
-                        ReaderProgressBar(model: model)
+                        ReaderProgressBar(model: model, height: $barHeight)
                             .transition(.opacity)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    if backBarIsUp, let trip = model.trip, let geometry = model.geometry,
+                       let left = model.layout.textColumns(inReaderWidth: Double(geometry.size.width))?.first?.lowerBound {
+                        ReaderBackBar(trip: trip, back: model.goBack, stay: model.settleTrip)
+                            .fixedSize()
+                            .offset(x: left, y: backBarTop(in: geometry))
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: backBarIsUp)
+                .animation(.easeOut(duration: 0.2), value: controls.showsBar)
                 .overlay(alignment: .topLeading) {
                     if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
                         ReaderRibbon()
@@ -163,7 +179,7 @@ private struct ReaderScreen: View {
                         }
                         .frame(width: max(0, right - left))
                         .padding(.leading, left)
-                        .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4)
+                        .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4 + (stacksOverBackBar ? ReaderBackBar.height + 6 : 0))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -317,6 +333,34 @@ private struct ReaderScreen: View {
 
     private var darkMode: Bool { systemColorScheme == .dark }
 
+    /// The way back stays up with the controls hidden (decision 33). Not
+    /// under a panel, or on one page while Search's bar has the footer's place.
+    private var backBarIsUp: Bool {
+        guard model.trip != nil, panel == nil, shell.tour == nil, model.phase == .open else { return false }
+        return !(model.search.isStepping && model.layout.columns != 2)
+    }
+
+    /// On one page, BookOrbit's capsule stacks above the way back (decision
+    /// 33). Open, they sit one under each page.
+    private var stacksOverBackBar: Bool {
+        guard backBarIsUp, model.layout.columns != 2, case .serverPlace = footerBar else { return false }
+        return true
+    }
+
+    /// The bars take the footer's place, except that on one page the way back
+    /// keeps the numbers beside it, with BookOrbit's capsule above.
+    private var showsFooter: Bool {
+        !controls.showsBar && (footerBar == nil || stacksOverBackBar)
+    }
+
+    /// In the footer's place, or just above the progress bar while it's up.
+    private func backBarTop(in geometry: ReaderGeometry) -> Double {
+        if controls.showsBar {
+            return ReaderLayout.barBottom(in: geometry) - barHeight - 8 - ReaderBackBar.height
+        }
+        return Double(geometry.size.height) - model.layout.bottomInset - ReaderLayout.verticalMargin / 2 - ReaderBackBar.height / 2
+    }
+
     private var hintsPageTurn: Bool {
         shell.tour?.step == .turnThePage && model.phase == .open && shell.coverMotion == nil && !controls.coversPage && panel == nil
     }
@@ -415,11 +459,11 @@ private struct ReaderScreen: View {
             bookmarks: model.bookmarks.list,
             page: { [total = model.location?.total] in ReaderModel.page(at: $0, total: total) },
             goToRow: { row in
-                model.goTo(row)
+                model.jump(to: row)
                 backToReading()
             },
             goToBookmark: { bookmark in
-                model.goTo(bookmark)
+                model.jump(to: bookmark)
                 backToReading()
             },
             remove: { model.bookmarks.remove($0) }
@@ -523,9 +567,11 @@ extension ReaderInsets {
 /// padding; half open both pieces take the taller one's height.
 private struct ReaderProgressBar: View {
     let model: ReaderModel
+    @Binding var height: Double
     /// Where the scrubber is while it's dragged, and after it's let go until
     /// the page gets there.
     @State private var scrub: Double?
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @State private var relocationsAtRelease: Int?
 
     var body: some View {
@@ -550,6 +596,7 @@ private struct ReaderProgressBar: View {
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: Double.self) { Double($0.size.height) } action: { height = $0 }
             // The bar's bottom on the home indicator's edge.
             .frame(width: last.upperBound - first.lowerBound, height: ReaderLayout.barBottom(in: geometry), alignment: .bottom)
             .offset(x: first.lowerBound)
@@ -563,17 +610,66 @@ private struct ReaderProgressBar: View {
         return ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction)
     }
 
-    private var scrubber: some View {
-        VStack(alignment: .leading, spacing: 0) {
+    /// The chapter's name between its buttons (decision 35), which keep a
+    /// finger's room without making the bar any taller.
+    private var chapterLine: some View {
+        let skip = model.chapterSkip
+        return HStack(spacing: 0) {
+            if skip.isAvailable { chapterButton(.back, isEnabled: skip.canGoBack) }
             Text(place.chapter ?? model.title ?? " ")
                 .font(.footnote.weight(.semibold))
                 .lineLimit(1)
-            Slider(value: fraction, in: 0...1) { editing in
-                guard !editing, let scrub else { return }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if skip.isAvailable { chapterButton(.forward, isEnabled: skip.canGoForward) }
+        }
+    }
+
+    private func chapterButton(_ direction: ReaderChapterSkip.Direction, isEnabled: Bool) -> some View {
+        Button {
+            model.skipChapter(direction)
+        } label: {
+            Image(systemName: direction == .back ? "backward.end.fill" : "forward.end.fill")
+                .font(.footnote)
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isEnabled ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
+        .disabled(!isEnabled)
+        .padding(direction == .back ? .leading : .trailing, -14)
+        .padding(.vertical, -13)
+        .accessibilityLabel(direction == .back ? "Previous Chapter" : "Next Chapter")
+    }
+
+    private var scrubber: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            chapterLine
+            ReaderScrubber(value: fraction, chapters: model.toc.compactMap(\.fraction), total: model.location?.total, neutral: model.trip?.placeFraction) { chapter in
+                guard let scrub else { return }
                 relocationsAtRelease = model.relocationCount
-                model.goTo(fraction: scrub)
+                if let chapter, let href = model.toc.first(where: { $0.fraction == chapter })?.href {
+                    model.jump(to: href)
+                } else {
+                    model.jump(toFraction: scrub)
+                }
+            } cancelled: {
+                scrub = nil
+                relocationsAtRelease = nil
             }
-            .controlSize(.mini)
+            // A slider only redraws its fill for a new value, and a landing
+            // brings none, so a new place gets a new slider. VoiceOver would
+            // lose its place on it, and keeps this one.
+            .id(voiceOverEnabled ? nil : model.trip?.placeFraction)
+            .frame(height: 30)
+            // A jump that doesn't relocate (it landed on this page, or the
+            // place wouldn't open) mustn't leave the knob on it for good.
+            .task(id: relocationsAtRelease) {
+                guard relocationsAtRelease != nil else { return }
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                scrub = nil
+                relocationsAtRelease = nil
+            }
             .accessibilityLabel("Position in Book")
             .accessibilityValue(place.barLine(spread: false))
         }
@@ -658,12 +754,13 @@ private struct ReaderProgressBar: View {
 /// whose pictures carry each page's own (`ReaderTurn`).
 struct ReaderFooter: View {
     let model: ReaderModel
+    var hidesChapter = false
 
     var body: some View {
         if model.phase == .open, let geometry = model.geometry {
             ReaderFooterLines(
                 place: ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction),
-                layout: model.layout, geometry: geometry
+                layout: model.layout, geometry: geometry, hidesChapter: hidesChapter
             )
         }
     }
@@ -676,6 +773,8 @@ struct ReaderFooterLines: View {
     let place: ReaderPlace
     let layout: ReaderLayout
     let geometry: ReaderGeometry
+    /// The way back sits in the chapter's place (decision 33).
+    var hidesChapter = false
 
     var body: some View {
         if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width)),
@@ -684,10 +783,10 @@ struct ReaderFooterLines: View {
             let centre = Double(geometry.size.height) - layout.bottomInset - ReaderLayout.verticalMargin / 2
             Group {
                 if spread {
-                    line(chapter: place.chapter, numbers: nil, in: first, centre: centre)
+                    line(chapter: hidesChapter ? nil : place.chapter, numbers: nil, in: first, centre: centre)
                     line(chapter: nil, numbers: place.footer(spread: true), in: last, centre: centre)
                 } else {
-                    line(chapter: place.chapter, numbers: place.footer(spread: false), in: first, centre: centre)
+                    line(chapter: hidesChapter ? nil : place.chapter, numbers: place.footer(spread: false), in: first, centre: centre)
                 }
             }
             .font(.caption2)

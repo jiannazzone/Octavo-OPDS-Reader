@@ -46,10 +46,18 @@ Adam, while settling #8's start chip: "we definitely need a nicer empty state th
 
 #17 built each page's footer (chapter, page, percentage) and the glass bar as a scrubber (decision 7, amended). Not designed yet:
 
-- **Back to where you were.** After a scrub, Apple Books offers "Back to page N" for a while. Today a scrub just moves.
+- **Back to where you were.** Decided 2026-11-04: decision 33 in `docs/design/direction.md`. Still parked: **going forward again** after Back, and **a mark for your place on the scrubber** outside a trip (the system slider's tick locks the knob onto it, `docs/notes/going-back.md`).
 - **The scrubber's look.** It's the system slider (round knob); frame 08 draws a thin line with no knob.
 - **Real page numbers.** The numbers are foliate's 1,500-character locations, so a page turn doesn't always change them. Counting real pages for the current layout means paginating the whole book after every fold and text change; the Contents panel (#18, "page numbers for the current layout") meets the same question.
 - **Footer on or off**, as a Customize setting, if anyone wants the page bare.
+
+## Scrubber and notes: ideas not chosen (2026-11-04)
+
+From decisions 34 and 35. Seen as pictures, none chosen:
+
+- **Skipping by a swipe up or down on the page**: no controls to bring up, but nothing shows it's there and it's easy to do by accident. It could be added to the chapter buttons later.
+- **Other ways to zoom the scrubber**, if holding still ever needs replacing: slowing down (the slower your finger, the finer), dragging up off the bar, or a second line for the chapter (half open, the chapter line that's already there made draggable).
+- **A switch for pop-up notes in Customize**, if anyone would rather always jump. Go to Note covers it for now.
 
 ## The book-mode readout (Adam, 2026-11-03)
 
@@ -82,7 +90,7 @@ Blank for now (decision 8), with the door left open. All of these apply only unf
 
 - **Page edges:** thin lines at the screen's edge that thicken as you read. How far through the book at a glance, with nothing to tap or read.
 - **Progress rail:** your place and chapter ticks down the strip. The most exact, but it repeats the glass bar and footer and is always on screen.
-- **Go back in the strip:** the "go back" from `docs/PLAN.md`, showing only after a jump or a scrub, with the page it returns to. Empty the rest of the time, and it needs another home when folded. It could go with page edges.
+- **Go back in the strip:** the "go back" from `docs/PLAN.md`, showing only after a jump or a scrub, with the page it returns to. Empty the rest of the time, and it needs another home when folded. Adam chose the bottom of the left page instead (decision 33), so this one's closed.
 - **Chapter down the side:** the chapter title running sideways, like a book's running head. Sideways text is slow to read.
 
 Turned down:

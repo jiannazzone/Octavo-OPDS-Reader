@@ -115,6 +115,7 @@ extension ReaderModel {
             paper: Color(hex: appearance.background), old: old,
             oldPlace: ReaderPlace(chapter: chapter, location: location, fraction: shownFraction)
         )
+        turn?.hidesChapter = trip != nil
         Task { await turnUnderPictures(run, regions: regions.new, size: size, spine: spine) }
         // A tap's turn waits for the new page, which is drawn about 50 ms
         // later (too soon to notice), so it moves in whole; one that takes
@@ -136,7 +137,7 @@ extension ReaderModel {
         guard phase == .open else { return }
         Task {
             let answer = try? await page.callJavaScript("return await window.octavo.turn(side, false)", arguments: ["side": side.rawValue]) as? [String: Any]
-            if answer?["moved"] as? Bool == true { onPageTurned?() }
+            if answer?["moved"] as? Bool == true { pageTurned() }
         }
     }
 
@@ -219,7 +220,7 @@ extension ReaderModel {
     /// The pictures go, and the web view shows where the turn went. A turn
     /// asked for meanwhile starts.
     private func endTurn() {
-        if let turnRun, turnRun.target == 1, turnRun.moved == true { onPageTurned?() }
+        if let turnRun, turnRun.target == 1, turnRun.moved == true { pageTurned() }
         turnRun = nil
         turn = nil
         guard !queuedTurns.isEmpty else { return }

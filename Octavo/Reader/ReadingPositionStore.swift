@@ -58,12 +58,37 @@ nonisolated struct ReadingPositionStore: Sendable {
 
     func removePosition(forBook bookID: String) {
         try? FileManager.default.removeItem(at: fileURL(forBook: bookID))
+        saveTrip(nil, forBook: bookID)
+    }
+
+    // MARK: Trips (decision 33)
+
+    /// Kept beside the positions, and never synced.
+    private var tripsDirectory: URL {
+        directory.appending(path: "Trips", directoryHint: .isDirectory)
+    }
+
+    func trip(forBook bookID: String) -> ReaderTrip? {
+        guard let data = try? Data(contentsOf: Self.fileURL(forBook: bookID, in: tripsDirectory)) else { return nil }
+        return try? JSONDecoder().decode(ReaderTrip.self, from: data)
+    }
+
+    /// `nil` ends it.
+    func saveTrip(_ trip: ReaderTrip?, forBook bookID: String) {
+        let url = Self.fileURL(forBook: bookID, in: tripsDirectory)
+        guard let trip else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        try? FileManager.default.createDirectory(at: tripsDirectory, withIntermediateDirectories: true)
+        try? JSONEncoder().encode(trip).write(to: url, options: .atomic)
     }
 
     /// Every book's place but `keeping`'s (another server after Remove
     /// server, `RemovedServer`).
     func removeAll(keeping bookIDs: Set<String>) {
         Self.removeFiles(in: directory, keeping: bookIDs)
+        Self.removeFiles(in: tripsDirectory, keeping: bookIDs)
     }
 
     /// The per-book JSON files in `directory`, but `keeping`'s; folders

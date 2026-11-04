@@ -4,6 +4,14 @@ import Testing
 @testable import Octavo
 
 struct ReaderMessageTests {
+    @Test func onlyATurnsRelocationIsAPageTurn() {
+        for (reason, isTurn) in [("page", true), ("snap", true), ("anchor", false), ("navigation", false), (nil, false)] as [(String?, Bool)] {
+            var relocation = ReaderMessage.Relocation()
+            relocation.reason = reason
+            #expect(relocation.isPageTurn == isTurn)
+        }
+    }
+
     // A relocate message as bridge.js posted it while reading Pride and Prejudice.
     static let relocateJSON = """
     {"type":"relocate","cfi":"epubcfi(/6/4!/4/16/8/2,/2/2/3:0,/4/2/3:14)","fraction":0.011097344942887005,\
@@ -131,6 +139,16 @@ struct ReaderMessageTests {
     @Test func decodesExternalLink() throws {
         #expect(try ReaderMessage.decode(#"{"type":"externalLink","href":"https://www.gutenberg.org/ebooks/1342"}"#)
             == .externalLink(href: "https://www.gutenberg.org/ebooks/1342"))
+    }
+
+    @Test func decodesALinkInsideTheBook() throws {
+        #expect(try ReaderMessage.decode(#"{"type":"link","href":"OEBPS/chapter-2.xhtml#note-1"}"#)
+            == .link(href: "OEBPS/chapter-2.xhtml#note-1"))
+    }
+
+    /// With nowhere to go there's no message to act on.
+    @Test func aLinkWithNoAddressIsAnError() {
+        #expect(throws: (any Error).self) { try ReaderMessage.decode(#"{"type":"link"}"#) }
     }
 
     @Test func unknownTypeIsNotAnError() throws {

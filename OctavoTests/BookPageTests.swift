@@ -58,6 +58,11 @@ struct BookPageTests {
         #expect(synced.line(now: now) == "48% · Synced just now")
         let unsent = BookPlace(progress: 0.48, problem: nil, status: .notSynced, finished: false)
         #expect(unsent.line(now: now) == "48% · Not synced yet, will retry")
+        // Away from your place: where the book opens, in place of the sync.
+        var trip = ReaderTrip(place: ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.48))
+        trip.landed(on: ReadingPosition(cfi: "epubcfi(/6/30!/4/2)", fraction: 0.9), fraction: 0.9)
+        #expect(BookPlace(progress: 0.48, problem: nil, status: .synced(now), trip: trip, finished: false).line(now: now) == "48% · Opens at 90%")
+        #expect(BookPlace(progress: 0.48, problem: nil, status: .synced(now), trip: trip, finished: true).line(now: now) == "Finished")
         // An OPDS book doesn't sync: the place alone.
         #expect(BookPlace(progress: nil, problem: nil, status: nil, finished: false).line(now: now) == "Not started")
     }

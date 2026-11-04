@@ -42,16 +42,56 @@ extension ReaderModel {
         ReaderPlace(fraction: fraction, toc: [], total: total).first
     }
 
-    func goTo(_ row: ReaderContentsRow) {
+    func jump(to row: ReaderContentsRow) {
         if let href = row.href {
-            goTo(target: href)
+            jump(to: href)
         } else if let fraction = row.fraction {
-            goTo(fraction: fraction)
+            jump(toFraction: fraction)
         }
     }
 
-    func goTo(_ bookmark: LocalBookmark) {
-        goTo(target: bookmark.cfi)
+    func jump(to bookmark: LocalBookmark) {
+        jump(to: bookmark.cfi)
+    }
+
+    // MARK: Chapter buttons
+
+    var chapterSkip: ReaderChapterSkip {
+        let page = ReaderPlace(chapter: nil, location: location, fraction: shownFraction)
+        var isOnFirstEntry = false
+        if let start = toc.first?.fraction.flatMap({ Self.page(at: $0, total: location?.total) }), let first = page.first, let last = page.last {
+            isOnFirstEntry = (first...last).contains(start)
+        }
+        return ReaderChapterSkip(count: toc.count, current: currentContentsRow, isOnFirstEntry: isOnFirstEntry)
+    }
+
+    /// Goes to the first of the buttons' places that moves the page.
+    func skipChapter(_ direction: ReaderChapterSkip.Direction) {
+        guard phase == .open, !isSkippingChapter else { return }
+        isSkippingChapter = true
+        beginJump()
+        Task {
+            let rows = contentsRows
+            for index in chapterSkip.targets(direction) where rows.indices.contains(index) {
+                if await goToAndSeeIfThePageMoved(rows[index]) { break }
+            }
+            isSkippingChapter = false
+            await endJump()
+        }
+    }
+
+    private func goToAndSeeIfThePageMoved(_ row: ReaderContentsRow) async -> Bool {
+        let before = relocation?.startCFI ?? relocation?.cfi
+        let count = relocationCount
+        if let href = row.href {
+            _ = try? await page.callJavaScript("return await window.octavo.goTo(target)", arguments: ["target": href])
+        } else if let fraction = row.fraction {
+            _ = try? await page.callJavaScript("return await window.octavo.goToFraction(fraction)", arguments: ["fraction": fraction])
+        } else {
+            return false
+        }
+        await relocationsSettled(since: count)
+        return (relocation?.startCFI ?? relocation?.cfi) != before
     }
 
     /// The Contents panel opening: what's in the section on screen placed
@@ -107,7 +147,7 @@ extension ReaderModel {
     func showMatch(_ index: Int) {
         guard search.matches.indices.contains(index) else { return }
         search.show(index)
-        call("return await window.octavo.showMatch(cfi)", arguments: ["cfi": search.matches[index].cfi])
+        runJump("return await window.octavo.showMatch(cfi)", arguments: ["cfi": search.matches[index].cfi])
     }
 
     /// ✕ on the step bar: the highlight goes and the search with it.
