@@ -85,7 +85,7 @@ Left as they are:
 
 ## Checked on the simulator
 
-- A true new install (uninstalled first), unfolded and closed, every step with real taps, to Add your books, Skip and Home at 1%. `videos/whole-tour-flat.mp4`.
+- A true new install (uninstalled first), unfolded and closed, every step with real taps, to Add your books, Skip and Home. `videos/whole-tour-flat.mp4` shows the final tour from a new install up to the Text and theme panel, on a Mac under heavy load, so the first opening is much slower than the 4.4 s below.
 - A tap and a swipe both moved Turn the page on.
 - Sepia and Night changing the left page live.
 - Half open at 110°: book mode, the card on the left page, the spine shadow.
@@ -95,6 +95,8 @@ Left as they are:
 - Six folds and unfolds at different moments on Turn the page, no crash. The lift runs for 0.9 s in every 3.4 s, so not every fold will have caught it.
 - A replay turning two pages: the real saved place unchanged, the temporary one written.
 - A replay with the local BookOrbit connected: Add books opened the Files picker.
+
+**A tap while the book is still loading** turns the page without counting: foliate turns it itself until Octavo takes over turns (`setTurnMode`), so the step waits for the next tap. Harmless, and left as it is.
 
 **Taps while the cover opens are ignored.** The cover's motion takes touches until it's gone (`ReaderCoverMotionView`), so a tap on the card's place before it shows does nothing. That's probably the one lost tap seen earlier in this work; not proven.
 
