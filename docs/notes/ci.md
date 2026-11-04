@@ -5,8 +5,7 @@
 | Job | Runner | What it does |
 |---|---|---|
 | Changes | `ubuntu-latest` | Decides whether tests are needed |
-| OctavoKit tests | `xcode-27` | `swift test` |
-| App tests | `xcode-27` | `xcodebuild` on an iPhone Duo, iOS 27.1 |
+| Tests | `xcode-27` | `swift test`, then `xcodebuild` on an iPhone Duo, iOS 27.1 |
 | CI passed | `ubuntu-latest` | Fails unless the jobs that had to run passed. The one check "Protect main" requires |
 
 ## Merging
@@ -29,18 +28,20 @@ GitHub's `xcode-27` image lists Xcode 27.2, an iOS 27.1 runtime and the iPhone D
 
 The repo is public, so these standard runners should cost nothing. Pull requests from first-time and other outside contributors wait for approval, because the repo's setting is `all_external_contributors`.
 
+`swift test` and the app's tests share one job, so a run asks for one runner. They were two jobs until 2026-11-04. A run waited about 10 minutes for a runner, and on #57's run `41866624185` the OctavoKit job failed with "The job was not acquired by Runner of type hosted even after multiple attempts" while App tests passed, which turned the required check red. `swift test` goes first because it takes 1–2 minutes, so a failure there stops the run early. The app's results then wait until it's fixed. The job's limit is 35 minutes: the App tests job's 30, which one bad run nearly reached (see below), plus 5 for `swift test`.
+
 ## Docs-only changes
 
 A pull request compares its merge commit with the base. A push to `main` compares with where `main` was before the push, so every commit in it counts when a stack lands several at once. Tests are skipped only when every changed file is under `docs/`, or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a change with no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too.
 
 ## Build cache
 
-The App tests job turns on Xcode's compilation cache with `COMPILATION_CACHE_ENABLE_CACHING=YES`, in the workflow only, so local builds are unchanged. It keeps only `CompilationCache.noindex`, not the rest of DerivedData. Its entries are keyed by the compiler's input, not by file dates, so a fresh checkout still hits the cache and a stale result can't be reused the way it can with DerivedData.
+The Tests job turns on Xcode's compilation cache with `COMPILATION_CACHE_ENABLE_CACHING=YES`, in the workflow only, so local builds are unchanged. It keeps only `CompilationCache.noindex`, not the rest of DerivedData. Its entries are keyed by the compiler's input, not by file dates, so a fresh checkout still hits the cache and a stale result can't be reused the way it can with DerivedData.
 
 - Only pushes to `main` that run the tests save the cache, so a docs-only merge doesn't. A pull request restores it but never writes it, so the first build after the cache is empty is a full one.
 - The key holds the Xcode build and the month, so a new Xcode or a new month starts a fresh cache. Otherwise it would grow with every save, because each one keeps the old entries. The first build of a month is a full one until a merge to `main` that changes code saves again.
 - The DerivedData path has to stay the same between runs. The same code built at a different path hit only 99 of 156 tasks locally. `$RUNNER_TEMP` should be the same path on every GitHub run.
-- `OctavoKit tests` has no cache: it saved only a few seconds locally.
+- `swift test` has no cache: it saved only a few seconds locally.
 
 ## Signing
 
@@ -60,7 +61,7 @@ The small change added one line to an app file and one to an OctavoKit file: 99 
 
 ## Timings on GitHub's runners (2026-11-04)
 
-Four runs of the App tests job, with the simulator booting before the build. Most of the job's time comes before compiling, and the first `xcodebuild` on a new runner is the largest part. The second one, in the Test step, printed its first output in 6–8 s.
+Four runs of what was then the App tests job, with the simulator booting before the build. Most of the job's time comes before compiling, and the first `xcodebuild` on a new runner is the largest part. The second one, in the Test step, printed its first output in 6–8 s.
 
 | Phase | No cache (2 runs) | Cached (2 runs) |
 |---|---|---|
