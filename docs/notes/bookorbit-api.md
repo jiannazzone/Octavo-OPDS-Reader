@@ -25,7 +25,7 @@ Spike 1b (`BookOrbitClient` in OctavoKit) and 2a (sync), measured against the lo
 - `GET books/{id}/progress` returns one entry per file, with `updatedAt`.
 - BookOrbit's own web reader writes through `GET/PUT /api/v1/reading-progress` (batched, with Kobo/KOReader fields). It's the same row as `books/files/{id}/progress`, so either path syncs.
 - **Position format:** the web reader stores a collapsed **point** CFI at the start of the visible page; foliate reports a range. Octavo pushes the start point (`CFI.collapse(range)` in `bridge.js`). Element-start pages differ only in string form (ours `/102[id]`, the web's `/102[id]/1:0`), so compare positions by resolving them, never as strings.
-- Fixed-layout books restore by fraction, not CFI.
+- Fixed-layout books: the web reader restores by the percentage alone, which can land a page late. Octavo restores by CFI (`fixed-layout.md`).
 
 ## Bookmarks (step 12, measured 2026-11-02)
 

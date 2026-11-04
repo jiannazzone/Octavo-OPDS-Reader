@@ -47,6 +47,8 @@ final class ReaderModel {
     /// Counts relocations, including ones that repeat the same page (a fold
     /// re-lays out the page without moving the position).
     private(set) var relocationCount = 0
+    /// Where the page is as the reader shows it. `position` is what's saved.
+    var shownFraction: Double { relocation?.shownFraction ?? 0 }
 
     // Layout, decided from the fold. See `ReaderLayout`.
     /// The hinge's posture and angle, and whether that's book mode.
@@ -65,6 +67,11 @@ final class ReaderModel {
     var margins = ReaderMargins.standard {
         didSet { if margins != oldValue { relayout() } }
     }
+    /// Pre-paginated: pages drawn by the book, with no text to give margins.
+    private(set) var isFixedLayout = false
+    /// Narrow margins reach the page under the side column, which only suits
+    /// margins that aren't drawn.
+    private var layoutMargins: ReaderMargins { isFixedLayout ? .standard : margins }
     /// The controls cover the page, so a tap anywhere hides them.
     var coversPage = false {
         didSet { if coversPage != oldValue { sendTapMode() } }
@@ -300,7 +307,9 @@ final class ReaderModel {
     /// the book has opened.
     private func sendTurnMode() {
         let animated = pageTurn.isAnimated
-        swipes.isEnabled = animated
+        // Off with None, when foliate's paginator takes swipes itself. Its
+        // fixed-layout renderer has none, so those stay here.
+        swipes.isEnabled = animated || isFixedLayout
         guard phase == .open, animated != sentTurnMode else { return }
         sentTurnMode = animated
         call("return await window.octavo.setTurnMode(mode)", arguments: ["mode": ["animated": animated]])
@@ -327,7 +336,7 @@ final class ReaderModel {
             scheduleFoldEnd()
             return
         }
-        apply(ReaderLayout(posture: posture, geometry: geometry, margins: margins))
+        apply(ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins))
     }
 
     // MARK: Folding
@@ -408,7 +417,7 @@ final class ReaderModel {
             _ = try? await Self.withTimeout(.milliseconds(300)) { await coverTask.value }
         }
         lastClosedCover = max(lastClosedCover, cover)
-        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: margins)
+        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins)
         self.layout = layout
         sentLayout = layout
         bookModeMayHaveChanged()
@@ -520,6 +529,8 @@ final class ReaderModel {
             openedCFI = position?.cfi
             hasMoved = false
             didOpen()
+            isFixedLayout = opened.isFixedLayout
+            relayout()
             sendLayout()
             sendTapMode()
             sendTurnMode()
@@ -537,7 +548,10 @@ final class ReaderModel {
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
             location = relocation.location
-            if !isRestoring {
+            // A repeat isn't a move (a fixed-layout page re-laid out reports
+            // itself for the footer): saving it would mark it unsent, with a
+            // new time that could beat another reader's newer place.
+            if !isRestoring, relocation.position(cfiShape) != previous?.position(cfiShape) {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.
                 if !pageTurn.isAnimated, foldBatch == nil, relocation.cfi != previous?.cfi { onPageTurned?() }
@@ -545,7 +559,7 @@ final class ReaderModel {
             }
             // A turn's new page, measured again since its pictures came.
             if turnRun?.drawn == true, turn?.newPlace != nil {
-                turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.fraction ?? 0)
+                turn?.newPlace = ReaderPlace(chapter: relocation.tocLabel, location: relocation.location, fraction: relocation.shownFraction)
             }
             if serverPlace != nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
@@ -750,7 +764,12 @@ final class ReaderModel {
         guard let place = serverPlace, let cfi = place.position.cfi else { return }
         serverPlace = nil
         isJumpingToServer = true
-        goTo(cfi: cfi)
+        Task {
+            // It may not open (another edition's place), and the next turn is
+            // then this reader's own.
+            let went = try? await page.callJavaScript("return await window.octavo.goTo(cfi)", arguments: ["cfi": cfi]) as? Bool
+            if went != true { isJumpingToServer = false }
+        }
         // A fold or a text change since the offer re-laid out the page and
         // sent its place; the server's goes back.
         if pushedSinceOffer, let pusher { Task { await pusher.submit(place.position) } }

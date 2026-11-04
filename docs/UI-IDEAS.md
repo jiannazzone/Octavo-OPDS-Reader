@@ -89,3 +89,12 @@ Turned down:
 
 - **Spreading the pages across the whole width:** the right page's text sits on the crease, and going half open re-lays out.
 - **A wider left page, with the divide on the fold** (393 | 309 pt at Medium): Adam's idea, which keeps the fold steady and works in book mode too. foliate's pages are CSS columns, always equal, so it takes a workaround: every column as wide as the left page, with invisible floats blocking the outer 84 pt of each right page. In a throwaway test on macOS WebKit with foliate's column styles (not foliate itself, and not iOS), text came out at exactly those widths with 10-14% fewer spreads across the five sample books, Pride and Prejudice with its floats off. Left on, a book's own floats break it (Pride and Prejudice went from 63 spreads to 111, with blank pages). The book's `clear` rules also have to go, pictures and tables are capped at 309 pt, and boxes with backgrounds run under the column. Adam decided against the workaround.
+
+## Fixed-layout books (parked 2026-11-04)
+
+Pre-paginated books open now (`docs/notes/fixed-layout.md`). What they show that hasn't been decided:
+
+- **A book with `rendition:spread="none"`, unfolded:** foliate shows one page in the middle of the screen, straight across the fold. Pairing the pages either side of the fold would keep them off it, and suits portrait pages, but it halves a landscape page that fills the screen across the fold today. BookOrbit's web reader offers the choice as a setting (Page spreads).
+- **The Text panel:** font, size, spacing, margins and justify do nothing on these pages, and themes colour only the space around them. BookOrbit's web reader hides the text controls for these books.
+- **Search:** going to a match works, but foliate's fixed-layout renderer has nothing to draw its highlight on.
+- **Folded and turned sideways:** two pages, by foliate's rule, not the one page text gets. Each is about the size one page would be there (297 pt wide, against 309).

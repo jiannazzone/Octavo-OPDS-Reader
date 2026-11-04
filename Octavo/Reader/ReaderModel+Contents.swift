@@ -33,7 +33,7 @@ extension ReaderModel {
     /// starting at or before the page.
     var currentContentsRow: Int? {
         if let href = relocation?.tocHref, let index = toc.firstIndex(where: { $0.href == href }) { return index }
-        guard let fraction = relocation?.fraction else { return nil }
+        guard let fraction = relocation?.pageFraction ?? relocation?.fraction else { return nil }
         return toc.lastIndex { ($0.fraction ?? .infinity) <= fraction + 1e-9 }
     }
 
@@ -133,7 +133,7 @@ extension ReaderModel {
         }
         guard let relocation, relocation.blankPage != true, let cfi = relocation.startCFI ?? relocation.cfi else { return }
         Task {
-            let place = await describe(cfi) ?? BookmarkPlace(fraction: relocation.fraction, chapter: relocation.tocLabel, excerpt: nil)
+            let place = await describe(cfi) ?? BookmarkPlace(fraction: relocation.shownFraction, chapter: relocation.tocLabel, excerpt: nil)
             bookmarks.toggle(pageStart: cfi, place: place)
         }
     }
