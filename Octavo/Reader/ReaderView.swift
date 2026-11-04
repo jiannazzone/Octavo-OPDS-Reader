@@ -203,15 +203,6 @@ private struct ReaderScreen: View {
                 .toolbar { buttons }
                 .toolbar(buttonsVisible || showsControlsButton || shell.tour != nil ? .visible : .hidden, for: .navigationBar)
         }
-        // Over the column too, for the ring on its buttons.
-        .overlay {
-            // Not on the right page while something covers it: a tap there
-            // would only close that.
-            if let target = shell.tour?.step.ring, model.phase == .open, shell.coverMotion == nil,
-               target != .rightPage || !model.coversPage {
-                TourRingLayer(target: target, geometry: model.geometry, layout: model.layout)
-            }
-        }
         // The column's buttons, the footer, the bar and the panel in the
         // page's colours. Here, not for the window, so `systemColorScheme`
         // stays the iPhone's.
@@ -246,6 +237,17 @@ private struct ReaderScreen: View {
         }
         .onChange(of: panel) { _, panel in
             if panel == .contents { Task { await model.placeOnScreen() } }
+        }
+        // The tour's Turn the page: the page lifts every few seconds until it's
+        // turned. Not while something covers it: a tap would only close that.
+        .task(id: hintsPageTurn) {
+            guard hintsPageTurn else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1.2))
+                guard !Task.isCancelled else { return }
+                await model.playTurnHint()
+                try? await Task.sleep(for: .seconds(1.3))
+            }
         }
         .onChange(of: tourReaderState, initial: true) { _, state in
             shell.tourEvent(.reader(state))
@@ -315,6 +317,10 @@ private struct ReaderScreen: View {
 
     private var darkMode: Bool { systemColorScheme == .dark }
 
+    private var hintsPageTurn: Bool {
+        shell.tour?.step == .turnThePage && model.phase == .open && shell.coverMotion == nil && !controls.coversPage && panel == nil
+    }
+
     /// What the tour's steps in the book look at.
     private var tourReaderState: TourFlow.ReaderState {
         TourFlow.ReaderState(barVisible: controls.showsBar, buttonsVisible: controls.buttonsVisible, textPanelOpen: panel == .textAndTheme)
@@ -365,7 +371,7 @@ private struct ReaderScreen: View {
                     Button("Back", systemImage: "chevron.backward", action: close)
                 }
                 panelButton(.contents, title: "Contents", systemImage: "list.bullet")
-                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size")
+                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size", lit: shell.tour?.step.litButton == .textAndTheme)
                 panelButton(.search, title: "Search in Book", systemImage: "magnifyingglass")
                 let bookmarked = model.bookmarks.pageIsBookmarked
                 Button(bookmarked ? "Remove Bookmark" : "Bookmark", systemImage: bookmarked ? "bookmark.fill" : "bookmark") {
@@ -381,10 +387,12 @@ private struct ReaderScreen: View {
 
     /// A column button that opens `selected`, lit while it's open. Another
     /// panel's button switches to its own.
-    private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String) -> some View {
+    /// `lit`: the tour asks for this button next, so it's blue, as it's named
+    /// on the card (Adam, 2026-11-03).
+    private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String, lit: Bool = false) -> some View {
         Button(String(localized: title), systemImage: systemImage) {
             if panel != selected {
-                panelButtonFrame = ReaderColumnButton.frame(titled: String(localized: title))
+                panelButtonFrame = Self.columnButtonFrame(titled: String(localized: title))
             }
             withAnimation(ReaderPanel.animation) {
                 if panel == selected {
@@ -396,7 +404,7 @@ private struct ReaderScreen: View {
                 }
             }
         }
-        .tint(panel == selected ? .accentColor : nil)
+        .tint(panel == selected || lit ? .accentColor : nil)
         .accessibilityAddTraits(panel == selected ? .isSelected : [])
     }
 
@@ -465,24 +473,10 @@ private struct ReaderScreen: View {
         }
     }
 
-    private var showControlsButton: some View {
-        Button(ReaderColumnButton.showControls, systemImage: "ellipsis") {
-            withAnimation(.easeOut(duration: 0.2)) { controls.show() }
-        }
-        .tint(.secondary)
-    }
-}
-
-/// The column's buttons by title, which is how UIKit finds them.
-enum ReaderColumnButton {
-    static var showControls: String { String(localized: "Show Controls") }
-    static var textAndTheme: String { String(localized: "Text and Theme") }
-
-    /// A column button's frame in the window, for its panel to grow out of or
-    /// the tour's ring. SwiftUI measures a toolbar item in its own space
-    /// (about (-15, -10) for Aa), so this asks UIKit for the bar button with
-    /// that title.
-    static func frame(titled title: String) -> CGRect? {
+    /// A column button's frame in the window, for its panel to grow out of.
+    /// SwiftUI measures a toolbar item in its own space (about (-15, -10)
+    /// for Aa), so this asks UIKit for the bar button with that title.
+    private static func columnButtonFrame(titled title: String) -> CGRect? {
         func bars(in view: UIView) -> [UINavigationBar] {
             (view as? UINavigationBar).map { [$0] } ?? view.subviews.flatMap(bars)
         }
@@ -497,6 +491,13 @@ enum ReaderColumnButton {
             }
         }
         return nil
+    }
+
+    private var showControlsButton: some View {
+        Button("Show Controls", systemImage: "ellipsis") {
+            withAnimation(.easeOut(duration: 0.2)) { controls.show() }
+        }
+        .tint(shell.tour?.step.litButton == .showControls ? .accentColor : .secondary)
     }
 }
 

@@ -41,6 +41,15 @@ nonisolated enum ReaderPageTurn: String, CaseIterable, Identifiable, Sendable, C
         }
     }
 
+    /// How a page shows that it turns without turning (the tour's Turn the
+    /// page), if it can: a flip or a slide, started and let fall back. Reduce
+    /// Motion holds it still, whatever style was picked.
+    func hintMotion(spread: Bool, reduceMotion: Bool) -> ReaderTurnMotion? {
+        guard !reduceMotion else { return nil }
+        let motion = motion(spread: spread, reduceMotion: false)
+        return motion == .flip || motion == .slide ? motion : nil
+    }
+
     /// Whether Swift draws the turns. With None the page turns itself
     /// (`bridge.js` `setTurnMode`).
     var isAnimated: Bool { self != .none }

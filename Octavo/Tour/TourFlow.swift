@@ -15,10 +15,9 @@ nonisolated struct TourFlow: Equatable, Sendable {
         case closeYourIPhone
         /// The cover, folded.
         case cover
-        case welcome
         case turnThePage
         case bringUpControls
-        /// Make it yours, with a ring on Aa.
+        /// Make it yours, with Aa blue.
         case tapAa
         /// Make it yours, with the Text and theme panel open.
         case makeItYours
@@ -29,8 +28,6 @@ nonisolated struct TourFlow: Equatable, Sendable {
         case folded
         case unfolded
         case continueWithoutClosing
-        /// Welcome's Start.
-        case start
         /// A page really turned: a swipe that falls back isn't one.
         case pageTurned
         /// The controls or the panels changed, or a step started.
@@ -59,12 +56,12 @@ nonisolated struct TourFlow: Equatable, Sendable {
         step = switch fold {
         case .open?: .closeYourIPhone
         case .closed?: .cover
-        case nil: .welcome
+        case nil: .turnThePage
         }
     }
 
     /// The book is open at this step, or about to be.
-    var isInBook: Bool { step.rawValue >= Step.welcome.rawValue }
+    var isInBook: Bool { step.rawValue >= Step.turnThePage.rawValue }
 
     /// The cover's line: a book already opened goes on where it was.
     var coverLine: String {
@@ -81,10 +78,8 @@ nonisolated struct TourFlow: Equatable, Sendable {
             resumes = step
             step = .cover
         case (.unfolded, .cover):
-            step = resumes ?? .welcome
+            step = resumes ?? .turnThePage
         case (.continueWithoutClosing, .closeYourIPhone):
-            step = .welcome
-        case (.start, .welcome):
             step = .turnThePage
         case (.pageTurned, .turnThePage):
             step = .bringUpControls
@@ -116,7 +111,6 @@ extension TourFlow.Step {
     var card: (title: String, message: String)? {
         switch self {
         case .closeYourIPhone, .cover: nil
-        case .welcome: ("Welcome to Octavo", "Try things out on this book. It’s yours to keep.")
         case .turnThePage: ("Turn the page", "Tap the right page, or swipe. Tap the left page to go back.")
         case .bringUpControls: ("Bring up the controls", "Tap ··· whenever you need them.")
         case .tapAa: ("Make it yours", "Tap Aa for themes, text size and fonts.")
@@ -128,22 +122,21 @@ extension TourFlow.Step {
     /// Which of the card's dots this step lights.
     var dot: Int {
         switch self {
-        case .closeYourIPhone, .cover, .welcome: 0
-        case .turnThePage: 1
-        case .bringUpControls: 2
-        case .tapAa, .makeItYours: 3
-        case .addYourBooks: 4
+        case .closeYourIPhone, .cover, .turnThePage: 0
+        case .bringUpControls: 1
+        case .tapAa, .makeItYours: 2
+        case .addYourBooks: 3
         }
     }
 
-    static let dotCount = 5
+    static let dotCount = 4
 
-    /// What the pulsing ring marks.
-    var ring: TourRingTarget? {
+    /// The column button this step asks for, blue. Turn the page shows itself:
+    /// the page lifts (`ReaderModel.playTurnHint`).
+    var litButton: TourColumnButton? {
         switch self {
-        case .turnThePage: .rightPage
-        case .bringUpControls: .columnButton(ReaderColumnButton.showControls)
-        case .tapAa: .columnButton(ReaderColumnButton.textAndTheme)
+        case .bringUpControls: .showControls
+        case .tapAa: .textAndTheme
         default: nil
         }
     }
@@ -153,9 +146,9 @@ extension TourFlow.Step {
     var showsControlsOnOpening: Bool { self == .tapAa || self == .makeItYours }
 }
 
-nonisolated enum TourRingTarget: Equatable, Sendable {
-    case rightPage
-    case columnButton(String)
+nonisolated enum TourColumnButton: Equatable, Sendable {
+    case showControls
+    case textAndTheme
 }
 
 /// Whether the tour has played on this install. It plays once. Whether an

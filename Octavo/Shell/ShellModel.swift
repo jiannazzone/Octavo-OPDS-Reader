@@ -345,6 +345,7 @@ final class ShellModel {
     func installSampleBook() -> SourcedBook? {
         guard let book = try? SampleBook.install(into: library.imported) else { return nil }
         let sample = SourcedBook(source: .files, book: book)
+        SampleBook.startAtFirstChapter(in: places.store)
         library.importedChanged()
         try? library.onIPhone.record(sample)
         opener.filesChanged()
@@ -811,7 +812,9 @@ final class ShellModel {
     /// Show the tour, in Settings: from the beginning, and back to Settings.
     func showTour() {
         guard tour == nil, reading == nil else { return }
-        tourReplayPlace = TourReplayPlace()
+        let place = TourReplayPlace()
+        SampleBook.startAtFirstChapter(in: place.positions)
+        tourReplayPlace = place
         begin(TourFlow(fold: hingeFold, isReplay: true))
     }
 
