@@ -41,7 +41,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 
 - [x] Page-turn animations, designed together with opening and closing a book (Adam, after step 10). Decided 2026-11-03 (decisions 27 and 28 in `docs/design/direction.md`) and built the same day (`docs/notes/page-turns.md`); opening and closing to be confirmed on Adam's Duo.
 - [x] Back from the reader is a normal Back: it lands on the screen the book was opened from (Adam, 2026-11-03). No code change, it's what the app did already. Only folding closes onto the book's own screen (`ShellModel.closeToItsScreen`).
-- Should Home and the Library share the reader's colours (its theme: Paper, Sepia, Night), or keep the system's light and dark? (Adam, after step 12.)
+- [x] Home, the Library and Settings keep the system's light and dark; the reader's themes stay in the reader, as in Apple Books (Adam, 2026-11-03). Opening a themed book still changes colour.
 - The empty strip at the reader's left edge, unfolded (the mirror of the side column, about 84 pt, so the pages split on the hinge). Options: keep it as a margin; a quiet progress rail with chapter ticks; or, with Narrow margins and the Duo flat, let the pages spread across the whole width (text then crosses the crease, and going half open re-lays out). (Adam, after step 12.)
 - Graphical glitches in Settings: unfolded, the left column grows or bounces in from the edge as it opens (Adam, 2026-11-03, on his Duo). Not looked into yet.
 - A "go back" in the reading controls: back to where you were after a jump or a scrub (Adam, 2026-11-03, on his Duo), as in `docs/UI-IDEAS.md` (Reader progress). The controls' ‹ already closes the book.
