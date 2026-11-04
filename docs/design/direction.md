@@ -207,7 +207,7 @@ Decided with animated mockups in the planning session (no Figma frames); replace
 28. **A book opens like a cover** (provisional: Adam decides once he has seen it on his Duo). Opening from a book's screen, the cover moves onto the right page and swings over the spine, landing as the left page of your place: the same motion as a flip. Folded, the cover fills the screen and swings away to the left, uncovering your page. Closing plays it backwards: the page swings back over as the cover, which shrinks back into its place on the book's screen. With no cover on screen, the reader fades in as before.
     - **Reduce Motion** cross-fades instead.
     - **Folding while reading and unfolding on a cover stay as they are**: the fold is already the motion (decisions 10 and 11).
-    - **Built (2026-11-03, `docs/notes/page-turns.md`), for Adam to see on his Duo.** The cover rests on the right page until the book has opened, then swings. Closing plays only when Back lands on the book's screen; Back lands on the screen the book was opened over (`docs/PLAN.md`, To revisit).
+    - **Built (2026-11-03, `docs/notes/page-turns.md`), for Adam to see on his Duo.** The cover rests on the right page until the book has opened, then swings. Closing plays only when Back lands on the book's screen; elsewhere the reader fades. **Back is a normal Back** (Adam, 2026-11-03): it lands on the screen the book was opened from.
 
 ### The tour (Adam, 2026-11-03)
 

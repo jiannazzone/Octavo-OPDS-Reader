@@ -63,7 +63,7 @@ Half open, the bar's right-hand piece shows the chapter's progress: pages left i
 Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded slides, open flips over the spine, a Page Turn menu in Customize, and a cover that swings open). Still parked:
 
 - **Curl as a Page Turn choice**: the corner peels over, as in Apple Books. Adam was tempted by it for open and left it out for now. It would draw from the same snapshots as the flip (or UIKit's page curl).
-- **Opening and closing** (decision 28) may change once Adam has seen it on his Duo.
+- **Opening and closing** (decision 28) may change once Adam has seen it on his Duo. One idea: where Back doesn't land on the book's screen, the cover could shrink into its spot on Home or in a list instead of the reader fading.
 
 ## An accent colour (Adam, 2026-11-03)
 
