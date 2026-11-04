@@ -58,7 +58,7 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
   - We write our **own** JS bridge between Swift and foliate-js. Do **not** copy BookOrbit's `bridge.js` or its modified foliate files (see Licensing).
   - foliate-js says its API is unstable. Pin the version and update deliberately.
   - **Confirmed by the spike (2026-10-31).** foliate-js and Readium both synced positions with BookOrbit exactly. foliate-js was kept because it needs no CFI translation, reads MOBI/AZW3/FB2, blocks book scripts and works with SwiftUI. Readium's maturity was the strong counter-argument (see `docs/SPIKE.md`, engine bake-off). Safeguards that come with the choice:
-    1. **We own the pinned copy.** Pinned at upstream `6b11e17`. Local changes are a small, numbered patch set listed in `ReaderWeb/foliate-js/PINNED.md`, never in `epubcfi.js`. Today: 0001 keeps the position on blank pages, 0002 lets the host set the column count. Fixes may be offered upstream, but only with the owner's OK.
+    1. **We own the pinned copy.** Pinned at upstream `6b11e17`. Local changes are a small, numbered patch set listed in `ReaderWeb/foliate-js/PINNED.md`, never in `epubcfi.js`. Today: 0001 keeps the position on blank pages, 0002 lets the host set the column count, 0003 reports going to the other page of a fixed-layout spread. Fixes may be offered upstream, but only with the owner's OK.
     2. **Every foliate-js bump re-runs the BookOrbit position round trip** (`docs/notes/sync-spike/`), the fold-continuity check (`docs/notes/duo-spreads/`) and patch 0001's page-by-page comparison (`docs/notes/foliate-blank-page/`), automated in CI once CI exists.
     3. **Escape hatch:** the local branch `spike/readium-eval` keeps a working Readium reader with a CFI bridge (measured 30/30 against BookOrbit). Switching is estimated at 2–3 weeks.
 - **Book scripts never run.** Every `octavo://` response carries a CSP that allows scripts only from `bridge.js` and `foliate-js/`; the book file is sandboxed and `nosniff`; foliate's load hook refuses script items; the bridge accepts messages only from the main `octavo://app` frame; external links are cancelled. Keep every layer when changing the bridge or the scheme handler (`docs/notes/reader-spike.md`).
@@ -111,8 +111,9 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
   - Annotations/bookmarks: `books/{bookId}/annotations`, `books/{bookId}/bookmarks` (keyed by CFI)
   - Status: `PATCH books/{id}/status`; rating via `books/bulk-set-rating`
   - Sign out: `POST auth/logout {refreshToken}` ends the session (the access token alone ends nothing)
+- **Fixed-layout books** (`docs/notes/fixed-layout.md`): the web reader opens them by its stored percentage alone, ignoring the CFI, and that percentage (a section's end, in a Postgres `real`) can land it a page late. Octavo opens by the CFI, which is exact, and pushes a percentage just inside the page, so the web reader opens on Octavo's page. The numbers are measured against v3.6.0.
 - The API shapes change. The Android client mirrors them by hand. Expect breakage between server versions and handle missing fields tolerantly.
-- **CFI compatibility, confirmed by the spike:** BookOrbit v3.6.0's web reader runs foliate-js at the commit we pin, with an identical `epubcfi.js`. Positions matched 31/31 in both directions across four books. Fixed-layout books restore by fraction, not CFI.
+- **CFI compatibility, confirmed by the spike:** BookOrbit v3.6.0's web reader runs foliate-js at the commit we pin, with an identical `epubcfi.js`. Positions matched 31/31 in both directions across four books.
 
 ## iPhone Duo
 
@@ -124,7 +125,7 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
   - The hinge is a 40 pt `division` reserved region at the inner display's centre: inactive when flat, active when half open. The camera is an `occlusion` region at the top right.
   - `onHingeChange` fires once on appear, then repeats unchanged values for about half a second after each move, so compare before acting. `.fullyOpen` arrives about 200 ms before the scene resizes.
   - Folding moves the same window between displays and app state survives, so the cover-display flow in `docs/UI-IDEAS.md` is feasible.
-  - The page count comes from the hinge (`ReaderLayout`, foliate patch 0002): one page folded, two open or half open, with no text on the hinge.
+  - The page count comes from the hinge (`ReaderLayout`, foliate patch 0002): one page folded, two open or half open, with no text on the hinge. Fixed-layout pages keep foliate's own rule apart from one column meaning one page (`docs/notes/fixed-layout.md`), and a spread's two pages meet on the fold.
   - A fold does one re-layout (#5; it was 10–13 relocations): the page holds its size under a snapshot of itself until the page has resized and the inputs have gone quiet (`FoldBatch`), then `bridge.js` renders once and the snapshot fades out in 0.3 s. The position holds because foliate keeps its anchor through the render, which a foliate update could break (`PINNED.md`, step 4).
   - **The page runs edge to edge** (decision 8, #17; `docs/notes/reader-page.md`): `ReaderView` lays the `WebView` out under the side column, camera and home indicator, and `ReaderLayout` insets the `foliate-view` by the safe area (measured outside the reader's own toolbar, so the controls never re-paginate) and the margin setting. Folded the text runs 27–355 pt, unfolded 139–448 | 503–812 pt, as in frames 07–09.
 

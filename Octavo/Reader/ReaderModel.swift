@@ -65,6 +65,11 @@ final class ReaderModel {
     var margins = ReaderMargins.standard {
         didSet { if margins != oldValue { relayout() } }
     }
+    /// Pre-paginated: pages drawn by the book, with no text to give margins.
+    private(set) var isFixedLayout = false
+    /// Narrow margins reach the page under the side column, which only suits
+    /// margins that aren't drawn.
+    private var layoutMargins: ReaderMargins { isFixedLayout ? .standard : margins }
     /// The controls cover the page, so a tap anywhere hides them.
     var coversPage = false {
         didSet { if coversPage != oldValue { sendTapMode() } }
@@ -327,7 +332,7 @@ final class ReaderModel {
             scheduleFoldEnd()
             return
         }
-        apply(ReaderLayout(posture: posture, geometry: geometry, margins: margins))
+        apply(ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins))
     }
 
     // MARK: Folding
@@ -408,7 +413,7 @@ final class ReaderModel {
             _ = try? await Self.withTimeout(.milliseconds(300)) { await coverTask.value }
         }
         lastClosedCover = max(lastClosedCover, cover)
-        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: margins)
+        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins)
         self.layout = layout
         sentLayout = layout
         bookModeMayHaveChanged()
@@ -520,6 +525,8 @@ final class ReaderModel {
             openedCFI = position?.cfi
             hasMoved = false
             didOpen()
+            isFixedLayout = opened.isFixedLayout
+            relayout()
             sendLayout()
             sendTapMode()
             sendTurnMode()

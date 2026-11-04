@@ -265,7 +265,9 @@ export class FixedLayout extends HTMLElement {
     async goToSpread(index, side, reason) {
         if (index < 0 || index > this.#spreads.length - 1) return
         if (index === this.#index) {
+            this.#side = side
             this.#render(side)
+            this.#reportLocation(reason)
             return
         }
         this.#index = index
