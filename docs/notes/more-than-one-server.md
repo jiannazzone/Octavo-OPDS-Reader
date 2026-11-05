@@ -37,7 +37,9 @@ BookOrbit numbers its files from 1 on every server, so a file's ID says nothing 
 
 A place left by a book imported and since removed can't be told from the server's, so it moves with the server's and is orphaned: importing that file again starts at the beginning. Only a development install can have this.
 
-**Checked with a real upgrade.** A clone of a simulator on the old build (`Octavo Multi Old`, 323D3021-61E1-486A-BAF4-52782A182AF5): BookOrbit signed in through real setup, one download, a place and a bookmark. Installed this build over it: every file moved under the server's ID, `Server.json` gone, still signed in, the book still marked downloaded, and it opens at the same page with its bookmark. **A real device is unchecked**, including Adam's Duo.
+**Checked with a real upgrade.** A clone of a simulator on the old build (`Octavo Multi Old`, 323D3021-61E1-486A-BAF4-52782A182AF5): BookOrbit signed in through real setup, one download, a place and a bookmark. Installed this build over it: every file moved under the server's ID, `Server.json` gone, still signed in, the book still marked downloaded, and it opens at the same page with its bookmark.
+
+**Checked on Adam's Duo** (00008160-001C21D136A0000A, 2026-11-05). This build installed over his one saved server: `Server.json` gone and `Servers.json` there, his downloads, place and bookmarks moved under the server's ID, and the places of his imported books and the sample book left with their plain names. Adam says it looks right. A launch while locked is still unchecked.
 
 ## The launch sweep
 
