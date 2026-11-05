@@ -17,6 +17,8 @@ final class ReaderTurnRun {
     /// Where the pictures are going: 1 finishes the turn, 0 lets the page
     /// fall back. `nil` while a finger holds it.
     var target: Double?
+    /// The way there, while it's playing.
+    var ramp: ReaderTurnRamp?
     var animationDone = false
     let startedAt = ContinuousClock.now
     /// Milliseconds from the start until the new page's pictures were in.
@@ -194,13 +196,37 @@ extension ReaderModel {
         run.target = target
         run.animationDone = false
         let whole = !run.interactive && target == 1
-        let duration = whole ? run.motion.duration : ReaderTurnDrag.remainingDuration(from: turn.progress, to: target, motion: run.motion)
-        let animation: Animation = whole && run.motion == .flip ? .easeInOut(duration: duration) : .easeOut(duration: duration)
-        withAnimation(animation) {
-            self.turn?.progress = target
-        } completion: { [weak self] in
-            self?.played(run, to: target)
+        run.ramp = ReaderTurnRamp(
+            from: turn.progress,
+            to: target,
+            start: CACurrentMediaTime(),
+            duration: whole ? run.motion.duration : ReaderTurnDrag.remainingDuration(from: turn.progress, to: target, motion: run.motion),
+            curve: whole && run.motion == .flip ? .easeInOut : .easeOut
+        )
+    }
+
+    /// While a turn is on screen, the page's display is asked for up to
+    /// 120 Hz and `turnFrame` moves the pictures. A SwiftUI animation can't
+    /// ask, and on the Duo it mostly ran at 60 (`docs/notes/page-turns.md`).
+    func followTurnFrames(_ onScreen: Bool) {
+        turnFrames?.isEnabled = false
+        turnFrames = nil
+        guard onScreen, let webView = snapshots.webView else { return }
+        let link = UIUpdateLink(view: webView) { [weak self] _, info in
+            self?.turnFrame(at: info.modelTime)
         }
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+        link.requiresContinuousUpdates = true
+        link.isEnabled = true
+        turnFrames = link
+    }
+
+    private func turnFrame(at time: Double) {
+        guard let run = turnRun, let ramp = run.ramp else { return }
+        turn?.progress = ramp.progress(at: time)
+        guard time >= ramp.end else { return }
+        run.ramp = nil
+        played(run, to: ramp.to)
     }
 
     private func played(_ run: ReaderTurnRun, to target: Double) {
