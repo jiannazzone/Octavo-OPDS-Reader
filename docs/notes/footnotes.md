@@ -74,7 +74,7 @@ A second `WebView` would keep every style, but it brings a web process, an async
 | The controls up, then a mark | The controls go and the note opens |
 | A panel opening, or the bar | The note closes |
 
-**Only a turn closes it, not a relocation (Adam, on his Duo).** It first closed on any relocation with a new CFI. On his Duo, going to a note and back, the same mark's card closed as it opened for a little while. A section just laid out again can report its page late (on the simulator a card failed to appear once after a jump, with 12 relocations where 7 is usual), though Back itself couldn't be made to do it there: its relocations all came at once. In a DEBUG build `spike-events.jsonl` logs why each card closes.
+**Only a turn closes it, not a relocation (Adam, on his Duo).** It first closed on any relocation with a new CFI. On his Duo, going to a note and back, the same mark's card closed as it opened for a little while. A section just laid out again can report its page late (on the simulator a card failed to appear once after a jump, with 12 relocations where 7 is usual), though Back itself couldn't be made to do it there: its relocations all came at once. With this it's gone on his Duo. In a DEBUG build `spike-events.jsonl` logs why each card closes.
 
 The way back and BookOrbit's capsule go while a note is open, as they do for a panel: the card overlapped the way back by 8 pt.
 
