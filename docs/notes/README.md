@@ -31,7 +31,7 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `fixed-layout.md` (+ `fixed-layout/`) | 2026-11-04 | Pre-paginated EPUBs (and CBZ) in the reader: what stopped them opening and folding, what BookOrbit's web reader stores and does, why Octavo opens by CFI and pushes a percentage inside the page, foliate patch 0003, the script layers measured alone, simulator checks |
 | `reader-release.md` (+ `reader-release/`) | 2026-11-04 | A closed reader goes away: the frame wait that kept every closed book's model, page and web process alive, in the app and in tests, the fix, every way out measured before and after, why the place holds |
 | `reader-background.md` | 2026-11-04 | Leaving the app doesn't move the place: iOS's snapshot layouts, why a fold made the wrong place stick, holding size and hinge changes until the app is back, measured with and without the fix |
-| `ci.md` | #19 | CI on pull requests: the jobs, why GitHub's `xcode-27` runner, which pull requests skip tests, the build cache, timings |
+| `ci.md` | #19 | CI on pull requests: the jobs, why GitHub's `xcode-27` runner, which pull requests skip tests, the build cache, timings, two flaky tests |
 | `xhtml-first-frame.md` | 2026-11-04 | Why a new WebKit process's first XHTML frame takes over a second (QuickLook's `dlopen`), book opens with and without it, warm-ups, why it doesn't matter on a real Duo (25 ms), rendering a book before the tap (tried, dropped), closed readers staying alive |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

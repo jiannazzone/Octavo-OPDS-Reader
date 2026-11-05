@@ -118,3 +118,7 @@ OPDS servers sometimes run a KOReader sync server alongside them for reading pro
 ## Back always there in the reader (Adam, 2026-11-04)
 
 While reading, the side column showed only ···, and ‹ came up with Contents, Aa, Search and Bookmark, in one group. Adam asked for ‹ to stay up on its own, apart from ··· and the rest. Decided and built 2026-11-04: decision 7 in `docs/design/direction.md`, which covers half open, the tour's Skip, "Back to page 312" and stray taps.
+
+## An import that timed out (2026-11-05)
+
+A read that gets no answer in 30 s says "“Book” couldn’t be opened; the file may be damaged." It may be WebKit stalling and not the book, and trying again may work (`docs/notes/ci.md`). `BookInspectionError.timedOut` now tells the two apart, so a different line would be a small change in `BookImporter.reason`. So far it has only been seen on CI's simulators, so it may not be worth a string.

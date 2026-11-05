@@ -97,12 +97,32 @@ These aren't measured on GitHub's runners yet.
 
 **Checks:** I broke the reader 25 ways, one at a time: the picture rules, and the fixes and places listed in `fixed-layout.md`. The test that covers each one failed each time. The tests also pass in three shuffled orders.
 
-**`-parallel-testing-enabled NO` stays.** The history doesn't say why it was added. Without it, `xcodebuild` shuts down the simulator that CI boots during the build, to clone it. With it, the tests run one at a time. Plain `xcodebuild test` also passes, in 58 s here.
+**`-parallel-testing-enabled NO` stays.** The history doesn't say why it was added. Without it, `xcodebuild` shuts down the simulator that CI boots during the build, to clone it. With it, the tests run one at a time. Plain `xcodebuild test` passes on a quiet Mac, in 58 s here, but not on a busy one (see Watch for).
+
+## Two flaky tests (2026-11-05)
+
+Both failed on `main` and held up pull requests that didn't touch them, and a re-run costs about 16 minutes.
+
+**`picturesStillFitWhenThePageChangesSize`: a race in the reader, fixed.** It failed in `41897289597` and `42089316037` attempt 2, and it reproduces here (1 miss in 150 opens, 1 in 400, 9 in 700, more on a busier machine). foliate's ResizeObserver could render a section before its `load` event, and the bridge then read that layout's column as the table's own width. Foliate patch 0004 stops that (`reader-pictures.md`, section 6), and the test now also forces the order, so a return of this fails every run.
+
+**`encryptedContentIsDRM`: the first WebKit page of a run, on a new runner.** It's the first test to open a page. It failed in `42049512673`, `42089316037` attempt 1 and, with `readsAnEPUBsDetailsAndCover`, `41842337100`.
+
+- **It isn't the book.** In `42049512673` the page got no answer in 30 s, then the next page answered in about 2 s.
+- **The first page is slow, and most of that comes before the book.** The test's two reads took 3.2–10.2 s in 28 passing runs. On 'Octavo Flaky Tests Duo' (943BCED0-F564-4571-AA17-8B78F00DBF28), erased and booted each time, with its processes at background priority, 8 first pages took 10.5–15.1 s: 9.4–14.1 s before the bridge started on the book, and 0.2–1 s on the book.
+- **The failed run's log shows the same steps stretched.** Between WebKit's "Unable to filter" and "Unable to hide" lines, a passing run took 0.5 s, `42049512673` took 5.5 s and `41842337100` took 13 s.
+- **A frozen page matches the failure.** Holding that simulator's WebContent processes with `SIGSTOP` for 34 s gave `.damaged` at the limit, the next page fine, and no `updateFreezerStatus` line from the first process, as in the failed run.
+- **Ruled out, by measuring:** the page's wait for the bridge giving up after 250 tries (a hidden page's repeating timers slow to one every 1–3 s, and a bridge 8 s late was still answered); the process being suspended once the page has loaded (a hidden page kept running for the 70 s tried); and Swift's thread pool running out (one thread, `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`, took 1.4 s).
+
+**The fix:** the suite's tests that reach WebKit and aren't about the limit now allow 2 minutes (`BookInspectorTests.inspector`), 12 times the slowest pass. That's a limit, not a wait: a healthy read returns at once. It stays short because the suite has 8 such reads, and hung reads that used up the job's 35 minutes would lose the test report. The two tests about the limit keep their own, and the 34 s freeze now passes in 36.6 s.
+
+**Not known:** whether a stalled page on a runner would have answered in the end, because none has been given longer. No stall longer than 15 s reproduced here without freezing the process. If these tests ever fail with `.timedOut` after 2 minutes, the page hung for good and this fix isn't enough. A stall like `41842337100`'s would still fail: the whole app stopped for 19 minutes, in the run that moved the simulator's boot, which went back.
+
+**`.timedOut`:** a timeout used to be `.damaged`, so a stall read as a bad book, in CI and in an import. `BookInspector` now throws `.timedOut`, so the two can't be confused, and `anEPUBThatWontOpenIsDamaged` can no longer pass on a timeout. A real import still has its 30 s and still says the file may be damaged (`BookImporter.reason`), so nothing on screen changes. Better wording is parked in `docs/UI-IDEAS.md`. No stall has been seen outside a simulator, but no real device has been measured for this.
 
 ## Watch for
 
-- `AttemptTests` and any other test with short time limits may be flaky on a slower runner. `aServerThatDoesntAnswerTimesOut` expects a 50 ms limit to have fired after 150 ms.
-- A WebKit process that stalls on the runner makes `BookInspectorTests` fail with `.damaged`, which looks like a bad book but is a timeout. "CI passed" is required, so re-run before looking for a bug.
+- `AttemptTests` and any other test with short time limits may be flaky on a slower runner. `aServerThatDoesntAnswerTimesOut` expects a 50 ms limit to have fired after 150 ms. Plain `xcodebuild test`, in parallel on a Mac with a load of 25–70, fails it every time, and `BookPlacesTests.rowsFetchStartedBooksAtMostOnceAMinute` most times (2026-11-05, at `765f007` too). With `-parallel-testing-enabled NO`, as CI runs, both passed.
+- `BookInspectionError.timedOut` from `BookInspectorTests` means a page gave no answer in 2 minutes, which is WebKit, not the book (see above).
 - Some tests start requests to `localhost`, which nothing answers in CI. None waits for the answer.
 - Changing a pull request's base branch doesn't re-run CI, so its old result stays. If a pull request is ever retargeted, re-run CI by hand. Adding the `edited` trigger would fix it, but would also re-run the tests on every title or description edit.
 - A pull request's own copy of `ci.yml` is what runs, so it can turn "CI passed" green without testing anything. Read every `.github/` change by hand.

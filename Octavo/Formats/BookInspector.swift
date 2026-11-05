@@ -31,9 +31,11 @@ nonisolated enum BookInspectionError: Error, Equatable, Sendable {
     /// Not a format the reader opens. `kind` names the format when it's a
     /// known one ("PDF", "KFX"), for the message.
     case unsupported(kind: String?)
-    /// It claims a format the reader opens, but can't be read as one, or
-    /// took too long to read.
+    /// It claims a format the reader opens, but can't be read as one.
     case damaged
+    /// No answer within the limit. That says little about the book: WebKit's
+    /// own start can use it all up (`docs/notes/ci.md`).
+    case timedOut
 }
 
 /// Reads an imported book's details (step 15, `docs/notes/formats-check.md`):
@@ -76,7 +78,7 @@ struct BookInspector {
         do {
             answer = try await HiddenReader(file: file, format: format, webRoot: webRoot, script: script).read(timeout: timeout)
         } catch {
-            throw .damaged
+            throw error as? BookInspectionError ?? .damaged
         }
         guard let data = answer.data(using: .utf8),
               let read = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["result"] as? [String: Any]
@@ -152,6 +154,7 @@ private final class HiddenReader {
     /// The bridge's answer, as the JSON it posted: `{ result }` or
     /// `{ error }`.
     private var continuation: CheckedContinuation<String, any Error>?
+    private var timer: Task<Void, Never>?
 
     init(file: URL, format: BookFileFormat, webRoot: URL, script: String) {
         let name = "book.\(format.fileExtension)"
@@ -190,9 +193,9 @@ private final class HiddenReader {
             // Its events aren't followed: following them holds the page
             // until the load ends, which a busy page never reports.
             _ = page?.load(ReaderSchemeHandler.readerURL)
-            Task { [weak self] in
+            timer = Task { [weak self] in
                 try? await Task.sleep(for: timeout)
-                self?.finish(.failure(CancellationError()))
+                self?.finish(.failure(BookInspectionError.timedOut))
             }
         }
     }
@@ -204,6 +207,7 @@ private final class HiddenReader {
     private func finish(_ result: Result<String, any Error>) {
         continuation?.resume(with: result)
         continuation = nil
+        timer?.cancel()
         close()
     }
 

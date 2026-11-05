@@ -119,6 +119,14 @@ struct BookImporterTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: store.incomingDirectory().path).isEmpty)
     }
 
+    // No answer in time reads the same to the person importing, for now.
+    @Test func aReadThatTimesOutSaysDamaged() async throws {
+        let importer = BookImporter(store: store) { _ in throw BookInspectionError.timedOut }
+        let result = try await importer.importFile(at: ImportFixtures.epub(in: folder))
+        #expect(result == .failure(ImportFailure(fileName: "Some Book.epub", reason: .damaged)))
+        #expect(store.all().isEmpty)
+    }
+
     @Test func failuresSayWhy() {
         let drm = ImportFailure(fileName: "Kindred.azw3", reason: .drmProtected)
         let pdf = ImportFailure(fileName: "Taxes 2025.pdf", reason: .notABook)

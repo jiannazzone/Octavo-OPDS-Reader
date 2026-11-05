@@ -59,7 +59,7 @@ The name never counts: a `.zip` that's an EPUB is an EPUB, an `.epub` that's tex
 
 - **FB2 covers in Swift** (`OctavoKit/Formats/FB2Cover.swift`): foliate makes the cover a `data:` URL and fetches it, which the reader's `connect-src` blocks, and the CSP stays (Adam, 2026-11-01). `FB2Cover` streams the XML with `XMLParser` (external entities off), keeps only the cover's base64, and stops at 16 MB. **`.fbz` has no cover in v1**: reading it would take a ZIP inflater of our own; rare enough to leave.
 - **EPUB DRM beyond its own files**: an EPUB whose `encryption.xml` lists any algorithm but the two font obfuscations foliate undoes is refused as DRM-protected (Kobo's DRM leaves no file of its own for `BookFileCheck` to see).
-- Errors: `drmProtected`, `unsupported(kind:)` (`nil` when it isn't a book at all), `damaged` (foliate couldn't read it, it has no sections, or it took over 30 s).
+- Errors: `drmProtected`, `unsupported(kind:)` (`nil` when it isn't a book at all), `damaged` (foliate couldn't read it, or it has no sections), `timedOut` (no answer in 30 s; an import reads it as damaged, `ci.md`).
 
 ### 6. DEBUG switches for the checks
 
