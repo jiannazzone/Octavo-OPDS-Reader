@@ -138,6 +138,24 @@ struct RemoveServerTests {
         #expect(model.library.onIPhone.books().map(\.id) == [imported.id])
     }
 
+    // Nothing of it stays on the iPhone, its address and account included
+    // (Adam, 2026-11-05).
+    @Test func removingBooksLeavesNothingOfTheServer() async {
+        await model.removeServer(Self.server, removingBooks: true)
+        #expect(!hasPlace(downloaded))
+        #expect(!hasBookmarks(downloaded))
+        #expect(model.removedServers.load().isEmpty)
+        #expect(hasPlace(imported), "imported books stay")
+        #expect(hasBookmarks(imported))
+    }
+
+    @Test func keepingBooksKeepsItsPlacesToo() async {
+        await model.removeServer(Self.server, removingBooks: false)
+        #expect(hasPlace(downloaded))
+        #expect(hasBookmarks(downloaded))
+        #expect(model.removedServers.load().map(\.id) == [Self.server])
+    }
+
     // Kept books known only from Continue reading (opened before the
     // iPhone kept its list) stay listed once those records go.
     @Test func aKeptBookKnownOnlyFromContinueReadingStaysListed() async throws {

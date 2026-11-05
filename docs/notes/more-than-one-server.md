@@ -19,8 +19,9 @@ BookOrbit numbers its files from 1 on every server, so a file's ID says nothing 
 - **The key.** `LibraryFile.storageKey(in:)` is `<server ID>.book-<hash of the file ID>`, for the downloaded file, the place, the trip and the bookmarks. The hash means a hostile ID can't reach outside the folder. The server's ID is ours, and a dot ends it, so all of a server's files can be found by the prefix (`StoredBookKeys`), and `server-one.` doesn't match `server-one-more.`.
 - **Imported books** keep the plain `book-<hash>`. They belong to no server, and the same file imported again still opens where it was.
 - **In memory too.** `BookOpener`'s statuses and tasks, and `BookPages`, are keyed by `SourcedBook.ID`. They used to be keyed by the book's ID alone.
-- **Removing.** A kept book waits under its server's ID. `RemovedServers.json` lists each removed server's identity and ID. The same address and account coming back takes everything back (`ShellModel.takeBackBooks`), at its new ID. Any other server has its own names, so finds none of it, which replaces deleting the removed server's data when the next one was added.
-- **A catalog with a key** can never be recognised (`LibraryServer.canReturn`), so nothing is listed for it, and its places and bookmarks go at once. Kept files stay listed in Storage.
+- **Keep books on iPhone.** A kept book waits under its server's ID. `RemovedServers.json` lists each removed server's identity and ID. The same address and account coming back takes everything back (`ShellModel.takeBackBooks`), at its new ID, once it's saved. Any other server has its own names, so finds none of it, which replaces deleting the removed server's data when the next one was added.
+- **Remove books too** leaves nothing of it (Adam, from the security review): every file by its prefix, whether or not a record names it, its places and bookmarks, and no entry in `RemovedServers.json`.
+- **A catalog with a key** can never be recognised (`LibraryServer.canReturn`), so nothing is listed for it, and its places and bookmarks go at once, as they'd never be read. Kept files stay listed in Storage.
 
 ## Moving an install over
 
@@ -40,7 +41,9 @@ A place left by a book imported and since removed can't be told from the server'
 
 ## The launch sweep
 
-`KeychainSweep` keeps every saved server's items and deletes the rest, and removes the sign-in of each server flagged `signedOut`. If `Servers.json` or `Server.json` is there and can't be read, it deletes nothing, as before.
+`KeychainSweep` keeps every saved server's items and deletes the rest, and removes the sign-in of each server flagged `signedOut`. If `Servers.json` or `Server.json` is there and can't be read, it deletes nothing, as before. A list that can't be decoded is replaced by the next server added, as the one saved server's file was, so it can't stop the sweep for good. The review and Adam's sign-off are in `docs/notes/network-trust.md`.
+
+**An older build installed over this one** sees no `Server.json` and deletes every server's sign-in. No release has shipped, so this only touches a development install, such as a branch without this work installed on Adam's Duo.
 
 ## The Library's title
 
@@ -71,4 +74,4 @@ Screens in all postures are in `01-all-postures.jpg`. The signed-out case came f
 
 - **iCloud and KOReader sync** carry the places of OPDS and imported books (`docs/PLAN.md`, separate tasks).
 - **A catalog whose key was wiped from the Keychain** stays in `Servers.json`, skipped at launch and shown nowhere (`libraryServer()` returns `nil`). Adding it again works, and the old entry stays. A read that fails before the first unlock looks the same, so it isn't deleted.
-- **A removed server's places and bookmarks** stay until it comes back, with no limit. They're small and on the iPhone only. Kept books can be removed in Storage.
+- **Keep books on iPhone** keeps a server's places, bookmarks, address and account until it comes back, with no limit. They're small and on the iPhone only, and Remove books too is the way to leave nothing. Removing a kept book in Storage afterwards leaves them.

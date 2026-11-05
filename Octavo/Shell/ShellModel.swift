@@ -435,9 +435,9 @@ final class ShellModel {
     /// (here and on BookOrbit), then every secret the Keychain holds for it,
     /// its saved address, the places waiting to go to it and the records of
     /// its books that can't open without it. `removingBooks` deletes its
-    /// downloads too; kept, they come back if the same server is added again,
-    /// and Storage still lists them. Imported books and the other servers'
-    /// are left alone. Then setup, if that leaves no servers and no books at
+    /// downloads, places and bookmarks too; kept, they come back if the same
+    /// server is added again, and Storage still lists the books. Imported
+    /// books and the other servers' are left alone. Then setup, if that leaves no servers and no books at
     /// all (decision 6); the sample book counts as one.
     func removeServer(_ id: LibrarySourceID, removingBooks: Bool) async {
         guard let server = library.server(id) else { return }
@@ -465,10 +465,12 @@ final class ShellModel {
         }
         library.forgetBooks(of: id)
         places.forget(server: id)
-        if server.canReturn {
+        if server.canReturn, !removingBooks {
             try? removedServers.add(RemovedServer(identity: server.identity, id: id))
         } else {
-            // It can never be recognised, so these would never be read.
+            // Remove books too leaves nothing of it on the iPhone (Adam,
+            // 2026-11-05). A server that can't be recognised again could never
+            // read these.
             places.store.removeAll(of: id)
             bookmarks.removeAll(of: id)
         }
