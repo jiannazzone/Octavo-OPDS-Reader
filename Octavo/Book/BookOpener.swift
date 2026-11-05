@@ -47,16 +47,16 @@ final class BookOpener {
     private let files: any BookFiles
     private var statuses: [SourcedBook.ID: Status] = [:]
     private var tasks: [SourcedBook.ID: Task<Void, Never>] = [:]
-    /// Files on disk aren't observed; this changes when one is removed, so
+    /// Files on disk aren't observed; this changes when one comes or goes, so
     /// covers and screens look again.
-    private var removals = 0
+    private var fileChanges = 0
 
     init(files: any BookFiles = StoredBookFiles.moved()) {
         self.files = files
     }
 
     func status(of book: SourcedBook) -> Status {
-        _ = removals
+        _ = fileChanges
         if let status = statuses[book.id] { return status }
         guard let file = book.book.readableFile, files.localFile(for: file, in: book.source) != nil else { return .notDownloaded }
         return .downloaded
@@ -114,7 +114,7 @@ final class BookOpener {
         cancel(book)
         guard let file = book.book.readableFile else { return }
         try? files.remove(file, in: book.source)
-        removals += 1
+        fileChanges += 1
     }
 
     /// Storage's Remove all downloads: every book's file but `keeping`'s
@@ -122,20 +122,20 @@ final class BookOpener {
     /// Downloads still running carry on.
     func removeAllDownloads(keeping keys: Set<String> = []) {
         try? files.removeAll(keeping: keys)
-        removals += 1
+        fileChanges += 1
     }
 
     /// Remove server's Remove books too: every file of `library`'s, named by
     /// a record or not.
     func removeAllDownloads(of library: LibrarySourceID) {
         files.removeAll(of: library)
-        removals += 1
+        fileChanges += 1
     }
 
     /// The same server came back at a new ID, and its kept files with it.
     func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {
         files.moveAll(of: library, to: other)
-        removals += 1
+        fileChanges += 1
     }
 
     /// Remove server: every download still running from `library` stops,
@@ -152,14 +152,14 @@ final class BookOpener {
 
     /// The downloaded file of `book`, for Storage's sizes.
     func localFile(for book: SourcedBook) -> URL? {
-        _ = removals
+        _ = fileChanges
         return book.book.readableFile.flatMap { files.localFile(for: $0, in: book.source) }
     }
 
     /// Files came or went outside the opener (an import, an imported book
     /// removed): covers and screens look again.
     func filesChanged() {
-        removals += 1
+        fileChanges += 1
     }
 
     /// Forgets a failure, so the strip shows Open again.
@@ -210,6 +210,7 @@ final class BookOpener {
         guard case .downloading(_, let opens) = statuses[book.id] else { return }
         tasks[book.id] = nil
         statuses[book.id] = nil
+        fileChanges += 1
         if opens { onOpen(OpenedBook(book: book.book, source: book.source, file: file, url: url)) }
     }
 

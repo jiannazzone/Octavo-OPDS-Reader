@@ -1,0 +1,55 @@
+import OctavoKit
+import Testing
+@testable import Octavo
+
+/// What an empty list says (decision 22, #30), and the list beside it.
+struct EmptyListTests {
+    private func link(_ rawValue: String) -> LibraryLink {
+        LibraryLink(rawValue: rawValue)
+    }
+
+    @Test func aListSaysItsServerDecides() {
+        let wording = EmptyListWording(kind: .feed, server: "Komga")
+        #expect(wording.title == "No books in this list")
+        #expect(wording.message == "Books show here when Komga lists them.")
+    }
+
+    @Test func aCollectionIsYoursToFill() {
+        let wording = EmptyListWording(kind: .collection, server: "BookOrbit")
+        #expect(wording.title == "No books in this collection")
+        #expect(wording.message == "Books you add to it on BookOrbit show here.")
+    }
+
+    // A smart collection is a filter, so nothing is added to it.
+    @Test func aSmartCollectionIsTheServersToFill() {
+        let wording = EmptyListWording(kind: .smartCollection, server: "BookOrbit")
+        #expect(wording.title == "No books in this collection")
+        #expect(wording.message == "Books show here when BookOrbit lists them.")
+    }
+
+    @Test func aSeriesAndAnAuthorSayWhatTheyAre() {
+        #expect(EmptyListWording(kind: .series, server: "BookOrbit").title == "No books in this series")
+        #expect(EmptyListWording(kind: .author, server: "BookOrbit").title == "No books by this author")
+    }
+
+    // The right page's heading matches the shelf's.
+    @MainActor @Test func theNewestBooksGoByTheirShelfsName() {
+        let latest = LibraryEntry(kind: .feed, title: "Latest books", link: link("latest"))
+        let root = LibraryRoot(
+            chips: [LibraryEntry(kind: .feed, title: "All", link: link("all")), latest],
+            search: .unavailable, recentlyAdded: latest.link
+        )
+        #expect(LibraryView.newest(root) == latest)
+    }
+
+    @MainActor @Test func theNewestBooksAreRecentlyAddedIfTheServerDoesntNameThem() {
+        let root = LibraryRoot(chips: [LibraryEntry(kind: .feed, title: "All", link: link("all"))], search: .unavailable, recentlyAdded: link("recent"))
+        #expect(LibraryView.newest(root)?.title == "Recently added")
+        #expect(LibraryView.newest(root)?.link == link("recent"))
+    }
+
+    @MainActor @Test func aServerMayHaveNoNewestBooks() {
+        let root = LibraryRoot(chips: [LibraryEntry(kind: .feed, title: "All", link: link("all"))], search: .unavailable)
+        #expect(LibraryView.newest(root) == nil)
+    }
+}

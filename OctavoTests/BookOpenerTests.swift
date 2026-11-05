@@ -1,5 +1,7 @@
 import Foundation
+import Observation
 import OctavoKit
+import Synchronization
 import Testing
 @testable import Octavo
 
@@ -50,6 +52,28 @@ struct BookOpenerTests {
         #expect(opener.status(of: .test(book)) == .downloading(fraction: 0, opensWhenDone: false))
         #expect(await eventually { opener.status(of: .test(book)) == .downloaded })
         #expect(opened.isEmpty)
+    }
+
+    // On iPhone's screen and shelf ask for the file: a download that finishes
+    // has to make them ask again.
+    @Test func aFinishedDownloadTellsWhatLooksForItsFile() async throws {
+        let source = StubLibrarySource()
+        let book = try await source.details(for: Self.book).book
+        let changed = Flag()
+        opener.download(.test(book), from: source)
+        withObservationTracking {
+            _ = opener.localFile(for: .test(book))
+        } onChange: {
+            changed.set()
+        }
+        #expect(await eventually { changed.isSet })
+        #expect(opener.localFile(for: .test(book)) != nil)
+    }
+
+    private final class Flag: Sendable {
+        private let value = Mutex(false)
+        var isSet: Bool { value.withLock { $0 } }
+        func set() { value.withLock { $0 = true } }
     }
 
     @Test func removingADownloadTakesTheBookOffTheIPhone() async throws {
