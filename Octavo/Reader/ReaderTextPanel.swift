@@ -40,7 +40,8 @@ struct ReaderPanelFrame<Content: View>: View {
         let safe = geometry.safeArea
         let width = Double(geometry.size.width)
         let height = Double(geometry.size.height)
-        let bottom = min(height - safe.bottom, height - keyboard) - Self.inset
+        // Level with the progress bar, or clear of the keyboard while it's up.
+        let bottom = min(ReaderLayout.barBottom(in: geometry), height - keyboard - Self.inset)
         // Placed by padding in a layer the size of the page, which is what
         // the transition scales or moves: it attaches to the outermost view,
         // so an offset panel would scale about a point measured from the
