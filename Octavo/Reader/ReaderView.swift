@@ -219,7 +219,6 @@ private struct ReaderScreen: View {
                     withAnimation { controls.toggle() }
                 }
                 .toolbar { buttons }
-                .toolbar(buttonsVisible || showsControlsButton || shell.tour != nil ? .visible : .hidden, for: .navigationBar)
         }
         // The column's buttons, the footer, the bar and the panel in the
         // page's colours. Here, not for the window, so `systemColorScheme`
@@ -375,12 +374,6 @@ private struct ReaderScreen: View {
         TourFlow.ReaderState(barVisible: controls.showsBar, buttonsVisible: controls.buttonsVisible, textPanelOpen: panel == .textAndTheme)
     }
 
-    /// A book that couldn't open keeps Back up, so there's a way out.
-    private var buttonsVisible: Bool {
-        if case .failed = model.phase { return true }
-        return controls.buttonsVisible
-    }
-
     /// Bar hidden: a quiet "…" in the column is the one way to bring the
     /// controls up, in every posture (Adam, 2026-11-02; a middle tap would
     /// land on the fold half open). The rest of the column turns the page.
@@ -402,23 +395,28 @@ private struct ReaderScreen: View {
         }
     }
 
-    /// The column's buttons (frame 08).
+    /// The column's buttons (frame 08). Back is always up, on its own, and
+    /// as quiet as "…" while the rest are hidden (Adam, 2026-11-04). Skip
+    /// takes its place in the tour, as the way out. Two `if`s: with an `else`,
+    /// Skip's word comes up blank.
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
         if shell.tour != nil {
             ToolbarItem(placement: .topBarTrailing) {
                 TourSkipButton { shell.skipTour() }
             }
-            ToolbarSpacer(.fixed, placement: .topBarTrailing)
         }
-        if showsControlsButton, !buttonsVisible {
+        if shell.tour == nil {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Back", systemImage: "chevron.backward", action: close)
+                    .tint(controls.buttonsVisible ? nil : Color.secondary)
+            }
+        }
+        ToolbarSpacer(.fixed, placement: .topBarTrailing)
+        if showsControlsButton, !controls.buttonsVisible {
             ToolbarItem(placement: .topBarTrailing) { showControlsButton }
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if buttonsVisible {
-                // Skip is the way out of the tour.
-                if shell.tour == nil {
-                    Button("Back", systemImage: "chevron.backward", action: close)
-                }
+            if controls.buttonsVisible {
                 panelButton(.contents, title: "Contents", systemImage: "list.bullet")
                 panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size", lit: shell.tour?.step.litButton == .textAndTheme)
                 panelButton(.search, title: "Search in Book", systemImage: "magnifyingglass")

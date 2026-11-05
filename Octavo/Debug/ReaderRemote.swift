@@ -275,6 +275,11 @@ enum ReaderRemote {
     private static func handleReaderCommand(_ command: Command) -> String? {
         guard let reader else { return "no open reader" }
         switch command.cmd {
+        case "controls":
+            reader.onControlsTap?("toggle")
+        case "jump":
+            guard let fraction = command.fraction else { return "jump needs fraction" }
+            reader.jump(toFraction: fraction)
         case "goto":
             if let fraction = command.fraction {
                 reader.goTo(fraction: fraction)

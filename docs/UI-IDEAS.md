@@ -117,4 +117,4 @@ OPDS servers sometimes run a KOReader sync server alongside them for reading pro
 
 ## Back always there in the reader (Adam, 2026-11-04)
 
-While reading, the side column shows only ···, and ‹ comes up with Contents, Aa, Search and Bookmark, in one group. Adam: should ‹ always be there, apart from ··· and the rest? The column sits off the page, so it would cost no reading room, and leaving the book would no longer sit right above Contents. Not looked into yet. To decide: half open, where the controls stay hidden; the tour's Skip, which sits in that spot; "Back to page 312" alongside a ‹ that closes the book; and how much a stray tap matters, since a tap in the column turns the page today.
+While reading, the side column showed only ···, and ‹ came up with Contents, Aa, Search and Bookmark, in one group. Adam asked for ‹ to stay up on its own, apart from ··· and the rest. Decided and built 2026-11-04: decision 7 in `docs/design/direction.md`, which covers half open, the tour's Skip, "Back to page 312" and stray taps.

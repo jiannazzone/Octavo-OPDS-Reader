@@ -53,8 +53,8 @@ foliate keeps its outer margins and the gap between two pages equal, `gap`% of i
 | Anywhere while the bar shows | hide the controls | hide the controls |
 
 - Book mode now also needs two pages: half open sideways (one column across the fold) reads like flat (`ReaderModel.isBookMode`). Starting or ending book mode hides the controls (decision 9).
-- The buttons are the system toolbar (`ToolbarItemGroup(placement: .topBarTrailing)`): folded and unfolded the system puts them in one glass group in the column under the clock; sideways, in a glass bar along the top next to the clock.
-- A book that fails to open keeps Back up.
+- The buttons are the system toolbar (`ToolbarItemGroup(placement: .topBarTrailing)`): folded and unfolded the system puts them in one glass group in the column under the clock; sideways, in a glass bar along the top next to the clock. Since 2026-11-04 Back is its own `ToolbarItem` with a `ToolbarSpacer` after it, so it stays up apart from the rest (decision 7). Skip and Back need two `if`s, not `if`/`else`: with an `else`, Skip's word came up blank inside the book.
+- Back is up in every phase, so a book that fails to open has a way out.
 - VoiceOver: an accessibility action "Show Controls" on the page.
 
 ## 4. Progress: footer and scrubber
@@ -116,6 +116,8 @@ All on 'Octavo Reader Duo' with this build (margins Medium), 2026-11-01.
 - `open` (`fileID`): the BookOrbit book holding that file, through `ShellModel.openBook` (download, Continue reading), with a `BookOrbitProgressSync` for that file. Only books a script opens sync; the app's own sync is #11.
 - `detail` (`fileID`): the book's cover page in the Library tab, for `handoff.sh`. BookOrbit books only: a book in Documents has no cover page, so `handoff.sh`'s local-book form no longer works.
 - `keyboard` (`on`): shows or hides the keyboard over the reader through a hidden text field.
+- `controls`: shows or hides the column's buttons and the bar, for a picture of them without a tap.
+- `jump` (`fraction`): a jump that starts a trip (decision 33), where `goto` saves and pushes.
 - `home`, `close`, `goto`, `next`, `prev`, `shape`, `layout`, `watch`, `js` as before. The state file adds `location` and `margins`.
 - `DebugEvents` (was `SpikeEvents`) logs hinge, region, safe-area and scene events for the shell and the reader.
 - The Settings stand-in has a DEBUG "Reader" section (Always show controls, Margins, Book-mode shadow) until the Customize panel (#18); same keys.

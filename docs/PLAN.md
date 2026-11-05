@@ -48,6 +48,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] A way back after a jump or a scrub (Adam, 2026-11-03, on his Duo). The controls' ‹ already closes the book, so it's its own button. Decided 2026-11-04 (decision 33 in `docs/design/direction.md`) and built the same day: "Back to page 312" with ✕ at the bottom of the left page, your place holding until you settle, and a trip that survives closing, shown by the progress line's fill (`docs/notes/going-back.md`). To be tried on Adam's Duo.
 - Footnotes without leaving the page (Adam, 2026-11-04). Decided (decision 34), not built yet: a card on the facing page, or along the bottom folded, with Go to Note and ✕. Building it needs a real book with notes, as none of the test books has any.
 - [x] Skipping by chapter (Adam, 2026-11-04). Decided (decision 35) and built the same day: ⏮ and ⏭ beside the chapter's name, and a scrubber with dots at chapters and a tick you feel as it passes one. Hold still and it zooms in to one page at a time, with a catch at chapter starts (Adam, after a test build on his Duo). To be tried on Adam's Duo.
+- [x] Back always there in the reader (Adam, 2026-11-04). Decided (decision 7) and built the same day: ‹ on its own above ···, grey with it while you read.
 - Folded, it needs to be easier to dismiss the Customize pane (Adam, 2026-11-03, on his Duo). A tap on the screen is a small target there, and his opened the table of contents instead of closing the pane. Not looked into yet.
 
 ## What you'll see that isn't right yet
