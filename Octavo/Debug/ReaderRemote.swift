@@ -305,6 +305,8 @@ enum ReaderRemote {
             let setting = "page turn \(reader.pageTurn.rawValue), reduce motion \(reader.reduceMotion) → \(motion.rawValue)"
             guard let run = reader.turnRun else { return "\(setting); idle, last drawn after \(reader.lastTurnDrawnAfter ?? -1) ms, queued \(reader.queuedTurns.count), overlay \(reader.turn != nil); \(reader.swipes.debugState)" }
             return "run \(run.id) \(run.side) \(run.motion) interactive \(run.interactive) moved \(String(describing: run.moved)) drawn \(run.drawn) target \(String(describing: run.target)) done \(run.animationDone) progress \(reader.turn?.progress ?? -1)"
+        case "noteState":
+            return reader.note.map { "open \($0.href), mark at \($0.mark.y), size \($0.font.size), line \($0.font.lineHeight ?? -1), \($0.font.family ?? "no family"), \($0.blocks.count) blocks" } ?? "no note; last error \(reader.lastError ?? "none")"
         case "next": reader.next()
         case "prev": reader.previous()
         default: return "unknown command \(command.cmd)"
