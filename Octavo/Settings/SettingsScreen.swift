@@ -56,7 +56,10 @@ private struct SettingsPageView: View {
 /// background (the screen's, so the hinge between the pages matches).
 struct SettingsPageList<Content: View>: View {
     let title: String
+    /// Settings' own list, which is on the left page unfolded.
+    var isOnLeftPage = false
     @ViewBuilder let content: () -> Content
+    @Environment(\.spread) private var spread
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -65,6 +68,11 @@ struct SettingsPageList<Content: View>: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
                 .contentMargins(.top, 4, for: .scrollContent)
+                // At the screen's edge a list otherwise gets this margin from
+                // the system, worked out again on every frame of a slide: its
+                // rows stop at the margin while the rest of the screen carries
+                // on, and they shrink. Stated here, it moves with them.
+                .contentMargins(.leading, isOnLeftPage || !spread.isTwoPages ? SpreadMetrics.margin : 0, for: .scrollContent)
         }
     }
 }
@@ -80,7 +88,7 @@ struct SettingsList: View {
     @AppStorage(LibrarySettings.titlesUnderCoversKey) private var titlesUnderCovers = false
 
     var body: some View {
-        SettingsPageList(title: "Settings") {
+        SettingsPageList(title: "Settings", isOnLeftPage: true) {
             if let server = library.server {
                 Section("Server") {
                     row(.server) {

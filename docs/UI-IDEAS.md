@@ -106,3 +106,11 @@ Pre-paginated books open now (`docs/notes/fixed-layout.md`). What they show that
 - **The Text panel:** font, size, spacing, margins and justify do nothing on these pages, and themes colour only the space around them. BookOrbit's web reader hides the text controls for these books.
 - **Search:** going to a match works, but foliate's fixed-layout renderer has nothing to draw its highlight on.
 - **Folded and turned sideways:** two pages, by foliate's rule, not the one page text gets. Each is about the size one page would be there (297 pt wide, against 309).
+
+## Closing the Duo while reading (Adam, 2026-11-04)
+
+Folding while reading closes the book back to its screen, the cover (`ShellModel.closeToItsScreen`; `docs/design/direction.md` already says it may become a setting). Adam: keep that as the default, and make it optional. Off, the book would stay open on the folded screen at your place. Not looked into yet. To decide: the setting's name and where it lives, and what the tour does, since it teaches closing the iPhone.
+
+## KOReader sync for OPDS servers (Adam, 2026-11-04)
+
+OPDS servers sometimes run a KOReader sync server alongside them for reading progress. Adam: look into it. It's already on the "Later" list (`docs/design/direction.md`, v1 scope) and has a slot in the design (`KOSync`, percentage only, in `CLAUDE.md`; the server setup's sync step comes back once it exists). Not looked into yet. To find out: how the protocol works, how it matches a book to a file, and how close a percentage lands compared with a CFI.
