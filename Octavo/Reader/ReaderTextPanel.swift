@@ -34,13 +34,14 @@ struct ReaderPanelFrame<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static var inset: Double { 12 }
+    static var inset: Double { ReaderLayout.edgeInset }
 
     var body: some View {
         let safe = geometry.safeArea
         let width = Double(geometry.size.width)
         let height = Double(geometry.size.height)
-        let bottom = min(height - safe.bottom, height - keyboard) - Self.inset
+        // Level with the progress bar, or clear of the keyboard while it's up.
+        let bottom = min(ReaderLayout.barBottom(in: geometry), height - keyboard - Self.inset)
         // Placed by padding in a layer the size of the page, which is what
         // the transition scales or moves: it attaches to the outermost view,
         // so an offset panel would scale about a point measured from the
@@ -87,6 +88,23 @@ struct ReaderPanelFrame<Content: View>: View {
     }
 }
 
+/// The way out of a panel, at its top right in every posture (Adam,
+/// 2026-11-04): folded, there's little page left to tap.
+struct ReaderPanelCloseButton: View {
+    let close: () -> Void
+
+    var body: some View {
+        // The same frame as A− and A+, for a target worth aiming at.
+        Button(role: .close, action: close) {
+            Label("Close", systemImage: "xmark")
+                .frame(width: 24, height: 24)
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+    }
+}
+
 /// Text and theme (decision 13, frames 10 and 11): the themes and A−/A+ in
 /// front, then Customize (font, line spacing, margins, page turn, justify,
 /// Match Dark Mode, Book-mode shadow, Always show controls). On a spread
@@ -97,6 +115,7 @@ struct ReaderTextPanel: View {
     let darkMode: Bool
     /// Room for everything at once (a spread).
     let showsAll: Bool
+    let close: () -> Void
     @State private var customizing = false
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
     @AppStorage(ReaderPageTurn.key) private var pageTurn = ReaderPageTurn.standard
@@ -104,12 +123,37 @@ struct ReaderTextPanel: View {
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
 
     var body: some View {
-        // Scrolls only when it doesn't fit.
-        ViewThatFits(in: .vertical) {
-            controls
-            ScrollView { controls }
-                .scrollBounceBehavior(.basedOnSize)
+        VStack(spacing: 0) {
+            header
+            // Scrolls only when it doesn't fit, under the header, so the way
+            // out stays in place.
+            ViewThatFits(in: .vertical) {
+                controls
+                ScrollView { controls }
+                    .scrollBounceBehavior(.basedOnSize)
+            }
         }
+    }
+
+    private var header: some View {
+        HStack {
+            Group {
+                if !showsAll, customizing {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { customizing = false }
+                    } label: {
+                        Label("Text and Theme", systemImage: "chevron.backward")
+                    }
+                } else {
+                    Text("Text and Theme")
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.leading, 4)
+            Spacer()
+            ReaderPanelCloseButton(close: close)
+        }
+        .padding([.horizontal, .top], 14)
     }
 
     private var controls: some View {
@@ -122,12 +166,6 @@ struct ReaderTextPanel: View {
                 Divider()
                 customize
             } else if customizing {
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) { customizing = false }
-                } label: {
-                    Label("Text and Theme", systemImage: "chevron.backward")
-                        .font(.subheadline.weight(.semibold))
-                }
                 customize
             } else {
                 Button {
@@ -145,7 +183,8 @@ struct ReaderTextPanel: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(18)
+        .padding([.horizontal, .bottom], 18)
+        .padding(.top, 12)
     }
 
     private var themes: some View {

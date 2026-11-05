@@ -25,7 +25,7 @@ struct TourCardSlot: View {
 
     private var bottom: Double {
         if let sheetHeight {
-            return Double(geometry.size.height) - geometry.safeArea.bottom - ReaderPanelFrame<EmptyView>.inset - sheetHeight - 8
+            return ReaderLayout.barBottom(in: geometry) - sheetHeight - 8
         }
         return ReaderLayout.barBottom(in: geometry) - barClearance
     }

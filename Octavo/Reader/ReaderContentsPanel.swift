@@ -18,6 +18,7 @@ struct ReaderContentsPanel: View {
     let goToRow: (ReaderContentsRow) -> Void
     let goToBookmark: (LocalBookmark) -> Void
     let remove: (LocalBookmark.ID) -> Void
+    let close: () -> Void
     @State private var tab = Tab.contents
 
     /// The panel's own margins: a list in it gets none from the page.
@@ -25,11 +26,14 @@ struct ReaderContentsPanel: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            Picker("Show", selection: $tab) {
-                Text("Contents").tag(Tab.contents)
-                Text("Bookmarks").tag(Tab.bookmarks)
+            HStack(spacing: 10) {
+                Picker("Show", selection: $tab) {
+                    Text("Contents").tag(Tab.contents)
+                    Text("Bookmarks").tag(Tab.bookmarks)
+                }
+                .pickerStyle(.segmented)
+                ReaderPanelCloseButton(close: close)
             }
-            .pickerStyle(.segmented)
             .padding([.horizontal, .top], 14)
             switch tab {
             case .contents: contents

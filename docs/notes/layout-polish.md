@@ -32,7 +32,7 @@ Two layouts Adam chose from picture mockups ("A" both times) off the plan's "To 
 
 ## 2. The progress bar
 
-`ReaderLayout.barSpans(in:bookMode:)` gives the bar's stretches from `textColumns(inReaderWidth:)`, the same arithmetic the footer uses: one stretch from the first column's left edge to the last column's right edge, or in book mode one per page. `ReaderLayout.barBottom(in:)` is the top of the bottom safe area (12 pt up on a screen without one). Until foliate's columns are known, the safe area less 12 pt each side, as before.
+`ReaderLayout.barSpans(in:bookMode:)` gives the bar's stretches from `textColumns(inReaderWidth:)`, the same arithmetic the footer uses: one stretch from the first column's left edge to the last column's right edge, or in book mode one per page. `ReaderLayout.barBottom(in:)` is the top of the bottom safe area (12 pt up on a screen without one). Until foliate's columns are known, the safe area less 12 pt each side, as before. Since 2026-11-04 the bar is as wide as a panel instead, whatever the margins (decision 13).
 
 Measured on the screenshots (Night, the glass's edges on its middle row, against the text edges `layoutReport` gives):
 
