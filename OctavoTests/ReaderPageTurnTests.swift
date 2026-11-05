@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 import Testing
 @testable import Octavo
 
@@ -110,6 +111,16 @@ struct ReaderPageTurnTests {
         #expect(ReaderTurnDrag.remainingDuration(from: 0.6, to: 0, motion: .slide) == 0.3 * 0.6)
         #expect(ReaderTurnDrag.remainingDuration(from: 0.98, to: 1, motion: .flip) == 0.12)
         #expect(ReaderTurnDrag.remainingDuration(from: 0.98, to: 1, motion: .fade) == 0.12)
+        let ramp = ReaderTurnRamp(from: 0.25, to: 1, start: 10, duration: 0.2, curve: .easeOut)
+        #expect(ramp.end == 10.2)
+        #expect(ramp.progress(at: 9) == 0.25)
+        #expect(ramp.progress(at: 10) == 0.25)
+        #expect(ramp.progress(at: 10.1) > 0.25 + 0.75 / 2)
+        #expect(ramp.progress(at: 10.2) == 1)
+        #expect(ramp.progress(at: 11) == 1)
+        let fallingBack = ReaderTurnRamp(from: 0.4, to: 0, start: 0, duration: 0.12, curve: .easeOut)
+        #expect(fallingBack.progress(at: 0.06) < 0.2)
+        #expect(fallingBack.progress(at: 0.12) == 0)
     }
 
     @Test func sides() {

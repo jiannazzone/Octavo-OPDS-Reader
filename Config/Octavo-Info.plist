@@ -9,6 +9,12 @@
 <plist version="1.0">
 <dict>
 	<!--
+	  Without this, iOS holds an app's own animations to 60 Hz on iPhone, and
+	  our page turns are our own (docs/notes/page-turns.md, section 2).
+	-->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<!--
 	  Import from Files and Open in Octavo (step 15, docs/notes/other-ways-in.md):
 	  the books Octavo reads, offered in the Files picker and in other apps'
 	  share sheets. iOS copies a shared file into Documents/Inbox (not opened
