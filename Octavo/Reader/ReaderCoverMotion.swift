@@ -22,10 +22,11 @@ import UIKit
 /// cover and folding while reading keep their own motion, the fold.
 @Observable
 final class ReaderCoverMotion {
-    /// Seconds: the cover moving onto the right page, its swing (a flip's),
-    /// and Reduce Motion's fade.
-    static let slideDuration = 0.35
-    static let swingDuration = ReaderTurnMotion.flip.duration
+    /// Seconds: the cover moving onto the right page, its swing, and Reduce
+    /// Motion's fade. The swing is a third quicker than a page's flip (Adam,
+    /// 2026-11-04); it was 0.5, and the slide 0.35.
+    static let slideDuration = 0.23
+    static let swingDuration = 0.33
     static let fadeDuration = 0.3
 
     /// The cover's own picture, drawn as the book's screen draws it; a book
@@ -51,7 +52,7 @@ final class ReaderCoverMotion {
     /// stands edge on at the screen's left edge (past that it's off the
     /// screen, and the page would sit still for half the swing).
     var swungOver: Double { spread ? 1 : 0.5 }
-    /// Folded, the visible half of the swing at the flip's pace.
+    /// Folded, the visible half of the swing, at the same pace.
     var swingDuration: Double { Self.swingDuration * swungOver }
     /// The reader's pages once it has opened your place: the left page goes
     /// on the back of the cover.
@@ -253,6 +254,14 @@ struct ReaderCoverMotionView: View {
                 motion.paper
                     .frame(width: motion.coverFrame.width, height: motion.coverFrame.height)
                     .offset(x: motion.coverFrame.minX, y: motion.coverFrame.minY)
+                // The gutter's paper, along the cover's trailing edge: off the
+                // screen to start with, so the gutter stays the book screen's
+                // until the cover has passed. Without it a dark screen's gutter
+                // stays black between the paper and the cover.
+                let gutter = max(motion.rightPage.minX - motion.coverFrame.maxX, 0)
+                motion.paper
+                    .frame(width: gutter, height: motion.windowSize.height)
+                    .offset(x: motion.coverFrame.minX - gutter + motion.slide * (motion.rightPage.minX - motion.coverFrame.minX))
             }
         }
     }
