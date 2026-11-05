@@ -114,3 +114,7 @@ Folding while reading closes the book back to its screen, the cover (`ShellModel
 ## KOReader sync for OPDS servers (Adam, 2026-11-04)
 
 OPDS servers sometimes run a KOReader sync server alongside them for reading progress. Adam: look into it. It's already on the "Later" list (`docs/design/direction.md`, v1 scope) and has a slot in the design (`KOSync`, percentage only, in `CLAUDE.md`; the server setup's sync step comes back once it exists). Not looked into yet. To find out: how the protocol works, how it matches a book to a file, and how close a percentage lands compared with a CFI.
+
+## Back always there in the reader (Adam, 2026-11-04)
+
+While reading, the side column shows only ···, and ‹ comes up with Contents, Aa, Search and Bookmark, in one group. Adam: should ‹ always be there, apart from ··· and the rest? The column sits off the page, so it would cost no reading room, and leaving the book would no longer sit right above Contents. Not looked into yet. To decide: half open, where the controls stay hidden; the tour's Skip, which sits in that spot; "Back to page 312" alongside a ‹ that closes the book; and how much a stray tap matters, since a tap in the column turns the page today.
