@@ -50,6 +50,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] Skipping by chapter (Adam, 2026-11-04). Decided (decision 35) and built the same day: ⏮ and ⏭ beside the chapter's name, and a scrubber with dots at chapters and a tick you feel as it passes one. Hold still and it zooms in to one page at a time, with a catch at chapter starts (Adam, after a test build on his Duo). To be tried on Adam's Duo.
 - [x] Back always there in the reader (Adam, 2026-11-04). Decided (decision 7) and built the same day: ‹ on its own above ···, grey with it while you read.
 - [x] Folded, it needs to be easier to dismiss the Customize pane (Adam, 2026-11-03, on his Duo). A tap on the screen is a small target there, and his opened the table of contents instead of closing the pane. Built 2026-11-04: a ✕ at the top right of all three panels, folded and unfolded (decision 13 in `docs/design/direction.md`).
+- More than one server (Adam, 2026-11-05), before the first release: "Someone might have bookorbit and OPDS, for example." It reverses decision 1 and the v1 scope in `docs/design/direction.md`. Not designed yet: what Home, the Library and Search show across servers, and where each book's place syncs. `KeychainSweep` keeps only the saved server's items today, so this needs the security review Adam signs off.
 
 ## What you'll see that isn't right yet
 
