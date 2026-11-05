@@ -18,7 +18,7 @@ import OctavoKit
 ///   and with every other unsent place at launch, when the app comes back
 ///   and when the connection does (`retryUnsent`, Adam 2026-11-02).
 ///
-/// Keyed by the file's `storageKey`, like `ReadingPositionStore`.
+/// Keyed by the book's `storageKey`, like `ReadingPositionStore`.
 @Observable
 final class BookPlaces {
     /// The server's position for one book, as last pulled or pushed.
@@ -77,7 +77,7 @@ final class BookPlaces {
     func opening(of book: SourcedBook) -> OpeningPosition {
         _ = revision
         let listed = Self.listed(book.book)
-        guard let key = book.book.readableFile?.storageKey else { return OpeningPosition.choose(local: nil, remote: listed) }
+        guard let key = book.storageKey else { return OpeningPosition.choose(local: nil, remote: listed) }
         let remote: SyncedPosition? = remotes[key].map(\.position) ?? listed
         return OpeningPosition.choose(local: store.progress(forBook: key), remote: remote)
     }
@@ -93,7 +93,7 @@ final class BookPlaces {
     /// book opens; here the place line just shows the new place.
     func trip(of book: SourcedBook) -> ReaderTrip? {
         _ = revision
-        guard let key = book.book.readableFile?.storageKey, let trip = store.trip(forBook: key),
+        guard let key = book.storageKey, let trip = store.trip(forBook: key),
               trip.isPlace(opening(of: book).position)
         else { return nil }
         return trip
@@ -102,7 +102,7 @@ final class BookPlaces {
     /// The sync line, for a book whose place syncs and has a place.
     func status(of book: SourcedBook) -> Status? {
         _ = revision
-        guard backend(book) != nil, let key = book.book.readableFile?.storageKey else { return nil }
+        guard backend(book) != nil, let key = book.storageKey else { return nil }
         let opening = opening(of: book)
         guard opening != .start else { return nil }
         let local = store.progress(forBook: key)
@@ -130,7 +130,7 @@ final class BookPlaces {
     /// server's position (unless one younger than `age` is known), then send
     /// the iPhone's if it's newer and unsent.
     func refresh(_ book: SourcedBook, reusingWithin age: TimeInterval = 0) {
-        guard let backend = backend(book), let key = book.book.readableFile?.storageKey else { return }
+        guard let backend = backend(book), let key = book.storageKey else { return }
         Task { await sync(key, with: backend, reusingWithin: age) }
     }
 
@@ -180,7 +180,7 @@ final class BookPlaces {
     /// The reader's sync for `book`, through here: it reuses a recent pull
     /// and reports its pushes.
     func readerSync(for book: SourcedBook) -> (any ProgressSync)? {
-        guard let backend = backend(book), let key = book.book.readableFile?.storageKey else { return nil }
+        guard let backend = backend(book), let key = book.storageKey else { return nil }
         // Reading may leave a place unsent; remember where it goes.
         if unsent[key] != book {
             unsent[key] = book
@@ -230,12 +230,13 @@ final class BookPlaces {
         revision += 1
     }
 
-    /// Another server: what the old one said no longer applies.
-    func reset() {
+    /// `library` went: what it said no longer applies.
+    func reset(_ library: LibrarySourceID) {
+        let prefix = StoredBookKeys.prefix(of: library)
         // Pulls still running land in the old generation.
-        for key in Set(generations.keys).union(pulls.keys) { generations[key, default: 0] += 1 }
-        remotes = [:]
-        pulls = [:]
+        for key in Set(generations.keys).union(pulls.keys) where key.hasPrefix(prefix) { generations[key, default: 0] += 1 }
+        remotes = remotes.filter { !$0.key.hasPrefix(prefix) }
+        pulls = pulls.filter { !$0.key.hasPrefix(prefix) }
         revision += 1
     }
 

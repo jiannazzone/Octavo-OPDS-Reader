@@ -16,10 +16,10 @@ nonisolated struct ReaderServerPlace: Equatable, Sendable {
     /// reading on, which keeps this iPhone's place.
     var offeredOn: String
 
-    /// "BookOrbit: 62%".
-    var label: String {
+    /// "BookOrbit: 62%", with the name the server goes by.
+    func label(server: String) -> String {
         let percent = ReaderPlace(chapter: nil, location: nil, fraction: fraction).percent
-        return String(localized: "BookOrbit: \(percent)", comment: "The server's reading place for the open book, e.g. BookOrbit: 62%")
+        return String(localized: "\(server): \(percent)", comment: "The server's reading place for the open book, e.g. BookOrbit: 62%")
     }
 }
 
@@ -28,6 +28,8 @@ nonisolated struct ReaderServerPlace: Equatable, Sendable {
 /// step bar; turning the page leaves it, as ✕ does.
 struct ReaderServerPlaceBar: View {
     let place: ReaderServerPlace
+    /// The name the book's server goes by.
+    let server: String
     let go: () -> Void
     let stay: () -> Void
 
@@ -43,7 +45,7 @@ struct ReaderServerPlaceBar: View {
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
-                .accessibilityLabel(Text("Go to \(place.label)", comment: "VoiceOver: go to the server's place, e.g. Go to BookOrbit: 62%"))
+                .accessibilityLabel(Text("Go to \(place.label(server: server))", comment: "VoiceOver: go to the server's place, e.g. Go to BookOrbit: 62%"))
             Button("Stay Here", systemImage: "xmark", action: stay)
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
@@ -59,7 +61,7 @@ struct ReaderServerPlaceBar: View {
     }
 
     private var text: AttributedString {
-        var text = AttributedString(place.label)
+        var text = AttributedString(place.label(server: server))
         if let chapter = place.chapter {
             var rest = AttributedString(" · \(chapter)")
             rest.foregroundColor = .secondary

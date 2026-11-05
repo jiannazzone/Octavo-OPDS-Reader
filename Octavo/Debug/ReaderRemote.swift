@@ -219,7 +219,7 @@ enum ReaderRemote {
         let file = LibraryFile(id: LibraryFileID(rawValue: name), format: url.pathExtension.lowercased(), filename: name, isPrimary: true)
         let book = LibraryBook(id: LibraryBookID(rawValue: name), title: name, files: [file])
         shell.reading = nil
-        shell.reading = OpenedBook(book: book, file: file, url: url)
+        shell.reading = OpenedBook(book: book, source: .files, file: file, url: url)
         return nil
     }
 

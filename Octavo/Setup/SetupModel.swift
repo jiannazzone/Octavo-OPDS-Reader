@@ -20,6 +20,8 @@ final class SetupModel {
     var bookOrbitAddress = "" {
         didSet { if bookOrbitAddress != oldValue { edited() } }
     }
+    /// The name you gave it, if any (decision 36).
+    var bookOrbitName = ""
     var bookOrbitUsername = "" {
         didSet { if bookOrbitUsername != oldValue { edited() } }
     }
@@ -34,6 +36,8 @@ final class SetupModel {
             signIn = nil
         }
     }
+    /// The name you gave it, if any (decision 36).
+    var catalogName = ""
     var catalogUsername = "" {
         didSet { if catalogUsername != oldValue { edited() } }
     }
@@ -60,8 +64,10 @@ final class SetupModel {
     @ObservationIgnored var push: (SetupStep) -> Void = { _ in }
     /// Back from the trust step.
     @ObservationIgnored var pop: () -> Void = {}
-    /// The server is added: the shell saves it and opens Home.
+    /// The server is added: the shell saves it and opens it.
     @ObservationIgnored var finished: (SavedServer) -> Void = { _ in }
+    /// The servers already added, for telling the same one twice.
+    @ObservationIgnored var saved: () -> [SavedServer] = { [] }
 
     /// Secrets are stored under this ID as setup goes (tokens, a password, a
     /// trusted certificate); it becomes the server's when setup finishes.
@@ -93,6 +99,7 @@ final class SetupModel {
         // BookOrbit's address is its root: a query (a token pasted with it)
         // is never sent or saved.
         let root = parsed.url.withoutQuery
+        guard !isAdded(.bookOrbit, root, username: bookOrbitUsername) else { return }
         let id = serverID(for: root)
         let (username, password) = (bookOrbitUsername, bookOrbitPassword)
         let client = SavedServer.bookOrbitClient(id: id, url: root)
@@ -102,7 +109,7 @@ final class SetupModel {
                 guard isCurrent(), let self else { return }
                 pending = SavedServer(
                     id: id, kind: .bookOrbit, address: root.absoluteString, name: "BookOrbit",
-                    username: username, syncsProgress: true
+                    customName: Self.customName(bookOrbitName), username: username, syncsProgress: true
                 )
                 syncsProgress = true
                 bookOrbitPassword = ""
@@ -144,6 +151,7 @@ final class SetupModel {
             error = "Enter your username and password."
             return
         }
+        guard asked == nil || !isAdded(.opds, parsed.url, username: catalogUsername) else { return }
         let id = serverID(for: parsed.url)
         let credentials = asked == nil ? nil : PasswordCredentials(username: catalogUsername, password: catalogPassword)
         connecting.start { [weak self] isCurrent in
@@ -156,11 +164,16 @@ final class SetupModel {
                 guard isCurrent(), let self else { return }
                 switch access {
                 case .open(let title):
+                    guard !isAdded(.opds, parsed.url, username: credentials?.username) else {
+                        try? ServerCredentials.removeAll(serverID: id.rawValue)
+                        return
+                    }
                     try KeychainCatalogSecretStore(serverID: id.rawValue).save(secret)
                     let address = parsed.url.absoluteString
                     finished(SavedServer(
                         id: id, kind: .opds, address: secret?.redact(address) ?? address,
                         name: Self.name(title ?? asked?.title, url: parsed.url),
+                        customName: Self.customName(catalogName),
                         username: credentials?.username, authScheme: asked?.scheme
                     ))
                 case .signInRequired(let request):
@@ -183,11 +196,30 @@ final class SetupModel {
 
     static let accountMoved = "The account in the address is now in the fields. Check the address, then try again."
 
-    /// The catalog's own name, or its address's host.
+    /// The server at `url` with this account is already added: it says so,
+    /// under the fields (decision 36). Compared with the addresses as they
+    /// really are, a catalog's key put back in, only here on the iPhone.
+    private func isAdded(_ kind: SavedServer.Kind, _ url: URL, username: String?) -> Bool {
+        guard saved().contains(where: { $0.kind == kind && $0.isAt(url, username: username) }) else { return false }
+        error = "You’ve already added this server."
+        return true
+    }
+
+    /// What was typed for a name, if anything.
+    private static func customName(_ typed: String) -> String? {
+        let name = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
+    }
+
+    /// The catalog's own name, or its address's host. It's the catalog's say,
+    /// so one line, and no longer than a name needs to be.
     static func name(_ title: String?, url: URL) -> String {
-        let title = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let scalars = (title ?? "").unicodeScalars.map { CharacterSet.controlCharacters.contains($0) ? " " : Character($0) }
+        let title = String(String(scalars).trimmingCharacters(in: .whitespacesAndNewlines).prefix(nameLimit))
         return title.isEmpty ? url.host() ?? "OPDS catalog" : title
     }
+
+    private static let nameLimit = 60
 
     // MARK: Trust
 
@@ -217,9 +249,11 @@ final class SetupModel {
     func reset() {
         connecting.cancel()
         bookOrbitAddress = ""
+        bookOrbitName = ""
         bookOrbitUsername = ""
         bookOrbitPassword = ""
         catalogAddress = ""
+        catalogName = ""
         catalogUsername = ""
         catalogPassword = ""
         signIn = nil

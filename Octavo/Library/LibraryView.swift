@@ -12,6 +12,9 @@ struct LibraryView: View {
         if let server = library.server {
             if let root = library.root {
                 LibraryContents(source: server.id, sections: Self.sections(root))
+                    // Another server's lists, which may be at the same links,
+                    // and from the top.
+                    .id(server.id)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ConnectionBannerSlot()
@@ -52,6 +55,89 @@ struct LibraryView: View {
             sections.insert(LibraryEntry(kind: .feed, title: "Recently added", link: recent), at: min(1, sections.count))
         }
         return sections
+    }
+}
+
+/// The Library's title with several servers (decision 36): the chosen
+/// server's name and a chevron, where `ScreenTitle` would be. A tap opens a
+/// popover under it, with the servers and Add a server. Not a `Menu`, whose
+/// label iOS squashes into the glass as it opens: built for a small button,
+/// it made a blob of a large title and hid it while open (Adam, 2026-11-05).
+struct LibraryServerMenu: View {
+    @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
+    @State private var isOpen = false
+    /// A menu's row, growing with the text size.
+    @ScaledMetric private var rowHeight: CGFloat = 44
+
+    var body: some View {
+        Button {
+            isOpen = true
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(library.server?.name ?? "Library")
+                    .font(.largeTitle.bold())
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.tint)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityHint("Shows your servers")
+        .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+            rows
+                .presentationCompactAdaptation(.popover)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, SpreadMetrics.titleTop)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// As tall as its rows, scrolling if there are more than fit.
+    private var rows: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(library.connections, id: \.server.id) { connection in
+                    let isChosen = connection.server.id == library.server?.id
+                    row(connection.server.name, symbol: "checkmark", showsSymbol: isChosen) {
+                        isOpen = false
+                        shell.chooseServer(connection.server.id)
+                    }
+                    .accessibilityAddTraits(isChosen ? .isSelected : [])
+                }
+                Divider()
+                    .padding(.leading, 16)
+                row("Add a server", symbol: "plus", showsSymbol: true) {
+                    isOpen = false
+                    shell.push(.setup(.choose))
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: 300, height: min(CGFloat(library.connections.count + 1) * rowHeight + 13, 440))
+    }
+
+    private func row(_ title: String, symbol: String, showsSymbol: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .opacity(showsSymbol ? 1 : 0)
+                    .accessibilityHidden(!showsSymbol)
+                Text(title)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: rowHeight)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -333,7 +419,7 @@ struct FeedContent<Header: View>: View {
             // The next page of a grid.
             ProgressView()
                 .padding(.vertical, 12)
-        case .failed where library.connectionProblem == nil:
+        case .failed where library.connection(feed.source)?.problem == nil:
             if isEmpty {
                 EmptyInvitation(
                     symbol: "exclamationmark.triangle", title: "Couldn’t load this list",

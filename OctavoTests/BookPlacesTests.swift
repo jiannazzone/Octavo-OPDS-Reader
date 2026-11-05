@@ -61,7 +61,7 @@ struct BookPlacesTests {
         directory: URL.testDirectory.appending(path: "places-\(UUID().uuidString)", directoryHint: .isDirectory)
     )
     let clock = TestClock()
-    var key: String { Self.file.storageKey }
+    var key: String { Self.file.storageKey(in: Self.book.source) }
 
     func places(_ backend: FakeProgressSync?) -> BookPlaces {
         BookPlaces(store: store, now: { [clock] in clock.now }) { _ in backend }
@@ -359,7 +359,7 @@ struct BookPlacesTests {
         await backend.hold()
         places.refresh(Self.book)
         #expect(await eventuallyAwaiting { await backend.pulls == 2 })
-        places.reset()
+        places.reset(Self.book.source)
         await backend.release()
         try await Task.sleep(for: .milliseconds(50))
 

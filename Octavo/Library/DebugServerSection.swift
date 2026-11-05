@@ -10,8 +10,10 @@ struct DebugServerSection: View {
 
     var body: some View {
         Section {
-            if let server = library.server {
-                LabeledContent(server.name, value: server.detail)
+            if !library.connections.isEmpty {
+                ForEach(library.connections, id: \.server.id) { connection in
+                    LabeledContent(connection.server.name, value: connection.server.detail)
+                }
                 Button("Disconnect", role: .destructive) { shell.forgetServer() }
             } else {
                 Button {

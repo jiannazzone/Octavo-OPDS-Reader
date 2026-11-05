@@ -64,7 +64,7 @@ private struct Harness {
             onIPhone: BooksOnIPhone(fileURL: temporaryFile("BooksOnIPhone")), imported: .temporary()
         )
         defaults = UserDefaults.testSuite("SearchModelTests")
-        search = SearchModel(library: library, isOnIPhone: { downloaded.contains($0.id.rawValue) }, defaults: defaults, pause: pause)
+        search = SearchModel(library: library, isOnIPhone: { downloaded.contains($0.book.id.rawValue) }, defaults: defaults, pause: pause)
         await library.connect(LibraryServer(id: server, name: "Calibre-Web", source: source))
     }
 
