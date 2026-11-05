@@ -1,8 +1,8 @@
 import OctavoKit
 import SwiftUI
 
-// An empty list (decision 22, #30): what's missing and the way to the Library
-// on the left page, and the server's newest books on the right.
+// Empty screens (decision 22, #30): what's missing and one way forward on the
+// left page, and a server's newest books on the right.
 
 /// What an empty list says: what's missing, and where its books come from.
 nonisolated struct EmptyListWording: Equatable {
@@ -27,64 +27,74 @@ nonisolated struct EmptyListWording: Equatable {
     }
 }
 
-/// A list that came back with nothing in it. Folded, the invitation; unfolded,
-/// the invitation on the left page and the server's newest books on the right.
+/// A list that came back with nothing in it.
 struct EmptyFeed: View {
     let entry: LibraryEntry
     let feed: FeedModel
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
 
     var body: some View {
-        Group {
-            if let pages = spread.pages {
-                HStack(alignment: .top, spacing: 0) {
-                    invitation
-                        .frame(width: pages.leftWidth)
-                    Color.clear
-                        .frame(width: pages.hingeWidth)
-                    NewestBooksPage(newest: newest, source: feed.source, width: pages.rightWidth)
-                        .frame(width: pages.rightWidth)
-                }
-            } else {
-                invitation
+        let wording = EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
+        EmptyPages(server: feed.source, excluding: entry.link) {
+            // In a scroll view to pull down, centred on its page as on Home.
+            ScrollView {
+                EmptyInvitation(
+                    symbol: "books.vertical", title: wording.title,
+                    message: wording.message, actionTitle: "Open Library"
+                ) { shell.openLibrary(showing: feed.source) }
+                .containerRelativeFrame(.vertical)
             }
         }
         .refreshable { await feed.reload() }
     }
+}
 
-    /// In a scroll view to pull down, centred on its page as on Home.
-    private var invitation: some View {
-        let wording = EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
-        return ScrollView {
-            EmptyInvitation(
-                symbol: "books.vertical", title: wording.title,
-                message: wording.message, actionTitle: "Open Library"
-            ) { shell.openLibrary(showing: feed.source) }
-            .containerRelativeFrame(.vertical)
+/// An empty screen across the spread: folded, the invitation; unfolded, the
+/// invitation on the left page and a server's newest books on the right.
+struct EmptyPages<Invitation: View>: View {
+    /// Whose newest books go on the right page. `nil`: none.
+    let server: LibrarySourceID?
+    /// The list that's empty, which can't be shown beside itself.
+    var excluding: LibraryLink?
+    @ViewBuilder let invitation: () -> Invitation
+    @Environment(LibraryModel.self) private var library
+    @Environment(\.spread) private var spread
+
+    var body: some View {
+        if let pages = spread.pages {
+            HStack(alignment: .top, spacing: 0) {
+                invitation()
+                    .frame(width: pages.leftWidth)
+                Color.clear
+                    .frame(width: pages.hingeWidth)
+                NewestBooksPage(newest: newest, source: server, width: pages.rightWidth)
+                    .frame(width: pages.rightWidth)
+            }
+        } else {
+            invitation()
         }
     }
 
-    /// `nil` if the server has no such list, or it's this one.
+    /// `nil` if the server has no such list, or it's the empty one.
     private var newest: LibraryEntry? {
-        guard let root = library.connection(feed.source)?.root,
-              let newest = LibraryView.newest(root), newest.link != entry.link else { return nil }
+        guard let root = server.flatMap({ library.connection($0)?.root }),
+              let newest = LibraryView.newest(root), newest.link != excluding else { return nil }
         return newest
     }
 }
 
-/// The right page beside an empty list: the newest books as a shelf, with the
-/// page to itself. Blank if there are no covers to show.
+/// The right page beside an empty screen: the newest books as a shelf, with
+/// the page to itself. Blank if there are no covers to show.
 private struct NewestBooksPage: View {
     let newest: LibraryEntry?
-    let source: LibrarySourceID
+    let source: LibrarySourceID?
     let width: CGFloat
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
         ScrollView {
-            if let newest, let feed = library.feed(newest.link, from: source), shows(feed) {
+            if let newest, let source, let feed = library.feed(newest.link, from: source), shows(feed) {
                 LibraryShelf(entry: newest, source: source, maxRows: 3)
                     .environment(\.spread, Spread(width: width, pages: nil))
                     .padding(.top, 8)

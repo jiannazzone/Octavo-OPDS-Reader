@@ -7,7 +7,7 @@ A list that came back with nothing in it is an invitation, not a blank screen. D
 ## How it fits together
 
 - **`FeedModel.cameBackEmpty`** picks the screen in `FeedScreen`. It's set when a first page has nothing on it, and stays set through a reload, because `reload()` puts the list in `.loading`: going by the state, pulling down would swap the message for blank covers and back. A reload that fails clears it, so the screen says it couldn't load instead of saying there are no books.
-- **`EmptyFeed`** is the screen: one scroll view with the invitation folded, and an `HStack` of the two pages unfolded, as Home's is. The invitation is in a scroll view so the list can still be pulled down, and `containerRelativeFrame(.vertical)` centres it on its page.
+- **`EmptyPages`** is the layout, for an empty list (`EmptyFeed`), Home and On iPhone: the invitation alone folded, and an `HStack` of the two pages unfolded, as Home's books are. An empty list's invitation is in a scroll view so the list can still be pulled down, and `containerRelativeFrame(.vertical)` centres it on its page. Home and On iPhone can't be pulled down when empty, as before.
 - **`EmptyListWording`** has the words, from the list's `LibraryEntry.Kind` and the server's name. An OPDS list is always `.feed`, so a chip like Keep Reading and any other OPDS list say the same thing. Octavo can't tell what such a list is for, and doesn't push places to an OPDS server, so "Start a book and it'll show here" would be untrue.
 - **`ShellModel.openLibrary(showing:)`** is the button: the Library's top, on the list's server. The server only changes for a list opened from Search on another server. Search's own screens stay where they were.
 - **The right page** is a `LibraryShelf` with `maxRows: 3` and a one-page `Spread` in its environment, so its grid lays out for that page alone. `LibraryView.newest` finds the list by the same `sections` the Library's shelves use, so the heading matches the shelf.
@@ -16,7 +16,7 @@ A list that came back with nothing in it is an invitation, not a blank screen. D
 
 Before this, the message wasn't on the left page at all. `FeedContent` sized everything in its `VStack` to the left page, so with nothing else in it the stack was only that wide, and the scroll view centred it across the spread: "Nothing here yet" ran over the hinge, and "0 books" sat out of line with the title. `FeedContent`'s stack now fills the scroll view and leads, which also puts "Couldn't load this list" on the left page. That one was fixed by reading the layout and wasn't seen on screen, since it takes a server that fails.
 
-This doesn't reach Home's empty screen, which centres `EmptyInvitation` across the spread: a simulator screenshot shows its message across the hinge. On iPhone's reads the same way in its code, but wasn't checked on screen.
+Home's message had the same problem, because it centred `EmptyInvitation` across the spread, and so did On iPhone's, for the same reason as `FeedContent`. Both are on `EmptyPages` now. The right page is the newest books of the Library's chosen server, with nothing beside "Couldn't load your books in progress".
 
 ## Checked on the simulator
 
@@ -32,6 +32,8 @@ This doesn't reach Home's empty screen, which centres `EmptyInvitation` across t
 | Open Library on Komga's list, opened from Search with BookOrbit chosen | The Library shows Komga, title "Komga ⌄" |
 | A cover, and the heading, on the right page | Open the book's screen and the list, and ‹ comes back |
 | A scripted pull down on the empty screen | The message stays, with no blank covers. The request going out wasn't confirmed |
+| Home on Komga, launched folded and launched unfolded | Folded as before, unfolded on the left page with Latest books on the right |
+| On iPhone, after downloading a book and removing it | Before: across the hinge. Now on the left page unfolded with Latest books on the right, and centred folded |
 
 Not seen on screen: the right page left blank (a server with no such list, or that list being the empty one). `aReloadThatFailsIsNoLongerAnEmptyList` covers the reload's states.
 

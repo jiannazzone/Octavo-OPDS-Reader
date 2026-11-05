@@ -16,23 +16,27 @@ struct HomeView: View {
         } else if library.server != nil, !library.homeLoaded {
             HomeContent(books: nil)
         } else if library.continueReading.isEmpty {
-            VStack(spacing: 0) {
-                VStack(spacing: 12) { HomeBannersSlot() }
-                    .padding(.horizontal, SpreadMetrics.margin)
-                if !library.continueReadingFailed {
-                    // Frame 25.
-                    EmptyInvitation(
-                        symbol: "books.vertical", title: "Nothing in progress",
-                        message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
-                    ) { shell.select(.library) }
-                } else if library.homeProblems.isEmpty {
-                    EmptyInvitation(
-                        symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
-                        message: library.hasSeveralServers ? "Your servers didn’t send them." : "The server didn’t send them.", actionTitle: "Try again"
-                    ) { Task { await library.loadHome() } }
-                } else {
-                    // The banner says why, and retries.
-                    Spacer()
+            // The Library's newest books beside the invitation, not beside a
+            // problem.
+            EmptyPages(server: library.continueReadingFailed ? nil : library.server?.id) {
+                VStack(spacing: 0) {
+                    VStack(spacing: 12) { HomeBannersSlot() }
+                        .padding(.horizontal, SpreadMetrics.margin)
+                    if !library.continueReadingFailed {
+                        // Frame 25.
+                        EmptyInvitation(
+                            symbol: "books.vertical", title: "Nothing in progress",
+                            message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
+                        ) { shell.select(.library) }
+                    } else if library.homeProblems.isEmpty {
+                        EmptyInvitation(
+                            symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
+                            message: library.hasSeveralServers ? "Your servers didn’t send them." : "The server didn’t send them.", actionTitle: "Try again"
+                        ) { Task { await library.loadHome() } }
+                    } else {
+                        // The banner says why, and retries.
+                        Spacer()
+                    }
                 }
             }
         } else {
