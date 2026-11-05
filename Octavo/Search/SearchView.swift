@@ -24,18 +24,23 @@ struct SearchView: View {
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            ConnectionBannerSlot()
-                            if let server, !search.serverSearches {
-                                Text("\(server.name) doesn’t offer search. Showing books on your iPhone.")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                        // With several, each server says so in its own section.
+                        if !library.hasSeveralServers {
+                            VStack(alignment: .leading, spacing: 12) {
+                                ConnectionBannerSlot()
+                                if let server, !search.serverSearches {
+                                    Text("\(server.name) doesn’t offer search. Showing books on your iPhone.")
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
+                            .padding(.horizontal, SpreadMetrics.margin)
+                            .frame(width: spread.pages?.leftWidth, alignment: .leading)
                         }
-                        .padding(.horizontal, SpreadMetrics.margin)
-                        .frame(width: spread.pages?.leftWidth, alignment: .leading)
                         if search.searchText == nil {
                             SearchStart(search: search, source: server?.id ?? .files)
+                        } else if library.hasSeveralServers {
+                            SearchServerSections(search: search)
                         } else {
                             SearchResultsContent(search: search)
                         }
@@ -100,13 +105,22 @@ private struct SearchStart: View {
     let search: SearchModel
     let source: LibrarySourceID
     @Environment(\.spread) private var spread
+    @Environment(LibraryModel.self) private var library
 
     var body: some View {
         let hasRecent = !search.recentSearches.isEmpty
-        if spread.pages != nil, hasRecent {
+        if spread.pages != nil, hasRecent || library.hasSeveralServers {
             SpreadRow { page, _ in
                 Group {
-                    if page == 0 { recent } else { browse }
+                    if hasRecent {
+                        if page == 0 { recent } else { browse }
+                    } else if page == 0 {
+                        // Several servers, nothing recent: the first's lists
+                        // on the left page, the others' on the right.
+                        browseServers(library.connections.prefix(1))
+                    } else {
+                        browseServers(library.connections.dropFirst())
+                    }
                 }
                 .padding(.horizontal, SpreadMetrics.margin)
             }
@@ -146,7 +160,19 @@ private struct SearchStart: View {
 
     @ViewBuilder
     private var browse: some View {
-        BrowseLists(source: source)
+        if library.hasSeveralServers {
+            browseServers(library.connections[...])
+        } else {
+            BrowseLists(source: source)
+        }
+    }
+
+    private func browseServers(_ connections: ArraySlice<ServerConnection>) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            ForEach(connections, id: \.server.id) { connection in
+                BrowseLists(source: connection.server.id, title: "Browse \(connection.server.name)", chips: connection.root?.chips)
+            }
+        }
     }
 }
 
@@ -165,13 +191,16 @@ private struct RecentLabelStyle: LabelStyle {
 /// and Authors; an OPDS catalog's sections), each opening in this tab.
 private struct BrowseLists: View {
     let source: LibrarySourceID
+    var title = "Browse"
+    /// `nil`: the Library's server's.
+    var chips: [LibraryEntry]?
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        if let chips = library.root?.chips, !chips.isEmpty {
+        if let chips = chips ?? library.root?.chips, !chips.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                SearchHeading("Browse")
+                SearchHeading(title)
                 ChipFlow(spacing: 8) {
                     ForEach(chips) { chip in
                         Button(chip.title) { shell.push(.feed(chip, from: source)) }
@@ -216,7 +245,7 @@ private struct SearchResultsContent: View {
 
     @ViewBuilder
     private func sections(_ results: SearchModel.Results) -> some View {
-        let books = Array(results.books.prefix(SearchModel.bookLimit))
+        let books = Array(results.books.prefix(search.bookLimit))
         let hasEntries = !results.series.isEmpty || !results.authors.isEmpty
         if spread.pages != nil, hasEntries {
             SpreadRow { page, _ in
@@ -330,6 +359,142 @@ private struct SearchResultsContent: View {
 
     static func flowing(_ books: [SourcedBook], all: LibraryEntry?) -> [FlowItem] {
         books.map(FlowItem.book) + (all.map { [FlowItem.all($0)] } ?? [])
+    }
+}
+
+/// The results with several servers (decision 36): a section for each, one
+/// per page unfolded, a third carrying on down the right page. Each fills in
+/// when its server answers, so a slow one doesn't move the rest.
+private struct SearchServerSections: View {
+    let search: SearchModel
+    @Environment(\.spread) private var spread
+
+    var body: some View {
+        if spread.pages != nil {
+            SpreadRow { page, _ in
+                column(page == 0 ? search.sections.prefix(1) : search.sections.dropFirst())
+                    .padding(.horizontal, SpreadMetrics.margin)
+            }
+        } else {
+            column(search.sections[...])
+                .padding(.horizontal, SpreadMetrics.margin)
+        }
+    }
+
+    private func column(_ sections: ArraySlice<SearchModel.Section>) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            ForEach(sections) { section in
+                SearchServerSection(search: search, section: section)
+            }
+        }
+    }
+}
+
+/// One server's results: its name, its first books and "All 9 books", then
+/// its series and authors. A server that can't answer says so here.
+private struct SearchServerSection: View {
+    let search: SearchModel
+    let section: SearchModel.Section
+    @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
+
+    private var connection: ServerConnection? {
+        library.connection(section.source)
+    }
+
+    private var name: String {
+        connection?.server.name ?? "On iPhone"
+    }
+
+    var body: some View {
+        let results = section.results
+        VStack(alignment: .leading, spacing: 4) {
+            SearchHeading(name)
+            message
+            if let results {
+                ForEach(results.books.prefix(search.bookLimit)) { book in
+                    SearchBookRow(book: book)
+                }
+                if let all = results.allBooks {
+                    AllBooksLink(entry: all, source: results.source)
+                }
+                entries("Series", results.series, source: results.source)
+                entries("Authors", results.authors, source: results.source)
+                if isEmpty(results), section.state == .loaded, connection?.problem == nil, connection?.root?.search != .unavailable {
+                    Text("No results")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 8)
+                }
+            } else if section.state == .searching {
+                ForEach(0..<3, id: \.self) { _ in
+                    HStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(.quaternary)
+                            .frame(width: 40, height: 60)
+                        Text(verbatim: "A book’s title\nIts author")
+                            .redacted(reason: .placeholder)
+                    }
+                    .padding(.vertical, 6)
+                    .accessibilityHidden(true)
+                }
+            }
+        }
+        // Its own height, not a share of the page's: titles keep their two
+        // lines on the right page, which is narrower than one folded.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func isEmpty(_ results: SearchModel.Results) -> Bool {
+        results.books.isEmpty && results.series.isEmpty && results.authors.isEmpty
+    }
+
+    /// Why this server has nothing to show (decision 36).
+    @ViewBuilder
+    private var message: some View {
+        switch connection?.problem {
+        case .unreachable:
+            sentence("Can’t reach \(name).", action: "Try again") { search.retry(section.source) }
+        case .signedOut:
+            sentence("Signed out of \(name).", action: "Sign in") { shell.showSignIn(section.source) }
+        case nil:
+            if section.state == .failed {
+                sentence("Couldn’t search \(name).", action: "Try again") { search.retry(section.source) }
+            } else if connection?.root?.search == .unavailable {
+                sentence("\(name) doesn’t offer search.")
+            }
+        }
+    }
+
+    private func sentence(_ text: String, action: String? = nil, perform: @escaping () -> Void = {}) -> some View {
+        HStack {
+            Text(text)
+                .foregroundStyle(.secondary)
+            if let action {
+                Button(action, action: perform)
+            }
+        }
+        .font(.subheadline)
+        .padding(.vertical, 8)
+    }
+
+    @ViewBuilder
+    private func entries(_ title: String, _ entries: [LibraryEntry], source: LibrarySourceID) -> some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 8)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(entries) { entry in
+                    EntryRow(entry: entry, source: source)
+                        .padding(.vertical, 10)
+                    Divider()
+                }
+            }
+        }
     }
 }
 
