@@ -1,0 +1,17 @@
+{
+  "locale": "en-US",
+  "appInfo": {
+    "name": "Octavo – OPDS Reader",
+    "subtitle": "Read books from your server",
+    "privacyPolicyUrl": "https://github.com/jiannazzone/Octavo-OPDS-Reader/blob/main/docs/PRIVACY.md"
+  },
+  "version": {
+    "description": "Read the books on your own server, on a phone that opens like a book.\n\nOctavo is a free, open-source e-reader built for iPhone Duo first. It reads from BookOrbit, from any OPDS catalog, and from files you import. No accounts, no subscriptions, and no tracking.\n\nOpens like a book\n- One page folded, two pages open, and a real spread with a shadow at the spine when half open. Your place holds as you move between them.\n\nKeeps your place\n- With BookOrbit and KOReader, your position stays synced across all of your devices, even other e-readers.\n\nLets you look something up\n- Jump to a map or a glossary, then tap back. Your stored position doesn't move unless you settle somewhere new.\n\nReads your way\n- Four themes, fonts, text size, line spacing, margins and page turns. Contents, bookmarks and search in the book, and a scrubber that zooms in to one page at a time.\n\nWorks with\n- BookOrbit: your library, with your place and bookmarks synced\n- OPDS catalogs: browse, search and download. Checked against Calibre-Web, COPS, Kavita and Komga\n- KOReader for synchronization\n- Files: import EPUB, MOBI, AZW3 or FB2, or open them in Octavo from another app\n\nPrivate\n- Books and sign-ins stay between your iPhone and your server. Passwords go in the Keychain, plain http only goes to home and VPN addresses, and self-signed certificates work once you trust them.\n\nGood to know\n- Octavo doesn't sell books or come with a catalog. It can't open files with DRM, PDFs or comics.\n\nOctavo is a separate project from BookOrbit, and talks to it through its API.",
+    "keywords": "ebook,epub,mobi,azw3,fb2,library,self-hosted,foldable,duo,novel,bookshelf,catalog,bookorbit",
+    "promotionalText": "Read the books on your own server, on a phone that opens like a book. One page folded, two pages open. No accounts, no subscriptions, no tracking.",
+    "supportUrl": "https://github.com/jiannazzone/Octavo-OPDS-Reader/blob/main/docs/SUPPORT.md",
+    "marketingUrl": "https://github.com/jiannazzone/Octavo-OPDS-Reader"
+  },
+  "copyright": "2026 Joseph Iannazzone",
+  "reviewNotes": "No account or server is needed. Pride and Prejudice is built in and opens on first launch.\n\nTo try a catalog: Settings > Add a server > OPDS catalog, enter https://unglue.it/api/opds/ and tap Connect. It's public and needs no sign-in.\n\nBookOrbit is a self-hosted server, so signing in to it needs your own copy.\n\nWhy plain http is allowed: Octavo reads from people's own servers, which often run on a home network or a Tailscale VPN without TLS. The exceptions cover only the range Tailscale uses and local names (home.arpa, .internal, .lan, ts.net). The app also refuses any plain http request unless every address the server resolves to is private, link-local or VPN, so passwords and tokens aren't sent unencrypted over the internet. A self-signed certificate is accepted only after the person confirms its fingerprint."
+}
