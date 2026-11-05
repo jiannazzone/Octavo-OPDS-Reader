@@ -332,7 +332,9 @@ struct ReaderNotesBridgeTests {
         #expect(model.note == nil)
 
         model.handle(.note(note))
-        model.handle(.note(note))
+        var other = note
+        other.href = "notes.xhtml#n2"
+        model.handle(.note(other))
         #expect(model.note == nil, "A second mark's tap only closes the first")
 
         model.handle(.note(note))
@@ -340,6 +342,52 @@ struct ReaderNotesBridgeTests {
         #expect(model.note == nil)
         #expect(model.trip == nil, "A link's tap only closes the note")
 
+        #expect(model.position == place)
+    }
+
+    /// A chapter that's just been laid out again can report its page late,
+    /// with another CFI. Only the page turning closes a note (Adam's Duo: Go to
+    /// Note, Back, and the card closed as it opened).
+    @Test func aLateRelocationLeavesANoteOpen() async throws {
+        let model = try await opened()
+        let note = ReaderNote(href: "OEBPS/notes.xhtml#n6", mark: .init(x: 1, y: 1, width: 1, height: 1), font: .init(size: 16), blocks: [])
+        model.handle(.note(note))
+
+        var late = ReaderMessage.Relocation()
+        late.reason = "anchor"
+        late.cfi = "epubcfi(/6/2!/4/8/1:10)"
+        late.fraction = 0.1
+        model.handle(.relocate(late))
+        #expect(model.note == note)
+
+        model.pageTurn = .none
+        var turned = late
+        turned.reason = "page"
+        turned.cfi = "epubcfi(/6/2!/4/20/1:10)"
+        turned.fraction = 0.2
+        model.handle(.relocate(turned))
+        #expect(model.note == nil, "With Page Turn None, a swipe's relocation is all there is")
+    }
+
+    @Test func aMarkReportedTwiceIsOneTap() async throws {
+        let model = try await opened()
+        let note = ReaderNote(href: "OEBPS/notes.xhtml#n6", mark: .init(x: 1, y: 1, width: 1, height: 1), font: .init(size: 16), blocks: [])
+        model.handle(.note(note))
+        model.handle(.note(note))
+        #expect(model.note == note)
+        try await Task.sleep(for: ReaderModel.sameTapWindow + .milliseconds(50))
+        model.handle(.note(note))
+        #expect(model.note == nil, "Later, it's a second tap, which closes it")
+    }
+
+    @Test func aTurnAskedForOverANoteOnlyClosesIt() async throws {
+        let model = try await opened()
+        let note = ReaderNote(href: "OEBPS/notes.xhtml#n6", mark: .init(x: 1, y: 1, width: 1, height: 1), font: .init(size: 16), blocks: [])
+        let place = model.position
+        model.handle(.note(note))
+        model.handle(.turn(side: .right))
+        #expect(model.note == nil)
+        #expect(model.turnRun == nil)
         #expect(model.position == place)
     }
 

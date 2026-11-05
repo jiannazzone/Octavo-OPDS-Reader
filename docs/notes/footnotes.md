@@ -64,13 +64,17 @@ A second `WebView` would keep every style, but it brings a web process, an async
 | ✕, or a tap anywhere else, or a key or trackpad | Closes. No turn (`coversPage`, the panels' tap mode) |
 | A tap on the card | Nothing |
 | A tap on another link or mark | Only closes |
+| The same mark reported again within 0.5 s | Nothing: it's the same tap |
 | A swipe on the page or the card | Closes and turns |
-| Page Turn None, a swipe | foliate turns; the relocation closes it |
+| Page Turn None, a swipe | foliate turns; that turn's relocation closes it |
+| Any other relocation | Nothing |
 | Go to Note | A jump (`ReaderModel.jump`), with "Back to page N" |
 | A fold, or any new layout | Closes, as its mark has moved |
 | Half open and flat | Stays, as the layout's the same |
 | The controls up, then a mark | The controls go and the note opens |
 | A panel opening, or the bar | The note closes |
+
+**Only a turn closes it, not a relocation (Adam, on his Duo).** It first closed on any relocation with a new CFI. On his Duo, going to a note and back, the same mark's card closed as it opened for a little while. A section just laid out again can report its page late (on the simulator a card failed to appear once after a jump, with 12 relocations where 7 is usual), though Back itself couldn't be made to do it there: its relocations all came at once. In a DEBUG build `spike-events.jsonl` logs why each card closes.
 
 The way back and BookOrbit's capsule go while a note is open, as they do for a panel: the card overlapped the way back by 8 pt.
 

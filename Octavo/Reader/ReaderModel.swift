@@ -39,6 +39,7 @@ final class ReaderModel {
     private(set) var location: ReaderMessage.Relocation.Location?
     /// The footnote open over the page, if any (`ReaderModel+Notes`).
     var note: ReaderNote?
+    @ObservationIgnored var noteOpenedAt: ContinuousClock.Instant?
     /// The contents with where each entry starts, for naming the chapter at
     /// any point of the progress bar.
     private(set) var toc: [ReaderMessage.TOCEntry] = []
@@ -278,7 +279,7 @@ final class ReaderModel {
         guard !isInBackground else { return }
         // `.noHinge` is only the first report, before the hinge is known.
         if old != .noHinge, old.isFolded != posture.isFolded {
-            closeNote()
+            closeNote("a fold")
             beginFold(folded: posture.isFolded)
         }
         relayout()
@@ -488,7 +489,7 @@ final class ReaderModel {
     private func apply(_ layout: ReaderLayout) {
         guard layout != self.layout else { return }
         // Its mark has moved.
-        closeNote()
+        closeNote("a new layout")
         self.layout = layout
         sendLayout()
         bookModeMayHaveChanged()
@@ -603,9 +604,6 @@ final class ReaderModel {
             let previous = self.relocation
             self.relocation = relocation
             relocationCount += 1
-            // With Page Turn None a swipe is the page's own: this is all there
-            // is to go by.
-            if relocation.cfi != previous?.cfi { closeNote() }
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
             location = relocation.location
@@ -615,7 +613,10 @@ final class ReaderModel {
             if !isRestoring, relocation.position(cfiShape) != previous?.position(cfiShape) {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.
-                if !pageTurn.isAnimated, relocation.isPageTurn, foldBatch == nil, relocation.cfi != previous?.cfi { pageTurned() }
+                if !pageTurn.isAnimated, relocation.isPageTurn, foldBatch == nil, relocation.cfi != previous?.cfi {
+                    closeNote("a swipe with Page Turn None")
+                    pageTurned()
+                }
                 moved(to: relocation)
             }
             // A turn's new page, measured again since its pictures came.
@@ -626,7 +627,7 @@ final class ReaderModel {
             if serverPlace != nil, trip == nil, tripToBe == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
-            if zone == "dismiss" { closeNote() }
+            if zone == "dismiss" { closeNote("a tap elsewhere") }
             onControlsTap?(zone)
         case .turn(let side):
             turnRequested(side)
@@ -647,7 +648,7 @@ final class ReaderModel {
             log.notice("Ignored external link \(href, privacy: .public)")
         case .link(let href):
             if note != nil {
-                closeNote()
+                closeNote("a tap on a link")
             } else {
                 followLink(href)
             }

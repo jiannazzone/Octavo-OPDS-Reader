@@ -213,7 +213,7 @@ private struct ReaderScreen: View {
                             placement: ReaderNotePlacement(mark: note.mark, layout: model.layout, geometry: geometry),
                             theme: appearance.theme(darkMode: darkMode),
                             goToNote: model.goToNote,
-                            close: model.closeNote,
+                            close: { model.closeNote("✕") },
                             swiped: model.noteSwiped
                         )
                     }
@@ -269,12 +269,12 @@ private struct ReaderScreen: View {
             model.coversPage = covers
         }
         .onChange(of: panel) { _, panel in
-            if panel != nil { model.closeNote() }
+            if panel != nil { model.closeNote("a panel") }
             if panel == .contents { Task { await model.placeOnScreen() } }
         }
         // The bar would run under a note.
         .onChange(of: controls.showsBar) { _, shows in
-            if shows { model.closeNote() }
+            if shows { model.closeNote("the bar") }
         }
         // The tour's Turn the page: the page lifts every few seconds until it's
         // turned. Not while something covers it: a tap would only close that.
