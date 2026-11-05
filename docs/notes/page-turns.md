@@ -66,6 +66,27 @@ When the new page first showed in a snapshot, in ms after the turn was asked for
 - **Turns asked for while one is drawing** queue (up to three); once the current one's page is drawn it ends early, so rapid taps keep up.
 - **Folding mid-turn** ends the turn where it was going and the fold's own cover takes over.
 
+### Frame rate
+
+Measured 2026-11-05 on Adam's iPhone Duo (00008160-001C21D136A0000A), with 30-second Instruments recordings (Animation Hitches) of a Debug build with footnotes (#68) merged in, Adam turning the pages by hand. Both displays go to 120 Hz.
+
+- **A turn runs on its own link.** While `turn` is on screen, a `UIUpdateLink` on the web view (`ReaderModel.turnFrames`) asks for 80–120 Hz, and each tick moves `turn.progress` along a `ReaderTurnRamp`, on the same curves and durations as before. Being bound to the view, it follows the window between the displays. A finger's turn sets the progress itself.
+- **Why not a SwiftUI animation:** the 27.2 SDK's SwiftUI interfaces have no way to ask for a frame rate, and `UIView` animation options stop at 60. `CADisableMinimumFrameDurationOnPhone` only lifts the cap. With the link asking beside the animation, most slides stayed at 60 Hz, with frames taking about 5 ms, so no deadline was being missed. Why a third of them ran at 120 isn't known.
+
+| Folded, Slide | Mid-slide frame rate | Tap slides above 90 Hz | Frames in a tap's slide | Hitches of 16 ms or more |
+|---|---|---|---|---|
+| Key only | 55–60 Hz | not counted | about 20 | 16 |
+| Link asking beside the animation | 65 Hz (median) | 5 of 15 | 23 (median) | 17 |
+| Link moving the page | 120 Hz (median) | 21 of 21 | 38 (median) | 9 |
+
+- **Flat, Flip, with the link:** 17 of 17 movements above 90 Hz mid-turn, 120 Hz (median), 7 hitches of 16 ms or more. There's no flat recording from before the change.
+- **Hitch counts:** at 120 Hz a hitch can be one 8.33 ms frame, so the totals (16, then 57 folded, 37 flat) don't compare. Most of them are that size.
+- **Left as it is:** most movements still have small hitches about 60 ms in and at the end, which are the handoffs to and from the web view. The end's comes from a 15–20 ms app update as the pictures go.
+- **`min-quanta`** in `display-surface-swap` read 2 on every frame, those 8.3 ms apart included, so it doesn't say what a frame asked for. Go by the gaps between swaps.
+- **Not recorded:** half open, a Release build, Fade and battery use. The tour's hint still uses a SwiftUI animation.
+
+Recording: `xcrun xctrace record --no-prompt --template 'Animation Hitches' --device <UDID> --attach <pid> --time-limit 30s --output <trace>`, then `xcrun xctrace export --input <trace> --xpath '/trace-toc/run[@number="1"]/data/table[@schema="display-surface-swap"]'`, likewise for `hitches`. By name, `--attach Octavo` failed once to find the app. Traces are about 240 MB, so they aren't kept here.
+
 ## 3. Swipes: why UIKit, not the page
 
 The bridge first tracked swipes with touch events and posted their progress. It worked on the first swipe after a page loaded, then the turn stopped following: **once foliate turned under a finger, WebKit stopped passing that touch to the page** (the frame's `touchmove`s kept arriving at a spy listener but no longer at the bridge's, and later swipes on the same page worked). So a finger's turn is recognised in UIKit (`ReaderSwipeRecognizer`): a `UIPanGestureRecognizer` on the web view's superview (WebKit's own gestures don't hold it back there), recognising alongside WebKit and taking the touch once it starts, so the page sees a cancelled touch, not a tap.
