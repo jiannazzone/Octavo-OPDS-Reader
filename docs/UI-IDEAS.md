@@ -44,7 +44,7 @@ Frame 02 puts a filter button in the side column over the Library, but no decisi
 
 Adam, while settling #8's start chip: "we definitely need a nicer empty state than just a blank screen". Today an empty list (a chip, a collection, an OPDS feed with nothing in it) shows only "Nothing here yet" under the chips, with no action, and unfolded the right pane stays blank. Decision 22 asks for an invitation with one action. Needs a design: what the message says per kind of list (Keep Reading, On Deck, an empty shelf), its action (Open Home? Browse another chip?), and what the right pane shows unfolded.
 
-Decided and built 2026-11-05 (#30; decision 22 in `docs/design/direction.md`), so this one's closed. Not chosen: one line naming the list ("Nothing in Keep Reading"), See All Books opening the whole-library list, and the book you're reading or a blank page on the right. Home's empty screen and On iPhone's weren't part of it: unfolded, their messages still sit across the hinge.
+Decided and built 2026-11-05 (#30; decision 22 in `docs/design/direction.md`), so this one's closed. Not chosen: one line naming the list ("Nothing in Keep Reading"), See All Books opening the whole-library list, and the book you're reading or a blank page on the right. Home's empty screen and On iPhone's weren't part of it: unfolded, Home's message still runs across the hinge in the simulator, and On iPhone's reads the same way in its code but wasn't checked on screen.
 
 ## Reader progress: what's left after #17 (parked 2026-11-01)
 

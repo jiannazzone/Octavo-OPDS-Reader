@@ -16,7 +16,7 @@ A list that came back with nothing in it is an invitation, not a blank screen. D
 
 Before this, the message wasn't on the left page at all. `FeedContent` sized everything in its `VStack` to the left page, so with nothing else in it the stack was only that wide, and the scroll view centred it across the spread: "Nothing here yet" ran over the hinge, and "0 books" sat out of line with the title. `FeedContent`'s stack now fills the scroll view and leads, which also puts "Couldn't load this list" on the left page. That one was fixed by reading the layout and wasn't seen on screen, since it takes a server that fails.
 
-Home's empty screen and On iPhone's still sit across the hinge (`docs/UI-IDEAS.md`).
+This doesn't reach Home's empty screen, which centres `EmptyInvitation` across the spread: a simulator screenshot shows its message across the hinge. On iPhone's reads the same way in its code, but wasn't checked on screen.
 
 ## Checked on the simulator
 
@@ -35,11 +35,9 @@ Home's empty screen and On iPhone's still sit across the hinge (`docs/UI-IDEAS.m
 
 Not seen on screen: the right page left blank (a server with no such list, or that list being the empty one). `aReloadThatFailsIsNoLongerAnEmptyList` covers the reload's states.
 
-## A bug this turned up
+## An odd reading, not a confirmed bug
 
-Folding or unfolding on a screen in the Library can leave the whole stack laid out too wide, with the title cut off at the left. It's on `main` without this work and has nothing to do with empty lists. It happened on BookOrbit and Kavita, and not on Komga, including with a 1.5-second `hinge sweep` from a fresh launch; launching in either posture is fine.
-
-Unfolded, the numbers fit a stack measured at the full 951 pt of the screen in place of the 867 pt it's given, and centred on it, so its left edge is at −42 pt: a right page 413.5 pt wide gives covers of about 117 pt instead of 102.5, as measured from the screenshots. `ScreenStack` measures the `ZStack` of its screens, and the pages have fixed widths, so a wide measure may hold itself up. That's a reading of the screenshots, not a finding from logs. Not fixed here.
+On the simulator, driving the fold with the hinge tool on a pushed list on BookOrbit or Kavita left the screen laid out too wide; not on Komga, and the same on `main` without this work. It was never seen on a Duo and the cause wasn't measured, so it may be the simulator.
 
 ## Tests
 
