@@ -170,7 +170,9 @@ private struct SearchStart: View {
     private func browseServers(_ connections: ArraySlice<ServerConnection>) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             ForEach(connections, id: \.server.id) { connection in
-                BrowseLists(source: connection.server.id, title: "Browse \(connection.server.name)", chips: connection.root?.chips)
+                // Its own lists or none: another server's would open through
+                // this one.
+                BrowseLists(source: connection.server.id, title: "Browse \(connection.server.name)", chips: connection.root?.chips ?? [])
             }
         }
     }

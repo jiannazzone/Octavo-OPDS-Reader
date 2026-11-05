@@ -211,11 +211,15 @@ final class SetupModel {
         return name.isEmpty ? nil : name
     }
 
-    /// The catalog's own name, or its address's host.
+    /// The catalog's own name, or its address's host. It's the catalog's say,
+    /// so one line, and no longer than a name needs to be.
     static func name(_ title: String?, url: URL) -> String {
-        let title = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let scalars = (title ?? "").unicodeScalars.map { CharacterSet.controlCharacters.contains($0) ? " " : Character($0) }
+        let title = String(String(scalars).trimmingCharacters(in: .whitespacesAndNewlines).prefix(nameLimit))
         return title.isEmpty ? url.host() ?? "OPDS catalog" : title
     }
+
+    private static let nameLimit = 60
 
     // MARK: Trust
 

@@ -211,9 +211,17 @@ nonisolated struct ServerStore: Sendable {
         try JSONEncoder().encode(saved).write(to: fileURL, options: .atomic)
     }
 
-    /// Adds `server`, or replaces the one with its ID, and chooses it.
+    /// Adds `server`, or replaces the one with its ID, and chooses it. A list
+    /// that can't be decoded is replaced: nothing can be made of it, it reads
+    /// as no servers, and the launch sweep can't run while it's there. A file
+    /// that can't be read at all still throws, since it may be fine.
     func add(_ server: SavedServer) throws {
-        var saved = try read()
+        var saved: SavedServers
+        do {
+            saved = try read()
+        } catch is DecodingError {
+            saved = SavedServers()
+        }
         if let index = saved.servers.firstIndex(where: { $0.id == server.id }) {
             saved.servers[index] = server
         } else {

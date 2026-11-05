@@ -572,8 +572,15 @@ struct SignInAgainScreen: View {
                 VStack(alignment: .leading, spacing: 12) {
                     LabeledContent("Server", value: saved.detail.components(separatedBy: " · ").first ?? name)
                         .padding(.bottom, 4)
-                    SetupField("Username", text: Binding { username ?? saved.username ?? "" } set: { username = $0 })
-                        .textContentType(.username)
+                    // This account's: another one is another server, added
+                    // from Settings.
+                    if let account = saved.username {
+                        LabeledContent("Account", value: account)
+                            .padding(.bottom, 4)
+                    } else {
+                        SetupField("Username", text: Binding { username ?? "" } set: { username = $0 })
+                            .textContentType(.username)
+                    }
                     SetupField("Password", text: $password, secure: true)
                         .textContentType(.password)
                         .onSubmit { signIn(saved) }

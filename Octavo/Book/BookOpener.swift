@@ -125,6 +125,13 @@ final class BookOpener {
         removals += 1
     }
 
+    /// Remove server's Remove books too: every file of `library`'s, named by
+    /// a record or not.
+    func removeAllDownloads(of library: LibrarySourceID) {
+        files.removeAll(of: library)
+        removals += 1
+    }
+
     /// The same server came back at a new ID, and its kept files with it.
     func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {
         files.moveAll(of: library, to: other)

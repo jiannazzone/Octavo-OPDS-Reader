@@ -187,11 +187,13 @@ final class ShellModel {
         guard let server = added.libraryServer() else { return }
         do {
             try servers.add(added)
+            // Only once it's saved: next launch it would be gone, and them
+            // with it.
+            takeBackBooks(of: server)
         } catch {
             // Still usable now; setup asks again next launch.
         }
         let isFirst = library.connections.isEmpty
-        takeBackBooks(of: server)
         addsBooksAfterTour = false
         for tab in ShellTab.allCases { self[path: tab].replace([]) }
         tab = isFirst ? .home : .library
@@ -205,7 +207,9 @@ final class ShellModel {
     /// OPDS catalog by keeping the new password and asking again. Then what
     /// failed on it loads.
     func signInAgain(_ id: LibrarySourceID, username: String, password: String) async throws {
-        guard let saved = servers.load()[id], let server = library.server(id) else {
+        // Another account is another server: this one's unsent places and
+        // bookmarks would go to it. Add a server takes it.
+        guard let saved = servers.load()[id], let server = library.server(id), saved.username == nil || saved.username == username else {
             throw LibraryError.signedOut
         }
         switch saved.kind {
@@ -445,6 +449,9 @@ final class ShellModel {
         let downloads = downloads(on: id)
         if removingBooks {
             for download in downloads { opener.removeDownload(download.book) }
+            // Also any no record names: one downloaded from a list entry
+            // without its files is kept under a file its record doesn't list.
+            opener.removeAllDownloads(of: id)
         }
         // Its books stay listed only while their files do, so Storage
         // shows the kept ones (some known only from Continue reading,

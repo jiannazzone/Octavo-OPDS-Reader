@@ -22,6 +22,9 @@ nonisolated protocol BookFiles: Sendable {
     /// Remove all downloads keeps none).
     func removeAll(keeping keys: Set<String>) throws
 
+    /// Deletes every download of `library`'s, whichever book it was for.
+    func removeAll(of library: LibrarySourceID)
+
     /// Gives `library`'s downloads to `other` (`RemovedServer`).
     func moveAll(of library: LibrarySourceID, to other: LibrarySourceID)
 }
@@ -152,6 +155,10 @@ nonisolated struct StoredBookFiles: BookFiles {
         for name in names where !keys.contains((name as NSString).deletingPathExtension) {
             try manager.removeItem(at: directory.appending(path: name))
         }
+    }
+
+    func removeAll(of library: LibrarySourceID) {
+        StoredBookKeys.removeFiles(of: library, in: directory)
     }
 
     func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {

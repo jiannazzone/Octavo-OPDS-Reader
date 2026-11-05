@@ -7,7 +7,8 @@ import OctavoKit
 /// (`LibraryFile.storageKey`), and they're now kept under the server's ID as
 /// well (`storageKey(in:)`). Runs once at launch while `Server.json` or
 /// `RemovedServer.json` is there, and each is deleted last, so a launch cut
-/// short does the rest next time: what has moved no longer has the old name.
+/// short does the rest next time: what has moved no longer has the old name,
+/// and the rest goes under the same ID.
 ///
 /// - A saved server's: everything under a plain name but the imported books',
 ///   which stay as they are, is the server's.
@@ -25,7 +26,15 @@ nonisolated struct ServerStorageMigration: Sendable {
     var onIPhone = BooksOnIPhone()
 
     func run() throws {
-        if let legacy = try servers.readLegacy() {
+        let legacy: SavedServer?
+        do {
+            legacy = try servers.readLegacy()
+        } catch is DecodingError where FileManager.default.fileExists(atPath: servers.fileURL.path) {
+            // Unreadable, and a server added since has started the list.
+            try servers.removeLegacy()
+            return
+        }
+        if let legacy {
             try move(to: legacy.id)
             // A list saved already (only by a launch that couldn't run this,
             // as before the first unlock) stays; else it starts with this one.
@@ -36,9 +45,11 @@ nonisolated struct ServerStorageMigration: Sendable {
             try servers.removeLegacy()
         } else if removed.hasLegacyFile {
             if let identity = removed.readLegacyIdentity() {
-                let id = LibrarySourceID(rawValue: "removed-\(UUID().uuidString)")
-                try move(to: id)
+                // Listed first, so a launch cut short carries on under the
+                // same ID.
+                let id = removed.load().first { $0.identity == identity }?.id ?? LibrarySourceID(rawValue: "removed-\(UUID().uuidString)")
                 try removed.add(RemovedServer(identity: identity, id: id))
+                try move(to: id)
             }
             removed.removeLegacy()
         }
@@ -56,12 +67,15 @@ nonisolated struct ServerStorageMigration: Sendable {
             }
         }
         moveUnsent(keeping: imported, to: id)
-        // Every server's book was kept as this one's, whichever ID it was
-        // first listed under.
+        // A book was kept as this server's, whichever ID it was first listed
+        // under. Not one of a server added since (a launch that couldn't run
+        // this), whose files already have its name.
+        let others = Set(servers.load().servers.map(\.id) + removed.load().map(\.id)).subtracting([id])
         let records = onIPhone.books()
         var seen = Set<SourcedBook.ID>()
         try onIPhone.replace(records.compactMap { record in
-            let book = record.source == .files ? record : SourcedBook(source: id, book: record.book)
+            let isOwn = record.source != .files && !others.contains(record.source)
+            let book = isOwn ? SourcedBook(source: id, book: record.book) : record
             return seen.insert(book.id).inserted ? book : nil
         })
         if let failure { throw failure }

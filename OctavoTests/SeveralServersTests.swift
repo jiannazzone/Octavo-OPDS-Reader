@@ -96,6 +96,22 @@ struct ServerStoreListTests {
         #expect(throws: (any Error).self) { try legacy.read() }
     }
 
+    // The sweep can't run while it's there, and nothing can be made of it, so
+    // the next server replaces it. Otherwise each would last one launch.
+    @Test func aListThatCantBeDecodedIsReplaced() throws {
+        let store = store()
+        try write("{ not json", to: store.fileURL)
+        try store.add(saved(one))
+        #expect(try store.read().servers.map(\.id) == [one])
+    }
+
+    @Test func anOldFileThatCantBeDecodedDoesntStopTheList() throws {
+        let store = store()
+        try write("{ not json", to: store.legacyFileURL)
+        try store.add(saved(one))
+        #expect(try store.read().servers.map(\.id) == [one])
+    }
+
     @Test func aSecondServerOfTheSameNameGetsANumber() throws {
         var list = SavedServers()
         #expect(list.uniqueName("Calibre-Web") == "Calibre-Web")
@@ -287,6 +303,42 @@ struct ServerStorageMigrationTests {
         #expect(throws: (any Error).self) { try migration.run() }
         #expect(migration.positions.progress(forBook: plain) != nil)
         #expect(FileManager.default.fileExists(atPath: migration.servers.legacyFileURL.path))
+    }
+
+    // Unreadable, with a list started since: it goes, or it fails every launch.
+    @Test func anUnreadableOldFileGoesOnceThereIsAList() throws {
+        try write("{ not json", to: migration.servers.legacyFileURL)
+        try migration.servers.add(SavedServer(id: two, kind: .bookOrbit, address: "http://nas.lan", name: "BookOrbit"))
+        try migration.run()
+        #expect(!FileManager.default.fileExists(atPath: migration.servers.legacyFileURL.path))
+        #expect(migration.servers.load().servers.map(\.id) == [two])
+    }
+
+    // A server added before this could run keeps its own books.
+    @Test func anotherServersRecordsStayItsOwn() throws {
+        try saveOldServer()
+        try migration.servers.save(SavedServers(servers: [
+            SavedServer(id: one, kind: .bookOrbit, address: "http://nas.lan", name: "BookOrbit"),
+            SavedServer(id: two, kind: .opds, address: "http://two.lan/opds", name: "COPS"),
+        ], chosen: two))
+        let theirs = SourcedBook(source: two, book: book("9", "Theirs"))
+        try migration.onIPhone.record(theirs)
+        try migration.run()
+        #expect(migration.onIPhone.books().contains(theirs))
+    }
+
+    // Cut short, the next launch carries on under the same ID.
+    @Test func aRemovedServersMoveCutShortKeepsItsID() throws {
+        try saveOldBooks()
+        try write(#"{"identity":"bookOrbit|http://nas.lan|adam"}"#, to: migration.removed.legacyFileURL)
+        let id = LibrarySourceID(rawValue: "removed-earlier")
+        try migration.removed.add(RemovedServer(identity: "bookOrbit|http://nas.lan|adam", id: id))
+        try FileManager.default.moveItem(
+            at: migration.positions.fileURL(forBook: plain), to: migration.positions.fileURL(forBook: file().storageKey(in: id))
+        )
+        try migration.run()
+        #expect(migration.removed.load().map(\.id) == [id])
+        checkMoved(to: id)
     }
 
     // Removed with its books kept: they wait for it, as they did.
@@ -813,6 +865,60 @@ struct SeveralServersShellTests {
         #expect(!model.needsSetup)
     }
 
+    // Downloaded from a list entry without its files, so no record names it.
+    @Test func removeBooksTooLeavesNoFileOfTheServers() async throws {
+        model.setup.finished(first)
+        model.setup.finished(second)
+        let books = files.store.directory
+        try write(to: books.appending(path: file("unnamed").storageKey(in: first.id) + ".epub"))
+        try write(to: books.appending(path: file("unnamed").storageKey(in: second.id) + ".epub"))
+        await model.removeServer(first.id, removingBooks: true)
+        let left = try FileManager.default.contentsOfDirectory(atPath: books.path)
+        #expect(left == [file("unnamed").storageKey(in: second.id) + ".epub"])
+    }
+
+    @Test func keepingBooksLeavesThemAll() async throws {
+        model.setup.finished(first)
+        let name = file("unnamed").storageKey(in: first.id) + ".epub"
+        try write(to: files.store.directory.appending(path: name))
+        await model.removeServer(first.id, removingBooks: false)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: files.store.directory.path) == [name])
+    }
+
+    // Another account is another server: this one's unsent places and
+    // bookmarks would go to it.
+    @Test func signingInAgainIsForTheSameAccount() async throws {
+        var withAccount = first
+        withAccount.username = "adam"
+        model.setup.finished(withAccount)
+        await #expect(throws: LibraryError.self) {
+            try await model.signInAgain(first.id, username: "sam", password: "secret")
+        }
+        #expect(model.servers.load()[first.id]?.username == "adam")
+        #expect(model.library.server(first.id)?.username == "adam")
+    }
+
+    // A failed save isn't a server added: it'd be gone next launch, and its
+    // kept books with it.
+    @Test func booksComeBackOnlyOnceTheServerIsSaved() async throws {
+        model.setup.finished(first)
+        let kept = SourcedBook(source: first.id, book: book())
+        let bookFile = try #require(kept.book.readableFile)
+        try write(to: #require(files.store.url(for: bookFile, in: kept.source)))
+        try model.library.onIPhone.record(kept)
+        await model.removeServer(first.id, removingBooks: false)
+        // A folder where the list goes: it can't be written.
+        try FileManager.default.removeItem(at: model.servers.fileURL)
+        try FileManager.default.createDirectory(at: model.servers.fileURL, withIntermediateDirectories: true)
+
+        let back = SavedServer(id: SavedServer.newID(), kind: .opds, address: first.address, name: "Calibre-Web")
+        model.setup.finished(back)
+
+        #expect(model.library.server(back.id) != nil, "usable for now")
+        #expect(model.opener.localFile(for: kept) != nil, "still waiting under its old ID")
+        #expect(model.removedServers.load().map(\.id) == [first.id])
+    }
+
     @Test func removingTheLastIsAsItWas() async {
         model.setup.finished(first)
         await model.removeServer(first.id, removingBooks: false)
@@ -916,6 +1022,16 @@ struct SeveralServersSetupTests {
         #expect(!catalog.isAt(URL(string: "http://nas.lan:8083/opds")!, username: "adam"))
         #expect(catalog.isAt(URL(string: "http://nas.lan:8083/opds")!, username: nil))
         #expect(catalog.isAt(URL(string: "http://nas.lan:8083/opds")!, username: ""))
+    }
+
+    // It's the catalog's say: one line, and no longer than a name needs.
+    @Test func aCatalogsOwnNameIsTidied() throws {
+        let url = try #require(URL(string: "http://nas.lan/opds"))
+        #expect(SetupModel.name(" Calibre-Web ", url: url) == "Calibre-Web")
+        #expect(SetupModel.name("Two\nLines\u{202E}", url: url).contains("\n") == false)
+        #expect(SetupModel.name(String(repeating: "a", count: 500), url: url).count == 60)
+        #expect(SetupModel.name("\n ", url: url) == "nas.lan")
+        #expect(SetupModel.name(nil, url: url) == "nas.lan")
     }
 
     @Test func aNameTypedGoesWithTheServer() async {
