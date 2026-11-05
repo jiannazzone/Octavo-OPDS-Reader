@@ -272,7 +272,7 @@ Decided with mockups in the planning session (no Figma frames). This is step 17,
 
 ### Going back after a jump (Adam, 2026-11-04)
 
-Decided with pictures in the planning session (no Figma frames). Decisions 33 and 35 are built; 34 isn't (`docs/PLAN.md`, To revisit). The measurements are in `docs/notes/going-back.md`.
+Decided with pictures in the planning session (no Figma frames). All three are built. The measurements are in `docs/notes/going-back.md` and `docs/notes/footnotes.md`.
 
 33. **Any jump offers the way back, and your place holds until you settle.** Before this, a jump saved the page you landed on as your place and synced it about 2 s later, so a look at a map moved your other devices too.
     - **What starts it:** every jump: the scrubber, Contents, a bookmark, a search result or a link in the book. Not a page turn, a fold, a text size change, or Go on BookOrbit's capsule. A second jump keeps the same way back, to where you were before the first one.
@@ -288,13 +288,13 @@ Decided with pictures in the planning session (no Figma frames). Decisions 33 an
     - **Fixed-layout books:** the same, going back by the saved CFI, not by fraction. Their own fix is in (#56, `docs/notes/fixed-layout.md`).
     - **Built (2026-11-04).** `ReaderTrip`, `ReaderModel+Trip`. While you're zoomed in on a trip, the fill's start stays where your place sits on the whole line, until you let go. No right-to-left or fixed-layout book has been run through it, or VoiceOver.
 
-34. **A footnote opens where you are, without leaving the page.** Not built yet.
+34. **A footnote opens where you are, without leaving the page.**
     - **Where:** open (flat or half open), a glass card on the other page from its mark, level with it, so the sentence you're reading stays in view (Adam, over a pop-up by the mark and over a panel like Contents). Folded, along the bottom above the footer, or at the top if the mark is down there.
     - **What it holds:** the whole note, however many paragraphs, in your font, size and theme, with **Go to Note** and **✕** (Adam, over no ✕). A long note grows to the height of the page, then scrolls.
     - **Closing:** ✕ or a tap anywhere else, which doesn't turn the page. A swipe closes it and turns.
     - **It isn't a jump:** your place stays and there's no Back button. Go to Note is a jump, so it opens the note where it sits in the book, with "Back to page 876" (decision 33).
     - **Which links:** the ones a book marks as notes, and unmarked ones that look like a note's mark, to be tuned on real books. Any other link is a jump. A tap near a tiny mark counts, so a near miss doesn't turn the page.
-    - **Still needed: a real book with notes.** None of the sample books, or the three real books Adam gave the covers session, has a single note link.
+    - **Built (2026-11-05).** `ReaderNote`, `ReaderNoteCard`, `ReaderModel+Notes`, the bridge's `noteAt`, checked with real taps and swipes on Standard Ebooks' *The Count of Monte Cristo* and Project Gutenberg's *Olaudah Equiano* (`docs/notes/footnotes.md`). Open, the note's text is level with its mark; a mark too near the top puts the card at the top of the page. The buttons sit along the card's top, Go to Note on the left and ✕ on the right, as a panel's do, and stay put while a long note scrolls. The way back and BookOrbit's capsule go while a note is open. A note with a picture or a table is a jump, as the card only draws text. A book's own embedded font isn't known outside the page, so the card uses the font it falls back to. No right-to-left or fixed-layout book, or one in another format with notes, has been run through it, or VoiceOver.
 
 35. **Chapter buttons beside the chapter's name, and a scrubber that zooms.**
     - **Where:** ⏮ and ⏭ either side of the chapter's name on the progress bar, so the scrubber keeps its full width (Adam, over beside the scrubber and over a swipe on the page). Half open, in the left piece. Normal-sized targets: Adam caught that being beside the name doesn't make them smaller. The bar stays up, so you can keep tapping.

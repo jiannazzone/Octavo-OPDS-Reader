@@ -471,11 +471,15 @@ const onSectionLoad = ({ detail: { doc } }) => {
     collapseBlankPageBreaks(doc)
     // A fixed-layout page places its pictures itself.
     if (!view.isFixedLayout) limitPicturesToTheirBoxes(doc)
-    detectTaps(doc, e => {
+    detectTaps(doc, async e => {
         const frame = doc.defaultView?.frameElement
         if (!frame) return
         const box = frame.getBoundingClientRect()
-        tap(box.left + e.clientX * (view?.isFixedLayout && frame.offsetWidth ? box.width / frame.offsetWidth : 1))
+        const x = box.left + e.clientX * (view?.isFixedLayout && frame.offsetWidth ? box.width / frame.offsetWidth : 1)
+        // A near miss on a note's tiny mark doesn't turn the page.
+        const mark = tapMode.dismisses ? null : nearNoteMark(doc, e.clientX, e.clientY)
+        if (mark && await openNote(mark, resolvedHref(mark, doc))) return
+        tap(x)
     })
     listenForTurns(doc)
     muteTouches(doc)
@@ -1299,8 +1303,295 @@ const goToPoint = async target => {
 const hasScheme = href => /^[a-z][a-z0-9+.-]*:/i.test(String(href).trim()) && !/^blob:/i.test(String(href).trim())
 const onLink = e => {
     e.preventDefault()
-    const isExternal = !view?.book?.isExternal && hasScheme(e.detail.href)
-    post(isExternal ? 'externalLink' : 'link', { href: e.detail.href })
+    const { a, href } = e.detail
+    if (!view?.book?.isExternal && hasScheme(href)) return post('externalLink', { href })
+    openNote(a, href).then(opened => {
+        if (!opened) post('link', { href })
+    })
+}
+
+// Footnotes (decision 34, `docs/notes/footnotes.md`). A note's mark opens the
+// note in Swift's card, and the page doesn't move. Any other link is a jump,
+// and so is a note with something only the page can draw (a picture, a table).
+//
+// Which links: the ones a book marks as notes, and ones that look like a note's
+// mark in running text and point at the start of a block that isn't a heading.
+// A wrong guess costs one more tap, as the card has Go to Note.
+//
+// Only the note's words and which are italic and such go to Swift, so nothing
+// of the book's runs there. A section read for its note is only parsed, like
+// `describePlace`'s, and never put in a frame.
+const EPUB_NS = 'http://www.idpf.org/2007/ops'
+const wordsIn = value => (value ?? '').split(/\s+/).filter(Boolean)
+const hasType = (el, types, roles) =>
+    wordsIn(el.getAttributeNS(EPUB_NS, 'type') ?? el.getAttribute('epub:type')).some(word => types.includes(word))
+    || wordsIn(el.getAttribute('role')).some(word => roles.includes(word))
+
+const BLOCK_NAMES = new Set(['address', 'article', 'aside', 'blockquote', 'body', 'center', 'dd', 'details', 'div', 'dl', 'dt',
+    'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'li', 'main', 'nav', 'ol', 'p', 'pre',
+    'section', 'td', 'th', 'tr', 'ul'])
+const HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6'
+const isBlock = el => BLOCK_NAMES.has(el.localName)
+const blockOf = el => {
+    while (el && !isBlock(el)) el = el.parentElement
+    return el
+}
+const textBefore = (el, block) => {
+    const range = el.ownerDocument.createRange()
+    range.setStart(block, 0)
+    range.setEndBefore(el)
+    return range.toString().trim()
+}
+
+// `12`, `12.`, `*`, `†`, `²`, `[A]`, `(iv)`, or any short text that's raised.
+const BARE_MARK = /^(\d{1,4}\.?|[*†‡§¶#]{1,3}|[⁰¹²³⁴-⁹]{1,4})$/u
+const BRACKETED_MARK = /^[\[({<][^\s\])}>]{1,5}[\])}>]\.?$/
+const MARK_MAX_LENGTH = 8
+const isRaised = a => {
+    if (a.closest('sup') || a.querySelector('sup')) return true
+    return a.ownerDocument.defaultView?.getComputedStyle(a).verticalAlign === 'super'
+}
+const looksLikeMark = a => {
+    const text = a.textContent.trim()
+    if (!text || text.length > MARK_MAX_LENGTH) return false
+    return BARE_MARK.test(text) || BRACKETED_MARK.test(text) || isRaised(a)
+}
+
+const isExternalHref = href => view?.book?.isExternal ? view.book.isExternal(href) : hasScheme(href)
+const isInContents = a => {
+    for (let el = a.parentElement; el; el = el.parentElement) {
+        if (el.localName === 'nav' || hasType(el, ['toc', 'index', 'landmarks'], ['doc-toc', 'doc-index'])) return true
+    }
+    return false
+}
+const BACKLINK = [['backlink'], ['doc-backlink']]
+// `marked`, `looks`, or `null` for a link that's no note's mark. The note's own
+// way back starts its block, with nothing before it, so it isn't one.
+const markKind = a => {
+    const href = a.getAttribute('href')
+    if (!href || isExternalHref(href) || hasType(a, ...BACKLINK) || isInContents(a)) return null
+    if (hasType(a, ['noteref'], ['doc-noteref'])) return 'marked'
+    const block = blockOf(a)
+    return block && looksLikeMark(a) && textBefore(a, block) ? 'looks' : null
+}
+
+const isNoteItem = el => hasType(el, ['footnote', 'endnote', 'rearnote', 'note'], ['doc-footnote', 'doc-endnote'])
+// A box that holds one note of several paragraphs.
+const isNoteBox = el => {
+    if (['li', 'aside', 'dd'].includes(el.localName)) return true
+    return ['div', 'section'].includes(el.localName) && /note|foot|^fn/i.test(`${el.getAttribute('class') ?? ''} ${el.id}`)
+}
+const holdsOnlyNote = (box, note) => [...box.children].every(child =>
+    child === note || !(child.id || child.querySelector('[id]') || child.matches(HEADING_SELECTOR)))
+
+// The note at a link's target, or `null` if what's there isn't one.
+const noteElement = (target, marked) => {
+    const body = target.ownerDocument.body
+    if (target === body || target === target.ownerDocument.documentElement) return null
+    for (let el = target; el && el !== body; el = el.parentElement) {
+        if (isNoteItem(el)) return el
+    }
+    if (target.matches(HEADING_SELECTOR) || hasType(target, ['pagebreak'], ['doc-pagebreak'])) return null
+    // An empty anchor just before the note.
+    const next = target.nextElementSibling
+    if (!target.textContent.trim() && next && isBlock(next)) target = next
+    let note = blockOf(target)
+    if (!note || note === body) return null
+    if (note !== target && !marked && textBefore(target, note)) return null
+    while (note.parentElement !== body && isNoteBox(note.parentElement)
+        && !textBefore(note, note.parentElement) && holdsOnlyNote(note.parentElement, note)) note = note.parentElement
+    return !marked && note.querySelector(HEADING_SELECTOR) ? null : note
+}
+
+const ONLY_THE_PAGE_DRAWS = new Set(['img', 'image', 'svg', 'math', 'table', 'video', 'audio', 'canvas', 'object', 'embed', 'iframe'])
+const DRAWN_SELECTOR = [...ONLY_THE_PAGE_DRAWS].join(', ')
+
+// A link in the note that only leads back: left out of the card, whatever it
+// holds if it's plainly the way back. Otherwise its words are the note's, and
+// a picture in it means the card can't draw the note.
+const leadsBack = (a, mark, note) => {
+    if (hasType(a, ...BACKLINK)) return true
+    const fragment = (a.getAttribute('href') ?? '').split('#')[1]
+    if (fragment && mark.id === fragment) return true
+    if (a.querySelector(DRAWN_SELECTOR)) return false
+    if (/^[\s↩↑⤴⏎⬆\uFE0E\uFE0F]*$/u.test(a.textContent)) return true
+    if (a.textContent.trim().length > MARK_MAX_LENGTH) return false
+    // To a box around the mark.
+    if (fragment) {
+        for (let el = mark.parentElement; el; el = el.parentElement) {
+            if (el.id === fragment) return true
+        }
+    }
+    // The note's own number, where it links to.
+    return looksLikeMark(a) && !textBefore(a, note)
+}
+
+// More than a note could be: a wrong guess, or a book trying to make the card
+// do too much.
+const NOTE_MAX_LENGTH = 20000
+const NOTE_MAX_BLOCKS = 200
+const NOTE_MAX_INDENT = 4
+const NOT_SHOWN = new Set(['script', 'style', 'template', 'noscript', 'head', 'title'])
+const RUN_STYLES = {
+    i: 'italic', em: 'italic', cite: 'italic', dfn: 'italic', var: 'italic',
+    b: 'bold', strong: 'bold', sup: 'sup', sub: 'sub',
+    code: 'code', tt: 'code', kbd: 'code', samp: 'code',
+}
+const STYLE_NAMES = ['italic', 'bold', 'sup', 'sub', 'code']
+const isHidden = el => el.hasAttribute('hidden') || /display\s*:\s*none/i.test(el.getAttribute('style') ?? '')
+    || hasType(el, ['pagebreak'], ['doc-pagebreak'])
+
+// The note's words as blocks of styled runs. `null` if it has anything the card
+// can't draw, or is more than a note could be.
+const noteBlocks = (note, mark) => {
+    const blocks = []
+    let block = null
+    let length = 0
+    const endBlock = () => {
+        if (!block) return
+        const { runs } = block
+        while (runs.length) {
+            const last = runs[runs.length - 1]
+            last.text = last.text.trimEnd()
+            if (last.text) break
+            runs.pop()
+        }
+        if (runs.length) blocks.push(block)
+        block = null
+    }
+    const add = (text, style, indent, preformatted) => {
+        block ??= { runs: [], indent }
+        const last = block.runs[block.runs.length - 1]
+        if (!preformatted && (!last || /\s$/.test(last.text))) text = text.replace(/^[ \t\r\n\f]+/, '')
+        if (!text) return
+        length += text.length
+        if (last && STYLE_NAMES.every(name => last[name] === style[name])) last.text += text
+        else block.runs.push({ text, ...style })
+    }
+    // Whether all of it can be drawn. It stops as soon as there's too much.
+    const walk = (parent, style, indent, preformatted) => {
+        for (const node of parent.childNodes) {
+            if (length > NOTE_MAX_LENGTH || blocks.length > NOTE_MAX_BLOCKS) return false
+            if (node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE) {
+                add(preformatted ? node.data : node.data.replace(/[ \t\r\n\f]+/g, ' '), style, indent, preformatted)
+                continue
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) continue
+            const name = node.localName.toLowerCase()
+            if (ONLY_THE_PAGE_DRAWS.has(name)) return false
+            if (NOT_SHOWN.has(name) || isHidden(node)) continue
+            if (name === 'a' && node.hasAttribute('href') && leadsBack(node, mark, note)) continue
+            if (name === 'br') {
+                const last = block?.runs[block.runs.length - 1]
+                if (last) last.text = `${last.text.replace(/[ \t]+$/, '')}\n`
+                continue
+            }
+            const isOwnBlock = isBlock(node)
+            if (isOwnBlock) endBlock()
+            const inner = RUN_STYLES[name] ? { ...style, [RUN_STYLES[name]]: true } : style
+            const innerIndent = Math.min(indent + (name === 'blockquote' ? 1 : 0), NOTE_MAX_INDENT)
+            if (!walk(node, inner, innerIndent, preformatted || name === 'pre')) return false
+            if (isOwnBlock) endBlock()
+        }
+        return true
+    }
+    if (!walk(note, {}, 0, false)) return null
+    endBlock()
+    return blocks.length && blocks.length <= NOTE_MAX_BLOCKS && length <= NOTE_MAX_LENGTH ? blocks : null
+}
+
+// What a tap on `a` would show, if it's a note.
+const noteAt = async (a, href) => {
+    const kind = markKind(a)
+    if (!kind) return null
+    const resolved = await view.book.resolveHref(href)
+    const section = view.book.sections[resolved?.index]
+    const doc = section && (loadedDoc(resolved.index) ?? await section.createDocument?.())
+    const target = doc && resolved.anchor(doc)
+    if (target?.nodeType !== Node.ELEMENT_NODE) return null
+    const note = noteElement(target, kind === 'marked')
+    return note && noteBlocks(note, a)
+}
+
+// Whether the note opened.
+const openNote = async (a, href) => {
+    try {
+        const blocks = await noteAt(a, href)
+        const mark = blocks && markBox(a)
+        if (!mark) return false
+        post('note', { href, mark, font: noteFont(a), blocks })
+        return true
+    } catch (e) {
+        post('log', { level: 'warn', message: `Couldn't read a note: ${e}` })
+        return false
+    }
+}
+
+const frameScale = frame => view.isFixedLayout && frame.offsetWidth ? frame.getBoundingClientRect().width / frame.offsetWidth : 1
+
+// Where the mark is in the top window's coordinates, which are the screen's.
+const markBox = a => {
+    const frame = a.ownerDocument.defaultView?.frameElement
+    if (!frame) return null
+    const box = frame.getBoundingClientRect()
+    const scale = frameScale(frame)
+    const rects = [...a.getClientRects()].map(rect => ({
+        x: box.left + rect.left * scale,
+        y: box.top + rect.top * scale,
+        width: rect.width * scale,
+        height: rect.height * scale,
+    }))
+    return rects.find(rect => rect.x + rect.width > 0 && rect.x < innerWidth) ?? null
+}
+
+// How far apart the lines of `block` are drawn: `line-height: normal` doesn't
+// say. The closest two lines, leaving out a raised mark's smaller box, which
+// has a top of its own.
+const linePitch = (block, size) => {
+    const range = block.ownerDocument.createRange()
+    range.selectNodeContents(block)
+    const tops = [...range.getClientRects()].filter(rect => rect.height >= size).map(rect => rect.top).sort((a, b) => a - b)
+    const gaps = tops.slice(1).map((top, index) => top - tops[index]).filter(gap => gap >= size * 0.9)
+    return gaps.length ? Math.min(...gaps) : null
+}
+
+// The text around the mark, whatever set it (the book, or Text and Theme).
+const noteFont = a => {
+    const { defaultView, documentElement } = a.ownerDocument
+    const block = blockOf(a) ?? documentElement
+    const style = defaultView.getComputedStyle(block)
+    const scale = frameScale(defaultView.frameElement)
+    const size = parseFloat(style.fontSize)
+    const lineHeight = parseFloat(style.lineHeight) || linePitch(block, size)
+    return { family: style.fontFamily, size: size * scale, lineHeight: lineHeight ? lineHeight * scale : null }
+}
+
+// How far a tap can miss a mark and still count, in points around its box.
+const NEAR_MARK_X = 16
+const NEAR_MARK_Y = 12
+const nearNoteMark = (doc, x, y) => {
+    let nearest = null
+    let distance = Infinity
+    for (const a of doc.querySelectorAll('a[href]')) {
+        for (const rect of a.getClientRects()) {
+            const dx = Math.max(rect.left - x, 0, x - rect.right)
+            const dy = Math.max(rect.top - y, 0, y - rect.bottom)
+            if (dx > NEAR_MARK_X || dy > NEAR_MARK_Y) continue
+            const d = Math.hypot(dx, dy)
+            if (d < distance && markKind(a)) {
+                nearest = a
+                distance = d
+            }
+        }
+    }
+    return nearest
+}
+
+// A link's address as foliate resolves it for its `link` event.
+const resolvedHref = (a, doc) => {
+    const index = view.renderer.getContents().find(content => content.doc === doc)?.index
+    const raw = a.getAttribute('href')
+    return view.book.sections[index]?.resolveHref?.(raw) ?? raw
 }
 
 // Try the CFI first, then the fraction, then the start of the book. A
@@ -1692,6 +1983,21 @@ window.octavo = Object.freeze({
     }),
     bookmarksOnScreen: reported(async function bookmarksOnScreen(cfis) {
         return placeOnScreen(cfis)
+    }),
+    // Every link in the book and what a tap on it does, for tuning which links
+    // are notes (`docs/notes/footnotes.md`).
+    noteLinks: reported(async function noteLinks() {
+        const links = []
+        for (const [index, section] of requireView().book.sections.entries()) {
+            const doc = loadedDoc(index) ?? await section.createDocument?.()
+            for (const a of doc?.querySelectorAll('a[href]') ?? []) {
+                const raw = a.getAttribute('href')
+                const href = section.resolveHref?.(raw) ?? raw
+                const blocks = isExternalHref(href) ? null : await noteAt(a, href)
+                links.push({ section: index, text: a.textContent.trim().slice(0, 40), href: raw, kind: markKind(a), note: blocks })
+            }
+        }
+        return JSON.stringify(links)
     }),
     // The text of the visible page, whitespace collapsed, for debugging and
     // for checking positions against another reader.

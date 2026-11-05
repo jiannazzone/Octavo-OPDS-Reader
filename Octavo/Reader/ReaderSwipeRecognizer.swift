@@ -28,6 +28,7 @@ final class ReaderSwipeRecognizer: NSObject, UIGestureRecognizerDelegate {
     /// Where the finger landed. The pan's own translation starts from where
     /// it recognised, 10–20 pt on, so the page would lag the finger.
     private var touchStartX: Double = 0
+    private var touchStartY: Double = 0
 
     override init() {
         super.init()
@@ -69,7 +70,9 @@ final class ReaderSwipeRecognizer: NSObject, UIGestureRecognizerDelegate {
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         touchStartedAt = touch.timestamp
-        touchStartX = Double(touch.location(in: gestureRecognizer.view).x)
+        let location = touch.location(in: gestureRecognizer.view)
+        touchStartX = Double(location.x)
+        touchStartY = Double(location.y)
         return true
     }
 
@@ -83,12 +86,16 @@ final class ReaderSwipeRecognizer: NSObject, UIGestureRecognizerDelegate {
     #endif
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        let moved = pan.translation(in: pan.view)
+        // From where the finger landed: the pan's own translation can still
+        // read zero here, 10 pt on, which would lose the swipe.
+        let location = pan.location(in: pan.view)
+        let movedX = Double(location.x) - touchStartX
+        let movedY = Double(location.y) - touchStartY
         #if DEBUG
-        asked = "moved \(moved), since \(touchStartedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? -1)"
+        asked = "moved (\(movedX), \(movedY)), since \(touchStartedAt.map { ProcessInfo.processInfo.systemUptime - $0 } ?? -1)"
         #endif
         guard !pageHasSelection else { return false }
-        guard abs(moved.x) > abs(moved.y) else { return false }
+        guard abs(movedX) > abs(movedY) else { return false }
         if let touchStartedAt, ProcessInfo.processInfo.systemUptime - touchStartedAt > Self.pressDuration { return false }
         return true
     }

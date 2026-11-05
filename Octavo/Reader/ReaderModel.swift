@@ -37,6 +37,8 @@ final class ReaderModel {
     private(set) var tocLabel: String?
     var chapter: String? { tocLabel }
     private(set) var location: ReaderMessage.Relocation.Location?
+    /// The footnote open over the page, if any (`ReaderModel+Notes`).
+    var note: ReaderNote?
     /// The contents with where each entry starts, for naming the chapter at
     /// any point of the progress bar.
     private(set) var toc: [ReaderMessage.TOCEntry] = []
@@ -275,7 +277,10 @@ final class ReaderModel {
         log.debug("posture \(posture.rawValue, privacy: .public)")
         guard !isInBackground else { return }
         // `.noHinge` is only the first report, before the hinge is known.
-        if old != .noHinge, old.isFolded != posture.isFolded { beginFold(folded: posture.isFolded) }
+        if old != .noHinge, old.isFolded != posture.isFolded {
+            closeNote()
+            beginFold(folded: posture.isFolded)
+        }
         relayout()
     }
 
@@ -482,6 +487,8 @@ final class ReaderModel {
 
     private func apply(_ layout: ReaderLayout) {
         guard layout != self.layout else { return }
+        // Its mark has moved.
+        closeNote()
         self.layout = layout
         sendLayout()
         bookModeMayHaveChanged()
@@ -596,6 +603,9 @@ final class ReaderModel {
             let previous = self.relocation
             self.relocation = relocation
             relocationCount += 1
+            // With Page Turn None a swipe is the page's own: this is all there
+            // is to go by.
+            if relocation.cfi != previous?.cfi { closeNote() }
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
             location = relocation.location
@@ -616,6 +626,7 @@ final class ReaderModel {
             if serverPlace != nil, trip == nil, tripToBe == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
+            if zone == "dismiss" { closeNote() }
             onControlsTap?(zone)
         case .turn(let side):
             turnRequested(side)
@@ -635,7 +646,13 @@ final class ReaderModel {
         case .externalLink(let href):
             log.notice("Ignored external link \(href, privacy: .public)")
         case .link(let href):
-            followLink(href)
+            if note != nil {
+                closeNote()
+            } else {
+                followLink(href)
+            }
+        case .note(let tapped):
+            noteTapped(tapped)
         case .error(let error):
             lastError = error.message
             log.error("Reader script error (\(error.phase ?? "?", privacy: .public)): \(error.message, privacy: .public)")

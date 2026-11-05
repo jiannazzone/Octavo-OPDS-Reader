@@ -1,6 +1,6 @@
 # Going back after a jump (decision 33)
 
-Decision 33 in `docs/design/direction.md`. Written 2026-11-04 on 'Octavo Navigation Duo' (F7C03777-468D-4B9C-9E47-AAD7FF706A88, iPhone Duo, iOS 27.1 simulator), against the local BookOrbit v3.6.0. These are the measurements behind the design, and what was found building decisions 33 and 35. Footnotes (34) aren't built.
+Decision 33 in `docs/design/direction.md`. Written 2026-11-04 on 'Octavo Navigation Duo' (F7C03777-468D-4B9C-9E47-AAD7FF706A88, iPhone Duo, iOS 27.1 simulator), against the local BookOrbit v3.6.0. These are the measurements behind the design, and what was found building decisions 33 and 35. Footnotes (34) are in `footnotes.md`.
 
 ## What a jump did before
 
@@ -68,7 +68,7 @@ Built in `ReaderScrubber.swift` (the slider) and `ReaderScrubberLine.swift` (the
 ## Notes in real books (decision 34)
 
 - **No test book has one:** no `noteref` or `doc-noteref`, and no superscript or numbered note link in the five samples, the bundled book, or Adam's three modern novels. Green City Wars' chapter headings do link back to its contents.
-- **Links:** `detectTaps` leaves a tap on `a[href]` alone, and foliate's `link` event goes to `onLink`, which hands it to Swift as a jump. That's where a note would be caught.
+- **Links:** `detectTaps` leaves a tap on `a[href]` alone, and foliate's `link` event goes to `onLink`, which hands it to Swift as a jump. That's where a note is caught (`footnotes.md`).
 - **foliate's `footnotes.js` isn't vendored** (`PINNED.md`). Reading a note from a parsed section, as `describePlace` does, runs no script.
 - **There's no standard:** other readers were reported to guess, or to show only a note's first paragraph.
 
@@ -125,7 +125,7 @@ Measured with real taps on Moby-Dick's own contents page, the server at 0.4%:
 | Etymology, folded, the controls up | Its heading, the controls stay, Back above the bar | Unchanged |
 
 - **A link you tapped can stay red when you come back to it.** Project Gutenberg's books colour `a:hover`, and on iOS a tapped link stays hovered until the next tap elsewhere. The tap itself hasn't changed, so this would have happened before too, but going back makes it easy to see.
-- **Not run:** a link inside the same spread, a book's note that links back, and links in a fixed-layout book, MOBI or FB2.
+- **Not run:** a link inside the same spread, and links in a fixed-layout book, MOBI or FB2. A book's note that links back is in `footnotes.md`.
 
 ## Tools
 

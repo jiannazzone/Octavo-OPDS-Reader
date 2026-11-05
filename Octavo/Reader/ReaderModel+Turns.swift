@@ -56,6 +56,7 @@ extension ReaderModel {
     func swiped(_ swipe: ReaderTurnSwipe) {
         switch swipe.phase {
         case .began:
+            closeNote()
             guard phase == .open, !isFolding, let side = swipe.side else { return }
             queuedTurns.removeAll()
             if let run = turnRun {
