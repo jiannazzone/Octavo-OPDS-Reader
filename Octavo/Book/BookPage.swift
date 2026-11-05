@@ -200,12 +200,6 @@ final class BookPages {
         pages[id]
     }
 
-    /// Every server's, as after a debug disconnect.
-    func removeAll() {
-        pages = [:]
-        recent = []
-    }
-
     /// `library`'s went, or it signed in again.
     func removeAll(in library: LibrarySourceID) {
         pages = pages.filter { $0.key.source != library }

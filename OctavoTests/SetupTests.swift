@@ -43,20 +43,20 @@ struct ServerAddressTests {
 @Suite(.temporaryFiles)
 struct SavedServerTests {
     private static func temporaryStore() -> ServerStore {
-        ServerStore(fileURL: URL.testDirectory.appending(path: "Server-\(UUID().uuidString).json"))
+        ServerStore(fileURL: URL.testDirectory.appending(path: "Servers-\(UUID().uuidString)", directoryHint: .isDirectory).appending(path: "Servers.json"))
     }
 
     @Test func keepsTheServerBetweenLaunches() throws {
         let store = Self.temporaryStore()
-        #expect(store.load() == nil)
+        #expect(store.load().servers.isEmpty)
         let server = SavedServer(
             id: SavedServer.newID(), kind: .opds, address: "http://nas.lan:8080/opds", name: "Calibre-Web",
             username: "adam", authScheme: .digest
         )
         try store.save(server)
-        #expect(store.load() == server)
-        try store.remove()
-        #expect(store.load() == nil)
+        #expect(store.load().servers == [server])
+        try store.remove(server.id)
+        #expect(store.load().servers.isEmpty)
     }
 
     @Test func describesItselfByHostAndAccount() {
@@ -81,15 +81,18 @@ struct SavedServerTests {
     /// `signedOut` existed still reads.
     @Test func tellsNoServerFromOneThatCantBeRead() throws {
         let store = Self.temporaryStore()
-        #expect(try store.read() == nil)
+        #expect(try store.read().servers.isEmpty)
+        try FileManager.default.createDirectory(at: store.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("{ not json".utf8).write(to: store.fileURL)
         #expect(throws: (any Error).self) { try store.read() }
-        #expect(store.load() == nil)
+        #expect(store.load().servers.isEmpty)
 
+        // One server, as an install before there could be several saved it.
+        try FileManager.default.removeItem(at: store.fileURL)
         let older = #"{"id":"server-1","kind":"opds","address":"http://nas.lan/opds","name":"COPS","syncsProgress":false}"#
-        try Data(older.utf8).write(to: store.fileURL)
-        #expect(try store.read()?.signedOut == nil)
-        #expect(try store.read()?.name == "COPS")
+        try Data(older.utf8).write(to: store.legacyFileURL)
+        #expect(try store.read().servers.first?.signedOut == nil)
+        #expect(try store.read().servers.first?.name == "COPS")
     }
 
     /// Other secrets in a catalog's address are saved as placeholders, and
@@ -121,15 +124,15 @@ struct SavedServerTests {
         try store.save(SavedServer(id: id, kind: .opds, address: "http://nas.lan/api/opds/{key}?token=abcdefgh1234", name: "Kavita"))
 
         try store.moveSecretsOut()
-        #expect(store.load()?.address == "http://nas.lan/api/opds/{key}?token={key2}")
+        #expect(store.load().servers.first?.address == "http://nas.lan/api/opds/{key}?token={key2}")
         #expect(try secrets.load()?.values == ["kavita0123456789", "abcdefgh1234"])
         try store.moveSecretsOut()
-        #expect(store.load()?.address == "http://nas.lan/api/opds/{key}?token={key2}")
+        #expect(store.load().servers.first?.address == "http://nas.lan/api/opds/{key}?token={key2}")
 
         let bookOrbit = SavedServer(id: SavedServer.newID(), kind: .bookOrbit, address: "https://books.example.com?token=abcdefgh", name: "BookOrbit")
         try store.save(bookOrbit)
         try store.moveSecretsOut()
-        #expect(store.load()?.address == "https://books.example.com")
+        #expect(store.load().servers.first?.address == "https://books.example.com")
     }
 
     /// A crash or a failed save after the Keychain: the next launch still
@@ -143,7 +146,7 @@ struct SavedServerTests {
         try store.save(SavedServer(id: id, kind: .opds, address: "http://nas.lan/feed?apikey=abcdefgh12345678", name: "COPS"))
 
         try store.moveSecretsOut()
-        #expect(store.load()?.address == "http://nas.lan/feed?apikey={key}")
+        #expect(store.load().servers.first?.address == "http://nas.lan/feed?apikey={key}")
         #expect(try secrets.load()?.values == ["abcdefgh12345678"])
     }
 
@@ -186,7 +189,7 @@ struct SetupFlowTests {
 
         #expect(!shell.needsSetup)
         #expect(shell.library.server?.id == saved.id)
-        #expect(shell.servers.load() == saved)
+        #expect(shell.servers.load().servers == [saved])
         #expect(shell.tab == .home)
         #expect(shell[path: .setup].routes.isEmpty)
         #expect(shell.setup.catalogAddress.isEmpty, "setup starts clean")

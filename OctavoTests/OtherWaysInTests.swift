@@ -258,10 +258,10 @@ struct ImportedBooksTests {
         let incoming = folder.appending(path: "c.epub")
         try Data("epub".utf8).write(to: incoming)
         try files.store.imported.add(LibraryBookDetails(book: LibraryBook(id: LibraryBookID(rawValue: "import-c"), title: "C", files: [file])), file: incoming, cover: nil)
-        #expect(files.store.localFile(for: file) != nil)
-        try files.store.remove(file)
+        #expect(files.store.localFile(for: file, in: .files) != nil)
+        try files.store.remove(file, in: .files)
         try files.store.removeAll(keeping: [])
-        #expect(files.store.localFile(for: file) != nil)
+        #expect(files.store.localFile(for: file, in: .files) != nil)
     }
 }
 
@@ -360,9 +360,9 @@ struct OtherWaysInShellTests {
         model.installSampleBook()
         model.opener.removeAllDownloads()
         #expect(Set(model.onIPhoneBooks().map(\.book.title)) == ["Persuasion", "Pride and Prejudice"])
-        await model.removeServer(removingBooks: true)
+        await model.removeServer(LibrarySourceID(rawValue: "keep-server"), removingBooks: true)
         #expect(Set(model.onIPhoneBooks().map(\.book.title)) == ["Persuasion", "Pride and Prejudice"])
-        #expect(model.serverDownloads().isEmpty)
+        #expect(model.downloads(on: LibrarySourceID(rawValue: "keep-server")).isEmpty)
         // Books are still on the iPhone: the Library, not setup.
         #expect(!model.needsSetup)
     }

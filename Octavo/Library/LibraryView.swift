@@ -419,7 +419,7 @@ struct FeedContent<Header: View>: View {
             // The next page of a grid.
             ProgressView()
                 .padding(.vertical, 12)
-        case .failed where library.connectionProblem == nil:
+        case .failed where library.connection(feed.source)?.problem == nil:
             if isEmpty {
                 EmptyInvitation(
                     symbol: "exclamationmark.triangle", title: "Couldn’t load this list",

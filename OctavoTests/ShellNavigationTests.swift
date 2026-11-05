@@ -88,10 +88,10 @@ func makeShell(
             imported: imported
         ),
         opener: opener ?? BookOpener(files: StoredBookFiles(directory: folder.appending(path: "Books"), imported: imported)),
-        servers: ServerStore(fileURL: folder.appending(path: "Server.json")),
+        servers: ServerStore(fileURL: folder.appending(path: "Servers.json")),
         positions: ReadingPositionStore(directory: folder.appending(path: "ReadingPositions")),
         bookmarks: BookmarkStore(directory: folder.appending(path: "Bookmarks")),
-        removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServer.json")),
+        removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServers.json")),
         importer: importer?(imported),
         tourRecord: tourRecord
     )
@@ -168,8 +168,8 @@ struct ShellModelTests {
     @Test func unfoldingOnADownloadedBooksScreenOpensIt() async throws {
         let files = try TemporaryBookFiles()
         let model = await connectedShell(files)
-        model.opener.download(Self.book.book, from: StubLibrarySource())
-        #expect(await eventually { model.opener.status(of: Self.book.book) == .downloaded })
+        model.opener.download(Self.book, from: StubLibrarySource())
+        #expect(await eventually { model.opener.status(of: Self.book) == .downloaded })
         model.select(.library)
         model[path: .library].replace([SampleRoutes.collections, .cover(Self.book)])
         model.hingeChanged(.unfold)
@@ -185,7 +185,7 @@ struct ShellModelTests {
         model[path: .library].replace([.cover(Self.book)])
         model.hingeChanged(.unfold)
         #expect(model.reading == nil)
-        #expect(model.opener.status(of: Self.book.book) == .notDownloaded)
+        #expect(model.opener.status(of: Self.book) == .notDownloaded)
         #expect(model[path: .library].top == .cover(Self.book))
     }
 
@@ -293,7 +293,7 @@ struct ShellModelTests {
         let alice = SampleRoutes.book(3)
         model.openBook(alice)
         #expect(await eventually {
-            if case .failed = model.opener.status(of: alice.book) { true } else { false }
+            if case .failed = model.opener.status(of: alice) { true } else { false }
         })
         #expect(model.library.continueReading.map(\.book.title) == ["Moby-Dick", "Frankenstein"])
     }

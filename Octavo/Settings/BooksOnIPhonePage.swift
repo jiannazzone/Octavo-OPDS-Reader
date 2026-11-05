@@ -90,6 +90,7 @@ struct BooksOnIPhonePage: View {
 /// A downloaded book: its cover, title and author, and its size.
 private struct DownloadedBookRow: View {
     let book: DownloadedBook
+    @Environment(LibraryModel.self) private var library
 
     var body: some View {
         HStack(spacing: 12) {
@@ -99,8 +100,10 @@ private struct DownloadedBookRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(book.book.book.title)
                     .lineLimit(1)
-                if let author = book.book.book.authors.first {
-                    Text(author)
+                // The same book on two servers is two rows (decision 36).
+                let line = [book.book.book.authors.first, library.label(for: book.book)].compactMap(\.self).joined(separator: " · ")
+                if !line.isEmpty {
+                    Text(line)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

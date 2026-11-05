@@ -11,7 +11,7 @@ struct ReaderServerPlaceTests {
 
     // Like the footer, so going there shows the same number.
     @Test func theLabelRoundsDownLikeTheFooter() {
-        #expect(Self.place(0.629).label == "BookOrbit: 62%")
-        #expect(Self.place(1).label == "BookOrbit: 100%")
+        #expect(Self.place(0.629).label(server: "BookOrbit") == "BookOrbit: 62%")
+        #expect(Self.place(1).label(server: "BookOrbit") == "BookOrbit: 100%")
     }
 }
