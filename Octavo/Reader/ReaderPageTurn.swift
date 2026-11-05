@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 /// Page Turn in Customize (decision 27): how a page turns. Kept in
 /// `UserDefaults` with the other reading settings (decision 14).
@@ -144,5 +144,23 @@ nonisolated enum ReaderTurnDrag {
     static func remainingDuration(from progress: Double, to target: Double, motion: ReaderTurnMotion) -> Double {
         let rest = abs(target - progress)
         return max(motion.duration * rest, min(motion.duration, 0.12))
+    }
+}
+
+/// A turn playing on its own: where it is at a given time.
+nonisolated struct ReaderTurnRamp {
+    let from: Double
+    let to: Double
+    /// In `CACurrentMediaTime()`'s seconds.
+    let start: Double
+    let duration: Double
+    let curve: UnitCurve
+
+    var end: Double { start + duration }
+
+    func progress(at time: Double) -> Double {
+        guard time < end else { return to }
+        let elapsed = max(time - start, 0) / duration
+        return from + (to - from) * curve.value(at: elapsed)
     }
 }

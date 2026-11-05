@@ -99,7 +99,11 @@ final class ReaderModel {
     }
     var reduceMotion = false
     /// The turn on screen, if any (`ReaderModel+Turns`).
-    var turn: ReaderTurn?
+    var turn: ReaderTurn? {
+        didSet { if (turn == nil) != (oldValue == nil) { followTurnFrames(turn != nil) } }
+    }
+    /// Ticks while a turn is on screen.
+    @ObservationIgnored var turnFrames: UIUpdateLink?
     @ObservationIgnored let snapshots = ReaderPageSnapshots()
     /// A finger's turns, recognised beside the web view.
     @ObservationIgnored let swipes = ReaderSwipeRecognizer()
@@ -524,6 +528,7 @@ final class ReaderModel {
     func close() async {
         await jumpsLanded()
         phase = .closed
+        followTurnFrames(false)
         foldTask?.cancel()
         foldBatch = nil
         await pusher?.flush()
