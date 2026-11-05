@@ -46,6 +46,8 @@ extension ReaderModel {
     /// One asked for while the last is still being drawn waits for it; once
     /// that's drawn, it ends early so the next starts at once.
     func turnRequested(_ side: ReaderTurnSide) {
+        // A tap that beat the page to hearing a note had opened: it only closes it.
+        guard note == nil else { return closeNote("a tap elsewhere, early") }
         guard phase == .open, !isFolding else { return }
         guard let run = turnRun else { return startTurn(side, interactive: false) }
         if queuedTurns.count < 3 { queuedTurns.append(side) }
@@ -56,6 +58,7 @@ extension ReaderModel {
     func swiped(_ swipe: ReaderTurnSwipe) {
         switch swipe.phase {
         case .began:
+            closeNote("a swipe on the page")
             guard phase == .open, !isFolding, let side = swipe.side else { return }
             queuedTurns.removeAll()
             if let run = turnRun {

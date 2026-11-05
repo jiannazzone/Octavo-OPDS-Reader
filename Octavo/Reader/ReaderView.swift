@@ -207,6 +207,19 @@ private struct ReaderScreen: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
+                    if let note = model.note, model.phase == .open, let geometry = model.geometry {
+                        ReaderNoteLayer(
+                            note: note,
+                            placement: ReaderNotePlacement(mark: note.mark, layout: model.layout, geometry: geometry),
+                            theme: appearance.theme(darkMode: darkMode),
+                            goToNote: model.goToNote,
+                            close: { model.closeNote("✕") },
+                            swiped: model.noteSwiped
+                        )
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: model.note)
+                .overlay(alignment: .topLeading) {
                     if let step = shell.tour?.step, model.phase == .open, shell.coverMotion == nil, let geometry = model.geometry {
                         let onOnePage = panel != nil && !(model.layout.columns == 2 && model.layout.fold != nil)
                         TourCardSlot(step: step, geometry: geometry, layout: model.layout, sheetHeight: onOnePage ? sheetHeight : nil)
@@ -252,11 +265,16 @@ private struct ReaderScreen: View {
         .onChange(of: scenePhase == .background, initial: true) { _, isInBackground in
             model.isInBackground = isInBackground
         }
-        .onChange(of: controls.coversPage || panel != nil, initial: true) { _, covers in
+        .onChange(of: controls.coversPage || panel != nil || model.note != nil, initial: true) { _, covers in
             model.coversPage = covers
         }
         .onChange(of: panel) { _, panel in
+            if panel != nil { model.closeNote("a panel") }
             if panel == .contents { Task { await model.placeOnScreen() } }
+        }
+        // The bar would run under a note.
+        .onChange(of: controls.showsBar) { _, shows in
+            if shows { model.closeNote("the bar") }
         }
         // The tour's Turn the page: the page lifts every few seconds until it's
         // turned. Not while something covers it: a tap would only close that.
@@ -338,9 +356,10 @@ private struct ReaderScreen: View {
     private var darkMode: Bool { systemColorScheme == .dark }
 
     /// The way back stays up with the controls hidden (decision 33). Not
-    /// under a panel, or on one page while Search's bar has the footer's place.
+    /// under a panel or a note, or on one page while Search's bar has the
+    /// footer's place.
     private var backBarIsUp: Bool {
-        guard model.trip != nil, panel == nil, shell.tour == nil, model.phase == .open else { return false }
+        guard model.trip != nil, panel == nil, model.note == nil, shell.tour == nil, model.phase == .open else { return false }
         return !(model.search.isStepping && model.layout.columns != 2)
     }
 
@@ -499,7 +518,7 @@ private struct ReaderScreen: View {
     }
 
     private var footerBar: FooterBar? {
-        guard panel == nil, !controls.showsBar, model.phase == .open else { return nil }
+        guard panel == nil, !controls.showsBar, model.note == nil, model.phase == .open else { return nil }
         if model.search.isStepping { return .search }
         return model.serverPlace.map(FooterBar.serverPlace)
     }

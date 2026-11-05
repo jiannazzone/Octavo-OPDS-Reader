@@ -32,6 +32,7 @@ extension ReaderModel {
     /// Relocations from here on aren't saved. A trip under way keeps its way
     /// back; otherwise this page's place is the way back.
     func beginJump() {
+        closeNote("a jump")
         if jumpsUnderWay == 0 { jumpStartCount = relocationCount }
         jumpsUnderWay += 1
         guard trip == nil, tripToBe == nil, let place = savedPlace else { return }
