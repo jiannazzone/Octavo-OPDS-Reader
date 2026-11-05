@@ -829,6 +829,51 @@ struct SeveralServersShellTests {
         #expect(model.servers.load().chosen == first.id)
     }
 
+    private func emptyList(on server: SavedServer) -> ShellRoute {
+        .feed(LibraryEntry(kind: .feed, title: "Keep Reading", link: LibraryLink(rawValue: "keep")), from: server.id)
+    }
+
+    // An empty list's button, on a list Search opened from the other server:
+    // the Library shows that list's server, and Search stays where it was.
+    @Test func openLibraryShowsTheListsServer() {
+        model.setup.finished(first)
+        model.setup.finished(second)
+        model.push(emptyList(on: second))
+        model.select(.search)
+        model.push(emptyList(on: first))
+
+        model.openLibrary(showing: first.id)
+
+        #expect(model.tab == .library)
+        #expect(model.library.server?.id == first.id)
+        #expect(model.servers.load().chosen == first.id)
+        #expect(model[path: .library].routes.isEmpty)
+        #expect(model[path: .search].routes == [emptyList(on: first)])
+    }
+
+    @Test func openLibraryGoesToTheTop() {
+        model.setup.finished(first)
+        model.setup.finished(second)
+        model.push(emptyList(on: second))
+
+        model.openLibrary(showing: second.id)
+
+        #expect(model.tab == .library)
+        #expect(model.library.server?.id == second.id)
+        #expect(model[path: .library].routes.isEmpty)
+    }
+
+    // An imported book's author can open a list, and Files is no server.
+    @Test func openLibraryKeepsTheServerForAListFromFiles() {
+        model.setup.finished(first)
+        model.setup.finished(second)
+
+        model.openLibrary(showing: .files)
+
+        #expect(model.library.server?.id == second.id)
+        #expect(model.servers.load().chosen == second.id)
+    }
+
     @Test func removingOneLeavesTheOther() async throws {
         model.setup.finished(first)
         model.setup.finished(second)

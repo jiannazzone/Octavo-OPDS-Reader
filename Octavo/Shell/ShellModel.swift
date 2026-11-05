@@ -553,6 +553,14 @@ final class ShellModel {
         self[path: tab].popToRoot()
     }
 
+    /// Open Library on an empty list: the Library's top, showing the list's
+    /// server. The list may have come from Search with another server chosen.
+    func openLibrary(showing source: LibrarySourceID) {
+        if library.server?.id != source, library.connection(source) != nil { chooseServer(source) }
+        popToRoot(.library)
+        tab = .library
+    }
+
     /// The Settings button at the top of the side column.
     func openSettings() {
         push(.settings)

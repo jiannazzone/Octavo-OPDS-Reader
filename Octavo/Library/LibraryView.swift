@@ -56,6 +56,12 @@ struct LibraryView: View {
         }
         return sections
     }
+
+    /// The server's newest books, by the name its shelf has. `nil` if the
+    /// server has no such list.
+    static func newest(_ root: LibraryRoot) -> LibraryEntry? {
+        sections(root).first { $0.link == root.recentlyAdded }
+    }
 }
 
 /// The Library's title with several servers (decision 36): the chosen
@@ -179,6 +185,7 @@ struct LibraryContents: View {
 struct LibraryShelf: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
+    var maxRows = 1
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
     @Environment(\.spread) private var spread
@@ -223,16 +230,16 @@ struct LibraryShelf: View {
     @ViewBuilder
     private func shelf(_ feed: FeedModel?) -> some View {
         if let feed, !feed.books.isEmpty {
-            SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }, maxRows: 1, cell: { book in
+            SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }, maxRows: maxRows, cell: { book in
                 BookGridCell(book: book)
             })
         } else if let feed, !feed.entries.isEmpty, feed.entries.contains(where: { !$0.previewCovers.isEmpty }) {
             // A list of lists (series, authors): each a tile that opens it.
-            SpreadGrid(items: feed.entries, maxRows: 1, cell: { entry in
+            SpreadGrid(items: feed.entries, maxRows: maxRows, cell: { entry in
                 EntryTile(entry: entry, source: source)
             })
         } else if feed.map({ $0.state == .idle || $0.state == .loading }) ?? false {
-            SpreadGrid(items: (0..<8).map { ShelfPlaceholder(id: $0) }, maxRows: 1, cell: { _ in
+            SpreadGrid(items: (0..<8).map { ShelfPlaceholder(id: $0) }, maxRows: maxRows, cell: { _ in
                 ShelfPlaceholder.shape
             })
             .accessibilityHidden(true)
@@ -290,12 +297,16 @@ struct FeedScreen: View {
 
     var body: some View {
         if let feed = library.feed(entry.link, from: source) {
-            FeedContent(feed: feed, numbered: entry.kind == .series) {
-                if let summary = summary(feed) {
-                    Text(summary)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
+            if feed.cameBackEmpty {
+                EmptyFeed(entry: entry, feed: feed)
+            } else {
+                FeedContent(feed: feed, numbered: entry.kind == .series) {
+                    if let summary = summary(feed) {
+                        Text(summary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
+                    }
                 }
             }
         } else {
@@ -381,6 +392,9 @@ struct FeedContent<Header: View>: View {
                 status
                     .frame(width: spread.pages?.leftWidth)
             }
+            // With only the left page's width in it, a scroll view would
+            // centre this across the hinge.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 20)
         }
     }
@@ -428,8 +442,6 @@ struct FeedContent<Header: View>: View {
             } else {
                 Button("Couldn’t load the rest · Try again") { Task { await feed.retry() } }
             }
-        case .loaded where isEmpty:
-            ContentUnavailableView("Nothing here yet", systemImage: "books.vertical")
         default:
             EmptyView()
         }
