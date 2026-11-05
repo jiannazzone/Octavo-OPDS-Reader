@@ -25,12 +25,13 @@ Step 14 of `docs/PLAN.md`, built 2026-11-02. Settings replaces the stand-in that
 
 ## The slide in (2026-11-04)
 
-Adam saw the left column grow or bounce from the edge, very briefly, as Settings opened unfolded (on his Duo, 2026-11-03). Measured frame by frame in a recording of the inner display (`simctl io … recordVideo`), reading the edges of the chosen row, on the simulator:
+Adam saw the left column grow or bounce from the edge, very briefly, as Settings opened unfolded (on his Duo, 2026-11-03). Measured frame by frame in a recording of each display (`simctl io … recordVideo`), reading the edges of a row, on the simulator:
 
-- **Before:** the list's frame started at the screen's edge, and its rows filled it (455 pt wide) until its left edge came within 20 pt of where it stops. From there the rows' left edge stayed at x = 20 while their right edge, the title and the right page carried on, so the rows and their text shrank to 435 pt over the last 90 ms or so.
-- **Why:** at the screen's edge the list takes a left margin from the system, and that margin is worked out again on each frame of the slide. This is inferred from the measurements and from the fix, not read from UIKit. The right page, away from the edge, always moved as one piece.
-- **Now:** unfolded, `SettingsList` starts the list at `SpreadMetrics.margin` by itself (`SettingsPageList.listLeading`), under a title that keeps its own margin, so it never reaches that margin. The rows stay 435 pt wide through the slide, Back and a swipe (frame 12), and rest where they did (no differing pixels bar video noise, left of the side column).
-- **Folded** is untouched: `listLeading` is 0 there. It has a smaller version of the same thing, the rows stopping at x = 33 and shrinking by 10 pt, which Adam hasn't remarked on. `TrustServerView`'s list also sits at the screen's edge; not measured.
+- **Before:** the list's frame started at the screen's edge, and its rows filled it (455 pt wide unfolded) until its left edge came within 20 pt of where it stops. From there the rows' left edge stayed at x = 20 while their right edge, the title and the right page carried on, so the rows and their text shrank by 20 pt over the last 90 ms or so. Folded did the same, by the same 20 pt.
+- **Why:** against the screen's left edge a `List`'s rows take a 20 pt margin they don't have anywhere else, and `ScreenStack`'s slide carries the list across that edge. The right page, away from the edge, always moved as one piece. A probe of the list's `UICollectionView` read 0 for its left safe area and layout margin (and the window's left safe area is 0), so where UIKit gets the 20 pt is still unknown. The cells do take it: x = 0 and 455.7 pt wide, then x = 20 and 435.7 pt wide once the list is at the edge.
+- **Ruled out:** hiding the list's position from UIKit in the slide. With `.visualEffect { $0.offset(x:) }` the rows shrank the same way. With a `GeometryEffect` translation the probe still read the list moving, and the slide dropped to 3 frames in 0.4 s (with the probe running). A `UIHostingController` per screen is what's left; not tried, since it's most of a `NavigationStack` rebuilt.
+- **Now:** `SettingsPageList` states the margin with `contentMargins(.leading, …, for: .scrollContent)`: `SpreadMetrics.margin` at the screen's edge (Settings' list, and a page folded), 0 on the right page unfolded. A stated margin replaces the system's rather than adding to it, whichever is larger (0 put folded rows at the screen's edge), so it doesn't depend on the system's number. The list's frame still reaches the screen's edge. No other `List` joins the slide: the reader's panels don't use `ScreenStack`, and `TrustServerView` is only reached from the debug section.
+- **Measured** (frame 12): rows keep their width in every frame, opening unfolded and folded, a page opening folded, and Back and a slow swipe unfolded. At rest they sit where they did: unfolded 14 of 5.1M pixels differ (video noise), folded 334 of 2.4M with every row's edges in the same place (one pixel differs by more than 32 levels).
 
 ## Checked on the simulator
 
@@ -53,7 +54,7 @@ Adam saw the left column grow or bounce from the edge, very briefly, as Settings
 | 09 | Calibre-Web and COPS | No Reading progress row; Sign out only for Calibre-Web (password) |
 | 11 | Calibre-Web Sign out | Alert without the sync sentence; Sign in in its place |
 | — | Swipe a book in Storage | Removed, total updated |
-| 12 | Opening unfolded, before and after the slide's fix (`Octavo Settings Duo`, 43A383FE-1CAB-4349-AF2D-0D3D659F7EEC) | Rows 435 pt wide in every frame, from Home on the sample library and from the Library on local BookOrbit; Back and a swipe too. Half open, and after a fold and an unfold, the same as flat. Folded at rest, the same as before |
+| 12 | Opening unfolded, before and after the slide's fix (`Octavo Settings Duo`, 43A383FE-1CAB-4349-AF2D-0D3D659F7EEC) | Rows 435 pt wide in every frame, from Home on the sample library; Back and a slow swipe too. Folded, rows keep their width too, on the list and a page. Half open, and after a fold and an unfold, 0 pixels differ from flat. Folded at rest, the same as before. The picture shows the first version of the fix, `.padding`; `contentMargins` gives the same rows. An earlier run of that first version also opened from the Library on local BookOrbit |
 
 ## Security review (2026-11-02)
 

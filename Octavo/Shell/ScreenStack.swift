@@ -6,7 +6,8 @@ import SwiftUI
 ///
 /// - A pushed screen slides in from the trailing edge over the one before,
 ///   which stays as it was; Back, or a swipe from the leading edge, slides
-///   it out.
+///   it out. A `List` at the screen's edge has to state its leading margin,
+///   or its rows shrink at the end of the slide (`SettingsPageList`).
 /// - Back (or, at the root, Settings) sits in the side column: the
 ///   `NavigationStack` here never pushes and exists only so the system puts
 ///   those buttons there, as it does the reader's.
