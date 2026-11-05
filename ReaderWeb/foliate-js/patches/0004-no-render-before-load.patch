@@ -1,0 +1,57 @@
+From: Octavo (local foliate-js patch set)
+Subject: [PATCH 0004] paginator: ignore a render until the section has loaded
+
+A section's View exists before the section loads (#createView), and the
+paginator's ResizeObserver can call render() at any moment. So a render could
+reach the new document between its appearing and its load event, half parsed
+and before the host has heard of it. The host reads the section at load
+expecting no layout yet. Octavo's bridge then took the first layout's column
+for a table's own width, now and then.
+
+Ignores a render until load has run. A normal open already goes that way, and
+load measures the view itself, so a size change in between isn't lost.
+
+Checked on the Duo simulator (docs/notes/reader-pictures.md, section 6): the
+miss came up in about 1 open in 100 without this patch, and
+ReaderPicturesTests forces the order and fails without it.
+
+Applies on top of 0003. Apply from the repo root:
+  git apply --directory=ReaderWeb/foliate-js ReaderWeb/foliate-js/patches/0004-no-render-before-load.patch
+---
+diff --git a/paginator.js b/paginator.js
+index dd6fa00..f5b295b 100644
+--- a/paginator.js
++++ b/paginator.js
+@@ -250,6 +250,7 @@ class View {
+     #column = true
+     #size
+     #layout = {}
++    #loading = false
+     constructor({ container, onExpand }) {
+         this.container = container
+         this.onExpand = onExpand
+@@ -284,6 +285,7 @@ class View {
+     }
+     async load(src, afterLoad, beforeRender) {
+         if (typeof src !== 'string') throw new Error(`${src} is not string`)
++        this.#loading = true
+         return new Promise(resolve => {
+             this.#iframe.addEventListener('load', () => {
+                 const doc = this.document
+@@ -301,6 +303,7 @@ class View {
+                 this.#contentRange.selectNodeContents(doc.body)
+                 const layout = beforeRender?.({ vertical, rtl, background })
+                 this.#iframe.style.display = 'block'
++                this.#loading = false
+                 this.render(layout)
+                 this.#observer.observe(doc.body)
+ 
+@@ -315,7 +318,7 @@ class View {
+         })
+     }
+     render(layout) {
+-        if (!layout) return
++        if (!layout || this.#loading) return
+         this.#column = layout.flow !== 'scrolled'
+         this.#layout = layout
+         if (this.#column) this.columnize(layout)

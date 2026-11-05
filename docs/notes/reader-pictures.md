@@ -94,6 +94,17 @@ Control: with `bridge.js` as it was, the fit test fails in all three postures an
 - **A box of text with no picture** that's wider than the column stays as wide: this fix is only for pictures.
 - **Drop caps in Pride and Prejudice.** The same before and after. `.letra { float: left; margin-top: -1% }` puts a 100 pt drop cap about 3 pt above its line, and at the top of a page that part lands at the foot of the page before: a faint line, with 18 drop caps affected folded and unfolded and 30 sideways. In the section tried, turning the margin off ended the split (2 of 9 drop caps to none). The survey counts them as "split across columns". Cosmetic, and specific to this book's styles.
 
+## 6. A race, found by CI (2026-11-05)
+
+`picturesStillFitWhenThePageChangesSize` failed now and then in CI, always on the table with no width, always at the sideways size. It reproduced on 'Octavo Flaky Tests Duo' (a throwaway iPhone Duo simulator, iOS 27.1): 1 miss in 150 opens, 1 in 400 and 9 in 700, each time with the table set to `min(328.5625px, 100%)`, the folded column.
+
+- **Cause:** `limitPicturesToTheirBoxes` runs at the section's `load` and counts on no layout having happened (section 2). The paginator makes a section's `View` before the section loads (`#createView`), so a render from its ResizeObserver could reach the new document first. Then `getComputedStyle` answered with that layout's column instead of the table's natural width. In all 9 misses a render with no script behind it came during the open, which is how that observer's call shows in a stack, and the section's root already had `column-width` when the bridge read it.
+- **What a reader would see:** after an unfold or a turn to something wider, a table that stays at its first layout's width until the book is opened again. It's narrower than the column, never past it.
+- **Fix:** foliate patch 0004. A `View` ignores a render until its `load` has run. A normal open already goes that way, so nothing else changes, and `load` measures the view itself, so a size change in between isn't lost. `bridge.js` is untouched, and the same patch stops a render from reaching a half-parsed section at all.
+- **First try, dropped:** reading the table's width with `computedStyleMap`. It passed the tests, but a code review found it took the limit off a table with `width: 150%`, `100vw` or `max-content`, and it changed how some tables looked (a `width: 50%` table, the logo on *Pride and Prejudice*'s title page when sideways). The patch changes neither.
+- **Tests:** `picturesStillFitWhenThePageChangesSize` now also runs with a render forced just before foliate sends `load`. Without the patch that case fails, with the table at 328.6 pt in a 575.4 pt column. With the patch it passes, and so did 700 repeats of both cases on 'Octavo Flaky Fixes Duo' (a throwaway simulator too). In the real app, `tools/survey.py` on *Pride and Prejudice* gives the same as section 3: 756, 412, 412 and 422 pages, none over the column. The other sample books, the cases book and vertical text weren't run again, because `bridge.js` didn't change.
+- **Still pinned, as before:** a table with no width gets `min(<its natural width>, 100%)`, because `getComputedStyle` answers with a width even in the hidden frame. That's why the logo above is 275 pt sideways and not its own 300 pt, and it's harmless for the rest. It isn't part of this fix.
+
 ## Tools
 
 Run headless, with `simctl` and `hinge` only.
