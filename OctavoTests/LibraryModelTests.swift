@@ -128,22 +128,25 @@ struct FeedModelTests {
         #expect(!full.cameBackEmpty)
     }
 
-    // The empty screen would otherwise say there are no books when the
-    // server didn't answer.
-    @Test func aReloadThatFailsIsNoLongerAnEmptyList() async throws {
+    // A first load that fails says nothing about the list. A reload that
+    // fails leaves it as it was, and `EmptyFeed` says it failed: going to
+    // `FeedContent` would load the list a second time.
+    @Test func onlyAnAnswerChangesWhetherAListIsEmpty() async throws {
         let faults = Faults()
+        faults.set("empty", LibraryError.server(status: 500, message: nil))
         let library = await connected(PagedSource(faults: faults))
         let feed = try #require(library.feed(link("empty"), from: server))
         await feed.load()
-        #expect(feed.cameBackEmpty)
-
-        faults.set("empty", LibraryError.server(status: 500, message: nil))
-        await feed.reload()
         #expect(feed.state == .failed)
         #expect(!feed.cameBackEmpty)
 
         faults.set("empty", nil)
         await feed.retry()
+        #expect(feed.cameBackEmpty)
+
+        faults.set("empty", LibraryError.server(status: 500, message: nil))
+        await feed.reload()
+        #expect(feed.state == .failed)
         #expect(feed.cameBackEmpty)
     }
 

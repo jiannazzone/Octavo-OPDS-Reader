@@ -6,8 +6,9 @@ A list that came back with nothing in it is an invitation, not a blank screen. D
 
 ## How it fits together
 
-- **`FeedModel.cameBackEmpty`** picks the screen in `FeedScreen`. It's set when a first page has nothing on it, and stays set through a reload, because `reload()` puts the list in `.loading`: going by the state, pulling down would swap the message for blank covers and back. A reload that fails clears it, so the screen says it couldn't load instead of saying there are no books.
-- **`EmptyPages`** is the layout, for an empty list (`EmptyFeed`), Home and On iPhone: the invitation alone folded, and an `HStack` of the two pages unfolded, as Home's books are. An empty list's invitation is in a scroll view so the list can still be pulled down, and `containerRelativeFrame(.vertical)` centres it on its page. Home and On iPhone can't be pulled down when empty, as before.
+- **`FeedModel.cameBackEmpty`** picks the screen in `FeedScreen`. It's set when a first page has nothing on it, and stays set through a reload, because `reload()` puts the list in `.loading`: going by the state, pulling down would swap the message for blank covers and back. A reload that fails leaves it set, and `EmptyFeed` says it couldn't load itself, because handing over to `FeedContent` would run its `.task` and load the list a second time.
+- **`EmptyPages`** is the layout, for an empty list (`EmptyFeed`), Home and On iPhone: the invitation alone folded, and an `HStack` of the two pages unfolded, as Home's books are. Each invitation is in a scroll view (`scrollingOnItsPage`), which centres it on its page and scrolls if it doesn't fit: at the largest text size a fixed height cut off a collection's Open Library. Only an empty list can be pulled down.
+- **`BookOpener.fileChanges`** (it was `removals`) now also changes when a download finishes. `onIPhoneBooks()` looks for files on disk, which nothing observes, so a book downloaded from On iPhone's right page left the screen saying "No books on iPhone" until a relaunch, and the Library's On iPhone shelf had the same problem.
 - **`EmptyListWording`** has the words, from the list's `LibraryEntry.Kind` and the server's name. An OPDS list is always `.feed`, so a chip like Keep Reading and any other OPDS list say the same thing. Octavo can't tell what such a list is for, and doesn't push places to an OPDS server, so "Start a book and it'll show here" would be untrue.
 - **`ShellModel.openLibrary(showing:)`** is the button: the Library's top, on the list's server. The server only changes for a list opened from Search on another server. Search's own screens stay where they were.
 - **The right page** is a `LibraryShelf` with `maxRows: 3` and a one-page `Spread` in its environment, so its grid lays out for that page alone. `LibraryView.newest` finds the list by the same `sections` the Library's shelves use, so the heading matches the shelf.
@@ -34,8 +35,10 @@ Home's message had the same problem, because it centred `EmptyInvitation` across
 | A scripted pull down on the empty screen | The message stays, with no blank covers. The request going out wasn't confirmed |
 | Home on Komga, launched folded and launched unfolded | Folded as before, unfolded on the left page with Latest books on the right |
 | On iPhone, after downloading a book and removing it | Before: across the hinge. Now on the left page unfolded with Latest books on the right, and centred folded |
+| An empty collection at the largest text size, folded | Before: Open Library cut off, with no way to scroll. Now it scrolls to the button |
+| A book downloaded from On iPhone's right page, then ‹ | Before: still "No books on iPhone". Now the book is there |
 
-Not seen on screen: the right page left blank (a server with no such list, or that list being the empty one). `aReloadThatFailsIsNoLongerAnEmptyList` covers the reload's states.
+Not seen on screen: the right page left blank (a server with no such list, or that list being the empty one), and a reload that fails, since no local server fails on demand. `onlyAnAnswerChangesWhetherAListIsEmpty` covers the reload's states, and `aFinishedDownloadTellsWhatLooksForItsFile` the finished download.
 
 ## An odd reading, not a confirmed bug
 

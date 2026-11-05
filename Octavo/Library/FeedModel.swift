@@ -27,7 +27,8 @@ final class FeedModel {
     /// Empty unless the list is only authors.
     private(set) var authorSections: [AuthorIndex.Section] = []
     /// The first page had nothing on it (`EmptyFeed`). Stays set through a
-    /// reload, so pulling down doesn't swap the screen for blank covers.
+    /// reload, so pulling down doesn't swap the screen for blank covers, and
+    /// through one that fails, which `EmptyFeed` says itself.
     private(set) var cameBackEmpty = false
 
     @ObservationIgnored private let library: any LibrarySource
@@ -102,7 +103,6 @@ final class FeedModel {
                 // A reload took over.
                 guard !Task.isCancelled else { return }
                 state = .failed
-                cameBackEmpty = false
                 report(error)
             }
         }

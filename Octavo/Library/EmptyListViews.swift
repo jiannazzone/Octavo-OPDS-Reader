@@ -35,18 +35,34 @@ struct EmptyFeed: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        let wording = EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
         EmptyPages(server: feed.source, excluding: entry.link) {
-            // In a scroll view to pull down, centred on its page as on Home.
-            ScrollView {
+            // A reload that failed, unless the problem's banner says why. It
+            // stays this screen: `FeedContent` would load the list again.
+            if feed.state == .failed, library.connection(feed.source)?.problem == nil {
+                FeedFailedInvitation(feed: feed)
+                    .scrollingOnItsPage()
+            } else {
+                let wording = EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
                 EmptyInvitation(
                     symbol: "books.vertical", title: wording.title,
                     message: wording.message, actionTitle: "Open Library"
                 ) { shell.openLibrary(showing: feed.source) }
-                .containerRelativeFrame(.vertical)
+                .scrollingOnItsPage()
             }
         }
         .refreshable { await feed.reload() }
+    }
+}
+
+/// A list the server didn't send.
+struct FeedFailedInvitation: View {
+    let feed: FeedModel
+
+    var body: some View {
+        EmptyInvitation(
+            symbol: "exclamationmark.triangle", title: "Couldn’t load this list",
+            message: "The server didn’t send it.", actionTitle: "Try again"
+        ) { Task { await feed.retry() } }
     }
 }
 

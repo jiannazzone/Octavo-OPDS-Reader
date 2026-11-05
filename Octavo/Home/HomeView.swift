@@ -28,11 +28,13 @@ struct HomeView: View {
                             symbol: "books.vertical", title: "Nothing in progress",
                             message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
                         ) { shell.select(.library) }
+                        .scrollingOnItsPage()
                     } else if library.homeProblems.isEmpty {
                         EmptyInvitation(
                             symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
                             message: library.hasSeveralServers ? "Your servers didn’t send them." : "The server didn’t send them.", actionTitle: "Try again"
                         ) { Task { await library.loadHome() } }
+                        .scrollingOnItsPage()
                     } else {
                         // The banner says why, and retries.
                         Spacer()

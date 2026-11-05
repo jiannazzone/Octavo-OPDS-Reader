@@ -33,6 +33,7 @@ struct OnIPhoneContent: View {
                         symbol: "book.closed", title: "No books on iPhone",
                         message: "Books you download or import show here.", actionTitle: "Import from Files"
                     ) { shell.showFilePicker() }
+                    .scrollingOnItsPage()
                     if offersServer {
                         HaveAServerCard()
                             .padding(.horizontal, SpreadMetrics.margin)

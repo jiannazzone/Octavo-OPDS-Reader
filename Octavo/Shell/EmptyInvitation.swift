@@ -21,6 +21,15 @@ struct EmptyInvitation: View {
     }
 }
 
+extension View {
+    /// An invitation with the page to itself: centred on it, and scrolling if
+    /// it doesn't fit, at the largest text sizes.
+    func scrollingOnItsPage() -> some View {
+        ScrollView { self }
+            .defaultScrollAnchor(.center, for: .alignment)
+    }
+}
+
 #Preview {
     EmptyInvitation(
         symbol: "books.vertical", title: "Nothing in progress",

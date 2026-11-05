@@ -435,10 +435,7 @@ struct FeedContent<Header: View>: View {
                 .padding(.vertical, 12)
         case .failed where library.connection(feed.source)?.problem == nil:
             if isEmpty {
-                EmptyInvitation(
-                    symbol: "exclamationmark.triangle", title: "Couldn’t load this list",
-                    message: "The server didn’t send it.", actionTitle: "Try again"
-                ) { Task { await feed.retry() } }
+                FeedFailedInvitation(feed: feed)
             } else {
                 Button("Couldn’t load the rest · Try again") { Task { await feed.retry() } }
             }
