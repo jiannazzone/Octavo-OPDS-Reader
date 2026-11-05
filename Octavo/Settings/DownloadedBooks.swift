@@ -63,7 +63,7 @@ extension ShellModel {
         var seen = Set<String>()
         let records = library.onIPhone.books() + library.recents.records().map(\.book)
         return records.compactMap { record in
-            guard let url = opener.localFile(for: record.book),
+            guard let url = opener.localFile(for: record),
                   seen.insert(url.lastPathComponent).inserted
             else { return nil }
             let values = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileSizeKey, .creationDateKey])
@@ -72,13 +72,9 @@ extension ShellModel {
         }
     }
 
-    /// What Remove server counts as the server's downloads: every book that
-    /// wasn't imported. v1 has one server (decision 1), and a file is kept
-    /// by its book's ID alone, so a book kept from a server removed before
-    /// shows as downloaded on the one added since (the same server, at a
-    /// new ID) and is its download too.
-    func serverDownloads() -> [DownloadedBook] {
-        downloads().filter { $0.book.source != .files }
+    /// What Remove server counts as `server`'s downloads.
+    func downloads(on server: LibrarySourceID) -> [DownloadedBook] {
+        downloads().filter { $0.book.source == server }
     }
 }
 

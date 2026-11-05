@@ -15,7 +15,7 @@ struct ShellScreen: View {
         case .settingsPage(let page): SettingsScreen(page: page)
         case .cover(let book): CoverScreen(book: book)
         case .setup(let step): SetupScreen(step: step)
-        case .signInAgain: SignInAgainScreen()
+        case .signInAgain(let id): SignInAgainScreen(server: id)
         case .onIPhone: OnIPhoneScreen()
         }
     }
@@ -48,23 +48,43 @@ struct CoverScreen: View {
     }
 }
 
-/// The connection banner, when there's a problem.
+/// The Library's server's banner, when there's a problem.
 struct ConnectionBannerSlot: View {
+    @Environment(LibraryModel.self) private var library
+
+    var body: some View {
+        if let id = library.server?.id, let problem = library.connectionProblem {
+            ServerProblemBanner(server: id, problem: problem)
+        }
+    }
+}
+
+/// Home's banners, one per server: `LibraryModel.homeProblems`.
+struct HomeBannersSlot: View {
+    @Environment(LibraryModel.self) private var library
+
+    var body: some View {
+        ForEach(library.homeProblems, id: \.server) { item in
+            ServerProblemBanner(server: item.server, problem: item.problem)
+        }
+    }
+}
+
+/// A server's banner, whose action is for that server.
+private struct ServerProblemBanner: View {
+    let server: LibrarySourceID
+    let problem: ConnectionProblem
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        if let problem = library.connectionProblem {
-            ConnectionBanner(problem: problem) { resolve(problem) }
-        }
-    }
-
-    private func resolve(_ problem: ConnectionProblem) {
-        switch problem {
-        case .unreachable:
-            Task { await library.retry() }
-        case .signedOut:
-            shell.showSignIn()
+        ConnectionBanner(problem: problem) {
+            switch problem {
+            case .unreachable:
+                Task { await library.retry(server) }
+            case .signedOut:
+                shell.showSignIn(server)
+            }
         }
     }
 }

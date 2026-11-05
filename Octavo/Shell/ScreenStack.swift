@@ -131,7 +131,7 @@ struct ScreenStack<Root: View>: View {
     }
 
     private func screen(at id: ScreenID, in path: ShellPath) -> some View {
-        ScreenFrame(title: id.route.map(\.title) ?? title) {
+        ScreenFrame(title: id.route.map(\.title) ?? title, isLibraryRoot: id.route == nil && tab == .library) {
             if let route = id.route {
                 ShellScreen(route: route)
             } else {
@@ -203,12 +203,18 @@ private struct ScreenID: Hashable {
 /// the one beneath. The title sits on the left page.
 struct ScreenFrame<Content: View>: View {
     let title: String?
+    /// With several servers, its title is the menu of them (decision 36).
+    var isLibraryRoot = false
     @ViewBuilder let content: () -> Content
     @Environment(\.spread) private var spread
+    @Environment(LibraryModel.self) private var library
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let title {
+            if isLibraryRoot, library.hasSeveralServers {
+                LibraryServerMenu()
+                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+            } else if let title {
                 ScreenTitle(title)
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
             }

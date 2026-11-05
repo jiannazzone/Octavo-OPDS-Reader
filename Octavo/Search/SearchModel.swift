@@ -44,7 +44,7 @@ final class SearchModel {
     private(set) var recentSearches: [String]
 
     @ObservationIgnored private let library: LibraryModel
-    @ObservationIgnored private let isOnIPhone: (LibraryBook) -> Bool
+    @ObservationIgnored private let isOnIPhone: (SourcedBook) -> Bool
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let pause: Duration
     @ObservationIgnored private var task: Task<Void, Never>?
@@ -57,7 +57,7 @@ final class SearchModel {
     private static let recentKey = "recentSearches"
 
     init(
-        library: LibraryModel, isOnIPhone: @escaping (LibraryBook) -> Bool,
+        library: LibraryModel, isOnIPhone: @escaping (SourcedBook) -> Bool,
         defaults: UserDefaults = .standard, pause: Duration = .milliseconds(300)
     ) {
         self.library = library
@@ -144,7 +144,7 @@ final class SearchModel {
     }
 
     private func search(_ text: String) async {
-        let local = library.iPhoneBooks().filter { isOnIPhone($0.book) && Self.matches($0.book, text) }
+        let local = library.iPhoneBooks().filter { isOnIPhone($0) && Self.matches($0.book, text) }
         // No server yet: the imported books alone.
         guard let server = library.server else {
             finish(Results(query: text, books: local, series: [], authors: [], source: .files))
@@ -160,7 +160,7 @@ final class SearchModel {
             finish(Self.results(found, from: server.id, adding: local, query: text))
         } catch {
             guard !Task.isCancelled else { return }
-            library.report(error)
+            library.report(error, server: server.id)
             // Offline, the books on the iPhone still match.
             finish(Results(query: text, books: local, series: [], authors: [], source: server.id),
                    failed: library.connectionProblem == nil)

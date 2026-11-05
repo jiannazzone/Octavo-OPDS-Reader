@@ -51,7 +51,7 @@ struct BookGridCell: View {
         OpenButton(route: .cover(book)) {
             VStack(spacing: 4) {
                 BookCover(book: book)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book) }
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book) }
                 if numbered {
                     Text(book.book.series?.position.map(Self.number) ?? "")
                         .font(.subheadline)
@@ -68,7 +68,7 @@ struct BookGridCell: View {
             }
         }
         .accessibilityLabel(Self.accessibilityLabel(book.book, numbered: numbered))
-        .accessibilityValue(DownloadBadge.accessibilityValue(shell.opener.status(of: book.book)))
+        .accessibilityValue(DownloadBadge.accessibilityValue(shell.opener.status(of: book)))
     }
 
     /// 1, 2, 2.5.
@@ -87,7 +87,7 @@ struct BookGridCell: View {
 /// downloads, nothing otherwise (`docs/design/direction.md`, Getting books
 /// onto the iPhone). A dark disc, so it reads on any cover.
 struct DownloadBadge: View {
-    let book: LibraryBook
+    let book: SourcedBook
     var size: CGFloat = 22
     @Environment(ShellModel.self) private var shell
 

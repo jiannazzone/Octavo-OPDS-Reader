@@ -12,6 +12,9 @@ struct LibraryView: View {
         if let server = library.server {
             if let root = library.root {
                 LibraryContents(source: server.id, sections: Self.sections(root))
+                    // Another server's lists, which may be at the same links,
+                    // and from the top.
+                    .id(server.id)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ConnectionBannerSlot()
@@ -52,6 +55,44 @@ struct LibraryView: View {
             sections.insert(LibraryEntry(kind: .feed, title: "Recently added", link: recent), at: min(1, sections.count))
         }
         return sections
+    }
+}
+
+/// The Library's title with several servers (decision 36): the chosen
+/// server's name and a chevron, for a menu of the servers and Add a server.
+/// Where `ScreenTitle` would be.
+struct LibraryServerMenu: View {
+    @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        Menu {
+            Picker("Server", selection: Binding { library.server?.id } set: { id in
+                if let id { shell.chooseServer(id) }
+            }) {
+                ForEach(library.connections, id: \.server.id) { connection in
+                    Text(connection.server.name)
+                        .tag(Optional(connection.server.id))
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            Button("Add a server", systemImage: "plus") { shell.push(.setup(.choose)) }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(library.server?.name ?? "Library")
+                    .font(.largeTitle.bold())
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, SpreadMetrics.titleTop)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 

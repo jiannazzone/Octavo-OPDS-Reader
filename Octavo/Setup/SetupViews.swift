@@ -196,6 +196,7 @@ private struct BookOrbitSetup: View {
                 AddressField(prompt: "books.example.com", address: $setup.bookOrbitAddress) {
                     setup.signInToBookOrbit()
                 }
+                SetupField("Name", text: $setup.bookOrbitName, prompt: "BookOrbit", isName: true)
                 SetupField("Username", text: $setup.bookOrbitUsername)
                     .textContentType(.username)
                 SetupField("Password", text: $setup.bookOrbitPassword, secure: true)
@@ -228,6 +229,8 @@ private struct CatalogSetup: View {
                 AddressField(prompt: "https://books.example.com/opds", address: $setup.catalogAddress) {
                     setup.connectToCatalog()
                 }
+                // The catalog's own name isn't known until it has answered.
+                SetupField("Name", text: $setup.catalogName, prompt: setup.signIn?.title ?? "Optional", isName: true)
                 if let signIn = setup.signIn {
                     Text(signIn.title.map { "Found “\($0)”. Sign-in required." } ?? "The catalog asks for a sign-in.")
                         .font(.subheadline)
@@ -472,12 +475,15 @@ private struct SetupField: View {
     @Binding var text: String
     var prompt: String?
     var secure = false
+    /// Words someone chose, not an address or an account.
+    var isName = false
 
-    init(_ label: String, text: Binding<String>, prompt: String? = nil, secure: Bool = false) {
+    init(_ label: String, text: Binding<String>, prompt: String? = nil, secure: Bool = false, isName: Bool = false) {
         self.label = label
         _text = text
         self.prompt = prompt
         self.secure = secure
+        self.isName = isName
     }
 
     var body: some View {
@@ -492,8 +498,8 @@ private struct SetupField: View {
                     TextField(label, text: $text, prompt: prompt.map(Text.init))
                 }
             }
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
+            .textInputAutocapitalization(isName ? .words : .never)
+            .autocorrectionDisabled(!isName)
             .padding(.horizontal, 12)
             .frame(height: 44)
             .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10))
@@ -550,6 +556,7 @@ private struct SetupError: View {
 /// address as it was added, the account, a new password. Back to where you
 /// were once it works.
 struct SignInAgainScreen: View {
+    let server: LibrarySourceID
     @Environment(ShellModel.self) private var shell
     @State private var username: String?
     @State private var password = ""
@@ -557,8 +564,8 @@ struct SignInAgainScreen: View {
     @State private var error: String?
 
     var body: some View {
-        if let saved = shell.servers.load() {
-            let name = saved.name
+        if let saved = shell.servers.load()[server] {
+            let name = saved.displayName
             SetupPage {
                 SetupText("Signed out of \(name). Reading works without it; sign in again to see your library and keep your place in step.")
             } form: {
@@ -594,16 +601,16 @@ struct SignInAgainScreen: View {
         let password = password
         attempt.start { isCurrent in
             do {
-                try await shell.signInAgain(username: username, password: password)
+                try await shell.signInAgain(saved.id, username: username, password: password)
                 guard isCurrent() else { return }
                 self.password = ""
                 shell.pop(shell.tab)
             } catch {
                 guard isCurrent() else { return }
-                self.error = SetupModel.message(for: error, server: saved.name, host: host)
+                self.error = SetupModel.message(for: error, server: saved.displayName, host: host)
             }
         } timedOut: {
-            error = "\(host ?? saved.name) didn’t answer. Check that this iPhone is on the same network as the server."
+            error = "\(host ?? saved.displayName) didn’t answer. Check that this iPhone is on the same network as the server."
         }
     }
 

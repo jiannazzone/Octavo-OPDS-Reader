@@ -126,6 +126,12 @@ final class BookPage {
         return progress.formatted(.percent.precision(.fractionLength(0)))
     }
 
+    /// "14% · BookOrbit": Home's, with several servers (decision 36).
+    static func placeLine(progress: Double?, server: String?) -> String {
+        let place = placeLine(progress: progress)
+        return server.map { "\(place) · \($0)" } ?? place
+    }
+
     /// The description as plain text: it may carry the book's own markup.
     var plainDescription: String? {
         guard let html = details?.description else { return nil }
@@ -171,17 +177,17 @@ final class BookPage {
 /// their state and doesn't load them again. Not observed: views get a
 /// page from here while drawing, and each page is observed on its own.
 final class BookPages {
-    private var pages: [LibraryBookID: BookPage] = [:]
-    private var recent: [LibraryBookID] = []
+    private var pages: [SourcedBook.ID: BookPage] = [:]
+    private var recent: [SourcedBook.ID] = []
     private let limit: Int
 
     init(limit: Int = 20) {
         self.limit = limit
     }
 
-    func page(for book: LibraryBook) -> BookPage {
+    func page(for book: SourcedBook) -> BookPage {
         if let page = pages[book.id] { return page }
-        let page = BookPage(book: book)
+        let page = BookPage(book: book.book)
         pages[book.id] = page
         recent.append(book.id)
         if recent.count > limit {
@@ -190,18 +196,24 @@ final class BookPages {
         return page
     }
 
-    func existingPage(for id: LibraryBookID) -> BookPage? {
+    func existingPage(for id: SourcedBook.ID) -> BookPage? {
         pages[id]
     }
 
-    /// The source changed (another server, or signed in again).
+    /// Every server's, as after a debug disconnect.
     func removeAll() {
         pages = [:]
         recent = []
     }
 
+    /// `library`'s went, or it signed in again.
+    func removeAll(in library: LibrarySourceID) {
+        pages = pages.filter { $0.key.source != library }
+        recent.removeAll { $0.source == library }
+    }
+
     /// A book that's gone (an imported book removed).
-    func remove(_ id: LibraryBookID) {
+    func remove(_ id: SourcedBook.ID) {
         pages[id] = nil
         recent.removeAll { $0 == id }
     }

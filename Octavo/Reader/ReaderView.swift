@@ -176,7 +176,10 @@ private struct ReaderScreen: View {
                             case .search:
                                 searchBar
                             case .serverPlace(let place):
-                                ReaderServerPlaceBar(place: place, go: model.goToServerPlace, stay: model.keepThisPlace)
+                                ReaderServerPlaceBar(
+                                    place: place, server: shell.reading.flatMap { shell.library.server($0.source)?.name } ?? "BookOrbit",
+                                    go: model.goToServerPlace, stay: model.keepThisPlace
+                                )
                             }
                         }
                         .frame(width: max(0, right - left))

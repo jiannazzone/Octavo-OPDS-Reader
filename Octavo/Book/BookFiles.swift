@@ -6,19 +6,24 @@ import OctavoKit
 /// download stays until it's removed (`docs/design/direction.md`, Getting
 /// books onto the iPhone).
 nonisolated protocol BookFiles: Sendable {
-    /// The file on the iPhone, or `nil` if it hasn't downloaded.
-    func localFile(for file: LibraryFile) -> URL?
+    /// `library`'s file on the iPhone, or `nil` if it hasn't downloaded.
+    func localFile(for file: LibraryFile, in library: LibrarySourceID) -> URL?
 
     /// Downloads `file` from `source`, replacing any earlier copy.
     /// Cancelling the calling task cancels the download.
-    func download(_ file: LibraryFile, from source: any LibrarySource, progress: @escaping @Sendable (Double) -> Void) async throws -> URL
+    func download(
+        _ file: LibraryFile, in library: LibrarySourceID, from source: any LibrarySource, progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL
 
     /// Deletes the downloaded copy, if there is one.
-    func remove(_ file: LibraryFile) throws
+    func remove(_ file: LibraryFile, in library: LibrarySourceID) throws
 
     /// Deletes every downloaded book but `keeping`'s storage keys (Storage's
     /// Remove all downloads keeps none).
     func removeAll(keeping keys: Set<String>) throws
+
+    /// Gives `library`'s downloads to `other` (`RemovedServer`).
+    func moveAll(of library: LibrarySourceID, to other: LibrarySourceID)
 }
 
 nonisolated extension LibraryBook {
@@ -40,20 +45,63 @@ nonisolated extension LibraryFile {
     }
 
     /// A stable name for the file, safe in a path whatever the source's ID
-    /// looks like (an OPDS ID is a URL). Also the reader's key for the
-    /// saved position.
+    /// looks like (an OPDS ID is a URL).
     var storageKey: String {
         let digest = SHA256.hash(data: Data(id.rawValue.utf8))
         return "book-" + digest.prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// The name of `library`'s copy of the file, its place and its bookmarks:
+    /// BookOrbit numbers its files from 1 on every server, so another server's
+    /// file 17 is another book. Starts with the server's own ID, which is
+    /// ours and safe in a path, so all of a server's can be found by it.
+    /// Imported books belong to no server and keep the plain name.
+    func storageKey(in library: LibrarySourceID) -> String {
+        library == .files ? storageKey : "\(StoredBookKeys.prefix(of: library))\(storageKey)"
+    }
+}
+
+nonisolated extension SourcedBook {
+    /// `LibraryFile.storageKey(in:)` for the file the reader opens.
+    var storageKey: String? {
+        book.readableFile?.storageKey(in: source)
+    }
+}
+
+/// How keys start with their server (`LibraryFile.storageKey(in:)`), for the
+/// stores that keep per-book files in one folder.
+nonisolated enum StoredBookKeys {
+    static func prefix(of library: LibrarySourceID) -> String {
+        "\(library.rawValue)."
+    }
+
+    /// Deletes every file of `library`'s directly in `directory`.
+    static func removeFiles(of library: LibrarySourceID, in directory: URL) {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasPrefix(prefix(of: library)) {
+            try? manager.removeItem(at: directory.appending(path: name, directoryHint: .notDirectory))
+        }
+    }
+
+    /// Gives `library`'s files in `directory` to `other`: the same server
+    /// added again finds what it left (`RemovedServer`). A file `other`
+    /// already has stays as it is.
+    static func moveFiles(of library: LibrarySourceID, to other: LibrarySourceID, in directory: URL) {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in names where name.hasPrefix(prefix(of: library)) {
+            let moved = prefix(of: other) + name.dropFirst(prefix(of: library).count)
+            let target = directory.appending(path: moved, directoryHint: .notDirectory)
+            guard !manager.fileExists(atPath: target.path) else { continue }
+            try? manager.moveItem(at: directory.appending(path: name, directoryHint: .notDirectory), to: target)
+        }
     }
 }
 
 /// Downloads into `Application Support/Books/`, one file per book file:
 /// iOS doesn't clear it when space runs low, and it stays out of the
 /// iPhone's backup, since the server has every book.
-///
-/// Keyed by the file's ID alone: v1 has one server (decision 1). A second
-/// server needs the server in the key.
 ///
 /// Books imported from Files (and the sample book) are on the iPhone too,
 /// in `ImportedBooks`' folder: they open from there, but only
@@ -71,28 +119,30 @@ nonisolated struct StoredBookFiles: BookFiles {
         self.imported = imported
     }
 
-    func url(for file: LibraryFile) -> URL? {
+    func url(for file: LibraryFile, in library: LibrarySourceID) -> URL? {
         guard let ext = file.readableExtension else { return nil }
-        return directory.appending(path: "\(file.storageKey).\(ext)", directoryHint: .notDirectory)
+        return directory.appending(path: "\(file.storageKey(in: library)).\(ext)", directoryHint: .notDirectory)
     }
 
-    func localFile(for file: LibraryFile) -> URL? {
-        downloadedFile(for: file) ?? imported.localFile(for: file)
+    func localFile(for file: LibraryFile, in library: LibrarySourceID) -> URL? {
+        library == .files ? imported.localFile(for: file) : downloadedFile(for: file, in: library)
     }
 
-    private func downloadedFile(for file: LibraryFile) -> URL? {
-        guard let url = url(for: file), FileManager.default.fileExists(atPath: url.path) else { return nil }
+    private func downloadedFile(for file: LibraryFile, in library: LibrarySourceID) -> URL? {
+        guard library != .files, let url = url(for: file, in: library), FileManager.default.fileExists(atPath: url.path) else { return nil }
         return url
     }
 
-    func download(_ file: LibraryFile, from source: any LibrarySource, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
-        guard let destination = url(for: file) else { throw BookFilesError.unreadableFormat }
+    func download(
+        _ file: LibraryFile, in library: LibrarySourceID, from source: any LibrarySource, progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> URL {
+        guard let destination = url(for: file, in: library) else { throw BookFilesError.unreadableFormat }
         try makeDirectory()
         return try await source.download(file, to: destination, progress: progress)
     }
 
-    func remove(_ file: LibraryFile) throws {
-        guard let url = downloadedFile(for: file) else { return }
+    func remove(_ file: LibraryFile, in library: LibrarySourceID) throws {
+        guard let url = downloadedFile(for: file, in: library) else { return }
         try FileManager.default.removeItem(at: url)
     }
 
@@ -102,6 +152,10 @@ nonisolated struct StoredBookFiles: BookFiles {
         for name in names where !keys.contains((name as NSString).deletingPathExtension) {
             try manager.removeItem(at: directory.appending(path: name))
         }
+    }
+
+    func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {
+        StoredBookKeys.moveFiles(of: library, to: other, in: directory)
     }
 
     /// The app's store, with any books from before it moved in.

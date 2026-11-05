@@ -41,7 +41,7 @@ struct BooksOnIPhonePage: View {
                                 if book.book.source == .files {
                                     removingImported = book.book
                                 } else {
-                                    shell.opener.removeDownload(book.book.book)
+                                    shell.opener.removeDownload(book.book)
                                 }
                             }
                             .tint(.red)
@@ -67,7 +67,7 @@ struct BooksOnIPhonePage: View {
                 .textCase(nil)
             } footer: {
                 if let server = library.server {
-                    Text("Removing a book keeps your place in it. You can download it again from \(server.name).")
+                    Text("Removing a book keeps your place in it. You can download it again from \(library.hasSeveralServers ? "its server" : server.name).")
                 }
             }
             let downloads = books.filter { $0.book.source != .files }

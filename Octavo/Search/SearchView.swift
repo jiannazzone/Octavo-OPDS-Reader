@@ -344,7 +344,7 @@ private struct SearchBookRow: View {
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book, size: 14) }
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 14) }
                     .frame(width: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
