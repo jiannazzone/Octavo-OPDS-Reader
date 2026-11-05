@@ -88,7 +88,7 @@ Nothing: every library step is decided and built (`docs/PLAN.md`).
 
 ### Structure and library (approved 2026-10-31)
 
-1. **One library server in v1.** You connect one server (BookOrbit, or one OPDS server) when you set up the app, and the app is built around it. Most people run one server; designing for several (a merged catalog index, deduplication, per-server switches, catalogs vs libraries) was explored and dropped as too complicated for v1. A second server comes later, as a menu in the Library title; servers are never merged (parked in `docs/UI-IDEAS.md`).
+1. **Any number of library servers** (Adam, 2026-11-05, reversing "one library server in v1"; decision 36). You add the first when you set up the app and more from Settings or the Library's title. Each server stays its own library: a merged catalog index, deduplication and per-server switches were explored and dropped as too complicated (parked in `docs/UI-IDEAS.md`). With one server, every screen is as it was.
 2. **Four tabs in the trailing column:** Home, Library and Settings, with Search last, at the very bottom (Apple's "Search Role" tab, the standard layout). The trailing column is the Duo's standard place for tab items, so nothing sits along the bottom of the screen.
    - **Search sits inside the system tab bar** (amended 2026-11-01). On iOS 27.1 the system draws the Search-role tab as the last item in the same glass capsule, not as the separate button Apple's kit and our frames show; UIKit does the same. We use the system's tab bar as it is rather than draw our own (`docs/notes/duo-tabbar.md`).
    - **Home:** "Continue reading" (positions from sync and from the phone), plus what's new on your server.
@@ -311,6 +311,25 @@ Decided with pictures in the planning session (no Figma frames). All three are b
     - **Detents that were turned down:** iOS's own, which are hard and keep you from pages inside a chapter, and a soft catch across the whole book, which takes 80% or more of the track in a book of 38 chapters or more. Zoomed in, chapters are far enough apart for a catch (`docs/notes/going-back.md`).
     - **Built (2026-11-04).** `ReaderChapterSkip`, `ReaderScrubber`, `ReaderScrubberLine`. No book with nested contents has been run through the buttons since Adam's three went from scratch, nor a fixed-layout book.
 
+### More than one server (Adam, 2026-11-05)
+
+Decided with screenshots of the real app running a throwaway prototype (no Figma frames). With one server, nothing below shows: the Library's title stays "Library", no book names its server, and Search lists 12 books.
+
+36. **Each server is its own library; Home and Search cover them all.**
+    - **Library: a menu in the title** (Adam, over a shelf for each server). The title is the chosen server's name with a chevron, in Ink. The menu lists the servers, with a check on the chosen one, then **Add a server**. The chosen server is remembered. That server's shelves are as they were, with On iPhone last. It doesn't open a list of servers first, so a shelf stays one tap away.
+    - **Home: the name on every book** (over grouping under each server, and over a name only when the same book is in progress twice). Books in progress from every server and the iPhone, most recent first. The place line reads "14% · BookOrbit", on the current book and on the rows, with no taller rows. Imported books and the sample book have no name.
+    - **The same book on two servers shows twice,** each with its own server's name and its own place. A position belongs to a file, and OPDS can't tell editions apart.
+    - **Search: every server, always, with a section for each** (Adam asked for cross-library search; over one list with the name on each book). Each section's heading is the server's name, then its first three books and "All 9 books", then its Series and Authors. A section fills in when its server answers, so a slow server doesn't move the rest. Unfolded, one server per page, and a third carries on down the right page. Books only imported from Files come last, under On iPhone.
+    - **Before typing,** Recent as before, and "Browse BookOrbit" and "Browse Calibre-Web", each with its own lists.
+    - **In a server's Search section, a problem says so in place:** "Can't reach Calibre-Web." · Try again, and "Calibre-Web doesn't offer search."
+    - **Settings: Servers,** each row its name over "address · account", with **Add a server** under them. Unfolded, the list on the left and the chosen server's page on the right, as before.
+    - **Your own name for a server, kept on the iPhone** (Adam, asked for during this session). A **Name** row at the top of the server's page, tap to change, and an optional **Name** field under Address when adding it (Adam, over only the page), showing the server's own name as its placeholder where that's known. Left empty, it's the server's own name, and a second "Calibre-Web" becomes "Calibre-Web 2". Everything that names a server uses it: the menu, the labels, the headings, the banners, From in a book's details, and BookOrbit's capsule in the reader.
+    - **Adding:** Add a server, in Settings or the menu, opens the server choices. You land on the new server's Library. The same address and account twice says "You've already added this server." under the fields. **No limit** on the number of servers.
+    - **Removing:** today's alert and choices, for that server only (decision 24). The Library moves to the next server. Removing the last one is as it was: setup, or Home with the books still on the iPhone.
+    - **One server's problem** (over both showing on Home). **Signed out** needs you, so it shows on Home and in the Library for that server, one banner per server, and Sign in opens Sign in again for that server and comes back. **Can't reach** shows only in the Library for that server and in its Search section: with a server at home and one on the internet, Home would nag every time you're out. With one server, as before.
+    - **Sync: a book's place goes to the server it came from.** BookOrbit's books sync with their BookOrbit server. OPDS and imported books keep their place on this iPhone. BookOrbit can't hold a place for a book that isn't on it, and two copies can't share one. iCloud and KOReader sync come later, as separate tasks (Adam).
+    - **The tour's Add books,** on a replay with a server connected, opens the server choices instead of the Files picker, since a new server no longer replaces the old one. This changes decision 30's note.
+
 ### Settings (approved 2026-10-31)
 
 24. **A lean Settings tab** (redone with Adam on 2026-11-02, under Settings in the library pass above; Settings is a button, not a tab):
@@ -324,12 +343,12 @@ Decided with pictures in the planning session (no Figma frames). All three are b
 
 ## v1 scope (approved 2026-10-31)
 
-The goal for v1: read your server's books well on the Duo.
+The goal for v1: read your servers' books well on the Duo.
 
 | | v1 | Later |
 |---|---|---|
-| Sources | BookOrbit, one OPDS server, Import from Files | A second server |
-| Progress sync | BookOrbit | iCloud, KOReader sync |
+| Sources | BookOrbit and OPDS servers, as many as you add (decision 36), Import from Files | |
+| Progress sync | BookOrbit, for its own books | iCloud, KOReader sync (separate tasks; Adam, 2026-11-05) |
 | Formats | EPUB; MOBI, AZW3 and FB2 if they pass a check through foliate, the bridge and the script blocking | PDF (PDFKit), comics (CBZ, CBR) |
 | Reader | Text and theme, Contents, Search in book, Bookmarks | Highlights and notes |
 | Duo | Cover → unfold → read, book mode, fold cross-fade | Lock Screen widget, Live Activity |

@@ -16,7 +16,7 @@ Technical notes:
 
 ## Several servers (parked 2026-10-31)
 
-**Adam, 2026-11-05: wanted before the first release** (`docs/PLAN.md`, To revisit). These earlier notes are where the design starts.
+**Adam, 2026-11-05: wanted before the first release, and decided (decision 36 in `docs/design/direction.md`).** These earlier notes are where the design started; a merged library and public catalogs as browse-only feeds stay parked.
 
 v1 is built around one library server (`docs/design/direction.md`). Explored in the design brainstorm and parked for later:
 
