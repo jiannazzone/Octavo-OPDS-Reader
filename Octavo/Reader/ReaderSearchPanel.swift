@@ -10,33 +10,37 @@ struct ReaderSearchPanel: View {
     /// What's typed changed (`submitted` on Return).
     let run: (_ submitted: Bool) -> Void
     let choose: (Int) -> Void
+    let close: () -> Void
     @FocusState private var focused: Bool
 
     var body: some View {
         @Bindable var search = search
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search in Book", text: $search.query)
-                    .focused($focused)
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .onSubmit { run(true) }
-                if !search.query.isEmpty {
-                    Button("Clear", systemImage: "xmark.circle.fill") {
-                        search.query = ""
-                        focused = true
+            HStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search in Book", text: $search.query)
+                        .focused($focused)
+                        .submitLabel(.search)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit { run(true) }
+                    if !search.query.isEmpty {
+                        Button("Clear", systemImage: "xmark.circle.fill") {
+                            search.query = ""
+                            focused = true
+                        }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.secondary)
+                        .buttonStyle(.plain)
                     }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(.fill.tertiary, in: .rect(cornerRadius: 10))
+                ReaderPanelCloseButton(close: close)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(.fill.tertiary, in: .rect(cornerRadius: 10))
             .padding([.horizontal, .top], 14)
             status
                 .font(.footnote)

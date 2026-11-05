@@ -193,7 +193,7 @@ private struct ReaderScreen: View {
                             Group {
                                 switch panel {
                                 case .textAndTheme:
-                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil)
+                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil, close: closePanel)
                                 case .contents:
                                     contentsPanel
                                 case .search:
@@ -440,21 +440,26 @@ private struct ReaderScreen: View {
     /// on the card (Adam, 2026-11-03).
     private func panelButton(_ selected: ReaderPanel, title: LocalizedStringResource, systemImage: String, lit: Bool = false) -> some View {
         Button(String(localized: title), systemImage: systemImage) {
-            if panel != selected {
-                panelButtonFrame = Self.columnButtonFrame(titled: String(localized: title))
+            guard panel != selected else {
+                closePanel()
+                return
             }
+            panelButtonFrame = Self.columnButtonFrame(titled: String(localized: title))
             withAnimation(ReaderPanel.animation) {
-                if panel == selected {
-                    panel = nil
-                    controls.panelClosed()
-                } else {
-                    if panel == nil { controls.panelOpened() }
-                    panel = selected
-                }
+                if panel == nil { controls.panelOpened() }
+                panel = selected
             }
         }
         .tint(panel == selected || lit ? .accentColor : nil)
         .accessibilityAddTraits(panel == selected ? .isSelected : [])
+    }
+
+    /// A panel's ✕, or its button again: back to the controls as they were.
+    private func closePanel() {
+        withAnimation(ReaderPanel.animation) {
+            panel = nil
+            controls.panelClosed()
+        }
     }
 
     private var contentsPanel: some View {
@@ -471,7 +476,8 @@ private struct ReaderScreen: View {
                 model.jump(to: bookmark)
                 backToReading()
             },
-            remove: { model.bookmarks.remove($0) }
+            remove: { model.bookmarks.remove($0) },
+            close: closePanel
         )
     }
 
@@ -483,7 +489,8 @@ private struct ReaderScreen: View {
             choose: { index in
                 model.showMatch(index)
                 backToReading()
-            }
+            },
+            close: closePanel
         )
     }
 
