@@ -34,7 +34,7 @@ struct ReaderPanelFrame<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    static var inset: Double { 12 }
+    static var inset: Double { ReaderLayout.edgeInset }
 
     var body: some View {
         let safe = geometry.safeArea

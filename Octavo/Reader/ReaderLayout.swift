@@ -306,26 +306,31 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
         }
     }
 
-    /// Where the progress bar goes in a reader of `geometry` (Adam,
-    /// 2026-11-03): left to right, the stretches it covers, each edge on
-    /// the text's edge, so it follows the margins setting. One stretch under
-    /// the page or the spread; in book mode one under each page, so nothing
-    /// sits on the hinge (decision 9). Until foliate's columns are known,
-    /// the safe area less 12 pt each side.
+    /// How far the bar and a panel keep from the safe area's sides and the
+    /// fold.
+    static let edgeInset = 12.0
+
+    /// Where the progress bar goes in a reader of `geometry`: left to right,
+    /// the stretches it covers, as wide as a panel whatever the margins (Adam,
+    /// 2026-11-04). A panel can't follow the margins: it would resize under
+    /// the finger choosing them. One stretch under the page or the spread; in
+    /// book mode one under each page, so nothing sits on the hinge (decision
+    /// 9). A spread's left edge mirrors the side column, as its text does.
     func barSpans(in geometry: ReaderGeometry, bookMode: Bool) -> [ClosedRange<Double>] {
-        let width = Double(geometry.size.width)
-        guard let columns = textColumns(inReaderWidth: width), let first = columns.first, let last = columns.last else {
-            let left = geometry.safeArea.left + 12
-            return [left...max(left, width - geometry.safeArea.right - 12)]
+        let safe = geometry.safeArea
+        let spreadFold = columns == 2 ? fold : nil
+        let left = (spreadFold == nil ? safe.left : max(safe.left, safe.right)) + Self.edgeInset
+        let right = Double(geometry.size.width) - safe.right - Self.edgeInset
+        if bookMode, let spreadFold {
+            return [left...(spreadFold.lowerBound - Self.edgeInset), (spreadFold.upperBound + Self.edgeInset)...right]
         }
-        if bookMode, columns.count == 2 { return columns }
-        return [first.lowerBound...last.upperBound]
+        return [left...max(left, right)]
     }
 
     /// The bar's bottom edge: just above the home indicator, so nothing runs
     /// under it, and 12 pt up from a screen without one.
     static func barBottom(in geometry: ReaderGeometry) -> Double {
-        Double(geometry.size.height) - max(geometry.safeArea.bottom, 12)
+        Double(geometry.size.height) - max(geometry.safeArea.bottom, edgeInset)
     }
 
     /// Arguments for `window.octavo.setLayout`.

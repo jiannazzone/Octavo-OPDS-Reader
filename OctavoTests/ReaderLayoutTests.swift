@@ -304,39 +304,34 @@ struct ReaderLayoutTests {
         #expect(Self.near(columns[1].upperBound, 867, within: 0.01))
     }
 
-    // MARK: The progress bar (Adam, 2026-11-03)
+    // MARK: The progress bar (Adam, 2026-11-04: as wide as a panel)
 
     @Test(arguments: ReaderMargins.allCases)
-    func barLinesUpWithTheFoldedText(margins: ReaderMargins) throws {
+    func barIsAPanelsWidthFolded(margins: ReaderMargins) {
         let layout = ReaderLayout(posture: .closed, geometry: Self.foldedScreen, margins: margins)
-        let text = try #require(layout.textColumns(inReaderWidth: 466)?.first)
-        #expect(layout.barSpans(in: Self.foldedScreen, bookMode: false) == [text])
+        #expect(layout.barSpans(in: Self.foldedScreen, bookMode: false) == [12...370])
         // Just above the home indicator.
         #expect(ReaderLayout.barBottom(in: Self.foldedScreen) == 644)
     }
 
+    // Its right edge is a panel's; its left edge mirrors it across the screen.
     @Test(arguments: ReaderMargins.allCases)
-    func barSpansTheSpreadFlat(margins: ReaderMargins) throws {
+    func barSpansTheSpreadFlat(margins: ReaderMargins) {
         let layout = ReaderLayout(posture: .open, geometry: Self.unfoldedScreen(), margins: margins)
-        let columns = try #require(layout.textColumns(inReaderWidth: 951))
-        #expect(layout.barSpans(in: Self.unfoldedScreen(), bookMode: false) == [columns[0].lowerBound...columns[1].upperBound])
+        #expect(layout.barSpans(in: Self.unfoldedScreen(), bookMode: false) == [96...855])
         #expect(ReaderLayout.barBottom(in: Self.unfoldedScreen()) == 635)
     }
 
-    // Half open, a piece under each page and nothing on the hinge.
+    // Half open, a piece under each page and nothing on the hinge. The right
+    // one is exactly a panel's width.
     @Test(arguments: ReaderMargins.allCases)
-    func barSplitsUnderEachPageInBookMode(margins: ReaderMargins) throws {
+    func barSplitsUnderEachPageInBookMode(margins: ReaderMargins) {
         let geometry = Self.unfoldedScreen(active: true)
         let layout = ReaderLayout(posture: .halfOpen, geometry: geometry, margins: margins)
-        let spans = layout.barSpans(in: geometry, bookMode: true)
-        #expect(spans == layout.textColumns(inReaderWidth: 951))
-        #expect(spans.count == 2)
-        #expect(spans[0].upperBound <= 455.5)
-        #expect(spans[1].lowerBound >= 495.5)
+        #expect(layout.barSpans(in: geometry, bookMode: true) == [96...443.5, 507.5...855])
     }
 
-    // Before foliate's columns are known, the safe area less 12 pt.
-    @Test func barKeepsToTheSafeAreaWhileFoliateDecides() {
+    @Test func barKeepsToTheSafeAreaWithoutAHinge() {
         let geometry = ReaderGeometry(size: CGSize(width: 1024, height: 768), safeArea: ReaderInsets(top: 0, left: 0, bottom: 0, right: 84))
         let layout = ReaderLayout(posture: .noHinge, geometry: geometry)
         #expect(layout.barSpans(in: geometry, bookMode: false) == [12...928])
