@@ -8,7 +8,10 @@ enum ReaderPanel: Equatable {
     case search
 
     /// Opening and closing: a little spring as it grows out of its button.
-    static let animation = Animation.spring(duration: 0.35, bounce: 0.15)
+    /// With Reduce Motion, no bounce.
+    static var animation: Animation {
+        UIAccessibility.isReduceMotionEnabled ? .easeOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.15)
+    }
 }
 
 /// Where a panel sits (decision 13): over the right page of a spread, the

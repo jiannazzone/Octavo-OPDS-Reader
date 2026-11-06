@@ -17,7 +17,7 @@ final class Probe: XCTestCase {
             }
             try? FileManager.default.removeItem(atPath: cmdPath)
             let parts = raw.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ", maxSplits: 1).map(String.init)
-            let verb = parts[0], arg = parts.count > 1 ? parts[1] : ""
+            let verb = parts.first ?? "", arg = parts.count > 1 ? parts[1] : ""
             var out = ""
             switch verb {
             case "exit":
@@ -37,8 +37,10 @@ final class Probe: XCTestCase {
                 }
                 out = issues.joined(separator: "\n") + "\n(\(issues.count) issues)"
             case "tap":
-                let element = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", arg)).firstMatch
-                if element.waitForExistence(timeout: 3) {
+                // Not one hidden or covered: the tree lists those too.
+                let matches = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", arg))
+                if matches.firstMatch.waitForExistence(timeout: 3),
+                   let element = matches.allElementsBoundByIndex.first(where: \.isHittable) {
                     element.tap()
                     out = "tapped \(arg)"
                 } else {

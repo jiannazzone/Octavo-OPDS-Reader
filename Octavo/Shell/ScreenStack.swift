@@ -144,7 +144,9 @@ struct ScreenStack<Root: View>: View {
         }
         // Unfolded, Settings' page shows its list too, so the list's own
         // screen beneath stays out of sight: a swipe back uncovers the tab.
-        .opacity(isListUnderItsPage(id, in: path) ? 0 : 1)
+        // With Reduce Motion it waits for a swipe, or the tab would show
+        // through as the page fades in.
+        .opacity(isListUnderItsPage(id, in: path) && (!reduceMotion || swipe != nil) ? 0 : 1)
     }
 
     private func isListUnderItsPage(_ id: ScreenID, in path: ShellPath) -> Bool {
@@ -173,7 +175,11 @@ struct ScreenStack<Root: View>: View {
                         let width = max((measured ?? .onePage).width, 1)
                         let goesBack = value.translation.width > width * Self.swipeCommit
                             || value.predictedEndTranslation.width > width * 0.6
-                        if goesBack {
+                        if goesBack, reduceMotion {
+                            // Fades from where the finger left it.
+                            back()
+                            swipe = nil
+                        } else if goesBack {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 swipe = travel
                             } completion: {

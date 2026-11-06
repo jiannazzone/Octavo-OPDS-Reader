@@ -31,12 +31,16 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 | **Sign in:** BookOrbit, a wrong password | ✓ unfolded | ✓ unfolded | | | | | |
 | **Sign in:** an OPDS catalog (COPS, no password), Trust this server | ✓ unfolded | ✓ unfolded | | | | | |
 | **Find a book:** Home, Library, Search's first screen | ✓ | ✓ | | | | | |
-| **A book's screen:** details, download, the remove prompt | ✓ | ✓ | | | | | |
-| **Read:** open, turn, fold, unfold, close | ✓ | ✓ | | | | | |
-| **In the book:** controls, Contents, Text and Theme, bookmark, search | ✓ | ✓ | | | | | |
+| **A book's screen:** details | ✓ | ✓ | | | | | |
+| **A book's screen:** download, the remove prompt | ✓ unfolded | ✓ unfolded | | | | | |
+| **Read:** open, fold, unfold, close | ✓ | ✓ | | | | | |
+| **Read:** turn a page | | | | | | | |
+| **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | | | | | |
+| **In the book:** opening search | ✓ unfolded | ✓ unfolded | | | | | |
 | **In the book:** footnotes, going back, half open | | | | | | | |
 | **Other ways in:** Import from Files, Open in Octavo | | | | | | | |
-| **Settings:** the list, a server's page, Books on iPhone | ✓ | ✓ | | | | | |
+| **Settings:** the list | ✓ | ✓ | | | | | |
+| **Settings:** a server's page, Books on iPhone | ✓ unfolded | ✓ unfolded | | | | | |
 
 ## Reduced Motion
 
@@ -46,7 +50,7 @@ What each motion does with the setting on:
 |---|---|---|
 | A pushed screen, Back | Fades, 0.2 s | `ScreenStack` |
 | Screens re-laying out on a fold | At once | `ScreenStack` |
-| A swipe back | Still follows the finger | `ScreenStack` |
+| A swipe back | Follows the finger, then fades when let go | `ScreenStack` |
 | Page turn, Automatic | Fades, 0.3 s | `ReaderPageTurn` |
 | Page turn, picked by hand | Stays. It's the reader's own choice (Adam, `docs/design/direction.md`), which Apple's finer in-app setting allows | `ReaderPageTurn` |
 | Opening and closing a book | Fades, 0.3 s | `ReaderCoverMotion` |
@@ -57,7 +61,7 @@ What each motion does with the setting on:
 | The download check | Fades | `DownloadBadge` |
 | The download ring's progress | Stays, since it's the progress | `DownloadBadge` |
 
-Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). The ribbon, the bars and the download check are from the code.
+Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). The ribbon, the bars, the download check, a swipe's release and the panels' animation are from the code. Automatic's fade was read from the debug remote's turn state, not watched.
 
 ## Dark Interface
 
@@ -105,7 +109,7 @@ Where it misleads:
 ## Not checked
 
 - A real Duo, a plain iPhone or an iPad.
-- Half open with either feature on, and the other blank rows above: footnotes, going back, Import from Files, Open in Octavo.
+- Half open with either feature on, and the other blank rows above: turning a page, footnotes, going back, Import from Files, Open in Octavo.
 - With Reduce Transparency on, or Bold Text.
 - CBZ and fixed-layout books.
 - The tour's later cards. Apple's first-launch test is complete or skip, and Skip was checked.
