@@ -145,3 +145,7 @@ Should Margins in Customize be a slider with detents instead of a picker? Today 
 ## A mark for finished books on covers (Adam, 2026-11-06)
 
 Finished books should have some kind of indicator on the cover, perhaps a checkmark. Downloaded covers already have a check (`LibraryComponents`), so the two would need telling apart. Not designed yet.
+
+## Home feels empty unfolded (Adam, 2026-11-06)
+
+Unfolded, Home feels pretty empty and will need a rework. As seen on his Duo with three books under Also reading: more than half of the right page is blank, and so is the space beside the cover on the left page. Not designed yet.
