@@ -161,7 +161,7 @@ private struct ReaderScreen: View {
                     if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
                         ReaderRibbon()
                             .offset(x: geometry.size.width - geometry.safeArea.right - 30)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     }
                 }
                 .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
@@ -185,7 +185,7 @@ private struct ReaderScreen: View {
                         .frame(width: max(0, right - left))
                         .padding(.leading, left)
                         .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4 + (stacksOverBackBar ? ReaderBackBar.height + 6 : 0))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     }
                 }
                 .animation(.easeOut(duration: 0.2), value: footerBar)

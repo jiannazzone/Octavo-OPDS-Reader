@@ -16,7 +16,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Apple's tab bar, everything else ours.** The system tab bar stays in the side column; Octavo draws the screens, how they move, and the Back and action buttons at the top of the side column.
 - **Three tabs: Home, Library, Search.** Settings is a button at the top of the side column on a tab's top screen, not a tab.
 - **One screen, two pages.** Every screen is a spread: content flows from the left page onto the right, and nothing sits on the hinge. Folded, you see one page. Folded or unfolded it is the same stack of screens; a fold only lays the top screen out again.
-- **Going deeper replaces the whole spread** (a pushed screen slides in). Back, or a swipe from the left edge, returns.
+- **Going deeper replaces the whole spread** (a pushed screen slides in; with Reduce Motion it fades). Back, or a swipe from the left edge, returns.
 
 ### The Duo as the book
 - **Unfolding on a book's screen opens the book**, if it's on the iPhone. If it isn't, the screen stays as Cover | Details and nothing downloads until you tap Download or Open.

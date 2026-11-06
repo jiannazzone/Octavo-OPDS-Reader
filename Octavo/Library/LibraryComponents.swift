@@ -90,6 +90,7 @@ struct DownloadBadge: View {
     let book: SourcedBook
     var size: CGFloat = 22
     @Environment(ShellModel.self) private var shell
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         switch shell.opener.status(of: book) {
@@ -100,7 +101,7 @@ struct DownloadBadge: View {
                 .frame(width: size, height: size)
                 .background(.black.opacity(0.6), in: .circle)
                 .padding(size / 4)
-                .transition(.scale.combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
         case .downloading(let fraction, _):
             Circle()
                 .trim(from: 0, to: max(fraction, 0.02))

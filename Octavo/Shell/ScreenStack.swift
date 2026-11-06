@@ -6,8 +6,10 @@ import SwiftUI
 ///
 /// - A pushed screen slides in from the trailing edge over the one before,
 ///   which stays as it was; Back, or a swipe from the leading edge, slides
-///   it out. A `List` at the screen's edge has to state its leading margin,
-///   or its rows shrink at the end of the slide (`SettingsPageList`).
+///   it out. With Reduce Motion it fades instead, though a swipe still
+///   follows the finger. A `List` at the screen's edge has to state its
+///   leading margin, or its rows shrink at the end of the slide
+///   (`SettingsPageList`).
 /// - Back (or, at the root, Settings) sits in the side column: the
 ///   `NavigationStack` here never pushes and exists only so the system puts
 ///   those buttons there, as it does the reader's.
@@ -23,6 +25,7 @@ struct ScreenStack<Root: View>: View {
     var skip: (() -> Void)?
     @ViewBuilder let root: () -> Root
     @Environment(ShellModel.self) private var shell
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// `nil` until the stack has been laid out once.
     @State private var measured: Spread?
     /// How far a screen slides: past the side column, which it runs under,
@@ -34,6 +37,7 @@ struct ScreenStack<Root: View>: View {
     /// Quick out of the gate and settled at 0.32 s. Not a spring: across the
     /// spread's full width its tail crept for half a second more.
     private static var slide: Animation { .timingCurve(0.25, 0.8, 0.25, 1, duration: 0.32) }
+    private static var fade: Animation { .easeOut(duration: 0.2) }
 
     /// Beyond the screen's edge, so the slide is still quick when a screen
     /// leaves sight.
@@ -59,7 +63,7 @@ struct ScreenStack<Root: View>: View {
                         .offset(x: isTop ? swipe ?? 0 : 0)
                         .allowsHitTesting(isTop)
                         .accessibilityHidden(!isTop)
-                        .transition(.offset(x: travel))
+                        .transition(reduceMotion ? .opacity : .offset(x: travel))
                 }
                 if !path.routes.isEmpty {
                     edge
@@ -68,8 +72,8 @@ struct ScreenStack<Root: View>: View {
             }
             // A replaced path (a launch argument, closing the reader onto its
             // book) changes at once.
-            .animation(path.lastMove == .replace ? nil : Self.slide, value: path)
-            .animation(.easeInOut(duration: 0.3), value: measured)
+            .animation(path.lastMove == .replace ? nil : reduceMotion ? Self.fade : Self.slide, value: path)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: measured)
             .onGeometryChange(for: Spread.self) { Spread($0) } action: { new in
                 spreadChanged(to: new)
             }

@@ -448,7 +448,7 @@ final class ReaderModel {
             // The fold may have been laid out already.
             guard id > self.lastClosedCover else { return }
             self.lastFold?.snapshot = FoldReport.milliseconds(since: startedAt)
-            self.foldCover = ReaderFoldCover(id: id, image: image, size: size)
+            self.foldCover = ReaderFoldCover(id: id, image: image, size: size, paper: Color(hex: self.appearance.background))
         }
     }
 

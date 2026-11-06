@@ -134,6 +134,12 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
   - A fold does one re-layout (#5; it was 10–13 relocations): the page holds its size under a snapshot of itself until the page has resized and the inputs have gone quiet (`FoldBatch`), then `bridge.js` renders once and the snapshot fades out in 0.3 s. The position holds because foliate keeps its anchor through the render, which a foliate update could break (`PINNED.md`, step 4).
   - **The page runs edge to edge** (decision 8, #17; `docs/notes/reader-page.md`): `ReaderView` lays the `WebView` out under the side column, camera and home indicator, and `ReaderLayout` insets the `foliate-view` by the safe area (measured outside the reader's own toolbar, so the controls never re-paginate) and the margin setting. Folded the text runs 27–355 pt, unfolded 139–448 | 503–812 pt, as in frames 07–09.
 
+## Accessibility (#73, `docs/notes/accessibility.md`)
+
+- The App Store's Accessibility Nutrition Labels are answered per device, and a label needs every common task to work with that feature. The note lists the common tasks and what's been checked on what. Claim only what's been checked.
+- With Reduce Motion, anything that slides, scales, flips or bounces fades or stops: `@Environment(\.accessibilityReduceMotion)` in views, `UIAccessibility.isReduceMotionEnabled` in models and static animations. A drag still follows the finger, and a Page Turn picked by hand stays (Adam).
+- `docs/notes/accessibility/tools/probe.sh` reads the running app's accessibility tree and runs Apple's audit. It isn't in CI.
+
 ## Licensing rules (important)
 
 - This project is **MPL-2.0**.
