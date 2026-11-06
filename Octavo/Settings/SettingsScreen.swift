@@ -145,18 +145,8 @@ struct SettingsList: View {
             }
             Section {
                 LabeledContent("Version", value: AboutOctavo.version)
-                Link(destination: AboutOctavo.sourceCode) {
-                    HStack {
-                        Text("Source code")
-                        Spacer(minLength: 8)
-                        Image(systemName: "arrow.up.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .contentShape(.rect)
-                }
-                .foregroundStyle(.primary)
-                .accessibilityHint("Opens GitHub in Safari")
+                link("Source code", to: AboutOctavo.sourceCode)
+                link("Privacy Policy", to: AboutOctavo.privacyPolicy)
                 row(.licences) { Text("Licences") }
             } header: {
                 Text("About")
@@ -170,6 +160,21 @@ struct SettingsList: View {
             ReaderSettingsSection()
             #endif
         }
+    }
+
+    private func link(_ title: LocalizedStringKey, to destination: URL) -> some View {
+        Link(destination: destination) {
+            HStack {
+                Text(title)
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.up.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(.rect)
+        }
+        .foregroundStyle(.primary)
+        .accessibilityHint("Opens GitHub in Safari")
     }
 
     private func row(_ page: SettingsPage, @ViewBuilder label: () -> some View) -> some View {
@@ -194,6 +199,8 @@ struct SettingsList: View {
 /// What About shows.
 nonisolated enum AboutOctavo {
     static let sourceCode = URL(string: "https://github.com/jiannazzone/Octavo-OPDS-Reader")!
+    /// Apple requires a link in the app as well as in the listing (guideline 5.1.1).
+    static let privacyPolicy = URL(string: "https://github.com/jiannazzone/Octavo-OPDS-Reader/blob/main/docs/PRIVACY.md")!
 
     /// "0.1 (1)": the version and the build.
     static var version: String {
