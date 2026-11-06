@@ -7,7 +7,7 @@ import Testing
 /// shown, and the files refused before that (step 15,
 /// `docs/notes/formats-check.md`).
 @MainActor
-@Suite(.firstPageWait, .temporaryFiles)
+@Suite(.temporaryFiles)
 struct BookInspectorTests {
     private static let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
 
