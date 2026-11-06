@@ -49,7 +49,7 @@ Run `asc diff`. If App Store Connect has text the repo doesn't, someone edited i
 1. **Review changes.** List the pull requests merged since the last tag (`git log <tag>..origin/main --merges`; before the first tag, everything). Show which ones a reader would notice, and let Adam confirm.
 2. **Bump.** Propose the version and the next build number. A new build number is needed for every upload. Edit `Config/Versions.xcconfig` after his OK.
 3. **Changelog.** Draft the entry in plain wording, with no jargon or pull request numbers, and show it to him. Add it to the top of `changelog.json`, then run `asc check`. Apple doesn't take What's New on the first version, so the client leaves it out until a version is live.
-4. **Commit** the bump and changelog on a branch. Ask before pushing. `docs/` alone skips the tests, but `Config/` runs them.
+4. **Commit** the bump and changelog on a branch. Ask before pushing. `docs/` alone needs no tests, but `Config/` does, so run `Scripts/local-tests.sh` first.
 5. **Publish the text.** `asc status`. If the new version isn't in App Store Connect, stop and ask Adam to add it. Otherwise follow "Syncing the listing only".
 6. **Hand over.** Give Adam the steps: Xcode > Product > Archive, then Distribute App, attach the build to the version, check any new prompts, and submit.
 7. **Tag.** Once Apple approves it, and with his OK to push, tag the merge commit `v<version>`.

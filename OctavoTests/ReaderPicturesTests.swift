@@ -128,8 +128,11 @@ struct ReaderPicturesTests {
     }()
 
     /// The reader's page with `book` open at `page`'s size. The page has no
-    /// window, so its style sheet sets the view's size.
-    private func open(_ book: Data = chapterBook, at page: Page) async throws -> WebPage {
+    /// window, so its style sheet sets the view's size. With
+    /// `renderingBeforeLoad` foliate renders each section just before the bridge
+    /// hears of it, as its ResizeObserver may. Its `load` event stays in a closed
+    /// shadow root, so nothing outside can listen for it.
+    private func open(_ book: Data = chapterBook, at page: Page, renderingBeforeLoad: Bool = false) async throws -> WebPage {
         try book.write(to: Self.bookFile)
         let web = Self.sharedPage
         if web.url == nil {
@@ -147,6 +150,15 @@ struct ReaderPicturesTests {
             document.head.append(style)
             """)
         try await size(web, to: page)
+        if renderingBeforeLoad {
+            _ = try await web.callJavaScript("""
+                const dispatch = EventTarget.prototype.dispatchEvent
+                EventTarget.prototype.dispatchEvent = function (event) {
+                    if (event.type === 'load' && event.detail?.doc) this.render?.()
+                    return dispatch.call(this, event)
+                }
+                """)
+        }
         _ = try await web.callJavaScript("return await window.octavo.open(options)", arguments: ["options": [
             "url": ReaderSchemeHandler.bookURL(fileName: Self.bookFile.lastPathComponent).absoluteString,
             "name": Self.bookFile.lastPathComponent,
@@ -238,9 +250,13 @@ struct ReaderPicturesTests {
         #expect(widths["table"] as? Double == 600)
     }
 
-    // Unfolding or turning the device lays the same document out again.
-    @Test func picturesStillFitWhenThePageChangesSize() async throws {
-        let web = try await open(at: .folded)
+    // Unfolding or turning the device lays the same document out again. Whether
+    // foliate's ResizeObserver rendered the section before it loaded or not, which
+    // is up to chance in the real thing: a render before `load` would pin the table
+    // to that layout (patch 0004), about once in 100 opens.
+    @Test(arguments: [false, true])
+    func picturesStillFitWhenThePageChangesSize(renderingBeforeLoad: Bool) async throws {
+        let web = try await open(at: .folded, renderingBeforeLoad: renderingBeforeLoad)
         let limit = try await measure(web).maxWidths["own-limit"]
         for page in [Page.unfolded, .sideways, .unfolded] {
             try await size(web, to: page)
@@ -255,7 +271,8 @@ struct ReaderPicturesTests {
             #expect(measured.tooWide.isEmpty, "\(measured.tooWide) in a column of \(measured.column), \(page.name)")
             #expect(measured.maxWidths["own-limit"] == limit)
             // A table with no width of its own isn't pinned to its first layout.
-            #expect(abs(try #require(measured.boxes["auto-table-box"]).width - measured.column) < 1)
+            let table = try #require(measured.boxes["auto-table-box"])
+            #expect(abs(table.width - measured.column) < 1, "\(table.width) in a column of \(measured.column), \(page.name)")
         }
     }
 }

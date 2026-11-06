@@ -34,7 +34,7 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `reader-release.md` (+ `reader-release/`) | 2026-11-04 | A closed reader goes away: the frame wait that kept every closed book's model, page and web process alive, in the app and in tests, the fix, every way out measured before and after, why the place holds |
 | `reader-background.md` | 2026-11-04 | Leaving the app doesn't move the place: iOS's snapshot layouts, why a fold made the wrong place stick, holding size and hinge changes until the app is back, measured with and without the fix |
 | `accessibility.md` (+ `accessibility/`) | #73 | The App Store's Accessibility Nutrition Labels: what Apple asks, the common tasks and what's been checked on what, what each motion does with Reduce Motion, how dark was measured, the audit probe and where it misleads |
-| `ci.md` | #19 | CI on pull requests: the jobs, why GitHub's `xcode-27` runner, which pull requests skip tests, the build cache, timings |
+| `ci.md` | #19 | CI and the local tests: what runs where, why the app's tests left GitHub, which pull requests skip tests, timings, two flaky tests |
 | `xhtml-first-frame.md` | 2026-11-04 | Why a new WebKit process's first XHTML frame takes over a second (QuickLook's `dlopen`), book opens with and without it, warm-ups, why it doesn't matter on a real Duo (25 ms), rendering a book before the tap (tried, dropped), closed readers staying alive |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

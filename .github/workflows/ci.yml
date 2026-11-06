@@ -1,5 +1,6 @@
-# Tests on every pull request (#19; docs/notes/ci.md).
-# "CI passed" is the one check for the "Protect main" ruleset to require, because
+# `swift test` on every pull request (#19; docs/notes/ci.md). The app's tests run on
+# the owner's Mac (Scripts/local-tests.sh), because pages stall on these runners.
+# "CI passed" is the one check here for the "Protect main" ruleset to require, because
 # a required check that never runs would block a docs-only pull request for good.
 name: CI
 
@@ -7,6 +8,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The App tests job, for code that shouldn't run on the owner's Mac:
+  # gh workflow run ci.yml --ref <branch>
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -52,11 +56,25 @@ jobs:
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
-  # One job, so a run asks for one runner.
   tests:
     name: Tests
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    runs-on: xcode-27
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: OctavoKit tests
+        working-directory: Packages/OctavoKit
+        run: swift test
+
+  app-tests:
+    name: App tests
+    if: github.event_name == 'workflow_dispatch'
     runs-on: xcode-27
     timeout-minutes: 35
     env:
@@ -66,39 +84,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # The quick one first, so a failure here stops the run early.
-      - name: OctavoKit tests
-        working-directory: Packages/OctavoKit
-        run: swift test
-      # The key starts again each month, so the cache can't grow without limit.
-      - id: cache
-        run: |
-          xcode=$(xcodebuild -version | awk 'END { print $3 }')
-          echo "prefix=compilation-cache-$xcode-$(date -u +%Y-%m)-" >> "$GITHUB_OUTPUT"
-          echo "DERIVED_DATA=$RUNNER_TEMP/DerivedData" >> "$GITHUB_ENV"
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.DERIVED_DATA }}/CompilationCache.noindex
-          key: ${{ steps.cache.outputs.prefix }}${{ github.sha }}
-          restore-keys: ${{ steps.cache.outputs.prefix }}
       # Boots while the build runs, so the tests don't have to wait for it.
       - run: xcrun simctl boot "iPhone Duo"
       - name: Build
         run: |
           xcodebuild build-for-testing -project Octavo.xcodeproj -scheme Octavo \
-            -destination "$DESTINATION" -derivedDataPath "$DERIVED_DATA" \
-            COMPILATION_CACHE_ENABLE_CACHING=YES \
+            -destination "$DESTINATION" -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= PROVISIONING_PROFILE_SPECIFIER=
-      # Only main saves, so a pull request can't change what later builds reuse.
-      - if: github.event_name == 'push'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ env.DERIVED_DATA }}/CompilationCache.noindex
-          key: ${{ steps.cache.outputs.prefix }}${{ github.sha }}
       - name: App tests
         run: |
           xcodebuild test-without-building -project Octavo.xcodeproj -scheme Octavo \
-            -destination "$DESTINATION" -derivedDataPath "$DERIVED_DATA" \
+            -destination "$DESTINATION" -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -parallel-testing-enabled NO -collect-test-diagnostics never
 
   passed:
