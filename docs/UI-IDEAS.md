@@ -75,8 +75,8 @@ Half open, the bar's right-hand piece shows the chapter's progress: pages left i
 Decided on 2026-11-03: decisions 27 and 28 in `docs/design/direction.md` (folded slides, open flips over the spine, a Page Turn menu in Customize, and a cover that swings open). Still parked:
 
 - **Curl as a Page Turn choice**: the corner peels over, as in Apple Books. Adam was tempted by it for open and left it out for now. It would draw from the same snapshots as the flip (or UIKit's page curl).
-- **Opening and closing** (decision 28) may change once Adam has seen it on his Duo. One idea: where Back doesn't land on the book's screen, the cover could shrink into its spot on Home or in a list instead of the reader fading.
-- **Leafing through to your place** (Adam, 2026-11-04): opening a book that isn't on page 1, some pages flip over, as if you're leafing through to where you left off. Not looked into yet. To decide: what the flipping pages show, how many there are and how long they take, what happens folded (where a turn slides), and whether it plays on every opening, including unfolding on a cover, which opens at once today.
+- **Opening and closing** (decision 28): Adam kept the swing on 2026-11-06. Decided the same day from a browser mock: where Back doesn't land on the book's screen, the closing motion still plays and the cover shrinks into its spot on Home or in a list. If the spot isn't on screen, the reader fades. **Not built (Adam, 2026-11-06):** Back can't land there in a normal build. Every list opens the book's screen, and Open and unfolding both start from it, so the reader always closes onto that screen; only debug launch settings reach Home or a list. Worth building if a list ever opens books directly. The tour's Skip and Not now do land on Home, and close at once.
+- **Leafing through to your place** (Adam, 2026-11-04): opening a book that isn't on page 1, some pages flip over, as if you're leafing through to where you left off. Decided and built on 2026-11-06, from a browser mock (decision 28, `docs/notes/page-turns.md`): the leaves show faint lines and the last one carries your real page, since moving the reader to capture real earlier pages would add a wait and put your place at risk. There are more leaves the further in you are (2 near the start, 5 near the end), each flip taking 0.3 s and starting 0.07 s after the last, so 0.57–0.78 s in all. Folded, they swing away like the cover (0.15 s each). Half open plays like unfolded (assumed). It plays when opening from a book's screen past page 1 and when unfolding on a cover, which has no cover swing, so there it's the leaves alone. It doesn't play on page 1, when the reader fades in with no cover on screen, with Reduce Motion, with Page Turn on Fade or None, or on closing. Set the speed on a real Duo.
 
 ## An accent colour (Adam, 2026-11-03)
 
@@ -113,7 +113,7 @@ Pre-paginated books open now (`docs/notes/fixed-layout.md`). What they show that
 
 ## Closing the Duo while reading (Adam, 2026-11-04)
 
-Folding while reading closes the book back to its screen, the cover (`ShellModel.closeToItsScreen`; `docs/design/direction.md` already says it may become a setting). Adam: keep that as the default, and make it optional. Off, the book would stay open on the folded screen at your place. Not looked into yet. To decide: the setting's name and where it lives, and what the tour does, since it teaches closing the iPhone.
+Folding while reading closes the book back to its screen, the cover (`ShellModel.closeToItsScreen`; `docs/design/direction.md` already says it may become a setting). Adam: keep that as the default, and make it optional. Off, the book stays open on the folded screen at your place, and no leaves play. Decided and built 2026-11-06: **Close book when folded**, in Settings under Reading, on by default (decision 24). The tour ignores it, so a fold mid-tour still closes the book.
 
 ## KOReader sync for OPDS servers (Adam, 2026-11-04)
 
@@ -136,3 +136,18 @@ The Font menu in Text and Theme should show each name in its own font. Tried on 
 The screen dimmed while reading, because nothing in the app held off Auto-Lock.
 
 Decided 2026-11-06: Keep screen on in Settings, under Reading, for Off or 5, 10 (the default), 15 or 30 minutes after a page turn, with no Always (decision 24). Built the same day (`docs/notes/settings.md`).
+The screen dims while reading, because nothing in the app holds off Auto-Lock (`isIdleTimerDisabled` isn't used anywhere). Tried on the simulator on 2026-11-06: about 10 lines in `ReaderView` keep the screen on until 10 minutes after a page turn, then Auto-Lock takes over. The flag read true with a book open; the 10 minutes running out and a real Duo weren't checked. To decide: the limit, and whether it needs a setting.
+
+## Margins as a slider? (Adam, 2026-11-06)
+
+Should Margins in Customize be a slider with detents instead of a picker? Today it's a segmented picker with Narrow, Medium and Wide (`ReaderMargins`). Not looked into yet.
+
+## A mark for finished books on covers (Adam, 2026-11-06)
+
+Finished books should have an indicator on the cover. Downloaded covers already have a check (`DownloadBadge`, `docs/design/direction.md`), so the two would conflict. Adam's proposal: finished takes the check, and downloaded becomes `arrow.down.to.line` or `arrow.down.to.line.compact`.
+
+Measured at a 12 pt bold font: the check is 14 × 13, the compact arrow 13 × 13 and the other 13 × 15, so the compact one is the likelier fit in the 22 pt disc. To work out: a book can be both, so a cover may need room for two marks, and an arrow could read as "tap to download". Not designed or tried on a cover yet.
+
+## Home feels empty unfolded (Adam, 2026-11-06)
+
+Unfolded, Home feels pretty empty and will need a rework. As seen on his Duo with three books under Also reading: more than half of the right page is blank, and so is the space beside the cover on the left page. Not designed yet.

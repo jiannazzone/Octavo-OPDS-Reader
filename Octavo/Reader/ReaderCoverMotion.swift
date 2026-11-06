@@ -17,9 +17,14 @@ import UIKit
 /// which WebKit traps on; `AppShell`), so the motion draws your pages from
 /// pictures taken as Back was tapped, over the book's screen.
 ///
+/// Past page 1 leaves go over too (`ReaderLeaves`), with your page on the last
+/// one instead of on the cover. Unfolding on a cover has no cover to swing, so
+/// it's the leaves alone: there from the moment the inner display is, the last
+/// waiting for your page if it isn't ready.
+///
 /// Drawn by `ReaderCoverMotionView` over the whole window, above the
-/// reader, which opens underneath it at once (`AppShell`). Unfolding on a
-/// cover and folding while reading keep their own motion, the fold.
+/// reader, which opens underneath it at once (`AppShell`). Folding while
+/// reading keeps its own motion, the fold.
 @Observable
 final class ReaderCoverMotion {
     /// Seconds: the cover moving onto the right page, its swing, and Reduce
@@ -36,7 +41,7 @@ final class ReaderCoverMotion {
     let author: String
     /// Where the book's screen shows the cover, in the window's coordinates.
     let coverFrame: CGRect
-    let windowSize: CGSize
+    private(set) var windowSize: CGSize
     /// The book's screen as it was when the book opened, under the motion
     /// until the cover leaves it. Closing, the screen itself is underneath.
     let bookScreen: ReaderSnapshot?
@@ -65,18 +70,39 @@ final class ReaderCoverMotion {
     var showsBookScreen = true
     /// Reduce Motion's fade, from the book's screen to the page.
     var fade = 0.0
+    /// Unfolding on a cover: no cover, just the leaves.
+    let leavesOnly: Bool
+    /// The leaves going over on the way to your place, if any.
+    private(set) var leaves: ReaderLeaves?
+    /// Their lines, in a few versions.
+    private(set) var leafLines: [Path] = []
+    /// Seconds since the cover began to swing or, without one, the leaves began.
+    private(set) var clock = 0.0
+    /// The last leaf has waited a while for your page.
+    private(set) var showsWaiting = false
 
     /// Called once the motion is over, to take it away.
     @ObservationIgnored var onFinished: (() -> Void)?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var slid = false
     @ObservationIgnored private var swinging = false
+    @ObservationIgnored private let pageTurn: ReaderPageTurn
+    @ObservationIgnored private let leafStyle: ReaderLeafStyle
+    /// Where the hinge's middle is, unfolding, until the reader says.
+    @ObservationIgnored private var hingeMiddle: Double?
+    /// Where the system's areas are, unfolding, for where the lines go.
+    @ObservationIgnored var safeArea = ReaderInsets.zero
+    /// While the leaves play, the display is asked for up to 120 Hz, as for a
+    /// page turn (`ReaderModel.followTurnFrames`).
+    @ObservationIgnored private var frames: UIUpdateLink?
+    @ObservationIgnored private var lastFrame: Double?
 
     /// Opening, from a picture of the book's screen; or closing, from
     /// pictures of your pages.
     init(cover: UIImage?, title: String, author: String, coverFrame: CGRect, windowSize: CGSize,
          bookScreen: ReaderSnapshot?, closing pages: ReaderCoverPages? = nil,
-         spread: Bool, reduceMotion: Bool, paper: Color) {
+         spread: Bool, reduceMotion: Bool, paper: Color,
+         pageTurn: ReaderPageTurn = .standard, leafStyle: ReaderLeafStyle = ReaderLeafStyle()) {
         self.cover = cover
         self.title = title
         self.author = author
@@ -86,6 +112,9 @@ final class ReaderCoverMotion {
         self.spread = spread
         self.reduceMotion = reduceMotion
         self.paper = pages?.paper ?? paper
+        self.pageTurn = pageTurn
+        self.leafStyle = leafStyle
+        leavesOnly = false
         closing = pages != nil
         guard let pages else { return }
         // As the reader left it: your pages, the cover swung over the spine.
@@ -95,9 +124,35 @@ final class ReaderCoverMotion {
         showsBookScreen = false
     }
 
-    /// The middle of the reader's spread, once known; the window's middle
-    /// (the hinge) till then.
-    var spine: Double { pages?.spine ?? Double(windowSize.width) / 2 }
+    /// Unfolding on a cover, `progress` through the book as its screen said.
+    init(unfoldingAt progress: Double, windowSize: CGSize, paper: Color, leafStyle: ReaderLeafStyle) {
+        cover = nil
+        title = ""
+        author = ""
+        coverFrame = .zero
+        self.windowSize = windowSize
+        bookScreen = nil
+        closing = false
+        spread = true
+        reduceMotion = false
+        self.paper = paper
+        pageTurn = .standard
+        self.leafStyle = leafStyle
+        leavesOnly = true
+        leaves = ReaderLeaves(count: ReaderLeaves.count(progress: progress), spread: true, followsCover: false)
+        showsBookScreen = false
+    }
+
+    /// The middle of the reader's spread, once known; the hinge or the
+    /// window's middle till then.
+    var spine: Double { pages?.spine ?? hingeMiddle ?? Double(windowSize.width) / 2 }
+
+    /// A leaf where it starts: the right half of a spread, or the whole page.
+    var leafFrame: CGRect {
+        spread
+            ? CGRect(x: spine, y: 0, width: Double(windowSize.width) - spine, height: Double(windowSize.height))
+            : CGRect(origin: .zero, size: windowSize)
+    }
 
     /// The cover over the right page: its own frame mirrored about the
     /// spine, so the swing lands it back where the book's screen had it.
@@ -108,7 +163,7 @@ final class ReaderCoverMotion {
     #if DEBUG
     /// For `ReaderRemote`'s `coverMotion`.
     var debugState: String {
-        "slide \(slide) swing \(swing) fade \(fade) bookScreen \(showsBookScreen) slid \(slid) swinging \(swinging) pages \(pages != nil) spine \(spine) cover \(coverFrame) window \(windowSize) spread \(spread)"
+        "slide \(slide) swing \(swing) fade \(fade) bookScreen \(showsBookScreen) slid \(slid) swinging \(swinging) pages \(pages != nil) spine \(spine) cover \(coverFrame) window \(windowSize) spread \(spread) leaves \(leaves?.count ?? 0) clock \(clock)"
     }
     #endif
 
@@ -121,6 +176,8 @@ final class ReaderCoverMotion {
         guard !started else { return }
         started = true
         if closing { return close() }
+        // No cover to move: the leaves wait for the inner display.
+        if leavesOnly { return }
         guard spread, !reduceMotion else {
             slid = true
             return
@@ -138,9 +195,47 @@ final class ReaderCoverMotion {
     func readerOpened(_ pages: ReaderCoverPages?) {
         guard self.pages == nil else { return }
         guard let pages else { return finish(fading: true) }
+        if leavesOnly { return unfoldedPages(pages) }
         self.pages = pages
         paper = pages.paper
+        if !closing, ReaderLeaves.play(fraction: pages.fraction, pageTurn: pageTurn, reduceMotion: reduceMotion),
+           let layout = pages.layout, (pages.spine != nil) == spread, spread || pages.whole != nil {
+            leaves = ReaderLeaves(count: ReaderLeaves.count(progress: pages.fraction), spread: spread, followsCover: true)
+            drawLines(layout)
+        }
         swingIfReady()
+    }
+
+    /// Unfolding on a cover: the window has moved to the inner display once
+    /// the hinge's region shows in it, and the leaves start.
+    func windowChanged(_ window: UnfoldedWindow) {
+        guard leavesOnly, frames == nil, pages == nil, let hinge = window.hinge, let size = ShellModel.keyWindow?.bounds.size else { return }
+        windowSize = size
+        hingeMiddle = Double(hinge.midX)
+        let geometry = ReaderGeometry(size: size, safeArea: safeArea)
+        drawLines(.spread(in: geometry, fold: hinge, margins: leafStyle.margins))
+        playLeaves()
+    }
+
+    /// Your pages, for the last leaf to carry. One page (the Duo turned on its
+    /// side, or a reader quicker than the scene) has no spine to leaf over.
+    private func unfoldedPages(_ pages: ReaderCoverPages) {
+        guard pages.spine != nil, let layout = pages.layout else {
+            stopFrames()
+            onFinished?()
+            return
+        }
+        self.pages = pages
+        paper = pages.paper
+        showsWaiting = false
+        guard frames == nil else { return }
+        if let size = ShellModel.keyWindow?.bounds.size { windowSize = size }
+        drawLines(layout)
+        playLeaves()
+    }
+
+    private func drawLines(_ layout: ReaderLayout) {
+        leafLines = (0..<2).map { ReaderLeafLines.path(layout: layout, size: windowSize, pitch: leafStyle.pitch, seed: $0) }
     }
 
     private func swingIfReady() {
@@ -148,11 +243,66 @@ final class ReaderCoverMotion {
         swinging = true
         if reduceMotion { return finish(fading: true) }
         showsBookScreen = false
+        if leaves != nil { return playLeaves() }
         withAnimation(spread ? .easeInOut(duration: swingDuration) : .easeIn(duration: swingDuration)) {
             swing = swungOver
         } completion: { [weak self] in
             self?.onFinished?()
         }
+    }
+
+    // MARK: The leaves
+
+    /// A frame that took longer than this counts as this long, so a leaf
+    /// doesn't jump when the main thread stalls (the scene moving, the reader's
+    /// web view): it just runs late.
+    private static let longestFrame = 0.05
+    /// How long the last leaf waits for your page before a spinner shows.
+    private static let waitBeforeSpinner = 0.75
+
+    private func playLeaves() {
+        guard let window = ShellModel.keyWindow else {
+            onFinished?()
+            return
+        }
+        let link = UIUpdateLink(view: window) { [weak self] link, info in
+            guard let self else {
+                link.isEnabled = false
+                return
+            }
+            let last = lastFrame ?? info.modelTime
+            lastFrame = info.modelTime
+            advance(by: min(info.modelTime - last, Self.longestFrame))
+        }
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
+        link.requiresContinuousUpdates = true
+        link.isEnabled = true
+        frames = link
+    }
+
+    /// One frame of the swing and the leaves. Unfolding, your page may not be
+    /// ready when the last leaf is due: the others land, and it rests.
+    func advance(by seconds: Double) {
+        guard var leaves else { return }
+        clock += seconds
+        let last = leaves.count - 1
+        if pages == nil, clock > leaves.start(of: last) {
+            leaves.lastLeafWait += clock - leaves.start(of: last)
+            self.leaves = leaves
+            if leaves.lastLeafWait > Self.waitBeforeSpinner, !showsWaiting { showsWaiting = true }
+        }
+        if !leavesOnly {
+            let curve: UnitCurve = spread ? .easeInOut : .easeIn
+            swing = swungOver * curve.value(at: min(clock / swingDuration, 1))
+        }
+        guard clock >= leaves.end else { return }
+        stopFrames()
+        onFinished?()
+    }
+
+    private func stopFrames() {
+        frames?.isEnabled = false
+        frames = nil
     }
 
     /// Backwards: the cover swings back over your page, then, unfolded,
@@ -180,6 +330,7 @@ final class ReaderCoverMotion {
     /// Reduce Motion, or a book that couldn't open: the book's screen fades
     /// away instead.
     private func finish(fading: Bool) {
+        stopFrames()
         withAnimation(.easeOut(duration: Self.fadeDuration)) {
             fade = 1
         } completion: { [weak self] in
@@ -196,6 +347,23 @@ struct ReaderCoverPages {
     var whole: ReaderSnapshot?
     var spine: Double?
     var paper: Color
+    /// How far through the book they are, for the leaves.
+    var fraction = 0.0
+    var layout: ReaderLayout?
+}
+
+/// What `ReaderCoverMotionView` watches while unfolding on a cover: the hinge,
+/// in the window's coordinates.
+nonisolated struct UnfoldedWindow: Equatable, Sendable {
+    var hinge: CGRect?
+
+    init(_ proxy: GeometryProxy) {
+        let origin = proxy.frame(in: .global).origin
+        let hinge = proxy.reservedRegions(kind: .division, options: .includeInactive, layoutDirectionBehavior: .fixed)
+            .map(\.frame)
+            .first { $0.height > $0.width }
+        self.hinge = hinge?.offsetBy(dx: origin.x, dy: origin.y)
+    }
 }
 
 /// Draws a `ReaderCoverMotion` over the window. Takes touches meanwhile, so
@@ -204,30 +372,54 @@ struct ReaderCoverPages {
 /// shell lays it out (inside the safe area, folded 42 pt in and 17 down).
 struct ReaderCoverMotionView: View {
     let motion: ReaderCoverMotion
+    @Environment(\.layoutDirection) private var layoutDirection
 
     var body: some View {
-        GeometryReader { proxy in
-            let origin = proxy.frame(in: .global).origin
-            content
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
-                .offset(x: -origin.x, y: -origin.y)
+        ZStack {
+            // Unfolding, the window changes size under the leaves.
+            if motion.leavesOnly {
+                motion.paper
+                    .ignoresSafeArea()
+            }
+            GeometryReader { proxy in
+                let origin = proxy.frame(in: .global).origin
+                content
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                    .onGeometryChange(for: UnfoldedWindow.self) { UnfoldedWindow($0) } action: { motion.windowChanged($0) }
+                    .offset(x: -origin.x, y: -origin.y)
+            }
+            .ignoresSafeArea()
         }
-        .ignoresSafeArea()
+        .onGeometryChange(for: ReaderInsets.self) { [layoutDirection] proxy in
+            ReaderInsets(proxy.safeAreaInsets, layoutDirection: layoutDirection)
+        } action: { motion.safeArea = $0 }
     }
 
     private var content: some View {
         let size = motion.windowSize
         return ZStack(alignment: .topLeading) {
-            if motion.showsBookScreen {
-                bookScreen
-            } else {
-                yourPages
+            Group {
+                if motion.showsBookScreen {
+                    bookScreen
+                } else {
+                    yourPages
+                }
             }
-            if !motion.reduceMotion {
+            .zIndex(-2)
+            if let leaves = motion.leaves, !motion.showsBookScreen {
+                ReaderLeavesView(motion: motion, leaves: leaves)
+            }
+            if !motion.reduceMotion, !motion.leavesOnly {
                 // There from the start, so its swing animates: folded it
-                // shows once the book's screen goes.
+                // shows once the book's screen goes. Over the leaves until
+                // it's past the spine, where they land on it.
                 ReaderCoverLeaf(motion: motion, slide: motion.slide, swing: motion.swing)
                     .opacity(motion.showsBookScreen && !motion.spread ? 0 : 1)
+                    .zIndex(motion.swing > 0.5 ? -1 : 1)
+            }
+            if motion.showsWaiting {
+                ProgressView()
+                    .position(x: motion.spine + (Double(size.width) - motion.spine) / 2, y: size.height / 2)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -250,7 +442,8 @@ struct ReaderCoverMotionView: View {
                 ReaderSnapshotView(snapshot: screen)
                     .frame(width: screen.frame.width, height: screen.frame.height)
             }
-            if motion.spread {
+            // With Reduce Motion the cover stays where it is and fades.
+            if motion.spread, !motion.reduceMotion {
                 motion.paper
                     .frame(width: motion.coverFrame.width, height: motion.coverFrame.height)
                     .offset(x: motion.coverFrame.minX, y: motion.coverFrame.minY)
@@ -279,6 +472,11 @@ extension ReaderCoverMotionView {
                     .frame(width: motion.spine, height: size.height)
                 if motion.reduceMotion, let left = motion.pages?.left {
                     picture(left)
+                }
+                if motion.leavesOnly {
+                    // What the first leaf lands on: there's no cover before it.
+                    ReaderLeafFace(motion: motion, variant: 0)
+                        .clipShape(ReaderTurnRegion(rect: CGRect(x: 0, y: 0, width: motion.spine, height: size.height)))
                 }
                 if let right = motion.pages?.right {
                     picture(right)
@@ -356,7 +554,10 @@ private struct ReaderCoverLeaf: View, Animatable {
     @ViewBuilder private var back: some View {
         ZStack(alignment: .topLeading) {
             motion.paper
-            if motion.spread, let left = motion.pages?.left {
+            if motion.leaves != nil {
+                // Your page is on the last leaf instead.
+                ReaderLeafFace(motion: motion, variant: 0)
+            } else if motion.spread, let left = motion.pages?.left {
                 ReaderSnapshotView(snapshot: left)
                     .frame(width: left.frame.width, height: left.frame.height)
                     .offset(x: left.frame.minX, y: left.frame.minY)

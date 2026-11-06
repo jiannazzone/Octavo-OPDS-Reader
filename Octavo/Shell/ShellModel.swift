@@ -55,6 +55,8 @@ final class ShellModel {
     let importer: BookImporter
     /// Whether a new install's tour has played (decision 30).
     private let tourRecord: TourRecord
+    /// Where the reading settings the shell acts on are kept.
+    private let defaults: UserDefaults
     /// The Files picker is showing (Import from Files, or the Library's +).
     var picksFiles = false
     /// Files from the last import that didn't come in: a banner on On
@@ -80,10 +82,11 @@ final class ShellModel {
         library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore(),
         positions: ReadingPositionStore = ReadingPositionStore(), bookmarks: BookmarkStore = BookmarkStore(),
         removedServers: RemovedServerStore = RemovedServerStore(), importer: BookImporter? = nil,
-        tourRecord: TourRecord = TourRecord()
+        tourRecord: TourRecord = TourRecord(), defaults: UserDefaults = .standard
     ) {
         self.library = library
         self.tourRecord = tourRecord
+        self.defaults = defaults
         self.importer = importer ?? BookImporter(store: library.imported)
         self.opener = opener
         self.servers = servers
@@ -608,7 +611,7 @@ final class ShellModel {
         if source != nil {
             library.bookOpened(SourcedBook(source: book.source, book: book.book))
         }
-        let motion = opensByUnfold ? nil : pendingCoverMotion ?? coverMotion(opening: book)
+        let motion = opensByUnfold ? leavesMotion(opening: book) : pendingCoverMotion ?? coverMotion(opening: book)
         opensByUnfold = false
         pendingCoverMotion = nil
         motion?.onFinished = { [weak self, weak motion] in
@@ -624,7 +627,7 @@ final class ShellModel {
     /// The cover opening the book, drawn over the reader while it opens.
     var coverMotion: ReaderCoverMotion?
     /// The book is opening because the Duo unfolded on its screen: the fold
-    /// is the motion then (decision 10).
+    /// is the cover's motion then (decision 10).
     @ObservationIgnored private var opensByUnfold = false
     /// A motion already made for the book about to open (the tour's).
     @ObservationIgnored private var pendingCoverMotion: ReaderCoverMotion?
@@ -649,6 +652,30 @@ final class ShellModel {
         return coverMotion(for: book, closing: nil)
     }
 
+    /// Unfolding on a cover, past page 1 the leaves alone. It goes by where the
+    /// book's screen says it opens, so they're moving by the time your page is
+    /// ready; the last one carries the page itself.
+    private func leavesMotion(opening book: OpenedBook) -> ReaderCoverMotion? {
+        guard reading == nil, let progress = places.progress(of: SourcedBook(source: book.source, book: book.book)),
+              ReaderLeaves.play(fraction: progress, pageTurn: pageTurn, reduceMotion: UIAccessibility.isReduceMotionEnabled)
+        else { return nil }
+        let window = Self.keyWindow
+        return ReaderCoverMotion(
+            unfoldingAt: progress, windowSize: window?.bounds.size ?? .zero, paper: window.map(Self.paper(in:)) ?? .white, leafStyle: leafStyle
+        )
+    }
+
+    private var pageTurn: ReaderPageTurn {
+        defaults.string(forKey: ReaderPageTurn.key).flatMap(ReaderPageTurn.init(rawValue:)) ?? .standard
+    }
+
+    private var leafStyle: ReaderLeafStyle {
+        ReaderLeafStyle(
+            appearance: UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance(),
+            margins: defaults.string(forKey: ReaderMargins.key).flatMap(ReaderMargins.init(rawValue:)) ?? .standard
+        )
+    }
+
     /// The cover's motion for `book` over its own screen, the top one: a
     /// picture of the screen to open from, or of your pages to close from.
     private func coverMotion(for book: OpenedBook, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
@@ -668,11 +695,11 @@ final class ShellModel {
             // Cover | Details: the cover has half the screen or less.
             spread: frame.width < size.width * 0.75,
             reduceMotion: UIAccessibility.isReduceMotionEnabled,
-            paper: Self.paper(in: window)
+            paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
     }
 
-    private static var keyWindow: UIWindow? {
+    static var keyWindow: UIWindow? {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow)
     }
 
@@ -736,7 +763,9 @@ final class ShellModel {
     /// - Unfolding on a book's screen opens the book, if it's on the iPhone.
     ///   If it isn't, the screen stays, as Cover | Details, and nothing
     ///   downloads until Download or Open is tapped.
-    /// - Folding while reading closes the book back to its screen.
+    /// - Folding while reading closes the book back to its screen, unless
+    ///   Close book when folded is off. Then the reader follows the fold, as
+    ///   it does unfolding (`ReaderModel.hingeChanged`), and no leaves play.
     ///
     /// The hinge reports an unfold before the scene moves to the inner
     /// display, so the folded screen is still the top one.
@@ -751,9 +780,10 @@ final class ShellModel {
             openBook(book)
         case .fold:
             guard let book = reading else { return }
-            // A cover still opening the book would wait for it for good.
+            // A cover still opening the book would wait for it for good, or,
+            // with the book staying open, be drawn for the wrong display.
             coverMotion = nil
-            closeToItsScreen(book)
+            if ReaderSettings.closesBookWhenFolded(in: defaults) { closeToItsScreen(book) }
         case .none:
             break
         }
@@ -927,7 +957,7 @@ final class ShellModel {
             coverFrame: frame, windowSize: window.bounds.size,
             bookScreen: ReaderSnapshot(view: screen, frame: window.bounds),
             spread: true, reduceMotion: UIAccessibility.isReduceMotionEnabled,
-            paper: Self.paper(in: window)
+            paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
     }
 

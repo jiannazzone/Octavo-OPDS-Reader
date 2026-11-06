@@ -21,7 +21,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ### The Duo as the book
 - **Unfolding on a book's screen opens the book**, if it's on the iPhone. If it isn't, the screen stays as Cover | Details and nothing downloads until you tap Download or Open.
 - **A book's screen, folded, has Open** (read on one page) **and Download** (when it isn't on the iPhone yet).
-- **Folding while reading closes the book** back to its screen. Default; may become a setting later.
+- **Folding while reading closes the book** back to its screen, unless **Close book when folded** is off in Settings (Adam, 2026-11-06, decision 24). Off, the book stays open at your place on the folded screen.
 - Unfolding anywhere else just lays the screen out as two pages.
 
 ### Home
@@ -214,10 +214,11 @@ Decided with animated mockups in the planning session (no Figma frames); replace
     - **Speed:** about 0.3 s for a slide, 0.5 s for a flip and 0.15 s for a fade, set on a real Duo.
     - **Curl** (the corner peels over, as in Apple Books) was weighed for open and left out for now (`docs/UI-IDEAS.md`).
     - **Built (2026-11-03, `docs/notes/page-turns.md`).** Swift draws each turn from snapshots of the page while foliate turns at once underneath; a swipe is recognised in UIKit. Across a chapter break the new page takes 70–250 ms on the simulator: a tap's turn waits up to 100 ms for it, then starts over the page's colour and the page fades in. A swipe that falls back is never saved or synced.
-28. **A book opens like a cover** (provisional: Adam decides once he has seen it on his Duo). Opening from a book's screen, the cover moves onto the right page and swings over the spine, landing as the left page of your place: the same motion as a flip. Folded, the cover fills the screen and swings away to the left, uncovering your page. Closing plays it backwards: the page swings back over as the cover, which shrinks back into its place on the book's screen. With no cover on screen, the reader fades in as before.
+28. **A book opens like a cover** (Adam kept it after trying it on his Duo, 2026-11-06). Opening from a book's screen, the cover moves onto the right page and swings over the spine, landing as the left page of your place: the same motion as a flip. Folded, the cover fills the screen and swings away to the left, uncovering your page. Closing plays it backwards: the page swings back over as the cover, which shrinks back into its place on the book's screen. With no cover on screen, the reader fades in as before.
     - **Reduce Motion** cross-fades instead.
-    - **Folding while reading and unfolding on a cover stay as they are**: the fold is already the motion (decisions 10 and 11).
-    - **Built (2026-11-03, `docs/notes/page-turns.md`), for Adam to see on his Duo.** The cover rests on the right page until the book has opened, then swings. Closing plays only when Back lands on the book's screen; elsewhere the reader fades. **Back is a normal Back** (Adam, 2026-11-03): it lands on the screen the book was opened from.
+    - **Folding while reading stays as it is**: the fold is already the motion (decisions 10 and 11). **Close book when folded** (decision 24) decides whether the book closes.
+    - **Leafing through to your place** (Adam, 2026-11-06, from a browser mock): past page 1, leaves go over before your page lands, as if you're leafing through to where you left off. They show faint grey lines on the page's colour, not real text, and the last carries your real page on its back, so the reader never moves to capture earlier pages and nothing is saved or sent. There are 2 near the start of the book and 5 near the end (`2 + round(progress × 3)`). Unfolded and half open, the first starts 0.2 s into the cover's swing and each flip takes 0.3 s, 0.07 s after the last: 0.57–0.78 s in all. Folded, the first starts at 0.1 s and each swings off the left edge in 0.15 s, 0.07 s apart. **Unfolding on a cover** there's no cover to swing, so it's the leaves alone, starting at once, the last waiting for your page. No leaves on page 1, when the reader fades in with no cover on screen, with Reduce Motion, with Page Turn on Fade or None, or on closing.
+    - **Built (2026-11-03, `docs/notes/page-turns.md`), for Adam to see on his Duo.** The cover rests on the right page until the book has opened, then swings. Closing plays only when Back lands on the book's screen; elsewhere the reader goes at once. **Back is a normal Back** (Adam, 2026-11-03): it lands on the screen the book was opened from. In a normal build that's always the book's screen, since every list opens it first. So **the cover shrinking into its spot on Home or in a list**, decided on 2026-11-06, isn't built (Adam, the same day; `docs/UI-IDEAS.md`).
 
 ### The tour (Adam, 2026-11-03)
 
@@ -343,7 +344,8 @@ Decided with screenshots of the real app running a throwaway prototype (no Figma
 
 24. **A lean Settings tab** (redone with Adam on 2026-11-02, under Settings in the library pass above; Settings is a button, not a tab):
     - **Server:** the server (address, account), reading-progress status; its page has Sign out and Remove server.
-    - **Reading: Keep screen on** (Adam, 2026-11-06): how long the screen stays on after a page turn before Auto-Lock takes over, as Off or 5, 10 (the default), 15 or 30 minutes. "How long the screen stays on after you turn a page." It's set once and left, and Customize was getting long. Turned down: a menu in Customize; a switch there with the time here, which kept the row and split one setting in two; and Always, which would keep a phone left on a table on until it's locked or the battery runs out.
+    - **Reading: Keep screen on** (Adam, 2026-11-06): how long the screen stays on after a page turn before Auto-Lock takes over, as Off or 5, 10 (the default), 15 or 30 minutes. "Keep screen on is how long the screen stays on after you turn a page." It's set once and left, and Customize was getting long. Turned down: a menu in Customize; a switch there with the time here, which kept the row and split one setting in two; and Always, which would keep a phone left on a table on until it's locked or the battery runs out.
+    - **Reading: Close book when folded** (Adam, 2026-11-06), below Keep screen on, on by default. On, folding while reading closes the book back to its screen. Off, the book stays open at your place on the folded screen, unfolding returns to the spread, and no leaves play. The tour ignores it: a fold mid-tour still closes the book.
     - **Storage:** Books on iPhone (count and size), where downloads can be removed.
     - **Show the tour** (decision 30), above About.
     - **About:** version, source code and licences.

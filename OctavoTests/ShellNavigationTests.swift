@@ -75,7 +75,9 @@ func makeShell(
     opener: BookOpener? = nil, imported: ImportedBooks? = nil,
     // Not a new install, unless a test says it is.
     tourRecord: TourRecord = .temporary(state: .played),
-    importer: ((ImportedBooks) -> BookImporter)? = nil
+    importer: ((ImportedBooks) -> BookImporter)? = nil,
+    // Never the simulator's own setting.
+    defaults: UserDefaults = .closingBookWhenFolded(true)
 ) -> ShellModel {
     let folder = URL.testDirectory.appending(path: "ShellTests-\(UUID().uuidString)", directoryHint: .isDirectory)
     // Never the app's own imported books.
@@ -93,8 +95,20 @@ func makeShell(
         bookmarks: BookmarkStore(directory: folder.appending(path: "Bookmarks")),
         removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServers.json")),
         importer: importer?(imported),
-        tourRecord: tourRecord
+        tourRecord: tourRecord,
+        defaults: defaults
     )
+}
+
+extension UserDefaults {
+    /// Reading settings of its own, never the app's.
+    static func closingBookWhenFolded(_ closes: Bool) -> UserDefaults {
+        let suite = "ShellTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(closes, forKey: ReaderSettings.closeBookWhenFoldedKey)
+        return defaults
+    }
 }
 
 struct ShellPathTests {
@@ -232,6 +246,50 @@ struct ShellModelTests {
         model.hingeChanged(.fold)
         #expect(model.reading == nil)
         #expect(model[path: .library].routes == [.cover(Self.book)])
+    }
+
+    @Test func closeBookWhenFoldedIsOnByDefault() {
+        let suite = "ShellTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        #expect(ReaderSettings.closesBookWhenFolded(in: defaults))
+        defaults.set(false, forKey: ReaderSettings.closeBookWhenFoldedKey)
+        #expect(!ReaderSettings.closesBookWhenFolded(in: defaults))
+    }
+
+    // Close book when folded off: the book stays open at your place, on the
+    // same screens, and unfolding has nothing to open.
+    @Test func foldingWithCloseBookOffKeepsTheBookOpen() async throws {
+        let files = try TemporaryBookFiles()
+        let model = makeShell(opener: BookOpener(files: files.store), defaults: .closingBookWhenFolded(false))
+        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", source: StubLibrarySource()))
+        model.select(.library)
+        model[path: .library].replace([.cover(Self.book)])
+        model.openBook(Self.book)
+        #expect(await eventually { model.reading != nil })
+        let open = model.reading
+        model.hingeChanged(.fold)
+        #expect(model.reading == open)
+        #expect(model[path: .library].routes == [.cover(Self.book)])
+        model.hingeChanged(.unfold)
+        #expect(model.reading == open)
+        #expect(model.coverMotion == nil)
+    }
+
+    // A cover still opening the book was laid out for the other display.
+    @Test func foldingWithCloseBookOffTakesAwayACoverStillOpening() async throws {
+        let files = try TemporaryBookFiles()
+        let model = makeShell(opener: BookOpener(files: files.store), defaults: .closingBookWhenFolded(false))
+        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", source: StubLibrarySource()))
+        model.openBook(Self.book)
+        #expect(await eventually { model.reading != nil })
+        model.coverMotion = ReaderCoverMotion(
+            cover: nil, title: "", author: "", coverFrame: CGRect(x: 0, y: 0, width: 10, height: 10), windowSize: CGSize(width: 20, height: 20),
+            bookScreen: nil, spread: true, reduceMotion: false, paper: .white
+        )
+        model.hingeChanged(.fold)
+        #expect(model.reading != nil)
+        #expect(model.coverMotion == nil)
     }
 
     @Test func foldingWithoutABookDoesNothing() {

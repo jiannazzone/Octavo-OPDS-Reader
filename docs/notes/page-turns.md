@@ -9,6 +9,7 @@ Decisions 27 and 28 in `docs/design/direction.md`. Written 2026-11-03 on 'Octavo
 - **A swipe drives the turn under the finger**, both ways; let go before halfway without a flick and the page falls back, and nothing is saved or synced for it. Taps, the keyboard and the trackpad play the whole turn: 0.3 s slide, 0.5 s flip, 0.15 s fade.
 - **A turn looks the same across a chapter break**: the new chapter is drawn 70–250 ms after the turn starts on this simulator (one run 409 ms). A tap's turn waits up to 100 ms for the new page, so it usually moves in whole; past that it starts over the page's colour and the page fades in when it comes.
 - **A book opens like a cover** (provisional): from its own screen, the cover moves onto the right page, rests there while the book loads, and swings over the spine as your left page; folded it swings away to the left. **Back onto the book's screen plays it backwards.** Reduce Motion cross-fades. From anywhere else, and for folds, nothing changed.
+- **Past page 1, leaves go over before your page lands** (section 5): 2 near the start of the book, 5 near the end, drawn as faint lines, with your real page on the back of the last. Unfolding on a cover it's the leaves alone. The reader doesn't move for them.
 - **The reading position and its syncing are unchanged.** A turn is foliate's own `goLeft`/`goRight`; the place holds through unfolding, book mode and back (section 6).
 - **No foliate patch.** `bridge.js` changed (section 3), every script-blocking layer untouched, so the BookOrbit round trip, fold-continuity and blank-page re-runs that a patch needs weren't required.
 
@@ -25,6 +26,13 @@ Videos (`page-turns/videos/`, half speed unless named otherwise):
 | Folded | Fade | `fade-tap-folded-half-speed.mp4` |
 | Flat, folded | Opening from the book's screen (real speed) | `open-cover-flat.mp4`, `open-cover-folded.mp4` |
 | Flat, folded | Closing with Back (real speed) | `close-cover-flat.mp4`, `close-cover-folded.mp4` |
+| Folded | Close book when folded off: folding keeps the page, a turn, then unfolding (real speed) | `close-book-off-folded.mp4` |
+| Flat, half open | Close book when folded off: folding, unfolding, then half open (real speed) | `close-book-off-spread.mp4` |
+| Folded | Leaves, 30% through: 3 (real speed) | `leaves-open-folded.mp4` |
+| Flat | Leaves, 30% through: 3 (real speed) | `leaves-open-flat.mp4` |
+| Flat | Leaves, 88% through: 5 (real speed) | `leaves-open-flat-far.mp4` |
+| Half open (114°) | Leaves, 30% through: 3 (real speed) | `leaves-open-half.mp4` |
+| Flat | Unfolding on a cover: the leaves alone, the last waiting for your page (real speed) | `leaves-unfold.mp4` |
 
 Stills: `page-turns/screenshots/` (the flip mid-turn flat and in book mode, a flip held by a finger, the cover waiting on the right page, the Page Turn menu, the chapter-break gap).
 
@@ -107,23 +115,34 @@ The bridge first tracked swipes with touch events and posted their progress. It 
 
 - **Opening.** Open on the book's own screen snapshots the window and lays it over everything (`ReaderCoverMotionView`, pinned to the window's corner: the shell lays it out inside the safe area, 42 pt in and 17 down folded). The reader opens underneath at once. Unfolded, the cover moves from the left page onto the right (0.23 s), the mirror of where it was, rests there until the reader has drawn your place (2–3 s on this simulator, the wait that used to hide under the fade), then swings over the spine with your left page on its back (0.33 s). Folded, the strip and the column's buttons go and the cover swings away to the left (the visible half of a swing, 0.17 s). Unfolding on a cover keeps the fold as its motion.
 - **Speed.** Opening and closing are a third quicker than they were (Adam, 2026-11-04): the slide was 0.35 s and the swing a flip's 0.5 s. Page turns keep their own 0.5 s. Reduce Motion's fade stays 0.3 s.
-- **Closing.** Back onto the book's own screen takes pictures of your pages, then the reader goes at once, as before: a reader still on screen, fading out, would be rebuilt by an unfold, which WebKit traps on (`AppShell`'s comment). The motion plays over the live book's screen: your left page swings back as the cover, which lands on the right page and moves back to its place; folded, the cover swings in from the left. Back onto anything else (Home, a list: see `docs/PLAN.md`, To revisit) closes at once as before; so does folding.
+- **Closing.** Back onto the book's own screen takes pictures of your pages, then the reader goes at once, as before: a reader still on screen, fading out, would be rebuilt by an unfold, which WebKit traps on (`AppShell`'s comment). The motion plays over the live book's screen: your left page swings back as the cover, which lands on the right page and moves back to its place; folded, the cover swings in from the left. Back onto anything else closes at once as before, though only debug launch settings reach that: every list opens the book's screen, and Open and unfolding both start from it (`docs/UI-IDEAS.md`); so does folding, unless Close book when folded is off in Settings, when the reader follows the fold and the book stays open at your place (`docs/notes/settings.md`).
 - **Reduce Motion** cross-fades (0.3 s) both ways.
-- Bugs found on the way: the reader said it had opened only from relocations, which all came while it was still loading (it now also checks when it opens); the move to the right page started in the same frame as the web view was made and was swallowed (it starts 50 ms after the overlay appears); folded, half the swing was off the screen and the page sat still for 0.3 s.
+- **Leaves** (`ReaderLeaves.swift`, Adam, 2026-11-06). Past page 1 (`shownFraction` above 0), `2 + round(progress × 3)` leaves go over. They're pictures of nothing: the page's colour and faint grey lines where the text runs (`ReaderLeafLines`, from the layout, the text size and the line spacing). Only the last is real, with your left page on its back; the cover's back is lines instead. Your right page lies under them all.
+  - **Flat and half open:** the cover swings as before (0.33 s). The first leaf starts 0.2 s into the swing, each flip takes 0.3 s, ease-in-out, and starts 0.07 s after the last: 0.57–0.78 s in all. Measured 0.63 s for 3 leaves, against 0.64 s by the numbers. On the right of the spine an earlier leaf lies over a later one, and on the left a later one lands on top.
+  - **Folded:** the cover swings away as before (0.165 s). The first leaf starts at 0.1 s, and each swings off the left edge to 90° in 0.15 s, ease-in, 0.07 s apart: 0.32–0.53 s.
+  - **Unfolding on a cover:** the leaves alone, from `ShellModel.leavesMotion`, going by where the book's screen says it opens (`BookPlaces.progress`), so they can start before the reader has opened. They start once the window has the hinge's region (`UnfoldedWindow`), the first at once, and the last waits for your page: the others land and it rests on the right, with a spinner if that takes over 0.75 s. Paper covers the reader until then, so its spinner and a half-drawn page never show. On this simulator the inner display fades in for about 0.4 s, under the first leaves, and the page took about 1.1 s more. The page lands about 0.45 s later than it would without leaves (the 150 ms the reader waits for its place to settle, plus the last flip).
+  - **The clock** runs on a `UIUpdateLink` asking for 120 Hz, as a page turn's does (`ReaderCoverMotion.advance`). A frame counts for at most 50 ms, so a stalled main thread makes a leaf late rather than jumpy. The opening without leaves and the closing keep their SwiftUI animations.
+  - **None** on page 1, when the reader fades in with no cover on screen, with Reduce Motion, with Page Turn on Fade or None, on closing, or when Close book when folded is off and the book never closed.
+  - **The tour** plays them too: Chapter I is past page 1, so unfolding on its cover plays 2.
+- **Half open** looks the same as flat. The leaves run across the hinge's place, and the book-mode spine shadow comes up as they end, as it does after the cover.
+- Bugs found on the way: the reader said it had opened only from relocations, which all came while it was still loading (it now also checks when it opens); the move to the right page started in the same frame as the web view was made and was swallowed (it starts 50 ms after the overlay appears); folded, half the swing was off the screen and the page sat still for 0.3 s; with Reduce Motion, unfolded, the cover's place stayed blank until the book had opened, and the cover now stays there and fades.
 
 ## 6. Checks
 
 - **Every posture**: the videos above. Flips forward and back flat and half open, across chapter breaks; slides both ways folded; fade; None (a tap turned at once, a swipe used foliate's drag).
 - **The place through folds**: reading at a watched CFI folded, then unfolded, half open (flip forward and back), flat: the visible page contained it throughout.
 - **Page Turn**: picked in the menu, it applied to the next turn; with the simulator's Reduce Motion on, Automatic resolved to a fade and Flip and Slide stayed.
-- **Tests**: `ReaderPageTurnTests` (24: the setting and the motion each posture gets, a finger's turn, flicks and pace, the pictures each motion takes, the bridge's messages). App tests 373 passed; OctavoKit 253 passed.
+- **The place through the leaves**, on 'Octavo Opening Duo' (D8823D0E-A416-48C2-9A6D-6AFBD640AFA2): opened in the posture it was left in, flat, half open and at 88%, the saved CFI and fraction were the same before and after. The saved record's time does change on opening, with Page Turn on Fade too, so that isn't the leaves. Opened in another posture, the place becomes the page's start in that layout (`ReaderModel.moved(to:)`), as it did before. `ReaderLeavesPlaceTests` plays each motion through on a real page: no relocations, nothing saved, nothing pushed.
+- **Fade and Reduce Motion**, opening flat with the simulator's setting and with Page Turn: no leaves. Night: the lines show on its dark page.
+- **Tests**: `ReaderLeavesTests` (the count, the timings, when they play, the last leaf waiting, the place); `ReaderPageTurnTests` (24: the setting and the motion each posture gets, a finger's turn, flicks and pace, the pictures each motion takes, the bridge's messages). App tests 373 passed; OctavoKit 253 passed.
 
 ## 7. Follow-ups
 
-- **Set the speeds and the 100 ms wait on a real Duo**, and see the opening and closing there (decision 28 is provisional). Turning back waited 61–192 ms for its page here, forward 56–83 ms.
-- **Back lands on the screen the book was opened over**, so the closing plays only when that's the book's screen (Adam's decision, 2026-11-03).
+- **Set the speeds and the 100 ms wait on a real Duo**, and see the opening and closing there. Turning back waited 61–192 ms for its page here, forward 56–83 ms.
+- **See the leaves on a real Duo**, unfolding above all: whether the page landing about 0.45 s later feels immediate, and whether the first leaves are lost while the inner display wakes. A delay before the first would be a small change.
+- **Back lands on the screen the book was opened over**, so the closing plays only when that's the book's screen (Adam's decision, 2026-11-03). The cover shrinking into its spot on Home or in a list was decided on 2026-11-06 and then not built, because Back can't land there (`docs/UI-IDEAS.md`).
 - **A layout change during a held swipe** (a text-size change can't happen mid-swipe, but a late `setLayout` could) would post the held relocation early. Not seen; worth a guard if it ever is.
-- **Opening and closing pictures leave out the page's footer**, and the controls vanish as the book closes.
+- **Opening and closing pictures leave out the page's footer**, and the controls vanish as the book closes. The last leaf's page has no footer either, until it lands.
 - Once, after many quick open/close cycles driven by the remote, Open did nothing until a relaunch. Not reproduced.
 - Curl stays parked (`docs/UI-IDEAS.md`); it would draw from the same snapshots.
 

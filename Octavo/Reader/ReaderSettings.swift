@@ -14,4 +14,13 @@ nonisolated enum ReaderSettings {
     /// "Margins" (decision 8): `ReaderMargins.key`.
     /// "Page Turn" (decision 27): `ReaderPageTurn.key`.
     /// "Keep screen on", in Settings: `ReaderScreenOn.key`.
+    /// "Close book when folded", in Settings: folding while reading closes the
+    /// book back to its screen. Off, the book stays open at your place on the
+    /// folded screen. The tour ignores it (`ShellModel.tourHingeChanged`).
+    static let closeBookWhenFoldedKey = "reader.closeBookWhenFolded"
+    static let closeBookWhenFoldedDefault = true
+
+    static func closesBookWhenFolded(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: closeBookWhenFoldedKey) == nil ? closeBookWhenFoldedDefault : defaults.bool(forKey: closeBookWhenFoldedKey)
+    }
 }
