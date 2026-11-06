@@ -303,12 +303,12 @@ extension ReaderModel {
     /// half of a spread, or the one page.
     func coverPages() -> ReaderCoverPages {
         let paper = Color(hex: appearance.background)
-        guard let geometry else { return ReaderCoverPages(paper: paper) }
+        guard let geometry else { return ReaderCoverPages(paper: paper, fraction: shownFraction) }
         let size = geometry.size
         let spine = layout.columns == 2 ? spine(in: geometry) : nil
         let regions: ReaderTurn.Regions = spine == nil ? .whole : [.left, .right]
         let taken = pictures(regions, size: size, spine: spine, afterScreenUpdates: true)
-        return ReaderCoverPages(left: taken?.left, right: taken?.right, whole: taken?.whole, spine: spine, paper: paper)
+        return ReaderCoverPages(left: taken?.left, right: taken?.right, whole: taken?.whole, spine: spine, paper: paper, fraction: shownFraction, layout: layout)
     }
 
     /// The middle of foliate's gap between the pages: over the fold.

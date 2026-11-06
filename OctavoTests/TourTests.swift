@@ -362,8 +362,9 @@ struct TourShellTests {
         #expect(model.tour?.step == .turnThePage)
         #expect(await eventually { model.reading?.book.id == .sample })
         #expect(model.library.continueReading.map(\.book.id) == [.sample])
-        // The fold is the motion.
-        #expect(model.coverMotion == nil)
+        // The fold is the cover's motion, and Chapter I is past page 1.
+        #expect(model.coverMotion?.leavesOnly == true)
+        #expect(model.coverMotion?.leaves?.count == 2)
     }
 
     // Folding mid-tour closes the book without opening its screen; unfolding

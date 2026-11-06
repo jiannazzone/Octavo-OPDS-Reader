@@ -611,7 +611,7 @@ final class ShellModel {
         if source != nil {
             library.bookOpened(SourcedBook(source: book.source, book: book.book))
         }
-        let motion = opensByUnfold ? nil : pendingCoverMotion ?? coverMotion(opening: book)
+        let motion = opensByUnfold ? leavesMotion(opening: book) : pendingCoverMotion ?? coverMotion(opening: book)
         opensByUnfold = false
         pendingCoverMotion = nil
         motion?.onFinished = { [weak self, weak motion] in
@@ -627,7 +627,7 @@ final class ShellModel {
     /// The cover opening the book, drawn over the reader while it opens.
     var coverMotion: ReaderCoverMotion?
     /// The book is opening because the Duo unfolded on its screen: the fold
-    /// is the motion then (decision 10).
+    /// is the cover's motion then (decision 10).
     @ObservationIgnored private var opensByUnfold = false
     /// A motion already made for the book about to open (the tour's).
     @ObservationIgnored private var pendingCoverMotion: ReaderCoverMotion?
@@ -652,6 +652,30 @@ final class ShellModel {
         return coverMotion(for: book, closing: nil)
     }
 
+    /// Unfolding on a cover, past page 1 the leaves alone. It goes by where the
+    /// book's screen says it opens, so they're moving by the time your page is
+    /// ready; the last one carries the page itself.
+    private func leavesMotion(opening book: OpenedBook) -> ReaderCoverMotion? {
+        guard reading == nil, let progress = places.progress(of: SourcedBook(source: book.source, book: book.book)),
+              ReaderLeaves.play(fraction: progress, pageTurn: pageTurn, reduceMotion: UIAccessibility.isReduceMotionEnabled)
+        else { return nil }
+        let window = Self.keyWindow
+        return ReaderCoverMotion(
+            unfoldingAt: progress, windowSize: window?.bounds.size ?? .zero, paper: window.map(Self.paper(in:)) ?? .white, leafStyle: leafStyle
+        )
+    }
+
+    private var pageTurn: ReaderPageTurn {
+        defaults.string(forKey: ReaderPageTurn.key).flatMap(ReaderPageTurn.init(rawValue:)) ?? .standard
+    }
+
+    private var leafStyle: ReaderLeafStyle {
+        ReaderLeafStyle(
+            appearance: UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance(),
+            margins: defaults.string(forKey: ReaderMargins.key).flatMap(ReaderMargins.init(rawValue:)) ?? .standard
+        )
+    }
+
     /// The cover's motion for `book` over its own screen, the top one: a
     /// picture of the screen to open from, or of your pages to close from.
     private func coverMotion(for book: OpenedBook, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
@@ -671,11 +695,11 @@ final class ShellModel {
             // Cover | Details: the cover has half the screen or less.
             spread: frame.width < size.width * 0.75,
             reduceMotion: UIAccessibility.isReduceMotionEnabled,
-            paper: Self.paper(in: window)
+            paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
     }
 
-    private static var keyWindow: UIWindow? {
+    static var keyWindow: UIWindow? {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow)
     }
 
@@ -933,7 +957,7 @@ final class ShellModel {
             coverFrame: frame, windowSize: window.bounds.size,
             bookScreen: ReaderSnapshot(view: screen, frame: window.bounds),
             spread: true, reduceMotion: UIAccessibility.isReduceMotionEnabled,
-            paper: Self.paper(in: window)
+            paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
     }
 
