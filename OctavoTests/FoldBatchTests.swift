@@ -1,5 +1,7 @@
 import Foundation
+import SwiftUI
 import Testing
+import UIKit
 @testable import Octavo
 
 /// When a fold's batched inputs get laid out.
@@ -71,5 +73,13 @@ struct FoldBatchTests {
     ])
     func onlyClosedIsFolded(posture: ReaderPosture, folded: Bool) {
         #expect(posture.isFolded == folded)
+    }
+
+    /// A snapshot with no colour to read fills out with the page's paper, so
+    /// a fold in Night never shows white.
+    @MainActor
+    @Test func aFoldCoverWithNoColourTakesThePaper() {
+        let paper = Color(hex: ReaderTheme.night.background)
+        #expect(ReaderFoldCover(id: 1, image: UIImage(), size: .zero, paper: paper).background == paper)
     }
 }

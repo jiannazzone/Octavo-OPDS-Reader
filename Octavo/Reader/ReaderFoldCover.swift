@@ -15,11 +15,11 @@ struct ReaderFoldCover: Equatable {
     let background: Color
     var isFading = false
 
-    init(id: Int, image: UIImage, size: CGSize) {
+    init(id: Int, image: UIImage, size: CGSize, paper: Color) {
         self.id = id
         self.image = image
         self.size = size
-        background = image.cornerColor ?? .white
+        background = image.cornerColor ?? paper
     }
 }
 

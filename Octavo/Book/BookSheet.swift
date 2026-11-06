@@ -17,7 +17,10 @@ struct BookSheet: View {
     @Environment(ShellModel.self) private var shell
     @GestureState private var drag: CGFloat = 0
 
-    static let animation = Animation.snappy(duration: 0.35)
+    /// With Reduce Motion, no bounce.
+    static var animation: Animation {
+        UIAccessibility.isReduceMotionEnabled ? .easeOut(duration: 0.2) : .snappy(duration: 0.35)
+    }
     /// How much more than the status bar's height of cover shows above the
     /// expanded sheet, to tap back to the strip (frame 15).
     static let expandedTopInset: CGFloat = 40
