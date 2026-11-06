@@ -241,26 +241,31 @@ struct ReaderTextPanel: View {
             .frame(width: 24, height: 24)
     }
 
+    /// A row's title, with a menu of its choices at the trailing edge.
+    private func menuRow<Value: Hashable>(
+        _ title: LocalizedStringKey,
+        selection: Binding<Value>,
+        @ViewBuilder choices: () -> some View
+    ) -> some View {
+        LabeledContent(title) {
+            Picker(title, selection: selection) { choices() }
+                .pickerStyle(.menu)
+                .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
+        }
+    }
+
     private var customize: some View {
         VStack(alignment: .leading, spacing: 14) {
-            LabeledContent("Font") {
-                Picker("Font", selection: $appearance.font) {
-                    ForEach(ReaderFont.allCases) { font in
-                        Text(font.name).tag(font)
-                    }
+            menuRow("Font", selection: $appearance.font) {
+                ForEach(ReaderFont.allCases) { font in
+                    Text(font.name).tag(font)
                 }
-                .pickerStyle(.menu)
-                .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
-            LabeledContent("Line Spacing") {
-                Picker("Line Spacing", selection: $appearance.lineSpacing) {
-                    Text("Book’s").tag(Double?.none)
-                    ForEach(ReaderAppearance.lineSpacings, id: \.self) { spacing in
-                        Text(spacing.formatted(.number.precision(.fractionLength(1...2)))).tag(Double?.some(spacing))
-                    }
+            menuRow("Line Spacing", selection: $appearance.lineSpacing) {
+                Text("Book’s").tag(Double?.none)
+                ForEach(ReaderAppearance.lineSpacings, id: \.self) { spacing in
+                    Text(spacing.formatted(.number.precision(.fractionLength(1...2)))).tag(Double?.some(spacing))
                 }
-                .pickerStyle(.menu)
-                .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Margins")
@@ -271,14 +276,10 @@ struct ReaderTextPanel: View {
                 }
                 .pickerStyle(.segmented)
             }
-            LabeledContent("Page Turn") {
-                Picker("Page Turn", selection: $pageTurn) {
-                    ForEach(ReaderPageTurn.allCases) { style in
-                        Text(style.name).tag(style)
-                    }
+            menuRow("Page Turn", selection: $pageTurn) {
+                ForEach(ReaderPageTurn.allCases) { style in
+                    Text(style.name).tag(style)
                 }
-                .pickerStyle(.menu)
-                .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
             Toggle("Justify", isOn: $appearance.justify)
             Toggle("Match Dark Mode", isOn: $appearance.matchDarkMode)

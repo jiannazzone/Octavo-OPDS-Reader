@@ -126,3 +126,13 @@ While reading, the side column showed only ···, and ‹ came up with Contents
 ## An import that timed out (2026-11-05)
 
 A read that gets no answer in 30 s says "“Book” couldn’t be opened; the file may be damaged." It may be WebKit stalling and not the book, and trying again may work (`docs/notes/ci.md`). `BookInspectionError.timedOut` now tells the two apart, so a different line would be a small change in `BookImporter.reason`. So far it has only been seen on CI's simulators, so it may not be worth a string.
+
+## Font names in their own fonts (Adam, 2026-11-06)
+
+The Font menu in Text and Theme should show each name in its own font. Tried on the simulator on 2026-11-06: it's a native menu (`Picker`, `.menu`), which ignores `.font` on its rows, so every name stays in the system font. It needs a list of our own. Not designed yet.
+
+## Keeping the screen on while reading (Adam, 2026-11-06)
+
+The screen dimmed while reading, because nothing in the app held off Auto-Lock.
+
+Decided 2026-11-06: Keep screen on in Settings, under Reading, for Off or 5, 10 (the default), 15 or 30 minutes after a page turn, with no Always (decision 24). Built the same day (`docs/notes/settings.md`).

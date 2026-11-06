@@ -310,6 +310,7 @@ private struct ReaderScreen: View {
         .onChange(of: connectionReturns) {
             Task { await model.catchUp() }
         }
+        .modifier(ReaderKeepAwake(model: model))
         .task {
             // The keyboard's top, as far up the reader as it comes. The
             // reader ignores the keyboard's safe area (see above), so the
