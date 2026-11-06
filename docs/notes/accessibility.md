@@ -5,7 +5,7 @@ What Apple asks for, the common tasks that have to work, and what's been checked
 ## Summary
 
 - **Nothing is claimed yet.** Claiming happens in App Store Connect, on the owner's say, once a label's column is full for that device.
-- **Dark Interface (#77) and Reduced Motion (#80):** checked on the simulator across the common tasks below, except what's listed under Not checked. Not checked on a real Duo.
+- **Dark Interface (#77) and Reduced Motion (#80):** checked across the common tasks below, except what's listed under Not checked: on the simulator, then by Adam on his Duo (2026-11-05, at 1e6a5cf).
 - **Labels are per device.** The app builds for iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`), so iPad needs its own pass or its own "no".
 - **Captions and Audio Descriptions stay unclaimed.** The app has no video or audio, and Apple's pages offer no "not applicable".
 
@@ -34,13 +34,16 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 | **A book's screen:** details | ✓ | ✓ | | | | | |
 | **A book's screen:** download, the remove prompt | ✓ unfolded | ✓ unfolded | | | | | |
 | **Read:** open, fold, unfold, close | ✓ | ✓ | | | | | |
-| **Read:** turn a page | | | | | | | |
+| **Read:** turn a page | ✓ Duo | ✓ Duo | | | | | |
 | **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | | | | | |
-| **In the book:** opening search | ✓ unfolded | ✓ unfolded | | | | | |
-| **In the book:** footnotes, going back, half open | | | | | | | |
+| **In the book:** search, a result | ✓ unfolded | ✓ unfolded | | | | | |
+| **Read:** half open | ✓ Duo | ✓ Duo | | | | | |
+| **In the book:** footnotes, going back | | | | | | | |
 | **Other ways in:** Import from Files, Open in Octavo | | | | | | | |
 | **Settings:** the list | ✓ | ✓ | | | | | |
 | **Settings:** a server's page, Books on iPhone | ✓ unfolded | ✓ unfolded | | | | | |
+
+"✓ Duo" means only on Adam's Duo. He ran these with Dark Mode and Reduce Motion on, and all passed: a book's screen and Back, a swipe back, a Settings page, opening a book, turning pages, the panels, a bookmark and a search result unfolded; folding while reading, half open and folding on Home; the book sheet, opening a book, turning pages and the panels folded; Show the tour and Skip.
 
 ## Reduced Motion
 
@@ -61,7 +64,7 @@ What each motion does with the setting on:
 | The download check | Fades | `DownloadBadge` |
 | The download ring's progress | Stays, since it's the progress | `DownloadBadge` |
 
-Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). The ribbon, the bars, the download check, a swipe's release and the panels' animation are from the code. Automatic's fade was read from the debug remote's turn state, not watched.
+Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). Adam watched the rest on his Duo, except the download check, which is from the code.
 
 ## Dark Interface
 
@@ -108,9 +111,9 @@ Where it misleads:
 
 ## Not checked
 
-- A real Duo, a plain iPhone or an iPad.
-- Half open with either feature on, and the other blank rows above: turning a page, footnotes, going back, Import from Files, Open in Octavo.
+- A plain iPhone or an iPad.
+- The blank rows above: footnotes, going back, Import from Files, Open in Octavo.
 - With Reduce Transparency on, or Bold Text.
 - CBZ and fixed-layout books.
 - The tour's later cards. Apple's first-launch test is complete or skip, and Skip was checked.
-- Search results, and an OPDS catalog that asks for a password.
+- The Search tab's results, and an OPDS catalog that asks for a password.
