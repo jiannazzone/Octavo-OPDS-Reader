@@ -383,6 +383,18 @@ struct TourShellTests {
         #expect(await eventually { model.reading != nil })
     }
 
+    // Close book when folded is for reading, not the tour.
+    @Test func aFoldMidTourClosesTheBookWithCloseBookOff() async {
+        let model = makeShell(tourRecord: record, importer: { BookImporter(store: $0, inspect: ImportFixtures.inspect()) }, defaults: .closingBookWhenFolded(false))
+        model.hingeReported(.closed)
+        model.hingeChanged(.unfold)
+        #expect(await eventually { model.reading != nil })
+        model.tourEvent(.pageTurned)
+        model.hingeChanged(.fold)
+        #expect(model.reading == nil)
+        #expect(model.tour?.step == .cover)
+    }
+
     // Opened or closed while the app was away, with no change reported: the
     // tour still follows the hinge.
     @Test func theTourFollowsAReportWithoutAChange() async {

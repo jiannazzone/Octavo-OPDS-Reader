@@ -113,7 +113,7 @@ Pre-paginated books open now (`docs/notes/fixed-layout.md`). What they show that
 
 ## Closing the Duo while reading (Adam, 2026-11-04)
 
-Folding while reading closes the book back to its screen, the cover (`ShellModel.closeToItsScreen`; `docs/design/direction.md` already says it may become a setting). Adam: keep that as the default, and make it optional. Off, the book stays open on the folded screen at your place, and no leaves play. Decided on 2026-11-06, not built yet: **Close book when folded**, in Settings under Reading, on by default. The tour ignores it, so a fold mid-tour still closes the book.
+Folding while reading closes the book back to its screen, the cover (`ShellModel.closeToItsScreen`; `docs/design/direction.md` already says it may become a setting). Adam: keep that as the default, and make it optional. Off, the book stays open on the folded screen at your place, and no leaves play. Decided and built 2026-11-06: **Close book when folded**, in Settings under Reading, on by default (decision 24). The tour ignores it, so a fold mid-tour still closes the book.
 
 ## KOReader sync for OPDS servers (Adam, 2026-11-04)
 

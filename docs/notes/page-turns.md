@@ -25,6 +25,8 @@ Videos (`page-turns/videos/`, half speed unless named otherwise):
 | Folded | Fade | `fade-tap-folded-half-speed.mp4` |
 | Flat, folded | Opening from the book's screen (real speed) | `open-cover-flat.mp4`, `open-cover-folded.mp4` |
 | Flat, folded | Closing with Back (real speed) | `close-cover-flat.mp4`, `close-cover-folded.mp4` |
+| Folded | Close book when folded off: folding keeps the page, a turn, then unfolding (real speed) | `close-book-off-folded.mp4` |
+| Flat, half open | Close book when folded off: folding, unfolding, then half open (real speed) | `close-book-off-spread.mp4` |
 
 Stills: `page-turns/screenshots/` (the flip mid-turn flat and in book mode, a flip held by a finger, the cover waiting on the right page, the Page Turn menu, the chapter-break gap).
 
@@ -107,7 +109,7 @@ The bridge first tracked swipes with touch events and posted their progress. It 
 
 - **Opening.** Open on the book's own screen snapshots the window and lays it over everything (`ReaderCoverMotionView`, pinned to the window's corner: the shell lays it out inside the safe area, 42 pt in and 17 down folded). The reader opens underneath at once. Unfolded, the cover moves from the left page onto the right (0.23 s), the mirror of where it was, rests there until the reader has drawn your place (2–3 s on this simulator, the wait that used to hide under the fade), then swings over the spine with your left page on its back (0.33 s). Folded, the strip and the column's buttons go and the cover swings away to the left (the visible half of a swing, 0.17 s). Unfolding on a cover keeps the fold as its motion.
 - **Speed.** Opening and closing are a third quicker than they were (Adam, 2026-11-04): the slide was 0.35 s and the swing a flip's 0.5 s. Page turns keep their own 0.5 s. Reduce Motion's fade stays 0.3 s.
-- **Closing.** Back onto the book's own screen takes pictures of your pages, then the reader goes at once, as before: a reader still on screen, fading out, would be rebuilt by an unfold, which WebKit traps on (`AppShell`'s comment). The motion plays over the live book's screen: your left page swings back as the cover, which lands on the right page and moves back to its place; folded, the cover swings in from the left. Back onto anything else (Home, a list: see `docs/PLAN.md`, To revisit) closes at once as before; so does folding.
+- **Closing.** Back onto the book's own screen takes pictures of your pages, then the reader goes at once, as before: a reader still on screen, fading out, would be rebuilt by an unfold, which WebKit traps on (`AppShell`'s comment). The motion plays over the live book's screen: your left page swings back as the cover, which lands on the right page and moves back to its place; folded, the cover swings in from the left. Back onto anything else (Home, a list: see `docs/PLAN.md`, To revisit) closes at once as before; so does folding, unless Close book when folded is off in Settings, when the reader follows the fold and the book stays open at your place (`docs/notes/settings.md`).
 - **Reduce Motion** cross-fades (0.3 s) both ways.
 - Bugs found on the way: the reader said it had opened only from relocations, which all came while it was still loading (it now also checks when it opens); the move to the right page started in the same frame as the web view was made and was swallowed (it starts 50 ms after the overlay appears); folded, half the swing was off the screen and the page sat still for 0.3 s.
 

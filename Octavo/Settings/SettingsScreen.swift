@@ -2,9 +2,9 @@ import OctavoKit
 import SwiftUI
 
 /// Settings (decision 24, frames 34–37): the server, Library's one switch,
-/// Keep screen on, the books on the iPhone and About. Reading choices live in
-/// the reader's Text and theme panel, not here. Keep screen on is the
-/// exception: it's set once and left (Adam, 2026-11-06).
+/// Keep screen on, Close book when folded, the books on the iPhone and About.
+/// Reading choices live in the reader's Text and theme panel, not here. Those
+/// two are the exception: they're set once and left (Adam, 2026-11-06).
 ///
 /// Folded, the list and each page are screens of their own. Unfolded, the
 /// list is on the left page and the chosen page on the right (the server's,
@@ -88,6 +88,7 @@ struct SettingsList: View {
     @Environment(\.spread) private var spread
     @AppStorage(LibrarySettings.titlesUnderCoversKey) private var titlesUnderCovers = false
     @AppStorage(ReaderScreenOn.key) private var screenOn = ReaderScreenOn.standard
+    @AppStorage(ReaderSettings.closeBookWhenFoldedKey) private var closesBookWhenFolded = ReaderSettings.closeBookWhenFoldedDefault
 
     var body: some View {
         SettingsPageList(title: "Settings", isOnLeftPage: true) {
@@ -131,10 +132,11 @@ struct SettingsList: View {
                         Text(time.name).tag(time)
                     }
                 }
+                Toggle("Close book when folded", isOn: $closesBookWhenFolded)
             } header: {
                 Text("Reading")
             } footer: {
-                Text("How long the screen stays on after you turn a page.")
+                Text("Keep screen on is how long the screen stays on after you turn a page.")
             }
             Section {
                 row(.storage) {

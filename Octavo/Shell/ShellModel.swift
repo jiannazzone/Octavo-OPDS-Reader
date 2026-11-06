@@ -55,6 +55,8 @@ final class ShellModel {
     let importer: BookImporter
     /// Whether a new install's tour has played (decision 30).
     private let tourRecord: TourRecord
+    /// Where the reading settings the shell acts on are kept.
+    private let defaults: UserDefaults
     /// The Files picker is showing (Import from Files, or the Library's +).
     var picksFiles = false
     /// Files from the last import that didn't come in: a banner on On
@@ -80,10 +82,11 @@ final class ShellModel {
         library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore(),
         positions: ReadingPositionStore = ReadingPositionStore(), bookmarks: BookmarkStore = BookmarkStore(),
         removedServers: RemovedServerStore = RemovedServerStore(), importer: BookImporter? = nil,
-        tourRecord: TourRecord = TourRecord()
+        tourRecord: TourRecord = TourRecord(), defaults: UserDefaults = .standard
     ) {
         self.library = library
         self.tourRecord = tourRecord
+        self.defaults = defaults
         self.importer = importer ?? BookImporter(store: library.imported)
         self.opener = opener
         self.servers = servers
@@ -736,7 +739,9 @@ final class ShellModel {
     /// - Unfolding on a book's screen opens the book, if it's on the iPhone.
     ///   If it isn't, the screen stays, as Cover | Details, and nothing
     ///   downloads until Download or Open is tapped.
-    /// - Folding while reading closes the book back to its screen.
+    /// - Folding while reading closes the book back to its screen, unless
+    ///   Close book when folded is off. Then the reader follows the fold, as
+    ///   it does unfolding (`ReaderModel.hingeChanged`), and no leaves play.
     ///
     /// The hinge reports an unfold before the scene moves to the inner
     /// display, so the folded screen is still the top one.
@@ -751,9 +756,10 @@ final class ShellModel {
             openBook(book)
         case .fold:
             guard let book = reading else { return }
-            // A cover still opening the book would wait for it for good.
+            // A cover still opening the book would wait for it for good, or,
+            // with the book staying open, be drawn for the wrong display.
             coverMotion = nil
-            closeToItsScreen(book)
+            if ReaderSettings.closesBookWhenFolded(in: defaults) { closeToItsScreen(book) }
         case .none:
             break
         }

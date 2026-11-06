@@ -21,7 +21,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ### The Duo as the book
 - **Unfolding on a book's screen opens the book**, if it's on the iPhone. If it isn't, the screen stays as Cover | Details and nothing downloads until you tap Download or Open.
 - **A book's screen, folded, has Open** (read on one page) **and Download** (when it isn't on the iPhone yet).
-- **Folding while reading closes the book** back to its screen. Default; may become a setting later.
+- **Folding while reading closes the book** back to its screen, unless **Close book when folded** is off in Settings (Adam, 2026-11-06, decision 24). Off, the book stays open at your place on the folded screen.
 - Unfolding anywhere else just lays the screen out as two pages.
 
 ### Home
@@ -343,7 +343,8 @@ Decided with screenshots of the real app running a throwaway prototype (no Figma
 
 24. **A lean Settings tab** (redone with Adam on 2026-11-02, under Settings in the library pass above; Settings is a button, not a tab):
     - **Server:** the server (address, account), reading-progress status; its page has Sign out and Remove server.
-    - **Reading: Keep screen on** (Adam, 2026-11-06): how long the screen stays on after a page turn before Auto-Lock takes over, as Off or 5, 10 (the default), 15 or 30 minutes. "How long the screen stays on after you turn a page." It's set once and left, and Customize was getting long. Turned down: a menu in Customize; a switch there with the time here, which kept the row and split one setting in two; and Always, which would keep a phone left on a table on until it's locked or the battery runs out.
+    - **Reading: Keep screen on** (Adam, 2026-11-06): how long the screen stays on after a page turn before Auto-Lock takes over, as Off or 5, 10 (the default), 15 or 30 minutes. "Keep screen on is how long the screen stays on after you turn a page." It's set once and left, and Customize was getting long. Turned down: a menu in Customize; a switch there with the time here, which kept the row and split one setting in two; and Always, which would keep a phone left on a table on until it's locked or the battery runs out.
+    - **Reading: Close book when folded** (Adam, 2026-11-06), below Keep screen on, on by default. On, folding while reading closes the book back to its screen. Off, the book stays open at your place on the folded screen, unfolding returns to the spread, and no leaves play. The tour ignores it: a fold mid-tour still closes the book.
     - **Storage:** Books on iPhone (count and size), where downloads can be removed.
     - **Show the tour** (decision 30), above About.
     - **About:** version, source code and licences.
