@@ -1,0 +1,4 @@
+// The app's version and build number, in one place. A release bumps them here
+// (.claude/skills/octavo-prepare-update). Every upload needs a new build number.
+MARKETING_VERSION = 0.1
+CURRENT_PROJECT_VERSION = 1

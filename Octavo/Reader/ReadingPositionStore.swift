@@ -64,7 +64,7 @@ nonisolated struct ReadingPositionStore: Sendable {
     // MARK: Trips (decision 33)
 
     /// Kept beside the positions, and never synced.
-    private var tripsDirectory: URL {
+    var tripsDirectory: URL {
         directory.appending(path: "Trips", directoryHint: .isDirectory)
     }
 
@@ -84,22 +84,16 @@ nonisolated struct ReadingPositionStore: Sendable {
         try? JSONEncoder().encode(trip).write(to: url, options: .atomic)
     }
 
-    /// Every book's place but `keeping`'s (another server after Remove
-    /// server, `RemovedServer`).
-    func removeAll(keeping bookIDs: Set<String>) {
-        Self.removeFiles(in: directory, keeping: bookIDs)
-        Self.removeFiles(in: tripsDirectory, keeping: bookIDs)
+    /// Every place and trip of `library`'s books.
+    func removeAll(of library: LibrarySourceID) {
+        StoredBookKeys.removeFiles(of: library, in: directory)
+        StoredBookKeys.removeFiles(of: library, in: tripsDirectory)
     }
 
-    /// The per-book JSON files in `directory`, but `keeping`'s; folders
-    /// (the unsent places) stay.
-    static func removeFiles(in directory: URL, keeping bookIDs: Set<String>) {
-        let kept = Set(bookIDs.map { fileURL(forBook: $0, in: directory).lastPathComponent })
-        let manager = FileManager.default
-        guard let names = try? manager.contentsOfDirectory(atPath: directory.path) else { return }
-        for name in names where name.hasSuffix(".json") && !kept.contains(name) {
-            try? manager.removeItem(at: directory.appending(path: name, directoryHint: .notDirectory))
-        }
+    /// Gives `library`'s places and trips to `other` (`RemovedServer`).
+    func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {
+        StoredBookKeys.moveFiles(of: library, to: other, in: directory)
+        StoredBookKeys.moveFiles(of: library, to: other, in: tripsDirectory)
     }
 
     /// Book IDs can be file names or server IDs; percent-encode anything that

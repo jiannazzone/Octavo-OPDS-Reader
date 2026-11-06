@@ -26,6 +26,10 @@ final class FeedModel {
     /// Authors A–Z, grouped once per page rather than on every redraw.
     /// Empty unless the list is only authors.
     private(set) var authorSections: [AuthorIndex.Section] = []
+    /// The first page had nothing on it (`EmptyFeed`). Stays set through a
+    /// reload, so pulling down doesn't swap the screen for blank covers, and
+    /// through one that fails, which `EmptyFeed` says itself.
+    private(set) var cameBackEmpty = false
 
     @ObservationIgnored private let library: any LibrarySource
     @ObservationIgnored private let report: (any Error) -> Void
@@ -113,6 +117,7 @@ final class FeedModel {
             title = feed.title
             entries = feed.entries
             books = feed.books
+            cameBackEmpty = feed.entries.isEmpty && feed.books.isEmpty
         } else {
             entries += feed.entries
             books += feed.books

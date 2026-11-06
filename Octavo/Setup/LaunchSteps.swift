@@ -11,7 +11,7 @@ import UIKit
 /// `isProtectedDataAvailable` reads false, so nothing ever ran from there.
 enum LaunchSteps {
     enum Step: String {
-        case removeLeftovers, sweep, moveSecretsOut
+        case removeLeftovers, sweep, moveStorage, moveSecretsOut
     }
 
     /// The steps that failed as this process launched, `nil` if they didn't
@@ -29,9 +29,10 @@ enum LaunchSteps {
     @discardableResult
     static func run(
         protectedDataAvailable: Bool, defaults: UserDefaults = .standard, servers: ServerStore = ServerStore(),
-        scope: (String) -> Bool = { _ in true }
+        migration: ServerStorageMigration? = nil, scope: (String) -> Bool = { _ in true }
     ) -> [Step]? {
         guard protectedDataAvailable else { return nil }
+        let migration = migration ?? ServerStorageMigration(servers: servers)
         var failed: [Step] = []
         func attempt(_ step: Step, _ body: () throws -> Void) {
             do {
@@ -46,12 +47,15 @@ enum LaunchSteps {
         // Keychain items outlive the app; a reinstall starts signed out.
         attempt(.removeLeftovers) {
             try ServerCredentials.removeLeftoversAfterInstall(
-                hasSavedServer: FileManager.default.fileExists(atPath: servers.fileURL.path), defaults: defaults, scope: scope
+                hasSavedServer: servers.hasFile, defaults: defaults, scope: scope
             )
         }
         // No setup has started storing: nothing can be tapped until this
         // callback returns.
         attempt(.sweep) { try KeychainSweep.run(servers: servers, scope: scope) }
+        // Before anything saves the list below: `Server.json` says whose the
+        // books are.
+        attempt(.moveStorage) { try migration.run() }
         attempt(.moveSecretsOut) { try servers.moveSecretsOut() }
         return failed
     }

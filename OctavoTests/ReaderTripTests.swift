@@ -129,13 +129,14 @@ struct ReaderTripTests {
         #expect(store.trip(forBook: "a") == nil)
     }
 
-    /// Another server: only the kept books' trips stay.
-    @Test func removingOtherBooksEndsTheirTrips() {
+    /// A server that can't come back: its books' trips go, the others' stay.
+    @Test func removingAServersBooksEndsTheirTrips() {
         let store = store()
+        let gone = LibrarySourceID(rawValue: "gone")
         store.saveTrip(trip(), forBook: "kept")
-        store.saveTrip(trip(), forBook: "gone")
-        store.removeAll(keeping: ["kept"])
+        store.saveTrip(trip(), forBook: "gone.book")
+        store.removeAll(of: gone)
         #expect(store.trip(forBook: "kept") != nil)
-        #expect(store.trip(forBook: "gone") == nil)
+        #expect(store.trip(forBook: "gone.book") == nil)
     }
 }

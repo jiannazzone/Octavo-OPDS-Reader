@@ -5,13 +5,15 @@ import OctavoKit
 /// A book ready to read: its library entry and the file on the iPhone.
 nonisolated struct OpenedBook: Hashable, Sendable {
     var book: LibraryBook
+    var source: LibrarySourceID
     var file: LibraryFile
     var reader: ReaderBook
 
-    init(book: LibraryBook, file: LibraryFile, url: URL) {
+    init(book: LibraryBook, source: LibrarySourceID, file: LibraryFile, url: URL) {
         self.book = book
+        self.source = source
         self.file = file
-        reader = ReaderBook(fileURL: url, id: file.storageKey)
+        reader = ReaderBook(fileURL: url, id: file.storageKey(in: source))
     }
 }
 
@@ -43,20 +45,20 @@ final class BookOpener {
     var onOpen: (OpenedBook) -> Void = { _ in }
 
     private let files: any BookFiles
-    private var statuses: [LibraryBookID: Status] = [:]
-    private var tasks: [LibraryBookID: Task<Void, Never>] = [:]
-    /// Files on disk aren't observed; this changes when one is removed, so
+    private var statuses: [SourcedBook.ID: Status] = [:]
+    private var tasks: [SourcedBook.ID: Task<Void, Never>] = [:]
+    /// Files on disk aren't observed; this changes when one comes or goes, so
     /// covers and screens look again.
-    private var removals = 0
+    private var fileChanges = 0
 
     init(files: any BookFiles = StoredBookFiles.moved()) {
         self.files = files
     }
 
-    func status(of book: LibraryBook) -> Status {
-        _ = removals
+    func status(of book: SourcedBook) -> Status {
+        _ = fileChanges
         if let status = statuses[book.id] { return status }
-        guard let file = book.readableFile, files.localFile(for: file) != nil else { return .notDownloaded }
+        guard let file = book.book.readableFile, files.localFile(for: file, in: book.source) != nil else { return .notDownloaded }
         return .downloaded
     }
 
@@ -69,8 +71,8 @@ final class BookOpener {
 
     /// Opens `book` now if it's on the iPhone, else downloads it and opens
     /// it when it's done.
-    func open(_ book: LibraryBook, from source: any LibrarySource) {
-        guard canOpen(book) else { return }
+    func open(_ book: SourcedBook, from source: any LibrarySource) {
+        guard canOpen(book.book) else { return }
         switch statuses[book.id] {
         case .downloading(let fraction, _):
             statuses[book.id] = .downloading(fraction: fraction, opensWhenDone: true)
@@ -78,29 +80,29 @@ final class BookOpener {
         default:
             break
         }
-        if let file = book.readableFile, let url = files.localFile(for: file) {
+        if let file = book.book.readableFile, let url = files.localFile(for: file, in: book.source) {
             statuses[book.id] = nil
-            onOpen(OpenedBook(book: book, file: file, url: url))
+            onOpen(OpenedBook(book: book.book, source: book.source, file: file, url: url))
         } else {
             start(book, from: source, opensWhenDone: true)
         }
     }
 
     /// Downloads `book` without opening it (the details' Download button).
-    func download(_ book: LibraryBook, from source: any LibrarySource) {
-        guard canOpen(book), tasks[book.id] == nil, status(of: book) != .downloaded else { return }
+    func download(_ book: SourcedBook, from source: any LibrarySource) {
+        guard canOpen(book.book), tasks[book.id] == nil, status(of: book) != .downloaded else { return }
         start(book, from: source, opensWhenDone: false)
     }
 
     /// Try again on the strip: the same request again.
-    func retry(_ book: LibraryBook, from source: any LibrarySource) {
+    func retry(_ book: SourcedBook, from source: any LibrarySource) {
         guard case .failed(_, let opensWhenDone) = statuses[book.id] else { return }
         statuses[book.id] = nil
         if opensWhenDone { open(book, from: source) } else { download(book, from: source) }
     }
 
     /// Cancel on the strip. Leaves no partial file.
-    func cancel(_ book: LibraryBook) {
+    func cancel(_ book: SourcedBook) {
         tasks[book.id]?.cancel()
         tasks[book.id] = nil
         statuses[book.id] = nil
@@ -108,11 +110,11 @@ final class BookOpener {
 
     /// Remove download: deletes the book's file from the iPhone. Its saved
     /// place stays, so it opens where it was if it's downloaded again.
-    func removeDownload(_ book: LibraryBook) {
+    func removeDownload(_ book: SourcedBook) {
         cancel(book)
-        guard let file = book.readableFile else { return }
-        try? files.remove(file)
-        removals += 1
+        guard let file = book.book.readableFile else { return }
+        try? files.remove(file, in: book.source)
+        fileChanges += 1
     }
 
     /// Storage's Remove all downloads: every book's file but `keeping`'s
@@ -120,83 +122,99 @@ final class BookOpener {
     /// Downloads still running carry on.
     func removeAllDownloads(keeping keys: Set<String> = []) {
         try? files.removeAll(keeping: keys)
-        removals += 1
+        fileChanges += 1
     }
 
-    /// Remove server: every download still running stops, and leaves no
-    /// file.
-    func cancelAll() {
-        for task in tasks.values { task.cancel() }
-        tasks = [:]
-        statuses = statuses.filter { _, status in
-            if case .downloading = status { false } else { true }
+    /// Remove server's Remove books too: every file of `library`'s, named by
+    /// a record or not.
+    func removeAllDownloads(of library: LibrarySourceID) {
+        files.removeAll(of: library)
+        fileChanges += 1
+    }
+
+    /// The same server came back at a new ID, and its kept files with it.
+    func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {
+        files.moveAll(of: library, to: other)
+        fileChanges += 1
+    }
+
+    /// Remove server: every download still running from `library` stops,
+    /// and leaves no file.
+    func cancelAll(in library: LibrarySourceID) {
+        for (id, task) in tasks where id.source == library {
+            task.cancel()
+            tasks[id] = nil
+        }
+        statuses = statuses.filter { id, status in
+            if id.source == library, case .downloading = status { false } else { true }
         }
     }
 
     /// The downloaded file of `book`, for Storage's sizes.
-    func localFile(for book: LibraryBook) -> URL? {
-        _ = removals
-        return book.readableFile.flatMap(files.localFile(for:))
+    func localFile(for book: SourcedBook) -> URL? {
+        _ = fileChanges
+        return book.book.readableFile.flatMap { files.localFile(for: $0, in: book.source) }
     }
 
     /// Files came or went outside the opener (an import, an imported book
     /// removed): covers and screens look again.
     func filesChanged() {
-        removals += 1
+        fileChanges += 1
     }
 
     /// Forgets a failure, so the strip shows Open again.
-    func clearFailure(_ book: LibraryBook) {
+    func clearFailure(_ book: SourcedBook) {
         if case .failed = statuses[book.id] { statuses[book.id] = nil }
     }
 
-    private func start(_ book: LibraryBook, from source: any LibrarySource, opensWhenDone: Bool) {
+    private func start(_ book: SourcedBook, from source: any LibrarySource, opensWhenDone: Bool) {
         tasks[book.id]?.cancel()
         statuses[book.id] = .downloading(fraction: 0, opensWhenDone: opensWhenDone)
         let files = files
         tasks[book.id] = Task {
             do {
                 // A list entry may not list its files; the details do.
-                var full = book
-                if full.files.isEmpty { full = try await source.details(for: book).book }
+                var full = book.book
+                if full.files.isEmpty { full = try await source.details(for: book.book).book }
                 guard let file = full.readableFile else { throw BookFilesError.unreadableFormat }
                 let id = book.id
-                let url = try await files.download(file, from: source) { fraction in
+                let url = try await files.download(file, in: book.source, from: source) { fraction in
                     Task { @MainActor [weak self] in self?.progressed(id, to: fraction) }
                 }
                 // Cancelled as the file landed: it goes too.
                 if Task.isCancelled {
-                    try? files.remove(file)
+                    try? files.remove(file, in: book.source)
                     throw CancellationError()
                 }
                 // Checked by its bytes, as an import is.
                 if await Self.isProtected(url) {
-                    try? files.remove(file)
+                    try? files.remove(file, in: book.source)
                     refused(book)
                     return
                 }
-                finished(full, file: file, url: url)
+                finished(SourcedBook(source: book.source, book: full), file: file, url: url)
             } catch {
                 failed(book, error)
             }
         }
     }
 
-    private func progressed(_ id: LibraryBookID, to fraction: Double) {
+    private func progressed(_ id: SourcedBook.ID, to fraction: Double) {
         guard case .downloading(let shown, let opens) = statuses[id] else { return }
         // Whole percents: the strip shows no more, and each change redraws it.
         let rounded = (fraction * 100).rounded(.down) / 100
         if rounded > shown { statuses[id] = .downloading(fraction: rounded, opensWhenDone: opens) }
     }
 
-    private func finished(_ book: LibraryBook, file: LibraryFile, url: URL) {
+    private func finished(_ book: SourcedBook, file: LibraryFile, url: URL) {
         guard case .downloading(_, let opens) = statuses[book.id] else { return }
         tasks[book.id] = nil
         statuses[book.id] = nil
-        if opens { onOpen(OpenedBook(book: book, file: file, url: url)) }
+        fileChanges += 1
+        if opens { onOpen(OpenedBook(book: book.book, source: book.source, file: file, url: url)) }
     }
 
-    private func refused(_ book: LibraryBook) {
+    private func refused(_ book: SourcedBook) {
         guard case .downloading = statuses[book.id] else { return }
         tasks[book.id] = nil
         statuses[book.id] = .protected
@@ -215,7 +233,7 @@ final class BookOpener {
         }
     }
 
-    private func failed(_ book: LibraryBook, _ error: any Error) {
+    private func failed(_ book: SourcedBook, _ error: any Error) {
         // Cancelled: `cancel` has already reset the status.
         guard case .downloading(_, let opens) = statuses[book.id], !Self.isCancellation(error) else { return }
         tasks[book.id] = nil

@@ -421,8 +421,9 @@ struct TourShellTests {
         await model.library.connect(RemoveServerTests.bookOrbit(id: LibrarySourceID(rawValue: "tour-download"), account: "octavo"))
         model.hingeReported(.closed)
         model.showTour()
-        model.opener.open(book, from: source)
-        #expect(await eventually { model.opener.status(of: book) == .downloaded })
+        let sourced = SourcedBook(source: LibrarySourceID(rawValue: "tour-download"), book: book)
+        model.opener.open(sourced, from: source)
+        #expect(await eventually { model.opener.status(of: sourced) == .downloaded })
         #expect(model.reading == nil)
         #expect(model.tour?.step == .cover)
     }
@@ -674,9 +675,9 @@ struct TourShellTests {
         #expect(model.library.continueReading.map(\.book.id) == reading)
     }
 
-    // On a replay with a server there's no second one to add: Add books is
-    // the Files picker, and no setup screen.
-    @Test func addBooksOnAReplayWithAServerOffersFiles() async throws {
+    // On a replay with a server, Add books adds another (decision 36), over
+    // the Settings it was replayed from.
+    @Test func addBooksOnAReplayWithAServerOffersTheServerChoices() async throws {
         let model = shell(state: .played)
         await model.library.connect(RemoveServerTests.bookOrbit(id: LibrarySourceID(rawValue: "tour-server"), account: "octavo"))
         model.hingeReported(.closed)
@@ -686,8 +687,8 @@ struct TourShellTests {
         model.tourAddBooks()
         #expect(model.tour == nil)
         #expect(!model.showsSetup)
-        #expect(model.picksFiles)
-        #expect(model[path: model.tab].routes == routes)
+        #expect(!model.picksFiles)
+        #expect(model[path: model.tab].routes == routes + [.setup(.choose)])
     }
 
     @Test func aReplayEndingOnAddYourBooksReturnsToSettingsOnSkip() {

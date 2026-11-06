@@ -12,6 +12,9 @@ struct LibraryView: View {
         if let server = library.server {
             if let root = library.root {
                 LibraryContents(source: server.id, sections: Self.sections(root))
+                    // Another server's lists, which may be at the same links,
+                    // and from the top.
+                    .id(server.id)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     ConnectionBannerSlot()
@@ -53,6 +56,95 @@ struct LibraryView: View {
         }
         return sections
     }
+
+    /// The server's newest books, by the name its shelf has. `nil` if the
+    /// server has no such list.
+    static func newest(_ root: LibraryRoot) -> LibraryEntry? {
+        sections(root).first { $0.link == root.recentlyAdded }
+    }
+}
+
+/// The Library's title with several servers (decision 36): the chosen
+/// server's name and a chevron, where `ScreenTitle` would be. A tap opens a
+/// popover under it, with the servers and Add a server. Not a `Menu`, whose
+/// label iOS squashes into the glass as it opens: built for a small button,
+/// it made a blob of a large title and hid it while open (Adam, 2026-11-05).
+struct LibraryServerMenu: View {
+    @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
+    @State private var isOpen = false
+    /// A menu's row, growing with the text size.
+    @ScaledMetric private var rowHeight: CGFloat = 44
+
+    var body: some View {
+        Button {
+            isOpen = true
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(library.server?.name ?? "Library")
+                    .font(.largeTitle.bold())
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.tint)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityHint("Shows your servers")
+        .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+            rows
+                .presentationCompactAdaptation(.popover)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, SpreadMetrics.titleTop)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// As tall as its rows, scrolling if there are more than fit.
+    private var rows: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(library.connections, id: \.server.id) { connection in
+                    let isChosen = connection.server.id == library.server?.id
+                    row(connection.server.name, symbol: "checkmark", showsSymbol: isChosen) {
+                        isOpen = false
+                        shell.chooseServer(connection.server.id)
+                    }
+                    .accessibilityAddTraits(isChosen ? .isSelected : [])
+                }
+                Divider()
+                    .padding(.leading, 16)
+                row("Add a server", symbol: "plus", showsSymbol: true) {
+                    isOpen = false
+                    shell.push(.setup(.choose))
+                }
+            }
+            .padding(.vertical, 6)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: 300, height: min(CGFloat(library.connections.count + 1) * rowHeight + 13, 440))
+    }
+
+    private func row(_ title: String, symbol: String, showsSymbol: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .opacity(showsSymbol ? 1 : 0)
+                    .accessibilityHidden(!showsSymbol)
+                Text(title)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: rowHeight)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 /// The sections as shelves, one under another.
@@ -93,6 +185,7 @@ struct LibraryContents: View {
 struct LibraryShelf: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
+    var maxRows = 1
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
     @Environment(\.spread) private var spread
@@ -137,16 +230,16 @@ struct LibraryShelf: View {
     @ViewBuilder
     private func shelf(_ feed: FeedModel?) -> some View {
         if let feed, !feed.books.isEmpty {
-            SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }, maxRows: 1, cell: { book in
+            SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }, maxRows: maxRows, cell: { book in
                 BookGridCell(book: book)
             })
         } else if let feed, !feed.entries.isEmpty, feed.entries.contains(where: { !$0.previewCovers.isEmpty }) {
             // A list of lists (series, authors): each a tile that opens it.
-            SpreadGrid(items: feed.entries, maxRows: 1, cell: { entry in
+            SpreadGrid(items: feed.entries, maxRows: maxRows, cell: { entry in
                 EntryTile(entry: entry, source: source)
             })
         } else if feed.map({ $0.state == .idle || $0.state == .loading }) ?? false {
-            SpreadGrid(items: (0..<8).map { ShelfPlaceholder(id: $0) }, maxRows: 1, cell: { _ in
+            SpreadGrid(items: (0..<8).map { ShelfPlaceholder(id: $0) }, maxRows: maxRows, cell: { _ in
                 ShelfPlaceholder.shape
             })
             .accessibilityHidden(true)
@@ -204,12 +297,16 @@ struct FeedScreen: View {
 
     var body: some View {
         if let feed = library.feed(entry.link, from: source) {
-            FeedContent(feed: feed, numbered: entry.kind == .series) {
-                if let summary = summary(feed) {
-                    Text(summary)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
+            if feed.cameBackEmpty {
+                EmptyFeed(entry: entry, feed: feed)
+            } else {
+                FeedContent(feed: feed, numbered: entry.kind == .series) {
+                    if let summary = summary(feed) {
+                        Text(summary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
+                    }
                 }
             }
         } else {
@@ -295,6 +392,9 @@ struct FeedContent<Header: View>: View {
                 status
                     .frame(width: spread.pages?.leftWidth)
             }
+            // With only the left page's width in it, a scroll view would
+            // centre this across the hinge.
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 20)
         }
     }
@@ -333,17 +433,12 @@ struct FeedContent<Header: View>: View {
             // The next page of a grid.
             ProgressView()
                 .padding(.vertical, 12)
-        case .failed where library.connectionProblem == nil:
+        case .failed where library.connection(feed.source)?.problem == nil:
             if isEmpty {
-                EmptyInvitation(
-                    symbol: "exclamationmark.triangle", title: "Couldn’t load this list",
-                    message: "The server didn’t send it.", actionTitle: "Try again"
-                ) { Task { await feed.retry() } }
+                FeedFailedInvitation(feed: feed)
             } else {
                 Button("Couldn’t load the rest · Try again") { Task { await feed.retry() } }
             }
-        case .loaded where isEmpty:
-            ContentUnavailableView("Nothing here yet", systemImage: "books.vertical")
         default:
             EmptyView()
         }

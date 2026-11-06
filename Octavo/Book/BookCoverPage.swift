@@ -23,10 +23,11 @@ struct BookCoverPage: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        let page = shell.pages.page(for: book)
+        let sourced = SourcedBook(source: sourceID, book: book)
+        let page = shell.pages.page(for: sourced)
         // The shelf's cover, until the full-size one loads: the screen
         // slides in with a cover on it, not an empty frame.
-        let thumbnail = shell.library.covers.cachedImage(for: SourcedBook(source: sourceID, book: book), size: .thumbnail)
+        let thumbnail = shell.library.covers.cachedImage(for: sourced, size: .thumbnail)
         Group {
             if let pages = spread.pages {
                 HStack(spacing: 0) {
@@ -56,13 +57,13 @@ struct BookCoverPage: View {
         .onAppear {
             page.load(from: source)
             page.keepFinished(in: shell.library.finished, as: SourcedBook.ID(source: sourceID, book: book.id))
-            shell.opener.clearFailure(book)
-            shell.places.refresh(SourcedBook(source: sourceID, book: book))
+            shell.opener.clearFailure(sourced)
+            shell.places.refresh(sourced)
         }
         .onChange(of: scenePhase) { _, phase in
             // Not under the reader: its own pushes keep the place current.
             guard phase == .active, shell.reading == nil else { return }
-            shell.places.refresh(SourcedBook(source: sourceID, book: book))
+            shell.places.refresh(sourced)
         }
     }
 }

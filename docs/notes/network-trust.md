@@ -336,6 +336,33 @@ Checked, with no defect: Release builds only use `server-<UUID>` accounts equal 
 
 Not verified anywhere: all of this on a real device, including a launch while locked; whether prewarming can reach `didFinishLaunching` (if it can while locked, the steps wait for a later process).
 
+## More than one server (2026-11-05)
+
+Decision 36: any number of servers (`docs/notes/more-than-one-server.md`). **Network-trust change: Adam signed off the review below on 2026-11-05** (through commit `da5b51c`).
+
+What changed here: each server keeps its own client, `ServerTransport`, certificate pin and Keychain items under its own ID, as one server did. `KeychainSweep` keeps every saved server's items and deletes the rest, and deletes nothing if the list can't be read. Remove server and Sign out touch one account. The policy, transport and ATS settings didn't change.
+
+### Independent security review (fresh subagent, given the code; signed off by Adam)
+
+Of commit `0ae1f8c`, by reading: it ran nothing. **Nothing High.** No secret reaches another server: clients, transports and Keychain stores all take the server's own ID. Storage keys are our ID, a dot and a SHA-256 of the file's ID, so a hostile or colliding ID can't reach a path or another server. It found no path where the sweep deletes a live secret. The fixes below weren't reviewed again independently; each has a test.
+
+| # | Finding | Severity | Done |
+|---|---|---|---|
+| 1 | Sign in again as another account kept the server's ID, so one account's unsent places and bookmarks went to the other, and its data came back under the new identity after Remove. Older than this change | Medium | Fixed (Adam): the account is fixed on that screen, and `signInAgain` refuses another. Another account is another server |
+| 2 | With a server unreachable or loading, Search's Browse showed the chosen server's lists under its name, so between two catalogs one's books opened as the other's. No secret moved: a password and a key stay on their own origin | Medium | Fixed: a server's own lists or none |
+| 3 | A list that can't be decoded made `ServerStore.add` throw: each new server lasted one launch, and the sweep never ran, so every session's tokens stayed | Medium | Fixed: the next server replaces it, as setup's save did with one server. A read error still throws, as a locked file may be fine |
+| 4 | Kept books were taken back before the save was known to work, stranding them if it failed | Low | Fixed: only once saved |
+| 5 | Migration: a run cut short made a new ID each time, and records of a server added since were relabelled | Low | Fixed: the entry is written first and reused, and other servers' records stay. `Server.json` that can't be decoded goes once there's a list |
+| 6 | Remove books too left files no record names | Low | Fixed: by the server's prefix |
+| 7 | A removed server's address, account, places and bookmark excerpts stayed with no limit, even after Remove books too | Low | Fixed (Adam): Remove books too leaves nothing. Keep books on iPhone keeps them until it comes back, by choice |
+| 8 | A catalog's title names the server, so one could call itself "BookOrbit", and the title had no length limit | Low | Length and control characters limited. The name stays: you added that catalog, its address shows on its pages, and you can rename it |
+| — | A corrupt `RemovedServers.json` reads as empty, so the next entry replaces it | Low | Accepted: those servers' kept books stay listed in Storage and can be removed, but won't be taken back |
+| — | Search sends what you type to every server, a hostile one included | Info | By design (decision 36) |
+| — | A catalog whose key is gone is skipped at launch and shown nowhere, and keeps its password and pin in the Keychain | Info | Accepted: adding it again works, and only a wiped Keychain causes it |
+| — | An older build installed over this one sweeps every server's items, as it sees no `Server.json` | Info | Development installs only: no release has shipped |
+
+Not verified anywhere: a real device, a locked launch, prewarming, what reading a locked file actually throws, and whether `auth/logout` ends only that session (taken from `settings.md`'s measurement of one session).
+
 ## Tests and how to run them
 
 ```bash

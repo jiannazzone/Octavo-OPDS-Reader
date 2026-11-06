@@ -24,10 +24,23 @@ nonisolated struct BooksOnIPhone: Sendable {
         try write(books)
     }
 
+    /// Gives `library`'s records to `other` (`RemovedServer`).
+    func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) throws {
+        let books = books()
+        guard books.contains(where: { $0.source == library }) else { return }
+        try write(books.map { $0.source == library ? SourcedBook(source: other, book: $0.book) : $0 })
+    }
+
     func remove(_ book: SourcedBook.ID) throws {
         let kept = books().filter { $0.id != book }
         guard kept.count != books().count else { return }
         try write(kept)
+    }
+
+    /// The list as it stands, for `ServerStorageMigration`.
+    func replace(_ books: [SourcedBook]) throws {
+        guard !books.isEmpty || !self.books().isEmpty else { return }
+        try write(books)
     }
 
     private func write(_ books: [SourcedBook]) throws {

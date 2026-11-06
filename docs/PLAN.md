@@ -50,6 +50,9 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] Skipping by chapter (Adam, 2026-11-04). Decided (decision 35) and built the same day: ⏮ and ⏭ beside the chapter's name, and a scrubber with dots at chapters and a tick you feel as it passes one. Hold still and it zooms in to one page at a time, with a catch at chapter starts (Adam, after a test build on his Duo). To be tried on Adam's Duo.
 - [x] Back always there in the reader (Adam, 2026-11-04). Decided (decision 7) and built the same day: ‹ on its own above ···, grey with it while you read.
 - [x] Folded, it needs to be easier to dismiss the Customize pane (Adam, 2026-11-03, on his Duo). A tap on the screen is a small target there, and his opened the table of contents instead of closing the pane. Built 2026-11-04: a ✕ at the top right of all three panels, folded and unfolded (decision 13 in `docs/design/direction.md`).
+- [x] More than one server (Adam, 2026-11-05), before the first release: "Someone might have bookorbit and OPDS, for example." Decided and built the same day (decision 36 in `docs/design/direction.md`, `docs/notes/more-than-one-server.md`): a menu in the Library's title, Home and Search across every server, a name you set. Adam tried it on his Duo the same day.
+- [x] Empty lists: an invitation, not a blank screen (Adam, 2026-11-01; #30). Decided and built 2026-11-05 (decision 22 in `docs/design/direction.md`, `docs/notes/empty-lists.md`): "No books in this list" with Open Library, and unfolded the server's newest books on the right page. Home's and On iPhone's empty screens use the same layout.
+- iCloud sync and KOReader sync (Adam, 2026-11-05): separate tasks, for later. They'd carry the places of OPDS and imported books, which stay on the iPhone in decision 36.
 
 ## What you'll see that isn't right yet
 

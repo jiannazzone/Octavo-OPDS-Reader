@@ -41,7 +41,7 @@ Books and sign-ins stay between your iPhone and your server. Passwords go in the
 
 ## Not yet
 
-PDF and comics, highlights and notes, footnotes that open on the page, iCloud and KOReader sync, and more than one server.
+PDF and comics, highlights and notes, and iCloud and KOReader sync.
 
 ## Build it
 

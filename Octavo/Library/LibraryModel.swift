@@ -3,11 +3,15 @@ import Observation
 import OctavoKit
 import UIKit
 
-/// The connected library server, as the app sees it. v1 has one (decision 1).
+/// A connected library server, as the app sees it (decision 36).
 struct LibraryServer {
     var id: LibrarySourceID
-    /// "BookOrbit", or the OPDS catalog's name, for headings and banners.
+    /// What the app calls it, in headings and banners: the name you gave it,
+    /// else `ownName` (`SavedServer`).
     var name: String
+    /// "BookOrbit", or the OPDS catalog's own name, with a number if another
+    /// server had that name when this one was added.
+    var ownName: String? = nil
     /// Where, for Settings: "books.example.com", "localhost:3300".
     var address = ""
     /// Who's signed in, if anyone: "adam".
@@ -31,36 +35,96 @@ struct LibraryServer {
     }
 }
 
-/// The app-wide library state: the connected server, its chips, Home's
-/// lists, and every list opened so far, so a fold (which rebuilds the views)
-/// shows them without loading again. Views find a book's library with
+/// One connected server and what it has said (decision 36): its sections,
+/// its books in progress, and whether it can be reached.
+@Observable
+final class ServerConnection {
+    fileprivate(set) var server: LibraryServer
+    fileprivate(set) var root: LibraryRoot?
+    /// The sections didn't load for a reason the banner doesn't cover.
+    fileprivate(set) var rootFailed = false
+    /// A banner in the Library for this server, and on Home if it needs you
+    /// (decision 22, `LibraryModel.homeProblems`).
+    fileprivate(set) var problem: ConnectionProblem?
+    @ObservationIgnored fileprivate var continueReading: [SourcedBook] = []
+    /// Its Continue reading has loaded once.
+    fileprivate(set) var homeLoaded = false
+    fileprivate(set) var continueReadingFailed = false
+
+    fileprivate init(server: LibraryServer) {
+        self.server = server
+    }
+}
+
+/// The app-wide library state: the connected servers, each one's sections,
+/// Home's lists, and every list opened so far, so a fold (which rebuilds the
+/// views) shows them without loading again. Views find a book's library with
 /// `source(for:)`.
+///
+/// Each server is its own library (decision 36): `server`, `root` and
+/// `connectionProblem` are the one the Library shows, and Home and Search go
+/// through `connections`.
 @Observable
 final class LibraryModel {
-    private(set) var server: LibraryServer?
-    private(set) var root: LibraryRoot?
-    /// Shown as a banner at the top of Home and the Library (decision 22).
-    var connectionProblem: ConnectionProblem?
+    /// In the order they were added.
+    private(set) var connections: [ServerConnection] = []
+    private var chosenID: LibrarySourceID?
+    /// The Library's server: the one chosen, else the first.
+    var chosen: ServerConnection? {
+        connections.first { $0.server.id == chosenID } ?? connections.first
+    }
+    var server: LibraryServer? { chosen?.server }
+    var root: LibraryRoot? { chosen?.root }
+    var rootFailed: Bool { chosen?.rootFailed ?? false }
+    /// Shown as a banner at the top of the Library (decision 22).
+    var connectionProblem: ConnectionProblem? {
+        get { chosen?.problem }
+        set { chosen?.problem = newValue }
+    }
     /// The Library tab's chip.
     var chip: LibraryLink?
 
-    /// Home: the books in progress, server and iPhone together, newest
-    /// first. The first is the book you're reading.
+    /// Home: the books in progress, every server's and the iPhone's together,
+    /// newest first. The first is the book you're reading.
     private(set) var continueReading: [SourcedBook] = []
-    /// Home has loaded once; until then it shows placeholders, not the empty
-    /// state.
-    private(set) var homeLoaded = false
-    /// The server's Continue reading didn't load, so an empty list doesn't
-    /// mean nothing is in progress.
-    private(set) var continueReadingFailed = false
-    /// The chips didn't load for a reason the banner doesn't cover.
-    private(set) var rootFailed = false
 
-    /// Changes with every connect and disconnect, so a screen holding the
-    /// old server's source starts over.
+    /// Home has loaded once from any server; until then it shows
+    /// placeholders, not the empty state. A slow server's books join later.
+    var homeLoaded: Bool {
+        connections.contains(where: \.homeLoaded)
+    }
+
+    /// No server's Continue reading loaded, so an empty list doesn't mean
+    /// nothing is in progress.
+    var continueReadingFailed: Bool {
+        !connections.isEmpty && connections.allSatisfy(\.continueReadingFailed)
+    }
+
+    /// There's more than one server, so books and sections name theirs
+    /// (decision 36).
+    var hasSeveralServers: Bool {
+        connections.count > 1
+    }
+
+    /// The banners on Home. With one server, whatever's wrong with it. With
+    /// several, only a sign-in, which needs you: a server you can't reach
+    /// right now shows in the Library and in Search, or Home would nag
+    /// whenever you're away from a server at home (decision 36).
+    var homeProblems: [(server: LibrarySourceID, problem: ConnectionProblem)] {
+        connections.compactMap { connection in
+            guard let problem = connection.problem else { return nil }
+            if hasSeveralServers, case .unreachable = problem { return nil }
+            return (connection.server.id, problem)
+        }
+    }
+
+    /// Changes with every server added or removed, so a screen holding a
+    /// server's source starts over.
     private(set) var connection = 0
-    /// Called when the server changes (the shell closes its screens).
-    @ObservationIgnored var serverChanged: () -> Void = {}
+    /// A server was added (the shell starts its search over).
+    @ObservationIgnored var serverAdded: () -> Void = {}
+    /// `id` is gone (the shell closes what showed its books).
+    @ObservationIgnored var serverRemoved: (LibrarySourceID) -> Void = { _ in }
 
     let covers = CoverCache()
     @ObservationIgnored let recents: RecentBooks
@@ -73,7 +137,6 @@ final class LibraryModel {
     private(set) var importedBooks: [SourcedBook] = []
     @ObservationIgnored private var feeds: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var previews: [FeedKey: FeedModel] = [:]
-    @ObservationIgnored private var serverContinueReading: [SourcedBook] = []
 
     /// The book you're reading and the others in progress Home shows.
     static let continueReadingLimit = 8
@@ -91,10 +154,24 @@ final class LibraryModel {
         importedChanged()
     }
 
+    func connection(_ id: LibrarySourceID) -> ServerConnection? {
+        connections.first { $0.server.id == id }
+    }
+
+    func server(_ id: LibrarySourceID) -> LibraryServer? {
+        connection(id)?.server
+    }
+
     /// The library `id` names, if it's connected. Imported books' always is.
     func source(for id: LibrarySourceID) -> (any LibrarySource)? {
         if id == .files { return importedSource }
-        return server?.id == id ? server?.source : nil
+        return server(id)?.source
+    }
+
+    /// What's beside a book's place with several servers: its server's name.
+    /// Imported books have none (decision 36).
+    func label(for book: SourcedBook) -> String? {
+        hasSeveralServers ? server(book.source)?.name : nil
     }
 
     /// A book on the shelf, imported or the sample: enough to leave setup
@@ -109,54 +186,87 @@ final class LibraryModel {
         mergeContinueReading()
     }
 
-    /// Replaces the server and loads its chips and Home.
+    /// Adds the server, or replaces the one with its ID, shows it in the
+    /// Library, and loads its sections and Home.
     func connect(_ server: LibraryServer) async {
-        use(server)
-        await loadServer()
+        add(server)
+        await load(server.id)
     }
 
-    /// Replaces the server at once, without loading anything: at launch, so
-    /// the first frame shows the tabs rather than setup.
-    func use(_ server: LibraryServer) {
-        self.server = server
-        connection += 1
-        serverChanged()
-        root = nil
+    /// Adds the server, or replaces the one with its ID, and shows it in the
+    /// Library, without loading anything: at launch, so the first frame shows
+    /// the tabs rather than setup.
+    func add(_ server: LibraryServer) {
+        if let index = connections.firstIndex(where: { $0.server.id == server.id }) {
+            forgetLists(of: server.id)
+            connections[index] = ServerConnection(server: server)
+        } else {
+            connections.append(ServerConnection(server: server))
+        }
+        chosenID = server.id
         chip = nil
-        feeds = [:]
-        previews = [:]
-        serverContinueReading = []
-        homeLoaded = false
-        continueReadingFailed = false
-        connectionProblem = nil
-    }
-
-    /// The server's chips, then Home.
-    func loadServer() async {
-        await loadRoot()
-        await loadHome()
-    }
-
-    func disconnect() {
-        server = nil
         connection += 1
-        serverChanged()
-        root = nil
+        serverAdded()
+    }
+
+    /// The Library shows `id`.
+    func choose(_ id: LibrarySourceID?) {
+        guard let id, connection(id) != nil else { return }
+        chosenID = id
+    }
+
+    /// Every server's sections, then its Home, each as it answers.
+    func loadServers() async {
+        await withTaskGroup(of: Void.self) { group in
+            for connection in connections {
+                let id = connection.server.id
+                group.addTask { await self.load(id) }
+            }
+        }
+    }
+
+    /// `id`'s sections, then its Home.
+    func load(_ id: LibrarySourceID) async {
+        guard let connection = connection(id) else { return }
+        await loadRoot(connection)
+        await loadHome(connection)
+    }
+
+    /// Takes `id` away. What's left of it goes with it.
+    func remove(_ id: LibrarySourceID) {
+        connections.removeAll { $0.server.id == id }
+        if chosenID == id { chosenID = connections.first?.server.id }
+        forgetLists(of: id)
         chip = nil
-        feeds = [:]
-        previews = [:]
-        serverContinueReading = []
-        // Imported books stay in progress.
+        connection += 1
         mergeContinueReading()
-        homeLoaded = false
-        continueReadingFailed = false
-        rootFailed = false
-        connectionProblem = nil
+        serverRemoved(id)
+    }
+
+    /// Every server goes, as after a debug disconnect.
+    func disconnect() {
+        for id in connections.map(\.server.id) { remove(id) }
+    }
+
+    private func forgetLists(of id: LibrarySourceID) {
+        feeds = feeds.filter { $0.key.source != id }
+        previews = previews.filter { $0.key.source != id }
     }
 
     /// Sign in again worked as `username`.
-    func signedIn(as username: String) {
-        server?.username = username
+    func signedIn(_ id: LibrarySourceID, as username: String) {
+        connection(id)?.server.username = username
+    }
+
+    /// The name you gave `id` (decision 36), or its own again.
+    func rename(_ id: LibrarySourceID, to name: String) {
+        guard let connection = connection(id) else { return }
+        connection.server.name = name
+        connection.problem = switch connection.problem {
+        case .unreachable: .unreachable(server: name)
+        case .signedOut: .signedOut(server: name)
+        case nil: nil
+        }
     }
 
     /// Remove server: the records of `server`'s books that can't be opened
@@ -175,7 +285,7 @@ final class LibraryModel {
         let key = FeedKey(source: source, link: link)
         if let feed = feeds[key] { return feed }
         guard let library = self.source(for: source) else { return nil }
-        let feed = FeedModel(link: link, source: source, library: library, report: reporter())
+        let feed = FeedModel(link: link, source: source, library: library, report: reporter(for: source))
         feeds[key] = feed
         return feed
     }
@@ -183,12 +293,12 @@ final class LibraryModel {
     /// The first few books at `link`, for a collection's row: from the
     /// server's preview source when it has one, else the list itself.
     func preview(_ link: LibraryLink, from source: LibrarySourceID) -> FeedModel? {
-        guard let server, server.id == source, let previewSource = server.previewSource else {
+        guard let previewSource = server(source)?.previewSource else {
             return feed(link, from: source)
         }
         let key = FeedKey(source: source, link: link)
         if let preview = previews[key] { return preview }
-        let preview = FeedModel(link: link, source: source, library: previewSource, report: reporter())
+        let preview = FeedModel(link: link, source: source, library: previewSource, report: reporter(for: source))
         previews[key] = preview
         return preview
     }
@@ -204,57 +314,69 @@ final class LibraryModel {
         return await covers.image(for: portrait, in: source, size: .thumbnail, from: library)
     }
 
-    /// Retry on the banner: what failed loads again.
-    func retry() async {
-        connectionProblem = nil
-        if root == nil { await loadRoot() }
-        let failed = (Array(feeds.values) + Array(previews.values)).filter { $0.state == .failed }
+    /// Retry on the banner: what failed on `id`, else on the Library's
+    /// server, loads again.
+    func retry(_ id: LibrarySourceID? = nil) async {
+        guard let connection = id.flatMap(connection(_:)) ?? chosen else { return }
+        let source = connection.server.id
+        connection.problem = nil
+        if connection.root == nil { await loadRoot(connection) }
+        let failed = (feeds.filter { $0.key.source == source }.map(\.value) + previews.filter { $0.key.source == source }.map(\.value))
+            .filter { $0.state == .failed }
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.loadHome() }
+            group.addTask { await self.loadHome(connection) }
             for feed in failed {
                 group.addTask { await feed.retry() }
             }
         }
     }
 
-    private func loadRoot() async {
-        guard let server else { return }
-        let connection = connection
-        rootFailed = false
+    private func loadRoot(_ connection: ServerConnection) async {
+        connection.rootFailed = false
         do {
-            let root = try await server.source.root()
-            // Another server meanwhile (Remove server, then setup): this
-            // answer is the old one's.
-            guard connection == self.connection else { return }
-            self.root = root
-            if !root.chips.contains(where: { $0.link == chip }) {
+            let root = try await connection.server.source.root()
+            // Removed meanwhile: this answer is the old one's.
+            guard isConnected(connection) else { return }
+            connection.root = root
+            if connection === chosen, !root.chips.contains(where: { $0.link == chip }) {
                 // OPDS: the whole-library chip, not an empty "Keep Reading".
                 let start = root.startChip.flatMap { start in root.chips.contains { $0.link == start } ? start : nil }
                 chip = start ?? root.chips.first?.link
             }
         } catch {
-            guard connection == self.connection else { return }
-            rootFailed = true
-            report(error)
+            guard isConnected(connection) else { return }
+            connection.rootFailed = true
+            report(error, on: connection)
         }
+    }
+
+    private func isConnected(_ connection: ServerConnection) -> Bool {
+        connections.contains { $0 === connection }
     }
 
     // MARK: Home
 
-    /// The books in progress, from the server and the iPhone. New arrivals
+    /// The books in progress, from every server and the iPhone. New arrivals
     /// live in the Library, not here.
     func loadHome() async {
-        guard let server else { return }
-        let connection = connection
-        if root == nil { await loadRoot() }
-        guard connection == self.connection else { return }
-        let readingBooks = await books(at: root?.continueReading, from: server)
-        guard connection == self.connection else { return }
+        await withTaskGroup(of: Void.self) { group in
+            for connection in connections {
+                group.addTask { await self.loadHome(connection) }
+            }
+        }
+    }
+
+    private func loadHome(_ connection: ServerConnection) async {
+        guard isConnected(connection) else { return }
+        if connection.root == nil { await loadRoot(connection) }
+        guard isConnected(connection) else { return }
+        let readingBooks = await books(at: connection.root?.continueReading, from: connection)
+        guard isConnected(connection) else { return }
         // A failed list keeps what it showed.
-        if let readingBooks { serverContinueReading = readingBooks }
-        continueReadingFailed = readingBooks == nil
+        if let readingBooks { connection.continueReading = readingBooks }
+        connection.continueReadingFailed = readingBooks == nil
         mergeContinueReading()
-        homeLoaded = true
+        connection.homeLoaded = true
     }
 
     /// A book marked finished leaves Home: BookOrbit drops it from its own
@@ -263,7 +385,7 @@ final class LibraryModel {
     func markedFinished(_ book: SourcedBook.ID, _ finished: Bool) {
         guard finished else { return }
         try? recents.remove(book)
-        serverContinueReading.removeAll { $0.id == book }
+        connection(book.source)?.continueReading.removeAll { $0.id == book }
         mergeContinueReading()
     }
 
@@ -279,59 +401,67 @@ final class LibraryModel {
         try? onIPhone.record(book)
     }
 
-    /// The connected server's books this iPhone has asked for, and the
+    /// The connected servers' books this iPhone has asked for, and the
     /// imported ones, newest first,
     /// including ones opened before `onIPhone` kept a list. Whether each is
     /// still on the iPhone is the opener's to say.
     func iPhoneBooks() -> [SourcedBook] {
         var seen = Set<SourcedBook.ID>()
         return (onIPhone.books() + recents.records().map(\.book))
-            .filter { ($0.source == server?.id || $0.source == .files) && seen.insert($0.id).inserted }
+            .filter { source(for: $0.source) != nil && seen.insert($0.id).inserted }
     }
 
     /// Lists Continue reading again, so its rows show the latest positions.
     func mergeContinueReading() {
         // Records from a server that's gone can't be opened.
         let iPhone = recents.records().filter { source(for: $0.book.source) != nil }
-        continueReading = ContinueReading.merge(server: serverContinueReading, iPhone: iPhone, limit: Self.continueReadingLimit)
+        continueReading = ContinueReading.merge(
+            server: connections.flatMap(\.continueReading), iPhone: iPhone, limit: Self.continueReadingLimit
+        )
     }
 
     /// `[]` with no list to load; `nil` if it failed.
-    private func books(at link: LibraryLink?, from server: LibraryServer) async -> [SourcedBook]? {
+    private func books(at link: LibraryLink?, from connection: ServerConnection) async -> [SourcedBook]? {
         guard let link else { return [] }
+        let server = connection.server
         do {
             return try await server.source.feed(link).books.map { SourcedBook(source: server.id, book: $0) }
         } catch {
-            if self.server?.id == server.id { report(error) }
+            if isConnected(connection) { report(error, on: connection) }
             return nil
         }
     }
 
     // MARK: Errors
 
-    /// A list's problems, for the banner, while the server it was made for
-    /// is the connected one.
-    private func reporter() -> (any Error) -> Void {
-        let connection = connection
-        return { [weak self] error in
-            guard let self, self.connection == connection else { return }
-            report(error)
+    /// A list's problems, for its server's banner, while that server is
+    /// connected. Imported books have no banner.
+    private func reporter(for id: LibrarySourceID) -> (any Error) -> Void {
+        let connection = connection(id)
+        return { [weak self, weak connection] error in
+            guard let self, let connection, isConnected(connection) else { return }
+            report(error, on: connection)
         }
     }
 
-    /// Connection problems become the banner; anything else stays with the
-    /// list that failed.
-    func report(_ error: any Error) {
-        let name = server?.name ?? "the server"
+    /// Connection problems on `id` become its banner; anything else stays
+    /// with the list that failed.
+    func report(_ error: any Error, server id: LibrarySourceID) {
+        guard let connection = connection(id) else { return }
+        report(error, on: connection)
+    }
+
+    private func report(_ error: any Error, on connection: ServerConnection) {
+        let name = connection.server.name
         switch error {
         case is CancellationError:
             break
         case let error as URLError where error.code == .cancelled:
             break
         case is URLError:
-            connectionProblem = .unreachable(server: name)
+            connection.problem = .unreachable(server: name)
         case LibraryError.signedOut:
-            connectionProblem = .signedOut(server: name)
+            connection.problem = .signedOut(server: name)
         default:
             break
         }
@@ -475,7 +605,8 @@ final class LibraryModel {
             origin: LibraryServer.origin(kind: .opds, address: secret?.redact(catalog.absoluteString) ?? catalog.absoluteString, secret: secret),
             source: source
         ))
-        debugConnection = root == nil ? .failed("\(server.name) didn’t send its catalog.") : .idle
+        debugConnection = self.server(server.sourceID).flatMap { _ in connection(server.sourceID)?.root } == nil
+            ? .failed("\(server.name) didn’t send its catalog.") : .idle
     }
 
     /// Made-up books, no network: for screenshots and previews.

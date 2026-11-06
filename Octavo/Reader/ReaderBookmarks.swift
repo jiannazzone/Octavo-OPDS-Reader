@@ -22,10 +22,14 @@ nonisolated struct BookmarkStore: Sendable {
         try JSONEncoder().encode(bookmarks).write(to: fileURL(forBook: bookID), options: .atomic)
     }
 
-    /// Every book's bookmarks but `keeping`'s (another server after Remove
-    /// server, `RemovedServer`).
-    func removeAll(keeping bookIDs: Set<String>) {
-        ReadingPositionStore.removeFiles(in: directory, keeping: bookIDs)
+    /// Every bookmark on `library`'s books.
+    func removeAll(of library: LibrarySourceID) {
+        StoredBookKeys.removeFiles(of: library, in: directory)
+    }
+
+    /// Gives `library`'s bookmarks to `other` (`RemovedServer`).
+    func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {
+        StoredBookKeys.moveFiles(of: library, to: other, in: directory)
     }
 
     func fileURL(forBook bookID: String) -> URL {

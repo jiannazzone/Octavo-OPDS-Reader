@@ -137,7 +137,7 @@ struct KeychainTests {
         let abandoned = prefix + "abandoned"
         defer { for account in [id, abandoned] { try? ServerCredentials.removeAll(serverID: account) } }
         let defaults = UserDefaults.testSuite("launch-test")
-        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Servers.json"))
         try store.save(SavedServer(
             id: LibrarySourceID(rawValue: id), kind: .opds, address: "http://nas.lan/feed?apikey=abcdefgh12345678", name: "COPS"
         ))
@@ -150,7 +150,7 @@ struct KeychainTests {
         #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
         #expect(try KeychainCertificatePinStore(serverID: id).load() != nil)
         #expect(try await KeychainPasswordStore(serverID: abandoned).load() == nil)
-        #expect(try store.read()?.address == "http://nas.lan/feed?apikey={key}")
+        #expect(try store.read().servers.first?.address == "http://nas.lan/feed?apikey={key}")
         #expect(try KeychainCatalogSecretStore(serverID: id).load() != nil)
         #expect(defaults.bool(forKey: ServerCredentials.installedKey))
         // Decided before the marker was set, or this would read as played.
@@ -163,7 +163,7 @@ struct KeychainTests {
         let id = "launch-test-\(UUID().uuidString)"
         defer { try? ServerCredentials.removeAll(serverID: id) }
         let defaults = UserDefaults.testSuite("launch-test")
-        let file = URL.testDirectory.appending(path: "Server.json")
+        let file = URL.testDirectory.appending(path: "Servers.json")
         try Data("{ not json".utf8).write(to: file)
         try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
 
@@ -177,7 +177,7 @@ struct KeychainTests {
     /// sign-in after it stays at the next launch.
     @MainActor @Test func aReinstallStartsSignedOutThroughTheSteps() async throws {
         let defaults = UserDefaults.testSuite("launch-test")
-        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Servers.json"))
         let tokens = KeychainBookOrbitTokenStore(serverID: serverID)
         try await tokens.save(BookOrbitCredentials(accessToken: "left over"))
 
@@ -199,14 +199,14 @@ struct KeychainTests {
         defer { try? ServerCredentials.removeAll(serverID: id) }
         let defaults = UserDefaults.testSuite("launch-test")
         let address = "http://nas.lan/feed?apikey=abcdefgh12345678"
-        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Servers.json"))
         try store.save(SavedServer(id: LibrarySourceID(rawValue: id + "-saved"), kind: .opds, address: address, name: "COPS"))
         try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
 
         #expect(LaunchSteps.run(protectedDataAvailable: false, defaults: defaults, servers: store) { $0 == id } == nil)
 
         #expect(try await KeychainPasswordStore(serverID: id).load() != nil)
-        #expect(try store.read()?.address == address)
+        #expect(try store.read().servers.first?.address == address)
         #expect(!defaults.bool(forKey: ServerCredentials.installedKey))
         #expect(TourRecord(defaults: defaults).state == nil)
     }
@@ -231,7 +231,7 @@ struct KeychainTests {
         }
         try await KeychainBookOrbitTokenStore(serverID: abandoned).save(BookOrbitCredentials(accessToken: "a"))
         try KeychainCatalogSecretStore(serverID: removed).save(OPDSURLSecret("0123456789abcdef"))
-        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Servers.json"))
         try store.save(saved)
 
         try KeychainSweep.run(servers: store) { $0.hasPrefix(prefix) || $0 == debug }
@@ -248,7 +248,7 @@ struct KeychainTests {
         #expect(try await KeychainPasswordStore(serverID: debug).load() != nil)
 
         // No saved server: nothing is kept.
-        try store.remove()
+        try store.save(SavedServers())
         try KeychainSweep.run(servers: store) { $0.hasPrefix(prefix) }
         #expect(try await KeychainPasswordStore(serverID: saved.id.rawValue).load() == nil)
     }
@@ -259,7 +259,7 @@ struct KeychainTests {
         let id = prefix + "server"
         defer { try? ServerCredentials.removeAll(serverID: id) }
         try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
-        let file = URL.testDirectory.appending(path: "Server.json")
+        let file = URL.testDirectory.appending(path: "Servers.json")
         try Data("{ not json".utf8).write(to: file)
 
         #expect(throws: (any Error).self) { try KeychainSweep.run(servers: ServerStore(fileURL: file)) { $0.hasPrefix(prefix) } }
@@ -277,7 +277,7 @@ struct KeychainTests {
         try await KeychainPasswordStore(serverID: id).save(PasswordCredentials(username: "u", password: "p"))
         try KeychainCertificatePinStore(serverID: id).save(CertificatePin(sha256: Data(repeating: 1, count: 32)))
         try KeychainCatalogSecretStore(serverID: id).save(OPDSURLSecret("0123456789abcdef"))
-        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Server.json"))
+        let store = ServerStore(fileURL: URL.testDirectory.appending(path: "Servers.json"))
         try store.save(saved)
 
         try KeychainSweep.run(servers: store) { $0 == id }

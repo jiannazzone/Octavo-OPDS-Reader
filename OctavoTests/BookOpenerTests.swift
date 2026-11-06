@@ -1,5 +1,7 @@
 import Foundation
+import Observation
 import OctavoKit
+import Synchronization
 import Testing
 @testable import Octavo
 
@@ -23,56 +25,78 @@ struct BookOpenerTests {
     }
 
     @Test func downloadsThenOpens() async {
-        opener.open(Self.book, from: StubLibrarySource())
-        #expect(opener.status(of: Self.book) == .downloading(fraction: 0, opensWhenDone: true))
+        opener.open(.test(Self.book), from: StubLibrarySource())
+        #expect(opener.status(of: .test(Self.book)) == .downloading(fraction: 0, opensWhenDone: true))
         #expect(await eventually { !opened.isEmpty })
         let book = opened[0]
         #expect(book.book.files.count == 1)
-        #expect(book.reader.id == book.file.storageKey)
+        #expect(book.reader.id == book.file.storageKey(in: .test))
         #expect(book.reader.fileURL.deletingLastPathComponent().standardizedFileURL == files.directory.standardizedFileURL)
         #expect(book.reader.fileURL.pathExtension == "epub")
-        #expect(opener.status(of: book.book) == .downloaded)
+        #expect(opener.status(of: .test(book.book)) == .downloaded)
     }
 
     @Test func opensAtOnceWhenOnTheIPhone() async throws {
         let source = StubLibrarySource()
         let book = try await source.details(for: Self.book).book
-        let url = try #require(files.store.url(for: source.files[0]))
+        let url = try #require(files.store.url(for: source.files[0], in: .test))
         try Data("epub".utf8).write(to: url)
-        opener.open(book, from: source)
+        opener.open(.test(book), from: source)
         #expect(opened.map(\.reader.fileURL) == [url])
     }
 
     @Test func downloadAloneDoesNotOpen() async throws {
         let source = StubLibrarySource()
         let book = try await source.details(for: Self.book).book
-        opener.download(book, from: source)
-        #expect(opener.status(of: book) == .downloading(fraction: 0, opensWhenDone: false))
-        #expect(await eventually { opener.status(of: book) == .downloaded })
+        opener.download(.test(book), from: source)
+        #expect(opener.status(of: .test(book)) == .downloading(fraction: 0, opensWhenDone: false))
+        #expect(await eventually { opener.status(of: .test(book)) == .downloaded })
         #expect(opened.isEmpty)
+    }
+
+    // On iPhone's screen and shelf ask for the file: a download that finishes
+    // has to make them ask again.
+    @Test func aFinishedDownloadTellsWhatLooksForItsFile() async throws {
+        let source = StubLibrarySource()
+        let book = try await source.details(for: Self.book).book
+        let changed = Flag()
+        opener.download(.test(book), from: source)
+        withObservationTracking {
+            _ = opener.localFile(for: .test(book))
+        } onChange: {
+            changed.set()
+        }
+        #expect(await eventually { changed.isSet })
+        #expect(opener.localFile(for: .test(book)) != nil)
+    }
+
+    private final class Flag: Sendable {
+        private let value = Mutex(false)
+        var isSet: Bool { value.withLock { $0 } }
+        func set() { value.withLock { $0 = true } }
     }
 
     @Test func removingADownloadTakesTheBookOffTheIPhone() async throws {
         let source = StubLibrarySource()
         let book = try await source.details(for: Self.book).book
-        opener.download(book, from: source)
-        #expect(await eventually { opener.status(of: book) == .downloaded })
+        opener.download(.test(book), from: source)
+        #expect(await eventually { opener.status(of: .test(book)) == .downloaded })
 
-        opener.removeDownload(book)
-        #expect(opener.status(of: book) == .notDownloaded)
-        #expect(files.store.localFile(for: source.files[0]) == nil)
+        opener.removeDownload(.test(book))
+        #expect(opener.status(of: .test(book)) == .notDownloaded)
+        #expect(files.store.localFile(for: source.files[0], in: .test) == nil)
     }
 
     // Storage's Remove all downloads: every file, known or not.
     @Test func removingAllDownloadsEmptiesTheStore() async throws {
         let source = StubLibrarySource()
         let book = try await source.details(for: Self.book).book
-        opener.download(book, from: source)
-        #expect(await eventually { opener.status(of: book) == .downloaded })
+        opener.download(.test(book), from: source)
+        #expect(await eventually { opener.status(of: .test(book)) == .downloaded })
         try Data("left over".utf8).write(to: files.directory.appending(path: "book-unknown.epub"))
 
         opener.removeAllDownloads()
-        #expect(opener.status(of: book) == .notDownloaded)
+        #expect(opener.status(of: .test(book)) == .notDownloaded)
         #expect(try FileManager.default.contentsOfDirectory(atPath: files.directory.path).isEmpty)
     }
 
@@ -80,44 +104,44 @@ struct BookOpenerTests {
     @Test func openingDuringADownloadOpensWhenDone() async {
         var source = StubLibrarySource()
         source.downloadTime = .milliseconds(200)
-        opener.download(Self.book, from: source)
-        opener.open(Self.book, from: source)
-        #expect(opener.status(of: Self.book) == .downloading(fraction: 0, opensWhenDone: true))
+        opener.download(.test(Self.book), from: source)
+        opener.open(.test(Self.book), from: source)
+        #expect(opener.status(of: .test(Self.book)) == .downloading(fraction: 0, opensWhenDone: true))
         #expect(await eventually { opened.count == 1 })
     }
 
     @Test func offlineNeedsAConnection() async {
         var source = StubLibrarySource()
         source.downloadError = URLError(.notConnectedToInternet)
-        opener.open(Self.book, from: source)
-        #expect(await eventually { opener.status(of: Self.book) == .failed(offline: true, opensWhenDone: true) })
+        opener.open(.test(Self.book), from: source)
+        #expect(await eventually { opener.status(of: .test(Self.book)) == .failed(offline: true, opensWhenDone: true) })
         #expect(opened.isEmpty)
     }
 
     @Test func otherErrorsCouldntDownload() async {
         var source = StubLibrarySource()
         source.downloadError = LibraryError.server(status: 500, message: nil)
-        opener.open(Self.book, from: source)
-        #expect(await eventually { opener.status(of: Self.book) == .failed(offline: false, opensWhenDone: true) })
+        opener.open(.test(Self.book), from: source)
+        #expect(await eventually { opener.status(of: .test(Self.book)) == .failed(offline: false, opensWhenDone: true) })
     }
 
     @Test func tryAgainOpens() async {
         var failing = StubLibrarySource()
         failing.downloadError = URLError(.timedOut)
-        opener.open(Self.book, from: failing)
-        #expect(await eventually { opener.status(of: Self.book) == .failed(offline: false, opensWhenDone: true) })
-        opener.retry(Self.book, from: StubLibrarySource())
+        opener.open(.test(Self.book), from: failing)
+        #expect(await eventually { opener.status(of: .test(Self.book)) == .failed(offline: false, opensWhenDone: true) })
+        opener.retry(.test(Self.book), from: StubLibrarySource())
         #expect(await eventually { opened.count == 1 })
     }
 
     @Test func cancelLeavesNothing() async throws {
         var source = StubLibrarySource()
         source.downloadTime = .seconds(30)
-        opener.open(Self.book, from: source)
-        opener.cancel(Self.book)
-        #expect(opener.status(of: Self.book) == .notDownloaded)
+        opener.open(.test(Self.book), from: source)
+        opener.cancel(.test(Self.book))
+        #expect(opener.status(of: .test(Self.book)) == .notDownloaded)
         try await Task.sleep(for: .milliseconds(100))
-        #expect(opener.status(of: Self.book) == .notDownloaded)
+        #expect(opener.status(of: .test(Self.book)) == .notDownloaded)
         #expect(opened.isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: files.directory.path).isEmpty)
     }
@@ -129,8 +153,8 @@ struct BookOpenerTests {
         let drm = try Data(contentsOf: ImportFixtures.drmMobi(in: folder))
         var source = StubLibrarySource(downloadData: drm)
         source.files = [LibraryFile(id: LibraryFileID(rawValue: "file-drm"), format: "mobi", isPrimary: true)]
-        opener.open(Self.book, from: source)
-        #expect(await eventually { opener.status(of: Self.book) == .protected })
+        opener.open(.test(Self.book), from: source)
+        #expect(await eventually { opener.status(of: .test(Self.book)) == .protected })
         #expect(opened.isEmpty)
         #expect(try FileManager.default.contentsOfDirectory(atPath: files.directory.path).isEmpty)
     }
@@ -139,8 +163,8 @@ struct BookOpenerTests {
         var book = Self.book
         book.files = [LibraryFile(id: LibraryFileID(rawValue: "pdf"), format: "pdf", isPrimary: true)]
         #expect(!opener.canOpen(book))
-        opener.open(book, from: StubLibrarySource())
-        #expect(opener.status(of: book) == .notDownloaded)
+        opener.open(.test(book), from: StubLibrarySource())
+        #expect(opener.status(of: .test(book)) == .notDownloaded)
     }
 
     // A book that lists no files yet might have a readable one.
@@ -184,10 +208,10 @@ struct StoredBookFilesTests {
     @Test func downloadsStayOutOfTheBackup() async throws {
         let files = try TemporaryBookFiles()
         let store = StoredBookFiles(directory: files.directory.appending(path: "Books", directoryHint: .isDirectory), imported: .temporary())
-        _ = try await store.download(Self.file, from: StubLibrarySource()) { _ in }
+        _ = try await store.download(Self.file, in: .test, from: StubLibrarySource()) { _ in }
         let values = try store.directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
         #expect(values.isExcludedFromBackup == true)
-        #expect(store.localFile(for: Self.file) != nil)
+        #expect(store.localFile(for: Self.file, in: .test) != nil)
     }
 
     // Books from before the move (Caches) come along; one already moved wins.

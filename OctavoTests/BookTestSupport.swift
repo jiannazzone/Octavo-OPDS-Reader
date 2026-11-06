@@ -2,6 +2,25 @@ import Foundation
 import OctavoKit
 @testable import Octavo
 
+nonisolated extension LibrarySourceID {
+    /// The server in tests that have one.
+    static let test = LibrarySourceID(rawValue: "test-server")
+}
+
+nonisolated extension SourcedBook {
+    /// `book` on the test server.
+    static func test(_ book: LibraryBook) -> SourcedBook {
+        SourcedBook(source: .test, book: book)
+    }
+}
+
+nonisolated extension ServerStore {
+    /// Saves `server` as the only one.
+    func save(_ server: SavedServer) throws {
+        try save(SavedServers(servers: [server], chosen: server.id))
+    }
+}
+
 /// A source for the cover page and opener tests: one book, details, and a
 /// download that writes a small file, waits, or fails as asked.
 nonisolated struct StubLibrarySource: LibrarySource {

@@ -116,6 +116,40 @@ struct FeedModelTests {
         #expect(feed.books.count == 3)
     }
 
+    @Test func nothingOnTheFirstPageIsAnEmptyList() async throws {
+        let library = await connected(PagedSource(pages: Self.pages))
+        let empty = try #require(library.feed(link("empty"), from: server))
+        #expect(!empty.cameBackEmpty)
+        await empty.load()
+        #expect(empty.cameBackEmpty)
+
+        let full = try #require(library.feed(link("a"), from: server))
+        await full.load()
+        #expect(!full.cameBackEmpty)
+    }
+
+    // A first load that fails says nothing about the list. A reload that
+    // fails leaves it as it was, and `EmptyFeed` says it failed: going to
+    // `FeedContent` would load the list a second time.
+    @Test func onlyAnAnswerChangesWhetherAListIsEmpty() async throws {
+        let faults = Faults()
+        faults.set("empty", LibraryError.server(status: 500, message: nil))
+        let library = await connected(PagedSource(faults: faults))
+        let feed = try #require(library.feed(link("empty"), from: server))
+        await feed.load()
+        #expect(feed.state == .failed)
+        #expect(!feed.cameBackEmpty)
+
+        faults.set("empty", nil)
+        await feed.retry()
+        #expect(feed.cameBackEmpty)
+
+        faults.set("empty", LibraryError.server(status: 500, message: nil))
+        await feed.reload()
+        #expect(feed.state == .failed)
+        #expect(feed.cameBackEmpty)
+    }
+
     // Folding rebuilds the views; the list they find is the same one.
     // A server whose next page is one already loaded is looping.
     @Test func aListThatLoopsEnds() async throws {

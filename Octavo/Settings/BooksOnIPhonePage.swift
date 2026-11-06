@@ -41,7 +41,7 @@ struct BooksOnIPhonePage: View {
                                 if book.book.source == .files {
                                     removingImported = book.book
                                 } else {
-                                    shell.opener.removeDownload(book.book.book)
+                                    shell.opener.removeDownload(book.book)
                                 }
                             }
                             .tint(.red)
@@ -67,7 +67,7 @@ struct BooksOnIPhonePage: View {
                 .textCase(nil)
             } footer: {
                 if let server = library.server {
-                    Text("Removing a book keeps your place in it. You can download it again from \(server.name).")
+                    Text("Removing a book keeps your place in it. You can download it again from \(library.hasSeveralServers ? "its server" : server.name).")
                 }
             }
             let downloads = books.filter { $0.book.source != .files }
@@ -90,6 +90,7 @@ struct BooksOnIPhonePage: View {
 /// A downloaded book: its cover, title and author, and its size.
 private struct DownloadedBookRow: View {
     let book: DownloadedBook
+    @Environment(LibraryModel.self) private var library
 
     var body: some View {
         HStack(spacing: 12) {
@@ -99,8 +100,10 @@ private struct DownloadedBookRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(book.book.book.title)
                     .lineLimit(1)
-                if let author = book.book.book.authors.first {
-                    Text(author)
+                // The same book on two servers is two rows (decision 36).
+                let line = [book.book.book.authors.first, library.label(for: book.book)].compactMap(\.self).joined(separator: " · ")
+                if !line.isEmpty {
+                    Text(line)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

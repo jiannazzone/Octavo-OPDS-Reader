@@ -18,42 +18,51 @@ struct OnIPhoneScreen: View {
 struct OnIPhoneContent: View {
     /// No server yet: the card that offers one.
     var offersServer = false
+    @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
     @Environment(\.spread) private var spread
 
     var body: some View {
         let books = shell.onIPhoneBooks()
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 14) {
-                    if !books.isEmpty {
-                        Text(books.count == 1 ? "1 book" : "\(books.count) books")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+        if books.isEmpty {
+            EmptyPages(server: library.server?.id) {
+                VStack(spacing: 14) {
                     ImportFailureBanner()
-                }
-                .padding(.horizontal, SpreadMetrics.margin)
-                .frame(width: spread.pages?.leftWidth, alignment: .leading)
-                if books.isEmpty {
+                        .padding(.horizontal, SpreadMetrics.margin)
                     EmptyInvitation(
                         symbol: "book.closed", title: "No books on iPhone",
                         message: "Books you download or import show here.", actionTitle: "Import from Files"
                     ) { shell.showFilePicker() }
-                    .frame(width: spread.pages?.leftWidth)
-                } else {
+                    .scrollingOnItsPage()
+                    if offersServer {
+                        HaveAServerCard()
+                            .padding(.horizontal, SpreadMetrics.margin)
+                    }
+                }
+            }
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(books.count == 1 ? "1 book" : "\(books.count) books")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        ImportFailureBanner()
+                    }
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
                     SpreadGrid(items: books) { book in
                         BookGridCell(book: book)
                     }
+                    if offersServer {
+                        HaveAServerCard()
+                            .padding(.horizontal, SpreadMetrics.margin)
+                            .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                            .padding(.top, 10)
+                    }
                 }
-                if offersServer {
-                    HaveAServerCard()
-                        .padding(.horizontal, SpreadMetrics.margin)
-                        .frame(width: spread.pages?.leftWidth, alignment: .leading)
-                        .padding(.top, 10)
-                }
+                .padding(.bottom, 20)
             }
-            .padding(.bottom, 20)
         }
     }
 }

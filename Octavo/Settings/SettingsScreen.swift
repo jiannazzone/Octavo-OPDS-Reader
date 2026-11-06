@@ -17,7 +17,7 @@ struct SettingsScreen: View {
 
     var body: some View {
         // With no server yet (books imported), Storage's page to start with.
-        let first: SettingsPage = library.server == nil ? .storage : .server
+        let first: SettingsPage = library.server.map { .server($0.id) } ?? .storage
         Group {
             if let pages = spread.pages {
                 HStack(spacing: 0) {
@@ -45,7 +45,7 @@ private struct SettingsPageView: View {
 
     var body: some View {
         switch page {
-        case .server: ServerSettingsPage()
+        case .server(let id): ServerSettingsPage(id: id)
         case .storage: BooksOnIPhonePage()
         case .licences: LicencesPage()
         }
@@ -89,33 +89,31 @@ struct SettingsList: View {
 
     var body: some View {
         SettingsPageList(title: "Settings", isOnLeftPage: true) {
-            if let server = library.server {
-                Section("Server") {
-                    row(.server) {
+            // Each server, then Add a server (decision 36). "Server" with one
+            // or none, as before.
+            Section(library.hasSeveralServers ? "Servers" : "Server") {
+                ForEach(library.connections, id: \.server.id) { connection in
+                    row(.server(connection.server.id)) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(server.name)
-                            Text(server.detail)
+                            Text(connection.server.name)
+                            Text(connection.server.detail)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
-            } else {
-                // Books imported, no server yet (Adam, 2026-11-02).
-                Section("Server") {
-                    Button {
-                        shell.push(.setup(.choose))
-                    } label: {
-                        HStack {
-                            Text("Add a server")
-                                .foregroundStyle(.tint)
-                            Spacer(minLength: 8)
-                            Image(systemName: "chevron.forward")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .contentShape(.rect)
+                Button {
+                    shell.push(.setup(.choose))
+                } label: {
+                    HStack {
+                        Text("Add a server")
+                            .foregroundStyle(.tint)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.forward")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
                     }
+                    .contentShape(.rect)
                 }
             }
             Section {

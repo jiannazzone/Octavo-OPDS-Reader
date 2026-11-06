@@ -5,10 +5,14 @@ import SwiftUI
 /// has synced, then Sign out (Sign in, once signed out) and Remove server,
 /// each confirmed in an alert (Adam, 2026-11-02).
 struct ServerSettingsPage: View {
+    let id: LibrarySourceID
     @Environment(ShellModel.self) private var shell
     @Environment(LibraryModel.self) private var library
     @State private var confirmsSignOut = false
     @State private var removal: Removal?
+    /// The Name row while it's being typed in.
+    @State private var typedName: String?
+    @FocusState private var editsName: Bool
 
     /// What Remove server asks about: the server's downloads, counted when
     /// it's tapped.
@@ -17,7 +21,7 @@ struct ServerSettingsPage: View {
     }
 
     var body: some View {
-        if let server = library.server {
+        if let server = library.server(id) {
             page(server)
         } else {
             LibraryNotConnected()
@@ -27,6 +31,17 @@ struct ServerSettingsPage: View {
     private func page(_ server: LibraryServer) -> some View {
         SettingsPageList(title: server.name) {
             Section {
+                LabeledContent("Name") {
+                    TextField(
+                        "Name", text: Binding { typedName ?? server.name } set: { typedName = $0 },
+                        prompt: server.ownName.map(Text.init)
+                    )
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(.secondary)
+                    .submitLabel(.done)
+                    .focused($editsName)
+                    .onSubmit { keepName() }
+                }
                 LabeledContent("Address", value: server.address)
                 if let username = server.username {
                     LabeledContent("Account", value: username)
@@ -43,17 +58,17 @@ struct ServerSettingsPage: View {
             }
             Section {
                 if isSignedOut {
-                    Button("Sign in") { shell.showSignIn() }
+                    Button("Sign in") { shell.showSignIn(id) }
                 } else if server.signsIn {
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
                 }
                 Button("Remove server", role: .destructive) {
-                    removal = Removal(downloads: shell.serverDownloads())
+                    removal = Removal(downloads: shell.downloads(on: id))
                 }
             }
         }
         .alert("Sign out of \(server.name)?", isPresented: $confirmsSignOut) {
-            Button("Sign out", role: .destructive) { shell.signOut() }
+            Button("Sign out", role: .destructive) { shell.signOut(id) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(server.syncsProgress
@@ -72,10 +87,20 @@ struct ServerSettingsPage: View {
         } message: { removal in
             Text(Self.removalMessage(removal.downloads))
         }
+        .onChange(of: editsName) { _, editing in
+            if !editing { keepName() }
+        }
+    }
+
+    /// Done on the keyboard, or leaving the row.
+    private func keepName() {
+        guard let typedName else { return }
+        shell.rename(id, to: typedName)
+        self.typedName = nil
     }
 
     private var isSignedOut: Bool {
-        if case .signedOut = library.connectionProblem { return true }
+        if case .signedOut = library.connection(id)?.problem { return true }
         return false
     }
 
@@ -88,7 +113,7 @@ struct ServerSettingsPage: View {
     }
 
     private func remove(removingBooks: Bool) {
-        Task { await shell.removeServer(removingBooks: removingBooks) }
+        Task { await shell.removeServer(id, removingBooks: removingBooks) }
     }
 
     /// "Its 12 downloaded books use 48 MB. Remove them too, or keep them on

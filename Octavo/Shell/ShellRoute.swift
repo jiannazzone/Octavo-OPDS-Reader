@@ -10,8 +10,9 @@ nonisolated enum ShellTab: String, Hashable, Sendable, CaseIterable {
 }
 
 /// A page of Settings, opened from its list.
-nonisolated enum SettingsPage: Hashable, Sendable, CaseIterable {
-    case server, storage, licences
+nonisolated enum SettingsPage: Hashable, Sendable {
+    case server(LibrarySourceID)
+    case storage, licences
 }
 
 /// A screen a tab opens. A tab's root isn't a route; everything opened from
@@ -32,8 +33,8 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     /// Every book on the iPhone (`ShellModel.onIPhoneBooks`): the Library's
     /// last shelf, and where an import lands.
     case onIPhone
-    /// The server signed you out (or its password changed): sign in again.
-    case signInAgain
+    /// A server signed you out (or its password changed): sign in again.
+    case signInAgain(LibrarySourceID)
 
     /// Drawn as the screen's large title. `nil` for a book's screen, and for
     /// Settings, which draws a title on each page.
@@ -48,6 +49,16 @@ nonisolated enum ShellRoute: Hashable, Sendable {
         case .setup(.trust): "Trust this server?"
         case .setup(.sync): "Reading progress"
         case .signInAgain: "Sign in again"
+        }
+    }
+
+    /// The screen shows `library`'s books or details, so goes when it does.
+    func belongs(to library: LibrarySourceID) -> Bool {
+        switch self {
+        case .feed(_, let source): source == library
+        case .cover(let book): book.source == library
+        case .settingsPage(.server(let id)), .signInAgain(let id): id == library
+        case .settings, .settingsPage, .setup, .onIPhone: false
         }
     }
 }

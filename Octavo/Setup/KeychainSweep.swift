@@ -2,33 +2,34 @@ import Foundation
 import OctavoKit
 
 /// The launch sweep (step 16, `docs/notes/network-trust.md`): the Keychain
-/// keeps only the saved server's secrets. It deletes what a failed Keychain
+/// keeps only the saved servers' secrets. It deletes what a failed Keychain
 /// delete left at Remove server, what a setup left before it finished, and
 /// the sign-in of a server signed out of (`SavedServer.signedOut`) if Sign
 /// out couldn't delete it.
 ///
 /// Runs once, at launch, before the shell and its setup exist: a setup
 /// stores its secrets under a new ID each launch (`SetupModel`), so no
-/// setup in progress can lose them. If the saved server can't be read, or
+/// setup in progress can lose them. If the saved servers can't be read, or
 /// the Keychain can't list its items, nothing is deleted.
 nonisolated enum KeychainSweep {
     /// - Parameter scope: the servers it may delete from; tests narrow it
     ///   to their own.
     static func run(servers: ServerStore = ServerStore(), scope: (String) -> Bool = { _ in true }) throws {
-        let saved = try servers.read()
-        // Both run; the first failure is thrown after (an item that won't
-        // delete mustn't keep a signed-out sign-in).
+        let saved = try servers.read().servers
+        let keeping = Set(saved.map(\.id.rawValue))
+        // All of it runs; the first failure is thrown after (an item that
+        // won't delete mustn't keep a signed-out sign-in).
         var failure: (any Error)?
         do {
             try ServerCredentials.removeAll { account in
-                !scope(account) || account == saved?.id.rawValue || keepsForDebugging(account)
+                !scope(account) || keeping.contains(account) || keepsForDebugging(account)
             }
         } catch {
             failure = error
         }
-        if let saved, saved.signedOut == true {
+        for server in saved where server.signedOut == true {
             do {
-                try ServerCredentials.removeSignIn(serverID: saved.id.rawValue)
+                try ServerCredentials.removeSignIn(serverID: server.id.rawValue)
             } catch {
                 failure = failure ?? error
             }

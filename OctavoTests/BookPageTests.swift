@@ -155,24 +155,24 @@ struct BookPageTests {
         let files = try TemporaryBookFiles()
         let shell = makeShell(opener: BookOpener(files: files.store))
         let book = SampleRoutes.book(1).book
-        #expect(BookOpenButton.state(of: book, in: shell) == .download)
-        shell.opener.download(book, from: StubLibrarySource())
-        #expect(await eventually { BookOpenButton.state(of: book, in: shell) == .open })
+        #expect(BookOpenButton.state(of: .test(book), in: shell) == .download)
+        shell.opener.download(.test(book), from: StubLibrarySource())
+        #expect(await eventually { BookOpenButton.state(of: .test(book), in: shell) == .open })
     }
 
     @Test func pagesAreKeptAcrossRedraws() {
         let pages = BookPages(limit: 2)
-        let first = pages.page(for: Self.book)
+        let first = pages.page(for: .test(Self.book))
         first.isExpanded = true
-        #expect(pages.page(for: Self.book) === first)
+        #expect(pages.page(for: .test(Self.book)) === first)
     }
 
     @Test func oldPagesAreDropped() {
         let pages = BookPages(limit: 2)
-        let first = pages.page(for: Self.book)
+        let first = pages.page(for: .test(Self.book))
         for id in ["a", "b"] {
-            _ = pages.page(for: LibraryBook(id: LibraryBookID(rawValue: id), title: id))
+            _ = pages.page(for: .test(LibraryBook(id: LibraryBookID(rawValue: id), title: id)))
         }
-        #expect(pages.page(for: Self.book) !== first)
+        #expect(pages.page(for: .test(Self.book)) !== first)
     }
 }

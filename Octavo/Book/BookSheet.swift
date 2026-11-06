@@ -122,7 +122,7 @@ struct BookSheetSummary: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                BookOpenButton(page: page, source: source, fillsWidth: false)
+                BookOpenButton(page: page, source: source, sourceID: sourceID, fillsWidth: false)
                     .fixedSize()
             }
             BookPlaceLine(place: place)
@@ -154,7 +154,7 @@ struct BookSummary: View {
             place
             HStack(spacing: 10) {
                 BookFinishedButton(page: page, source: source)
-                BookOpenButton(page: page, source: source)
+                BookOpenButton(page: page, source: source, sourceID: sourceID)
             }
         }
     }
@@ -231,7 +231,7 @@ struct BookPlace {
         let book = SourcedBook(source: sourceID, book: page.current)
         self.init(
             progress: shell.places.progress(of: book),
-            problem: Self.problem(BookOpenButton.state(of: page.current, in: shell), finishedFailed: page.finishedFailed),
+            problem: Self.problem(BookOpenButton.state(of: book, in: shell), finishedFailed: page.finishedFailed),
             status: shell.places.status(of: book),
             trip: shell.places.trip(of: book),
             finished: page.isFinished
@@ -334,6 +334,7 @@ struct BookFinishedButton: View {
 struct BookOpenButton: View {
     let page: BookPage
     let source: any LibrarySource
+    let sourceID: LibrarySourceID
     /// As wide as the space it's given (unfolded, beside Mark finished), or
     /// as wide as its label (the folded sheet's capsule).
     var fillsWidth = true
@@ -350,7 +351,7 @@ struct BookOpenButton: View {
     }
 
     /// The opener's state, or the debug stand-in (`-shellCoverStrip`).
-    static func state(of book: LibraryBook, in shell: ShellModel) -> State {
+    static func state(of book: SourcedBook, in shell: ShellModel) -> State {
         switch shell.coverStrip {
         case .downloadFailed: return .failed(offline: false)
         case .needsConnection: return .failed(offline: true)
@@ -369,11 +370,12 @@ struct BookOpenButton: View {
 
     var body: some View {
         let book = page.current
+        let sourced = SourcedBook(source: sourceID, book: book)
         let opener = shell.opener
-        switch Self.state(of: book, in: shell) {
+        switch Self.state(of: sourced, in: shell) {
         case .open:
             Button {
-                if let openBook { openBook(book) } else { opener.open(book, from: source) }
+                if let openBook { openBook(book) } else { opener.open(sourced, from: source) }
             } label: {
                 Text("Open")
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
@@ -382,7 +384,7 @@ struct BookOpenButton: View {
             .disabled(!opener.canOpen(book))
         case .download:
             Button {
-                if let downloadBook { downloadBook(book) } else { opener.download(book, from: source) }
+                if let downloadBook { downloadBook(book) } else { opener.download(sourced, from: source) }
             } label: {
                 Label("Download", systemImage: "arrow.down")
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
@@ -391,7 +393,7 @@ struct BookOpenButton: View {
             .disabled(!opener.canOpen(book))
         case .downloading(let fraction):
             Button {
-                if shell.coverStrip != nil { shell.coverStrip = nil } else { opener.cancel(book) }
+                if shell.coverStrip != nil { shell.coverStrip = nil } else { opener.cancel(sourced) }
             } label: {
                 HStack(spacing: 8) {
                     DownloadRing(fraction: fraction)
@@ -404,7 +406,7 @@ struct BookOpenButton: View {
             .accessibilityValue(fraction.formatted(.percent.precision(.fractionLength(0))))
         case .failed:
             Button {
-                if shell.coverStrip != nil { shell.coverStrip = nil } else { opener.retry(book, from: source) }
+                if shell.coverStrip != nil { shell.coverStrip = nil } else { opener.retry(sourced, from: source) }
             } label: {
                 Text("Try again")
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
@@ -459,7 +461,7 @@ struct BookDetails: View {
                 Divider()
                 row("File", page.fileLine)
                 Divider()
-                row("From", page.serverName)
+                row("From", serverName)
                 Divider()
                 row("Added", page.addedLine)
             }
@@ -472,10 +474,16 @@ struct BookDetails: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 4)
                 .confirmRemovingImported($removingImported)
-            } else if shell.opener.status(of: page.current) == .downloaded {
+            } else if shell.opener.status(of: SourcedBook(source: sourceID, book: page.current)) == .downloaded {
                 removeDownload
             }
         }
+    }
+
+    /// The name the book's server goes by, else what its library calls
+    /// itself.
+    private var serverName: String? {
+        shell.library.server(sourceID)?.name ?? page.serverName
     }
 
     /// Asks first: the one pop-up the app allows is a confirmation to
@@ -490,10 +498,10 @@ struct BookDetails: View {
                 titleVisibility: .visible
             ) {
                 Button("Remove download", role: .destructive) {
-                    withAnimation { shell.opener.removeDownload(page.current) }
+                    withAnimation { shell.opener.removeDownload(SourcedBook(source: sourceID, book: page.current)) }
                 }
             } message: {
-                Text("Your place is kept. You can download it again from \(page.serverName ?? "the server").")
+                Text("Your place is kept. You can download it again from \(serverName ?? "the server").")
             }
     }
 

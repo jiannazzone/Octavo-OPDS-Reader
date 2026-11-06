@@ -16,23 +16,29 @@ struct HomeView: View {
         } else if library.server != nil, !library.homeLoaded {
             HomeContent(books: nil)
         } else if library.continueReading.isEmpty {
-            VStack(spacing: 0) {
-                ConnectionBannerSlot()
-                    .padding(.horizontal, SpreadMetrics.margin)
-                if !library.continueReadingFailed {
-                    // Frame 25.
-                    EmptyInvitation(
-                        symbol: "books.vertical", title: "Nothing in progress",
-                        message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
-                    ) { shell.select(.library) }
-                } else if library.connectionProblem == nil {
-                    EmptyInvitation(
-                        symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
-                        message: "The server didn’t send them.", actionTitle: "Try again"
-                    ) { Task { await library.loadHome() } }
-                } else {
-                    // The banner says why, and retries.
-                    Spacer()
+            // The Library's newest books beside the invitation, not beside a
+            // problem.
+            EmptyPages(server: library.continueReadingFailed ? nil : library.server?.id) {
+                VStack(spacing: 0) {
+                    VStack(spacing: 12) { HomeBannersSlot() }
+                        .padding(.horizontal, SpreadMetrics.margin)
+                    if !library.continueReadingFailed {
+                        // Frame 25.
+                        EmptyInvitation(
+                            symbol: "books.vertical", title: "Nothing in progress",
+                            message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
+                        ) { shell.select(.library) }
+                        .scrollingOnItsPage()
+                    } else if library.homeProblems.isEmpty {
+                        EmptyInvitation(
+                            symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
+                            message: library.hasSeveralServers ? "Your servers didn’t send them." : "The server didn’t send them.", actionTitle: "Try again"
+                        ) { Task { await library.loadHome() } }
+                        .scrollingOnItsPage()
+                    } else {
+                        // The banner says why, and retries.
+                        Spacer()
+                    }
                 }
             }
         } else {
@@ -76,7 +82,7 @@ struct HomeContent: View {
             HStack(alignment: .top, spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        ConnectionBannerSlot()
+                        HomeBannersSlot()
                         current(coverWidth: 250)
                     }
                     .padding(.horizontal, SpreadMetrics.margin)
@@ -96,7 +102,7 @@ struct HomeContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 16) {
-                        ConnectionBannerSlot()
+                        HomeBannersSlot()
                         current(coverWidth: 190)
                     }
                     .padding(.horizontal, SpreadMetrics.margin)
@@ -136,7 +142,7 @@ struct CurrentBook: View {
         OpenButton(route: .cover(book)) {
             VStack(alignment: .leading, spacing: 14) {
                 BookCover(book: book, cornerRadius: 6, size: .full)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book, size: 26) }
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 26) }
                     .frame(width: coverWidth)
                     .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 4) {
@@ -150,7 +156,7 @@ struct CurrentBook: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(BookPage.placeLine(progress: progress))
+                    Text(BookPage.placeLine(progress: progress, server: shell.library.label(for: book)))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     ProgressView(value: progress ?? 0)
@@ -222,17 +228,18 @@ struct AlsoReading: View {
 struct ContinueReadingRow: View {
     let book: SourcedBook
     let progress: Double?
+    @Environment(LibraryModel.self) private var library
 
     var body: some View {
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book.book, size: 14) }
+                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 14) }
                     .frame(width: 48)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
                         .lineLimit(1)
-                    Text(BookPage.placeLine(progress: progress))
+                    Text(BookPage.placeLine(progress: progress, server: library.label(for: book)))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     ProgressView(value: progress ?? 0)
