@@ -149,7 +149,7 @@ struct BookInspectorTests {
 
     @Test func aSlowReadTimesOut() async throws {
         let url = try file(Self.epub(opf: "<dc:title>Slow</dc:title>"), "slow.epub")
-        await #expect(throws: BookInspectionError.damaged) { try await BookInspector(timeout: .milliseconds(1)).inspect(url) }
+        await #expect(throws: BookInspectionError.timedOut) { try await BookInspector(timeout: .milliseconds(1)).inspect(url) }
     }
 
     @Test func aPageThatNeverAnswersIsDropped() async throws {
@@ -160,7 +160,7 @@ struct BookInspectorTests {
         var inspector = BookInspector(timeout: .seconds(2))
         inspector.script = "setTimeout(() => { for (;;) {} }, 0)"
         let started = ContinuousClock.now
-        await #expect(throws: BookInspectionError.damaged) { try await inspector.inspect(url) }
+        await #expect(throws: BookInspectionError.timedOut) { try await inspector.inspect(url) }
         #expect(ContinuousClock.now - started < .seconds(10))
         // A busy page left behind wouldn't stop the next one.
         #expect(try await BookInspector().inspect(url).title == "Busy")

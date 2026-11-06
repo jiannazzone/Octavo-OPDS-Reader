@@ -250,6 +250,7 @@ class View {
     #column = true
     #size
     #layout = {}
+    #loading = false
     constructor({ container, onExpand }) {
         this.container = container
         this.onExpand = onExpand
@@ -284,6 +285,7 @@ class View {
     }
     async load(src, afterLoad, beforeRender) {
         if (typeof src !== 'string') throw new Error(`${src} is not string`)
+        this.#loading = true
         return new Promise(resolve => {
             this.#iframe.addEventListener('load', () => {
                 const doc = this.document
@@ -301,6 +303,7 @@ class View {
                 this.#contentRange.selectNodeContents(doc.body)
                 const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
+                this.#loading = false
                 this.render(layout)
                 this.#observer.observe(doc.body)
 
@@ -315,7 +318,7 @@ class View {
         })
     }
     render(layout) {
-        if (!layout) return
+        if (!layout || this.#loading) return
         this.#column = layout.flow !== 'scrolled'
         this.#layout = layout
         if (this.#column) this.columnize(layout)
