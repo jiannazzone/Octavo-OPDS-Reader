@@ -194,6 +194,35 @@ struct CoverFilesTests {
         #expect(try Data(contentsOf: file) == data)
     }
 
+    @Test func clearingCoversFetchesThemAgain() async throws {
+        let supply = try CoverSupply(data: png())
+        let covers = CoverCache(files: files)
+        _ = await covers.image(for: cover, in: server, size: .thumbnail, from: source(supply))
+        _ = await covers.image(for: cover, in: LibrarySourceID(rawValue: "server-two"), size: .thumbnail, from: source(supply))
+        #expect(await covers.filesSize() > 0)
+        await covers.clear()
+        #expect(stored().isEmpty)
+        #expect(await covers.filesSize() == 0)
+        #expect(covers.cachedImage(for: cover, in: server, size: .thumbnail) == nil)
+        #expect(await covers.image(for: cover, in: server, size: .thumbnail, from: source(supply)) != nil)
+        #expect(supply.fetches == 3)
+        #expect(stored().count == 1, "and it's kept again")
+    }
+
+    @Test func clearingCoversAsksAgainAboutOnesItHadntGot() async throws {
+        let covers = CoverCache(files: files)
+        #expect(await covers.image(for: cover, in: server, size: .thumbnail, from: StubLibrarySource()) == nil)
+        await covers.clear()
+        #expect(try await covers.image(for: cover, in: server, size: .thumbnail, from: source(CoverSupply(data: png()))) != nil)
+    }
+
+    @Test func theSizeIsWhatTheFilesTake() async {
+        #expect(await files.totalSize() == 0)
+        await files.write(Data(repeating: 1, count: 100), as: "a", in: server)
+        await files.write(Data(repeating: 1, count: 50), as: "b", in: LibrarySourceID(rawValue: "server-two"))
+        #expect(await files.totalSize() == 150)
+    }
+
     @Test func trimmingRemovesWhatWasWrittenLongestAgo() async throws {
         let data = Data(repeating: 1, count: 100)
         for (index, key) in ["oldest", "middle", "newest"].enumerated() {

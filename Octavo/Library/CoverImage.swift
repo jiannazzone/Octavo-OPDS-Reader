@@ -158,6 +158,18 @@ final class CoverCache {
         await files.removeAll(in: source)
     }
 
+    /// Clear covers: on the iPhone and in memory, so each is fetched again when
+    /// it's next shown.
+    func clear() async {
+        images.removeAllObjects()
+        missing.removeAll()
+        await files.removeAll()
+    }
+
+    func filesSize() async -> Int {
+        await files.totalSize()
+    }
+
     /// Fetches a kept cover again in the background: the one on the iPhone is
     /// already showing, and the new one shows when the cover is next drawn.
     private func refresh(

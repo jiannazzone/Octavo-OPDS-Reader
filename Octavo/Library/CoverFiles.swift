@@ -41,21 +41,35 @@ nonisolated struct CoverFiles: Sendable {
         try? FileManager.default.removeItem(at: folder(of: source))
     }
 
+    /// Clear covers, in Settings.
+    @concurrent func removeAll() async {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    /// What all the covers take, in bytes.
+    @concurrent func totalSize() async -> Int {
+        covers().reduce(0) { $0 + $1.size }
+    }
+
     /// Removes the covers written longest ago until the rest fit in `limit`.
     @concurrent func trim(to limit: Int = Self.limit) async {
-        let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-        let found = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: Array(keys))?.allObjects as? [URL] ?? []
-        let covers = found.compactMap { file -> (file: URL, size: Int, written: Date)? in
-            guard let values = try? file.resourceValues(forKeys: keys), values.isRegularFile == true,
-                  let size = values.fileSize, let written = values.contentModificationDate
-            else { return nil }
-            return (file, size, written)
-        }
+        let covers = covers()
         var total = covers.reduce(0) { $0 + $1.size }
         for cover in covers.sorted(by: { $0.written < $1.written }) {
             guard total > limit else { return }
             try? FileManager.default.removeItem(at: cover.file)
             total -= cover.size
+        }
+    }
+
+    private func covers() -> [(file: URL, size: Int, written: Date)] {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+        let found = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: Array(keys))?.allObjects as? [URL] ?? []
+        return found.compactMap { file in
+            guard let values = try? file.resourceValues(forKeys: keys), values.isRegularFile == true,
+                  let size = values.fileSize, let written = values.contentModificationDate
+            else { return nil }
+            return (file, size, written)
         }
     }
 

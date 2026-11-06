@@ -16,6 +16,7 @@ Every launch used to fetch every cover again: `ServerTransport` has no URL cache
 - **No version** (every OPDS cover, and some BookOrbit ones): the kept one shows at once, and if its file is over a day old it's fetched again in the background. The new one shows when the cover is next drawn. If that fetch fails, the old one stays.
 - **Remove server:** its folder goes (`LibraryModel.remove`). A fetch under way then keeps nothing: `CoverCache.keep` checks before writing and again after.
 - **Sign out:** covers stay, like the server's books.
+- **Clear covers,** in Settings' Storage section (Adam): the files and the memory cache go, and each cover is fetched when it's next shown. It doesn't ask, since nothing is lost. A cover already on a screen stays until that screen draws it again.
 - **Over 500 MB in all:** at launch the covers written longest ago go first (`CoverFiles.trim`). A version's old files leave this way too. There's no age limit, because a cover deleted by age can't come back while the server is unreachable.
 
 ## Checked
