@@ -83,7 +83,7 @@ struct LibraryServerMenu: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(library.server?.name ?? "Library")
                     .font(.largeTitle.bold())
-                    .lineLimit(1)
+                    .lineLimit(untilLargerText: 1)
                 Image(systemName: "chevron.down")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -136,7 +136,7 @@ struct LibraryServerMenu: View {
                     .opacity(showsSymbol ? 1 : 0)
                     .accessibilityHidden(!showsSymbol)
                 Text(title)
-                    .lineLimit(1)
+                    .lineLimit(untilLargerText: 1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
@@ -210,7 +210,7 @@ struct LibraryShelf: View {
             HStack(spacing: 6) {
                 Text(entry.title)
                     .font(.title3.weight(.semibold))
-                    .lineLimit(1)
+                    .lineLimit(untilLargerText: 1)
                 if let count = count(feed) {
                     Text(count, format: .number)
                         .font(.title3)

@@ -81,6 +81,7 @@ struct ReaderBackBar: View {
                         .accessibilityHidden(true)
                     Text(trip.backLabel)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 .padding(.leading, 13)
                 .padding(.trailing, 5)
@@ -97,6 +98,9 @@ struct ReaderBackBar: View {
                 .contentShape(.rect)
         }
         .font(.subheadline)
+        // The most that fits its height and leaves room for ✕, which is the
+        // only way to stay here.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .glassEffect(.regular, in: .capsule)
         .accessibilityElement(children: .contain)
     }

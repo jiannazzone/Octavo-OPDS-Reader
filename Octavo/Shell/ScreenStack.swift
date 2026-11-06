@@ -253,7 +253,7 @@ struct ScreenTitle: View {
     var body: some View {
         Text(text)
             .font(.largeTitle.bold())
-            .lineLimit(1)
+            .lineLimit(untilLargerText: 1)
             .padding(.horizontal, 20)
             .padding(.top, SpreadMetrics.titleTop)
             .padding(.bottom, 8)

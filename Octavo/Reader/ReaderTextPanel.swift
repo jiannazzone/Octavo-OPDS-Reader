@@ -129,6 +129,7 @@ struct ReaderTextPanel: View {
     @AppStorage(ReaderPageTurn.key) private var pageTurn = ReaderPageTurn.standard
     @AppStorage(ReaderSettings.bookModeShadowKey) private var bookModeShadow = ReaderSettings.bookModeShadowDefault
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         VStack(spacing: 0) {
@@ -197,7 +198,7 @@ struct ReaderTextPanel: View {
 
     private var themes: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+            LargerTextStack(spacing: 10, stackedSpacing: 8) {
                 ForEach(ReaderTheme.allCases) { theme in
                     ThemeSwatch(theme: theme, selected: appearance.theme == theme) {
                         appearance.theme = theme
@@ -249,7 +250,7 @@ struct ReaderTextPanel: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .fixedSize()
+                .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
             LabeledContent("Line Spacing") {
                 Picker("Line Spacing", selection: $appearance.lineSpacing) {
@@ -259,7 +260,7 @@ struct ReaderTextPanel: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .fixedSize()
+                .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Margins")
@@ -277,13 +278,14 @@ struct ReaderTextPanel: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .fixedSize()
+                .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
             Toggle("Justify", isOn: $appearance.justify)
             Toggle("Match Dark Mode", isOn: $appearance.matchDarkMode)
             Toggle("Book-Mode Shadow", isOn: $bookModeShadow)
             Toggle("Always Show Controls", isOn: $alwaysShowControls)
         }
+        .labeledContentStyle(StackedAtLargerText())
     }
 }
 
@@ -292,14 +294,19 @@ private struct ThemeSwatch: View {
     let theme: ReaderTheme
     let selected: Bool
     let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
+        let large = size.isAccessibilitySize
+        // At these sizes, a name under a quarter of the panel breaks mid-word.
+        let layout = large ? AnyLayout(HStackLayout(spacing: 12)) : AnyLayout(VStackLayout(spacing: 4))
         Button(action: action) {
-            VStack(spacing: 4) {
+            layout {
                 Text("Aa")
                     .font(.system(.title3, design: .serif))
                     .foregroundStyle(Color(hex: theme.text))
-                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .padding(.horizontal, large ? 12 : 0)
+                    .frame(maxWidth: large ? nil : .infinity, minHeight: 44)
                     .background(Color(hex: theme.background), in: .rect(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
@@ -309,6 +316,8 @@ private struct ThemeSwatch: View {
                     .font(.caption)
                     .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondaryOnGlass))
             }
+            .frame(maxWidth: large ? .infinity : nil, alignment: .leading)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(theme.name)

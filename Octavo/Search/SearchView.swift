@@ -89,7 +89,7 @@ private struct SearchField: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(height: 40)
+        .frame(minHeight: 40)
         .background(Color(.tertiarySystemFill), in: .capsule)
         .onChange(of: covered) {
             guard covered else { return }
@@ -184,7 +184,7 @@ private struct RecentLabelStyle: LabelStyle {
             configuration.icon
                 .foregroundStyle(.secondary)
             configuration.title
-                .lineLimit(1)
+                .lineLimit(untilLargerText: 1)
         }
     }
 }
@@ -515,12 +515,12 @@ private struct SearchBookRow: View {
                     .frame(width: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
-                        .lineLimit(2)
+                        .lineLimit(untilLargerText: 2)
                     if !book.book.authors.isEmpty {
                         Text(book.book.authors.formatted(.list(type: .and)))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(untilLargerText: 1)
                     }
                     if let place = Self.place(book.book, progress: progress) {
                         Text(place)

@@ -52,10 +52,10 @@ struct ReaderContentsPanel: View {
                     Button {
                         goToRow(row)
                     } label: {
-                        HStack(alignment: .firstTextBaseline) {
+                        LargerTextStack(alignment: .firstTextBaseline, spacing: 12, stackedSpacing: 0) {
                             Text(row.label)
-                                .lineLimit(2)
-                            Spacer(minLength: 12)
+                                .lineLimit(untilLargerText: 2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             if let page = row.page {
                                 Text(page, format: .number)
                                     .monospacedDigit()
@@ -97,7 +97,7 @@ struct ReaderContentsPanel: View {
                                 Text("“\(excerpt)”")
                                     .font(.footnote)
                                     .foregroundStyle(.secondaryOnGlass)
-                                    .lineLimit(2)
+                                    .lineLimit(untilLargerText: 2)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

@@ -58,6 +58,8 @@ struct BookSheet: View {
             .buttonStyle(.plain)
             .accessibilityLabel(page.isExpanded ? "Hide details" : "Show details")
             BookSheetSummary(page: page, source: source, sourceID: sourceID)
+                // Pulled up at the largest text sizes, the details scroll instead.
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
         }
@@ -104,16 +106,17 @@ struct BookSheetSummary: View {
     let source: any LibrarySource
     let sourceID: LibrarySourceID
     @Environment(ShellModel.self) private var shell
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         let place = BookPlace(page: page, sourceID: sourceID, shell: shell)
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
+            LargerTextStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(page.current.title.isEmpty ? "Untitled" : page.current.title)
                         .font(.headline)
                         // In full once pulled up, as the details' heading.
-                        .lineLimit(page.isExpanded ? 2 : 1)
+                        .lineLimit(untilLargerText: page.isExpanded ? 2 : 1)
                         .accessibilityAddTraits(.isHeader)
                     // Redrawn each minute, so "just now" moves on.
                     TimelineView(.everyMinute) { context in
@@ -121,12 +124,12 @@ struct BookSheetSummary: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondaryOnGlass)
                             // A problem says what to do, so it may wrap.
-                            .lineLimit(place.problem == nil ? 1 : 2)
+                            .lineLimit(untilLargerText: place.problem == nil ? 1 : 2)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                BookOpenButton(page: page, source: source, sourceID: sourceID, fillsWidth: false)
-                    .fixedSize()
+                BookOpenButton(page: page, source: source, sourceID: sourceID, fillsWidth: size.isAccessibilitySize)
+                    .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
             BookPlaceLine(place: place)
         }
@@ -150,12 +153,12 @@ struct BookSummary: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(page.current.title.isEmpty ? "Untitled" : page.current.title)
                     .font(titleFont)
-                    .lineLimit(titleLines)
+                    .lineLimit(untilLargerText: titleLines)
                     .accessibilityAddTraits(.isHeader)
                 BookAuthorLink(page: page)
             }
             place
-            HStack(spacing: 10) {
+            LargerTextStack(spacing: 10) {
                 BookFinishedButton(page: page, source: source)
                 BookOpenButton(page: page, source: source, sourceID: sourceID)
             }
@@ -168,18 +171,17 @@ struct BookSummary: View {
     private var place: some View {
         let place = BookPlace(page: page, sourceID: sourceID, shell: shell)
         return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
+            LargerTextStack(alignment: .firstTextBaseline, spacing: 12, stackedSpacing: 2) {
                 Text(place.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if let trip = place.trip {
-                    Spacer(minLength: 12)
                     Text(trip.opensAtLabel)
-                        .lineLimit(1)
+                        .lineLimit(untilLargerText: 1)
                 } else if let status = place.status {
-                    Spacer(minLength: 12)
                     // Redrawn each minute, so "just now" moves on.
                     TimelineView(.everyMinute) { context in
                         Text(status.text(now: context.date))
-                            .lineLimit(1)
+                            .lineLimit(untilLargerText: 1)
                     }
                 }
             }
@@ -290,7 +292,7 @@ struct BookAuthorLink: View {
             } label: {
                 HStack(spacing: 4) {
                     Text(line)
-                        .lineLimit(1)
+                        .lineLimit(untilLargerText: 1)
                     Image(systemName: "chevron.forward")
                         .font(.footnote.weight(.semibold))
                 }
@@ -299,7 +301,7 @@ struct BookAuthorLink: View {
             .foregroundStyle(.tint)
         } else if !line.isEmpty {
             Text(line)
-                .lineLimit(1)
+                .lineLimit(untilLargerText: 1)
                 .foregroundStyle(.secondaryOnGlass)
         }
     }
@@ -323,7 +325,7 @@ struct BookFinishedButton: View {
             }
         } label: {
             Label(finished ? "Finished" : "Mark finished", systemImage: finished ? "checkmark.circle.fill" : "checkmark")
-                .lineLimit(1)
+                .lineLimit(untilLargerText: 1)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glass)

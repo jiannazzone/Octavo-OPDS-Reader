@@ -99,14 +99,14 @@ private struct DownloadedBookRow: View {
                 .clipShape(.rect(cornerRadius: 3))
             VStack(alignment: .leading, spacing: 2) {
                 Text(book.book.book.title)
-                    .lineLimit(1)
+                    .lineLimit(untilLargerText: 1)
                 // The same book on two servers is two rows (decision 36).
                 let line = [book.book.book.authors.first, library.label(for: book.book)].compactMap(\.self).joined(separator: " · ")
                 if !line.isEmpty {
                     Text(line)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(untilLargerText: 1)
                 }
             }
             Spacer(minLength: 8)

@@ -8,6 +8,7 @@ What Apple asks for, the common tasks that have to work, and what's been checked
 - **Dark Interface (#77) and Reduced Motion (#80):** checked across the common tasks below, except what's listed under Not checked: on the simulator, then by Adam on his Duo (2026-11-05, at 1e6a5cf).
 - **Sufficient Contrast (#79):** met only with Increase Contrast on, which Apple allows. By default `.secondary` text is about 3.4:1 in light. The rows below say what's been measured.
 - **Differentiate Without Color (#78):** nothing checked relies on color alone, judged from grey versions of the screenshots.
+- **Larger Text (#76):** the app's own words wrap or stack at the accessibility text sizes, and book text stays on its own A− A+ control, up to 200%. The rows below say what's been seen, and nothing has run on a real Duo.
 - **Labels are per device.** The app builds for iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`), so iPad needs its own pass or its own "no".
 - **Captions and Audio Descriptions stay unclaimed.** The app has no video or audio, and Apple's pages offer no "not applicable".
 
@@ -29,23 +30,23 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 
 | Task | Dark | Motion | Color | Contrast | Larger Text | VoiceOver | Voice Control |
 |---|---|---|---|---|---|---|---|
-| **First launch:** the tour, or Skip | ✓ unfolded | ✓ unfolded | ✓ unfolded | ✓ unfolded, light, first card | | | |
-| **Sign in:** BookOrbit, a wrong password | ✓ unfolded | ✓ unfolded | | | | | |
+| **First launch:** the tour, or Skip | ✓ unfolded | ✓ unfolded | ✓ unfolded | ✓ unfolded, light, first card | ✓ unfolded | | |
+| **Sign in:** BookOrbit, a wrong password | ✓ unfolded | ✓ unfolded | | | The fields, folded | | |
 | **Sign in:** an OPDS catalog (COPS, no password), Trust this server | ✓ unfolded | ✓ unfolded | | | | | |
 | **Sign in:** an OPDS catalog with a password, a wrong password | ✓ folded | ✓ folded | ✓ folded | ✓ unfolded | | | |
-| **Find a book:** Home, Library, Search's first screen | ✓ | ✓ | ✓ folded | ✓ folded | | | |
-| **Find a book:** the Search tab's results | ✓ folded | ✓ folded | ✓ folded | | | | |
-| **A book's screen:** details | ✓ | ✓ | ✓ folded | ✓ folded | | | |
-| **A book's screen:** download, the remove prompt | ✓ | ✓ | ✓ folded | Open only | | | |
-| **Read:** open, fold, unfold, close | ✓ | ✓ | ✓ folded | ✓ folded | | | |
-| **Read:** turn a page | ✓ Duo | ✓ Duo | | | | | |
-| **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | ✓ folded | ✓ | | | |
-| **In the book:** search, a result | ✓ | ✓ | ✓ folded | The field only | | | |
+| **Find a book:** Home, Library, Search's first screen | ✓ | ✓ | ✓ folded | ✓ folded | ✓ | | |
+| **Find a book:** the Search tab's results | ✓ folded | ✓ folded | ✓ folded | | ✓ folded | | |
+| **A book's screen:** details | ✓ | ✓ | ✓ folded | ✓ folded | ✓ | | |
+| **A book's screen:** download, the remove prompt | ✓ | ✓ | ✓ folded | Open only | Open only | | |
+| **Read:** open, fold, unfold, close | ✓ | ✓ | ✓ folded | ✓ folded | Open, close | | |
+| **Read:** turn a page | ✓ Duo | ✓ Duo | | | ✓ unfolded | | |
+| **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | ✓ folded | ✓ | ✓ | | |
+| **In the book:** search, a result | ✓ | ✓ | ✓ folded | The field only | ✓ folded | | |
 | **Read:** half open | ✓ Duo | ✓ Duo | | | | | |
-| **In the book:** footnotes, going back | ✓ | ✓ | ✓ folded | | | | |
+| **In the book:** footnotes, going back | ✓ | ✓ | ✓ folded | | Going back, folded | | |
 | **Other ways in:** Import from Files, Open in Octavo | ✓ folded | ✓ folded | ✓ folded | | | | |
-| **Settings:** the list | ✓ | ✓ | ✓ folded | ✓ folded | | | |
-| **Settings:** a server's page, Books on iPhone | ✓ | ✓ | ✓ folded | A server's page, unfolded | | | |
+| **Settings:** the list | ✓ | ✓ | ✓ folded | ✓ folded | ✓ | | |
+| **Settings:** a server's page, Books on iPhone | ✓ | ✓ | ✓ folded | A server's page, unfolded | A server's page, unfolded | | |
 
 "✓ Duo" means only on Adam's Duo. He ran these with Dark Mode and Reduce Motion on, and all passed: a book's screen and Back, a swipe back, a Settings page, opening a book, turning pages, the panels, a bookmark and a search result unfolded; folding while reading, half open and folding on Home; the book sheet, opening a book, turning pages and the panels folded; Show the tour and Skip.
 
@@ -128,6 +129,31 @@ Grey versions of the same screenshots, folded, light and dark, plus the first to
 | An open panel's button | The panel itself |
 | The button the tour asks for | The card names it |
 
+## Larger Text
+
+Apple asks for 200%, or the system's maximum, without overlapping or severe truncation. Dynamic Type passes 200% at AX3 (`accessibility-extra-large`) and reaches over 300% at AX5. The screens were read at both, folded and unfolded as the table says. Everything here applies only at the accessibility text sizes, in `Octavo/Shell/LargerText.swift`. Pictures at AX3: `accessibility/larger-text-before-after.jpg`.
+
+| What | At the accessibility text sizes |
+|---|---|
+| Titles, authors, list rows | Wrap instead of cutting off (`.lineLimit(untilLargerText:)`) |
+| The book sheet | The title wraps, and Open sits under it at full width. Pulled up, the details scroll and the title stays whole |
+| A book's screen | Mark finished over Open, the place over when it synced (`LargerTextStack`) |
+| Text and Theme | Themes are rows with the name beside the swatch, because a name under a quarter of the panel broke mid-word. Customize's labels sit over their values, because a menu wider than the panel pushed everything off its edges |
+| Contents | The chapter's name in full, the page number under it |
+| The progress bar | The chapter's name wraps |
+| The footer | Stops growing at AX2, about 218%. Folded, it leaves out the chapter, which was a letter or two |
+| The way back, the server's place | Stop growing at AX2, 200%, on one line, and shrink a little if a long line needs it. Beyond that the way back's ✕, its only way to stay, went off the screen, and the server's capsule covered the page. The capsule leaves out the chapter, and the way back's page numbers go |
+| The tour's cards | The words scroll inside the card, so its title stays on it and its buttons stay in reach |
+| Search and Setup's fields | Grow with their text |
+
+**Book text keeps its own control:** A− A+ goes from 80% to 200%, and the system's size doesn't change it. Apple names Apple Books as the example of this. Footnote cards follow it too.
+
+**Left alone:**
+
+- The side column's buttons and the tour's Skip stay about the same size, as Apple says a tab bar may. They don't offer the Large Content Viewer yet.
+- The Contents and Bookmarks switch and the margins switch are the system's segmented controls, which don't grow.
+- At AX5, "Languages" in the Library breaks as "Lan-guages", and an address such as localhost:3320 breaks where it must.
+
 ## How to check
 
 ```bash
@@ -164,9 +190,10 @@ Where it misleads:
 
 - A plain iPhone or an iPad.
 - CBZ and fixed-layout books.
-- The tour's later cards. Apple's first-launch test is complete or skip, and Skip was checked.
+- The tour's later cards, apart from Larger Text. Apple's first-launch test is complete or skip, and Skip was checked.
 - Contrast, measured: the note card, the way back, the Search tab's results, search results in a book, the remove prompt, Books on iPhone, Import from Files, and BookOrbit's sign-in.
-- **Not seen running since `.onAccent`:** the trust prompt's button, the server place's Go and an empty screen's button. They take the same style as Open, Download and Sign in, which were seen.
+- **Not seen running since `.onAccent`:** the trust prompt's button and an empty screen's button. They take the same style as Open, Sign in and the server place's Go, which were seen.
 - Color: BookOrbit's sign-in, the trust prompt, the connection banner, half open.
 - Unfolded: Reduce Transparency, Bold Text, grey versions of most screens.
-- Nothing in this slice has run on a real Duo.
+- Larger Text: half open, folding with a book open, the trust prompt, footnote cards, Import from Files, Books on iPhone, an empty screen, the connection banner, Dark Mode at these sizes.
+- Nothing from Color and Contrast or Larger Text has run on a real Duo.

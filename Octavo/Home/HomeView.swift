@@ -148,11 +148,11 @@ struct CurrentBook: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
                         .font(.title2.bold())
-                        .lineLimit(2)
+                        .lineLimit(untilLargerText: 2)
                     if !book.book.authors.isEmpty {
                         Text(book.book.authors.formatted(.list(type: .and)))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(untilLargerText: 1)
                     }
                 }
                 VStack(alignment: .leading, spacing: 6) {
@@ -238,7 +238,7 @@ struct ContinueReadingRow: View {
                     .frame(width: 48)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
-                        .lineLimit(1)
+                        .lineLimit(untilLargerText: 1)
                     Text(BookPage.placeLine(progress: progress, server: library.label(for: book)))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
