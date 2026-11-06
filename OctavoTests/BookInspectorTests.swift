@@ -7,14 +7,9 @@ import Testing
 /// shown, and the files refused before that (step 15,
 /// `docs/notes/formats-check.md`).
 @MainActor
-@Suite(.temporaryFiles)
+@Suite(.firstPageWait, .temporaryFiles)
 struct BookInspectorTests {
     private static let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
-
-    /// For the tests that aren't about the limit. On a new runner the first
-    /// page of a run can use up the app's 30 s before it gets to the book
-    /// (`docs/notes/ci.md`), and that says nothing about what these check.
-    private static let inspector = BookInspector(timeout: .seconds(120))
 
     private func file(_ data: Data, _ name: String) throws -> URL {
         let directory = URL.testDirectory.appending(path: UUID().uuidString)
@@ -66,10 +61,10 @@ struct BookInspectorTests {
     @Test func encryptedContentIsDRM() async throws {
         // Kobo's DRM: AES on the text, and no file of its own beside it.
         let locked = try file(Self.epub(opf: "<dc:title>Locked</dc:title>", extra: [Self.encryption("http://www.w3.org/2001/04/xmlenc#aes128-cbc")]), "locked.epub")
-        await #expect(throws: BookInspectionError.drmProtected) { try await Self.inspector.inspect(locked) }
+        await #expect(throws: BookInspectionError.drmProtected) { try await BookInspector().inspect(locked) }
         // Obfuscated fonts alone are fine.
         let fonts = try file(Self.epub(opf: "<dc:title>Fonts</dc:title>", extra: [Self.encryption("http://www.idpf.org/2008/embedding")]), "fonts.epub")
-        #expect(try await Self.inspector.inspect(fonts).title == "Fonts")
+        #expect(try await BookInspector().inspect(fonts).title == "Fonts")
     }
 
     @Test func readsAnEPUBsDetailsAndCover() async throws {
@@ -82,7 +77,7 @@ struct BookInspectorTests {
         <dc:publisher>Octavo Tests</dc:publisher>
         <dc:description>&lt;p&gt;It is a truth &lt;i&gt;universally&lt;/i&gt; acknowledged.&lt;/p&gt;&lt;script&gt;alert(1)&lt;/script&gt;</dc:description>
         """), "Some download (1).zip")
-        let details = try await Self.inspector.inspect(url)
+        let details = try await BookInspector().inspect(url)
         #expect(details.format == .epub)
         #expect(details.title == "Pride and Prejudice")
         #expect(details.authors == ["Jane Austen", "R. W. Chapman"])
@@ -95,7 +90,7 @@ struct BookInspectorTests {
 
     @Test func aBookWithoutDetailsHasNone() async throws {
         let url = try file(Self.epub(opf: "<dc:title></dc:title>"), "untitled.epub")
-        let details = try await Self.inspector.inspect(url)
+        let details = try await BookInspector().inspect(url)
         #expect(details.title == nil)
         #expect(details.authors.isEmpty)
         #expect(details.description == nil)
@@ -116,7 +111,7 @@ struct BookInspectorTests {
         <binary id="cover.png" content-type="image/png">iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==</binary>
         </FictionBook>
         """##
-        let details = try await Self.inspector.inspect(try file(Data(fb2.utf8), "alice.xml"))
+        let details = try await BookInspector().inspect(try file(Data(fb2.utf8), "alice.xml"))
         #expect(details.format == .fb2)
         #expect(details.title == "Alice’s Adventures in Wonderland")
         #expect(details.authors == ["Lewis Carroll"])
@@ -146,10 +141,10 @@ struct BookInspectorTests {
         // Its container names a package that isn't there.
         let container = #"<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/missing.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#
         let broken = StoredZip.make([("mimetype", Data("application/epub+zip".utf8)), ("META-INF/container.xml", Data(container.utf8))])
-        await #expect(throws: BookInspectionError.damaged) { try await Self.inspector.inspect(try file(broken, "broken.epub")) }
+        await #expect(throws: BookInspectionError.damaged) { try await BookInspector().inspect(try file(broken, "broken.epub")) }
         // Nothing to read.
         let empty = try file(Self.epub(opf: "<dc:title>Empty</dc:title>", spine: false), "empty.epub")
-        await #expect(throws: BookInspectionError.damaged) { try await Self.inspector.inspect(empty) }
+        await #expect(throws: BookInspectionError.damaged) { try await BookInspector().inspect(empty) }
     }
 
     @Test func aSlowReadTimesOut() async throws {
@@ -168,7 +163,7 @@ struct BookInspectorTests {
         await #expect(throws: BookInspectionError.timedOut) { try await inspector.inspect(url) }
         #expect(ContinuousClock.now - started < .seconds(10))
         // A busy page left behind wouldn't stop the next one.
-        #expect(try await Self.inspector.inspect(url).title == "Busy")
+        #expect(try await BookInspector().inspect(url).title == "Busy")
     }
 
     @Test func aLongDescriptionIsCut() {
