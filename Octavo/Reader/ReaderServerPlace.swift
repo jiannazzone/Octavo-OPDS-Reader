@@ -33,6 +33,7 @@ struct ReaderServerPlaceBar: View {
     let go: () -> Void
     let stay: () -> Void
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         HStack(spacing: 8) {
@@ -42,11 +43,13 @@ struct ReaderServerPlaceBar: View {
             Text(text)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .minimumScaleFactor(size.isAccessibilitySize ? 0.7 : 1)
             Button("Go", action: go)
                 .buttonStyle(.borderedProminent)
                 .foregroundStyle(.onAccent)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
+                .fixedSize()
                 .accessibilityLabel(Text("Go to \(place.label(server: server))", comment: "VoiceOver: go to the server's place, e.g. Go to BookOrbit: 62%"))
             Button("Stay Here", systemImage: "xmark", action: stay)
                 .labelStyle(.iconOnly)
@@ -54,6 +57,9 @@ struct ReaderServerPlaceBar: View {
                 .foregroundStyle(.secondary)
         }
         .font(.subheadline)
+        // As the way back: on one line, so it leaves the page showing and Go
+        // and ✕ in reach.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .padding(.leading, 14)
         .padding(.trailing, 10)
         .padding(.vertical, 6)
@@ -64,7 +70,7 @@ struct ReaderServerPlaceBar: View {
 
     private var text: AttributedString {
         var text = AttributedString(place.label(server: server))
-        if let chapter = place.chapter {
+        if !size.isAccessibilitySize, let chapter = place.chapter {
             var rest = AttributedString(" · \(chapter)")
             if contrast != .increased { rest.foregroundColor = .secondary }
             text += rest

@@ -142,6 +142,7 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
 - The App Store's Accessibility Nutrition Labels are answered per device, and a label needs every common task to work with that feature. The note lists the common tasks and what's been checked on what. Claim only what's been checked.
 - With Reduce Motion, anything that slides, scales, flips or bounces fades or stops: `@Environment(\.accessibilityReduceMotion)` in views, `UIAccessibility.isReduceMotionEnabled` in models and static animations. A drag still follows the finger, and a Page Turn picked by hand stays (Adam).
 - Grey words on glass use `.secondaryOnGlass`, and the words on a filled button use `.onAccent` (`Octavo/Shell/ContrastStyles.swift`): Increase Contrast doesn't reach 4.5:1 on glass, and white on the dark-mode accent is 1.7:1.
+- A line or a row that stops fitting at the accessibility text sizes wraps or stacks (`.lineLimit(untilLargerText:)`, `LargerTextStack`, `Octavo/Shell/LargerText.swift`). Book text stays on its own control, up to 200%.
 - `docs/notes/accessibility/tools/probe.sh` reads the running app's accessibility tree and runs Apple's audit. It isn't in CI.
 
 ## Licensing rules (important)

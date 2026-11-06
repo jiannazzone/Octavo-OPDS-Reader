@@ -501,7 +501,7 @@ private struct SetupField: View {
             .textInputAutocapitalization(isName ? .words : .never)
             .autocorrectionDisabled(!isName)
             .padding(.horizontal, 12)
-            .frame(height: 44)
+            .frame(minHeight: 44)
             .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10))
         }
     }

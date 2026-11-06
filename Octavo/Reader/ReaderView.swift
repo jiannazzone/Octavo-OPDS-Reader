@@ -650,7 +650,7 @@ private struct ReaderProgressBar: View {
             if skip.isAvailable { chapterButton(.back, isEnabled: skip.canGoBack) }
             Text(place.chapter ?? model.title ?? " ")
                 .font(.footnote.weight(.semibold))
-                .lineLimit(1)
+                .lineLimit(untilLargerText: 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if skip.isAvailable { chapterButton(.forward, isEnabled: skip.canGoForward) }
         }
@@ -725,14 +725,14 @@ private struct ReaderProgressBar: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(chapter.text)
                             .font(.footnote.weight(.semibold))
-                            .lineLimit(1)
+                            .lineLimit(untilLargerText: 1)
                         Spacer(minLength: 0)
                         if let pages = place.pages(spread: true) {
                             Text(pages)
                                 .font(.caption)
                                 .monospacedDigit()
                                 .foregroundStyle(.secondaryOnGlass)
-                                .lineLimit(1)
+                                .lineLimit(untilLargerText: 1)
                                 .layoutPriority(1)
                         }
                     }
@@ -760,7 +760,7 @@ private struct ReaderProgressBar: View {
             .font(.caption)
             .monospacedDigit()
             .foregroundStyle(.secondaryOnGlass)
-            .lineLimit(1)
+            .lineLimit(untilLargerText: 1)
     }
 
     private var fraction: Binding<Double> {
@@ -807,6 +807,7 @@ struct ReaderFooterLines: View {
     let geometry: ReaderGeometry
     /// The way back sits in the chapter's place (decision 33).
     var hidesChapter = false
+    @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
         if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width)),
@@ -818,10 +819,15 @@ struct ReaderFooterLines: View {
                     line(chapter: hidesChapter ? nil : place.chapter, numbers: nil, in: first, centre: centre)
                     line(chapter: nil, numbers: place.footer(spread: true), in: last, centre: centre)
                 } else {
-                    line(chapter: hidesChapter ? nil : place.chapter, numbers: place.footer(spread: false), in: first, centre: centre)
+                    // At these sizes the chapter would be a letter or two, and
+                    // the way back reaches the numbers.
+                    let large = size.isAccessibilitySize
+                    line(chapter: hidesChapter || large ? nil : place.chapter, numbers: hidesChapter && large ? nil : place.footer(spread: false), in: first, centre: centre)
                 }
             }
             .font(.caption2)
+            // Past 200%, and the most that fits a spread's numbers on one line.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .monospacedDigit()
             .foregroundStyle(.secondary)
             .allowsHitTesting(false)

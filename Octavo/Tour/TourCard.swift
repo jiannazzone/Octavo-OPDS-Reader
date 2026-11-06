@@ -47,19 +47,17 @@ private struct TourCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let card = step.card {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(card.title)
-                        .font(.headline)
-                    Text(TourCardWords.emphasized(card.message))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondaryOnGlass)
+                // Scrolls only at the largest text sizes, with the buttons
+                // still in reach.
+                ViewThatFits(in: .vertical) {
+                    words(card)
+                    ScrollView { words(card) }
+                        .scrollBounceBehavior(.basedOnSize)
                 }
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityElement(children: .combine)
             }
-            HStack(spacing: 16) {
+            LargerTextStack(spacing: 16, stackedSpacing: 10) {
                 TourDots(current: step.dot, count: TourFlow.Step.dotCount)
-                Spacer(minLength: 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 buttons
                     .font(.subheadline.weight(.semibold))
             }
@@ -71,6 +69,19 @@ private struct TourCard: View {
         // Nothing on the card turns the page beneath it.
         .contentShape(.rect(cornerRadius: 22))
         .onTapGesture {}
+    }
+
+    private func words(_ card: (title: String, message: String)) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(card.title)
+                .font(.headline)
+            Text(TourCardWords.emphasized(card.message))
+                .font(.subheadline)
+                .foregroundStyle(.secondaryOnGlass)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder private var buttons: some View {

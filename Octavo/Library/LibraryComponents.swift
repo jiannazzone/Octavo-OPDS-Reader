@@ -145,7 +145,7 @@ struct EntryRow: View {
                     AuthorAvatar(entry: entry, source: source)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(AuthorIndex.displayName(entry))
-                            .lineLimit(1)
+                            .lineLimit(untilLargerText: 1)
                         if let detail = entry.listDetail {
                             Text(detail)
                                 .font(.subheadline)
@@ -155,12 +155,12 @@ struct EntryRow: View {
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.title)
-                            .lineLimit(1)
+                            .lineLimit(untilLargerText: 1)
                         if let detail = entry.listDetail {
                             Text(detail)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                                .lineLimit(untilLargerText: 1)
                         }
                     }
                 }

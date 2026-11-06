@@ -100,7 +100,7 @@ struct ReaderSearchPanel: View {
                     if let chapter = group.chapter {
                         Text(chapter)
                             .font(.footnote.weight(.semibold))
-                            .lineLimit(1)
+                            .lineLimit(untilLargerText: 1)
                             .padding(.horizontal, 18)
                             .listRowInsets(EdgeInsets())
                     }
@@ -122,7 +122,7 @@ struct ReaderSearchPanel: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(match.pre)\(Text(match.match).bold().foregroundStyle(.tint))\(match.post)")
                     .font(.subheadline)
-                    .lineLimit(3)
+                    .lineLimit(untilLargerText: 3)
                 Spacer(minLength: 12)
                 if let page = match.fraction.flatMap(page) {
                     Text(page, format: .number)
