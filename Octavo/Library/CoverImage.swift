@@ -1,3 +1,4 @@
+import ImageIO
 import OctavoKit
 import SwiftUI
 import UIKit
@@ -26,7 +27,9 @@ struct CoverImage: View {
             }
             .clipped()
         // The pane beside a list keeps this view as the book changes.
-        .task(id: [book.source.rawValue, book.book.id.rawValue, book.book.cover?.cacheKey]) {
+        // Below the scrolling for a grid's covers, which may be gone before
+        // they're ready. A full cover is the screen's point.
+        .task(id: [book.source.rawValue, book.book.id.rawValue, book.book.cover?.cacheKey], priority: size == .full ? .userInitiated : .utility) {
             loaded = nil
             loaded = await library.coverImage(for: book, size: size)
         }
@@ -79,7 +82,8 @@ struct FittedCover: View {
 }
 
 /// Decoded covers in memory, keyed by library, image version and size, and
-/// one fetch per cover at a time.
+/// one fetch per cover at a time. What's fetched is also kept on the iPhone
+/// (`CoverFiles`).
 final class CoverCache {
     private let images = NSCache<NSString, UIImage>()
     private var loading: [String: Task<UIImage?, Never>] = [:]
@@ -87,8 +91,13 @@ final class CoverCache {
     /// cell scrolling back into view doesn't ask again. Not a failed
     /// connection: that cover loads once the server is back.
     private var missing: Set<String> = []
+    private let files: CoverFiles
+    /// How many times each server has been removed, so a fetch started before
+    /// doesn't leave a cover once its server's are gone.
+    private var removals: [LibrarySourceID: Int] = [:]
 
-    init() {
+    init(files: CoverFiles = CoverFiles()) {
+        self.files = files
         images.countLimit = 400
     }
 
@@ -113,15 +122,23 @@ final class CoverCache {
         guard !missing.contains(key) else { return nil }
         if let image = images.object(forKey: key as NSString) { return image }
         if let task = loading[key] { return await task.value }
-        let task = Task<UIImage?, Never> { [weak self] in
+        // An imported book's cover is on the iPhone already.
+        let keepsFile = source != .files
+        let removalsAtStart = removals[source, default: 0]
+        let task = Task<UIImage?, Never> { [weak self, files] in
+            if keepsFile, let data = await files.read(key, in: source), let image = await Self.decoded(data, size: size) {
+                if cover.version == nil, await !files.isRecent(key, in: source) {
+                    self?.refresh(cover, as: key, in: source, size: size, from: library, removalsAtStart: removalsAtStart)
+                }
+                return image
+            }
             do {
                 let data = try await library.cover(cover, size: size)
-                // Not `byPreparingForDisplay()`: on the iOS 27.1 simulator
-                // its images blank the whole window.
-                guard let image = UIImage(data: data) else {
+                guard let image = await Self.decoded(data, size: size) else {
                     self?.missing.insert(key)
                     return nil
                 }
+                if keepsFile { await self?.keep(data, as: key, in: source, removalsAtStart: removalsAtStart) }
                 return image
             } catch {
                 if !(error is URLError || error is CancellationError) { self?.missing.insert(key) }
@@ -133,6 +150,47 @@ final class CoverCache {
         loading[key] = nil
         if let image { images.setObject(image, forKey: key as NSString) }
         return image
+    }
+
+    /// Remove server: its covers on the iPhone go.
+    func removeFiles(of source: LibrarySourceID) async {
+        removals[source, default: 0] += 1
+        await files.removeAll(in: source)
+    }
+
+    /// Fetches a kept cover again in the background: the one on the iPhone is
+    /// already showing, and the new one shows when the cover is next drawn.
+    private func refresh(
+        _ cover: LibraryCover, as key: String, in source: LibrarySourceID, size: LibraryCoverSize,
+        from library: any LibrarySource, removalsAtStart: Int
+    ) {
+        Task(priority: .utility) { [weak self] in
+            guard let data = try? await library.cover(cover, size: size), let image = await Self.decoded(data, size: size) else { return }
+            await self?.keep(data, as: key, in: source, removalsAtStart: removalsAtStart)
+            self?.images.setObject(image, forKey: key as NSString)
+        }
+    }
+
+    /// The check after the write catches a server removed during it.
+    private func keep(_ data: Data, as key: String, in source: LibrarySourceID, removalsAtStart: Int) async {
+        guard removals[source, default: 0] == removalsAtStart else { return }
+        await files.write(data, as: key, in: source)
+        if removals[source, default: 0] != removalsAtStart { await files.removeAll(in: source) }
+    }
+
+    /// A cover ready to draw, made off the main thread and no larger than it's
+    /// ever shown: left to `UIImage(data:)`, it would be decoded as it first
+    /// draws, mid-scroll. Not `byPreparingForDisplay()`: on the iOS 27.1
+    /// simulator its images blank the whole window.
+    @concurrent nonisolated static func decoded(_ data: Data, size: LibraryCoverSize) async -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let options = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: size == .full ? 2400 : 600,
+            kCGImageSourceShouldCacheImmediately: true,
+        ] as CFDictionary
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options).map { UIImage(cgImage: $0) }
     }
 
     private func key(_ cover: LibraryCover, _ source: LibrarySourceID, _ size: LibraryCoverSize) -> String {
