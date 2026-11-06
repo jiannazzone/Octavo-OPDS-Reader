@@ -52,6 +52,8 @@ final class ReaderModel {
     /// Counts relocations, including ones that repeat the same page (a fold
     /// re-lays out the page without moving the position).
     private(set) var relocationCount = 0
+    /// Counts relocations that moved the position.
+    private(set) var moveCount = 0
     /// Where the page is as the reader shows it. `position` is what's saved.
     var shownFraction: Double { relocation?.shownFraction ?? 0 }
 
@@ -615,7 +617,9 @@ final class ReaderModel {
             // A repeat isn't a move (a fixed-layout page re-laid out reports
             // itself for the footer): saving it would mark it unsent, with a
             // new time that could beat another reader's newer place.
-            if !isRestoring, relocation.position(cfiShape) != previous?.position(cfiShape) {
+            let isMove = relocation.position(cfiShape) != previous?.position(cfiShape)
+            if isMove { moveCount += 1 }
+            if !isRestoring, isMove {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.
                 if !pageTurn.isAnimated, relocation.isPageTurn, foldBatch == nil, relocation.cfi != previous?.cfi {

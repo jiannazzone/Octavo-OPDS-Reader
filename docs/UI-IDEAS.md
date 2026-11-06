@@ -133,4 +133,6 @@ The Font menu in Text and Theme should show each name in its own font. Tried on 
 
 ## Keeping the screen on while reading (Adam, 2026-11-06)
 
-The screen dims while reading, because nothing in the app holds off Auto-Lock (`isIdleTimerDisabled` isn't used anywhere). Tried on the simulator on 2026-11-06: about 10 lines in `ReaderView` keep the screen on until 10 minutes after a page turn, then Auto-Lock takes over. The flag read true with a book open; the 10 minutes running out and a real Duo weren't checked. To decide: the limit, and whether it needs a setting.
+The screen dimmed while reading, because nothing in the app held off Auto-Lock.
+
+Decided 2026-11-06: Keep screen on in Settings, under Reading, for Off or 5, 10 (the default), 15 or 30 minutes after a page turn, with no Always (decision 24). Built the same day (`docs/notes/settings.md`).

@@ -92,12 +92,6 @@ private struct ReaderOpenedCheck: Equatable {
     var relocations: Int
 }
 
-/// What `ReaderView` watches to keep the screen on.
-private struct ReaderAwakeCheck: Equatable {
-    var relocations: Int
-    var isActive: Bool
-}
-
 /// The page, the column's buttons and the progress bar for one open book.
 private struct ReaderScreen: View {
     let model: ReaderModel
@@ -316,16 +310,7 @@ private struct ReaderScreen: View {
         .onChange(of: connectionReturns) {
             Task { await model.catchUp() }
         }
-        // Reading isn't touching: the screen stays on for 10 minutes after a
-        // page turn, then Auto-Lock takes over, for a phone left on a table.
-        .task(id: ReaderAwakeCheck(relocations: model.relocationCount, isActive: scenePhase == .active)) {
-            UIApplication.shared.isIdleTimerDisabled = scenePhase == .active
-            guard (try? await Task.sleep(for: .seconds(10 * 60))) != nil else { return }
-            UIApplication.shared.isIdleTimerDisabled = false
-        }
-        .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false
-        }
+        .modifier(ReaderKeepAwake(model: model))
         .task {
             // The keyboard's top, as far up the reader as it comes. The
             // reader ignores the keyboard's safe area (see above), so the
