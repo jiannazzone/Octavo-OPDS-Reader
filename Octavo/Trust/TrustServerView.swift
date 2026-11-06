@@ -94,12 +94,14 @@ struct TrustServerView: View {
                 if question.changed {
                     wideButton("Don’t connect") { decide(false) }
                         .buttonStyle(.glassProminent)
+                        .foregroundStyle(.onAccent)
                     wideButton(certificate.isTrustedBySystem ? "Use the new certificate" : "Trust the new certificate", role: .destructive) { decide(true) }
                         .buttonStyle(.glass)
                         .foregroundStyle(.red)
                 } else {
                     wideButton("Trust") { decide(true) }
                         .buttonStyle(.glassProminent)
+                        .foregroundStyle(.onAccent)
                     wideButton("Cancel", role: .cancel) { decide(false) }
                         .buttonStyle(.glass)
                 }

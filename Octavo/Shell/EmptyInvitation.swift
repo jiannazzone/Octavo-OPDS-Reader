@@ -17,6 +17,7 @@ struct EmptyInvitation: View {
         } actions: {
             Button(actionTitle, action: action)
                 .buttonStyle(.glassProminent)
+                .foregroundStyle(.onAccent)
         }
     }
 }

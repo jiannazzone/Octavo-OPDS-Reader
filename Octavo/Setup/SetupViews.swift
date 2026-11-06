@@ -533,6 +533,7 @@ private struct SetupButton: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.glassProminent)
+        .foregroundStyle(.onAccent)
         .controlSize(.large)
         .disabled(working)
     }

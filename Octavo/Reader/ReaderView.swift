@@ -731,7 +731,7 @@ private struct ReaderProgressBar: View {
                             Text(pages)
                                 .font(.caption)
                                 .monospacedDigit()
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryOnGlass)
                                 .lineLimit(1)
                                 .layoutPriority(1)
                         }
@@ -759,7 +759,7 @@ private struct ReaderProgressBar: View {
         Text(place.barLine(spread: model.layout.columns == 2))
             .font(.caption)
             .monospacedDigit()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.secondaryOnGlass)
             .lineLimit(1)
     }
 
