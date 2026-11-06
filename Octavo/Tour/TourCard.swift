@@ -52,7 +52,7 @@ private struct TourCard: View {
                         .font(.headline)
                     Text(TourCardWords.emphasized(card.message))
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryOnGlass)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityElement(children: .combine)

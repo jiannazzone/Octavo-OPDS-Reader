@@ -6,6 +6,8 @@ What Apple asks for, the common tasks that have to work, and what's been checked
 
 - **Nothing is claimed yet.** Claiming happens in App Store Connect, on the owner's say, once a label's column is full for that device.
 - **Dark Interface (#77) and Reduced Motion (#80):** checked across the common tasks below, except what's listed under Not checked: on the simulator, then by Adam on his Duo (2026-11-05, at 1e6a5cf).
+- **Sufficient Contrast (#79):** met only with Increase Contrast on, which Apple allows. By default `.secondary` text is about 3.4:1 in light. The rows below say what's been measured.
+- **Differentiate Without Color (#78):** nothing checked relies on color alone, judged from grey versions of the screenshots.
 - **Labels are per device.** The app builds for iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`), so iPad needs its own pass or its own "no".
 - **Captions and Audio Descriptions stay unclaimed.** The app has no video or audio, and Apple's pages offer no "not applicable".
 
@@ -27,21 +29,23 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 
 | Task | Dark | Motion | Color | Contrast | Larger Text | VoiceOver | Voice Control |
 |---|---|---|---|---|---|---|---|
-| **First launch:** the tour, or Skip | ✓ unfolded | ✓ unfolded | | | | | |
+| **First launch:** the tour, or Skip | ✓ unfolded | ✓ unfolded | ✓ unfolded | ✓ unfolded, light, first card | | | |
 | **Sign in:** BookOrbit, a wrong password | ✓ unfolded | ✓ unfolded | | | | | |
 | **Sign in:** an OPDS catalog (COPS, no password), Trust this server | ✓ unfolded | ✓ unfolded | | | | | |
-| **Find a book:** Home, Library, Search's first screen | ✓ | ✓ | | | | | |
-| **A book's screen:** details | ✓ | ✓ | | | | | |
-| **A book's screen:** download, the remove prompt | ✓ unfolded | ✓ unfolded | | | | | |
-| **Read:** open, fold, unfold, close | ✓ | ✓ | | | | | |
+| **Sign in:** an OPDS catalog with a password, a wrong password | ✓ folded | ✓ folded | ✓ folded | ✓ unfolded | | | |
+| **Find a book:** Home, Library, Search's first screen | ✓ | ✓ | ✓ folded | ✓ folded | | | |
+| **Find a book:** the Search tab's results | ✓ folded | ✓ folded | ✓ folded | | | | |
+| **A book's screen:** details | ✓ | ✓ | ✓ folded | ✓ folded | | | |
+| **A book's screen:** download, the remove prompt | ✓ | ✓ | ✓ folded | Open only | | | |
+| **Read:** open, fold, unfold, close | ✓ | ✓ | ✓ folded | ✓ folded | | | |
 | **Read:** turn a page | ✓ Duo | ✓ Duo | | | | | |
-| **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | | | | | |
-| **In the book:** search, a result | ✓ unfolded | ✓ unfolded | | | | | |
+| **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | ✓ folded | ✓ | | | |
+| **In the book:** search, a result | ✓ | ✓ | ✓ folded | The field only | | | |
 | **Read:** half open | ✓ Duo | ✓ Duo | | | | | |
-| **In the book:** footnotes, going back | | | | | | | |
-| **Other ways in:** Import from Files, Open in Octavo | | | | | | | |
-| **Settings:** the list | ✓ | ✓ | | | | | |
-| **Settings:** a server's page, Books on iPhone | ✓ unfolded | ✓ unfolded | | | | | |
+| **In the book:** footnotes, going back | ✓ | ✓ | ✓ folded | | | | |
+| **Other ways in:** Import from Files, Open in Octavo | ✓ folded | ✓ folded | ✓ folded | | | | |
+| **Settings:** the list | ✓ | ✓ | ✓ folded | ✓ folded | | | |
+| **Settings:** a server's page, Books on iPhone | ✓ | ✓ | ✓ folded | A server's page, unfolded | | | |
 
 "✓ Duo" means only on Adam's Duo. He ran these with Dark Mode and Reduce Motion on, and all passed: a book's screen and Back, a swipe back, a Settings page, opening a book, turning pages, the panels, a bookmark and a search result unfolded; folding while reading, half open and folding on Home; the book sheet, opening a book, turning pages and the panels folded; Show the tour and Skip.
 
@@ -64,7 +68,7 @@ What each motion does with the setting on:
 | The download check | Fades | `DownloadBadge` |
 | The download ring's progress | Stays, since it's the progress | `DownloadBadge` |
 
-Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). Adam watched the rest on his Duo, except the download check, which is from the code.
+Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). Adam watched the rest on his Duo, except the download check, which is from the code. Footnotes, going back, Import from Files, Open in Octavo and the rows marked folded were walked with the setting on, and their motion is from the code, not watched.
 
 ## Dark Interface
 
@@ -80,6 +84,50 @@ Measured from `simctl io recordVideo` by each frame's average brightness (ffmpeg
 
 A recording of an inactive display isn't what anyone sees: display 1 holds an old frame while the Duo is open. The OPDS form, the trust prompt, the remove prompt and Settings folded were checked from screenshots, not recordings. The screens are in `accessibility/dark-unfolded.jpg`, `dark-folded.jpg` and `dark-servers.jpg`.
 
+## Sufficient Contrast
+
+Apple asks for 4.5:1 for most text and commonly 3:1 for non-text, by default or with Increase Contrast. Read from screenshots with `tools/contrast.py`, on the simulator, folded unless it says otherwise:
+
+| What | Default | Increase Contrast | With Reduce Transparency too |
+|---|---|---|---|
+| `.secondary` on a plain screen, light | 3.4 | 6.0 | 6.0 |
+| `.secondary` on a plain screen, dark | clean in the audit | 7.1 to 8.5 | 7.1 to 8.5 |
+| The reader's footer, by theme | | Sepia 5.3, Original 6.0, Night 8.0 | |
+| Words on glass (Text and Theme, Contents, the bar, the book sheet) | 2.9 to 3.8, light | Was 4.3 to 4.9. Now 13.6 to 21 | Was 4.3 to 4.8. Now 15 to 21 |
+| The current Contents row, tint on its band | | 8.0 light, 6.4 dark | 8.2 light, 6.9 dark |
+| Open in Dark Mode, filled | Was 1.7. Now 12.2 | Was 1.7 | Was 1.7 |
+| Open in Light Mode, filled | 9.1 | 10.8 | |
+| An error's words | | 4.6 light, 7.2 dark, unfolded | |
+| Chevrons, `.tertiary` (non-text) | | 3.1 to 5.0 | 3.1 to 5.0 |
+
+Two fixes, in `Octavo/Shell/ContrastStyles.swift`:
+
+- **`.secondaryOnGlass`:** `.primary` with Increase Contrast on, otherwise `.secondary`. With the setting off, the three screens compared have identical pixels. Pictures: `accessibility/increase-contrast-glass.jpg`.
+- **`.onAccent`:** the words on a filled button, black in Dark Mode and white in light, because the system's white on the dark-mode accent (decision 31) is 1.7:1 and Increase Contrast doesn't change it. A disabled button still looks disabled, seen with Open forced off. Pictures: `accessibility/dark-filled-buttons.jpg`.
+
+**The system's placeholders are left alone:** the Search tab's is 3.9 in light and 4.9 in dark with Increase Contrast. Apple's audit doesn't flag it.
+
+Bold Text was walked folded and nothing broke; rows wrap. Reduce Transparency makes the glass opaque (`EnhancedBackgroundContrastEnabled`).
+
+## Differentiate Without Color
+
+Grey versions of the same screenshots, folded, light and dark, plus the first tour card unfolded. Each state has something besides color:
+
+| State | Besides color |
+|---|---|
+| The selected tab | A pill behind it |
+| The selected theme | A thicker ring |
+| The current Contents row | A band |
+| A search match in the results | Bold |
+| A search match on the page | A box |
+| A bookmark | Filled symbol, and the ribbon |
+| A downloaded book | A check |
+| Progress | The bar's length, and a percentage |
+| Switches | The thumb's position |
+| An error | A symbol and words |
+| An open panel's button | The panel itself |
+| The button the tour asks for | The card names it |
+
 ## How to check
 
 ```bash
@@ -88,6 +136,8 @@ xcrun simctl ui <udid> appearance dark
 xcrun simctl spawn <udid> defaults write com.apple.Accessibility ReduceMotionEnabled -bool true
 xcrun simctl ui <udid> content_size accessibility-extra-extra-extra-large
 xcrun simctl ui <udid> increase_contrast enabled
+xcrun simctl spawn <udid> defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -bool true
+xcrun simctl spawn <udid> defaults write com.apple.Accessibility EnhancedTextLegibilityEnabled -bool true
 # One recording at a time: display 3 unfolded, display 1 folded
 xcrun simctl io <udid> recordVideo --display=3 --force flow.mov
 ffmpeg -i flow.mov -vf "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=yavg.txt" -f null -
@@ -106,14 +156,17 @@ Where it misleads:
 
 - **The tree and the audit include what the code hides** with `accessibilityHidden`, so they can't show what VoiceOver skips, and the audit's counts are rough.
 - **The audit's contrast part returns nothing unfolded.** Run it folded.
+- **On glass it fails text that's fine,** down to 20:1 black on white. Read those from the pixels with `tools/contrast.py`, and take the screenshot first, because the audit can move a list.
 - **A tap can wait a minute.** After a fold, XCUITest often logs "App animations complete notification not received" and goes on after 60 s. The app sits at about 0% CPU meanwhile.
 - **VoiceOver starts on the simulator, but scripted gestures don't move its cursor.** It needs a person on a device.
 
 ## Not checked
 
 - A plain iPhone or an iPad.
-- The blank rows above: footnotes, going back, Import from Files, Open in Octavo.
-- With Reduce Transparency on, or Bold Text.
 - CBZ and fixed-layout books.
 - The tour's later cards. Apple's first-launch test is complete or skip, and Skip was checked.
-- The Search tab's results, and an OPDS catalog that asks for a password.
+- Contrast, measured: the note card, the way back, the Search tab's results, search results in a book, the remove prompt, Books on iPhone, Import from Files, and BookOrbit's sign-in.
+- **Not seen running since `.onAccent`:** the trust prompt's button, the server place's Go and an empty screen's button. They take the same style as Open, Download and Sign in, which were seen.
+- Color: BookOrbit's sign-in, the trust prompt, the connection banner, half open.
+- Unfolded: Reduce Transparency, Bold Text, grey versions of most screens.
+- Nothing in this slice has run on a real Duo.

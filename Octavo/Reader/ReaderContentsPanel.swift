@@ -59,7 +59,7 @@ struct ReaderContentsPanel: View {
                             if let page = row.page {
                                 Text(page, format: .number)
                                     .monospacedDigit()
-                                    .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                    .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondaryOnGlass))
                             }
                         }
                         .padding(.leading, CGFloat(min(row.depth, 4)) * 16)
@@ -96,7 +96,7 @@ struct ReaderContentsPanel: View {
                             if let excerpt = bookmark.excerpt {
                                 Text("“\(excerpt)”")
                                     .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.secondaryOnGlass)
                                     .lineLimit(2)
                             }
                         }

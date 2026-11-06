@@ -119,7 +119,7 @@ struct BookSheetSummary: View {
                     TimelineView(.everyMinute) { context in
                         Text(place.line(now: context.date))
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryOnGlass)
                             // A problem says what to do, so it may wrap.
                             .lineLimit(place.problem == nil ? 1 : 2)
                     }
@@ -184,7 +184,7 @@ struct BookSummary: View {
                 }
             }
             .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.secondaryOnGlass)
             BookPlaceLine(place: place)
         }
     }
@@ -300,7 +300,7 @@ struct BookAuthorLink: View {
         } else if !line.isEmpty {
             Text(line)
                 .lineLimit(1)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryOnGlass)
         }
     }
 }
@@ -384,6 +384,7 @@ struct BookOpenButton: View {
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
+            .foregroundStyle(.onAccent)
             .disabled(!opener.canOpen(book))
         case .download:
             Button {
@@ -393,6 +394,7 @@ struct BookOpenButton: View {
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
+            .foregroundStyle(.onAccent)
             .disabled(!opener.canOpen(book))
         case .downloading(let fraction):
             Button {
@@ -415,6 +417,7 @@ struct BookOpenButton: View {
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
+            .foregroundStyle(.onAccent)
         case .protected:
             // Greyed out, as for a format the reader can't open.
             Button {} label: {
@@ -422,6 +425,7 @@ struct BookOpenButton: View {
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
             }
             .buttonStyle(.glassProminent)
+            .foregroundStyle(.onAccent)
             .disabled(true)
         }
     }
@@ -451,7 +455,7 @@ struct BookDetails: View {
             if page.detailsFailed {
                 HStack {
                     Text("Couldn’t load the details.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryOnGlass)
                     Spacer()
                     Button("Try again") { Task { await page.retryDetails(from: source) } }
                 }

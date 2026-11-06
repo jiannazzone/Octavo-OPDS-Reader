@@ -32,6 +32,7 @@ struct ReaderServerPlaceBar: View {
     let server: String
     let go: () -> Void
     let stay: () -> Void
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         HStack(spacing: 8) {
@@ -43,6 +44,7 @@ struct ReaderServerPlaceBar: View {
                 .truncationMode(.tail)
             Button("Go", action: go)
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(.onAccent)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
                 .accessibilityLabel(Text("Go to \(place.label(server: server))", comment: "VoiceOver: go to the server's place, e.g. Go to BookOrbit: 62%"))
@@ -64,7 +66,7 @@ struct ReaderServerPlaceBar: View {
         var text = AttributedString(place.label(server: server))
         if let chapter = place.chapter {
             var rest = AttributedString(" · \(chapter)")
-            rest.foregroundColor = .secondary
+            if contrast != .increased { rest.foregroundColor = .secondary }
             text += rest
         }
         return text

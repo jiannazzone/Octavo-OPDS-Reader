@@ -207,7 +207,7 @@ struct ReaderTextPanel: View {
             if appearance.matchDarkMode, darkMode, appearance.theme != .night {
                 Text("Night while the iPhone is in Dark Mode. Turn off Match Dark Mode to choose.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryOnGlass)
             }
         }
     }
@@ -221,7 +221,7 @@ struct ReaderTextPanel: View {
             Spacer()
             Text(appearance.textScale.formatted(.percent.precision(.fractionLength(0))))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryOnGlass)
             Spacer()
             Button { appearance.stepText(by: 1) } label: {
                 textSizeLabel("Larger Text", systemImage: "textformat.size.larger")
@@ -307,7 +307,7 @@ private struct ThemeSwatch: View {
                     }
                 Text(theme.name)
                     .font(.caption)
-                    .foregroundStyle(selected ? .primary : .secondary)
+                    .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondaryOnGlass))
             }
         }
         .buttonStyle(.plain)

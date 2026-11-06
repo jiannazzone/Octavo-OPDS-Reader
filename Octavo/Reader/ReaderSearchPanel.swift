@@ -44,7 +44,7 @@ struct ReaderSearchPanel: View {
             .padding([.horizontal, .top], 14)
             status
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryOnGlass)
                 .padding(.horizontal, 18)
             results
         }
@@ -128,7 +128,7 @@ struct ReaderSearchPanel: View {
                     Text(page, format: .number)
                         .font(.footnote)
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryOnGlass)
                 }
             }
             .contentShape(.rect)
