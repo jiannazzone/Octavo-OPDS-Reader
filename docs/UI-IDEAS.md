@@ -141,3 +141,7 @@ The screen dims while reading, because nothing in the app holds off Auto-Lock (`
 ## Margins as a slider? (Adam, 2026-11-06)
 
 Should Margins in Customize be a slider with detents instead of a picker? Today it's a segmented picker with Narrow, Medium and Wide (`ReaderMargins`). Not looked into yet.
+
+## A mark for finished books on covers (Adam, 2026-11-06)
+
+Finished books should have some kind of indicator on the cover, perhaps a checkmark. Downloaded covers already have a check (`LibraryComponents`), so the two would need telling apart. Not designed yet.
