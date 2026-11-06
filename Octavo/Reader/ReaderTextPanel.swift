@@ -38,6 +38,9 @@ struct ReaderPanelFrame<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static var inset: Double { ReaderLayout.edgeInset }
+    /// What shows is cut to it: a list that reaches the safe area, as a panel
+    /// level with the progress bar does, draws on past the panel's edge.
+    private static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 26) }
 
     var body: some View {
         let safe = geometry.safeArea
@@ -55,7 +58,8 @@ struct ReaderPanelFrame<Content: View>: View {
                 let top = safe.top + Self.inset
                 content()
                     .frame(width: max(0, width - safe.right - Self.inset - left), height: max(0, bottom - top), alignment: .top)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 26))
+                    .clipShape(Self.shape)
+                    .glassEffect(.regular, in: Self.shape)
                     .padding(.leading, left)
                     .padding(.top, top)
             } else {
@@ -67,7 +71,8 @@ struct ReaderPanelFrame<Content: View>: View {
                 let maxHeight = min(fillsSheet ? min(640, usable * 0.68) : min(560, usable * 0.62), room)
                 content()
                     .frame(width: max(0, width - safe.right - Self.inset - left), height: fillsSheet ? max(0, maxHeight) : nil)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 26))
+                    .clipShape(Self.shape)
+                    .glassEffect(.regular, in: Self.shape)
                     .frame(height: max(0, maxHeight), alignment: .bottom)
                     .padding(.leading, left)
                     .padding(.top, bottom - maxHeight)
