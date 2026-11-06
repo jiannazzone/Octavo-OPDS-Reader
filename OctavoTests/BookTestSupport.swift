@@ -1,5 +1,6 @@
 import Foundation
 import OctavoKit
+import Synchronization
 @testable import Octavo
 
 nonisolated extension LibrarySourceID {
@@ -21,6 +22,26 @@ nonisolated extension ServerStore {
     }
 }
 
+/// A source's covers: `data`, after `time`, and how many it has handed out.
+nonisolated final class CoverSupply: Sendable {
+    private let data: Data
+    private let time: Duration
+    private let count = Mutex(0)
+
+    init(data: Data, time: Duration = .zero) {
+        self.data = data
+        self.time = time
+    }
+
+    var fetches: Int { count.withLock { $0 } }
+
+    func fetch() async throws -> Data {
+        count.withLock { $0 += 1 }
+        if time > .zero { try await Task.sleep(for: time) }
+        return data
+    }
+}
+
 /// A source for the cover page and opener tests: one book, details, and a
 /// download that writes a small file, waits, or fails as asked.
 nonisolated struct StubLibrarySource: LibrarySource {
@@ -33,6 +54,8 @@ nonisolated struct StubLibrarySource: LibrarySource {
     var finishedMarks: FinishedMarks?
     /// What a download writes, if not a placeholder.
     var downloadData: Data?
+    /// Its covers. Without it, it hasn't got any.
+    var coverSupply: CoverSupply?
 
     var tracksFinished: Bool { finishedMarks != nil }
 
@@ -70,7 +93,8 @@ nonisolated struct StubLibrarySource: LibrarySource {
     }
 
     func cover(_ cover: LibraryCover, size: LibraryCoverSize) async throws -> Data {
-        throw LibraryError.notFound
+        guard let coverSupply else { throw LibraryError.notFound }
+        return try await coverSupply.fetch()
     }
 
     func download(_ file: LibraryFile, to destination: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {

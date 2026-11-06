@@ -123,10 +123,15 @@ struct SettingsList: View {
             } footer: {
                 Text("Shows each book’s title beneath its cover.")
             }
-            Section("Storage") {
+            Section {
                 row(.storage) {
                     LabeledContent("Books on iPhone", value: shell.downloads().summary())
                 }
+                ClearCoversRow()
+            } header: {
+                Text("Storage")
+            } footer: {
+                Text("Covers download again when they’re next shown.")
             }
             Section {
                 Button {

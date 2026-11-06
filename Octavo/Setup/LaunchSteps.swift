@@ -66,6 +66,7 @@ final class OctavoAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         LaunchSteps.failedAtLaunch = LaunchSteps.run(protectedDataAvailable: application.isProtectedDataAvailable)
+        Task(priority: .utility) { await CoverFiles().trim() }
         return true
     }
 }

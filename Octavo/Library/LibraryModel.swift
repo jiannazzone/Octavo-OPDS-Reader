@@ -126,7 +126,7 @@ final class LibraryModel {
     /// `id` is gone (the shell closes what showed its books).
     @ObservationIgnored var serverRemoved: (LibrarySourceID) -> Void = { _ in }
 
-    let covers = CoverCache()
+    let covers: CoverCache
     @ObservationIgnored let recents: RecentBooks
     @ObservationIgnored let finished: FinishedBooks
     @ObservationIgnored let onIPhone: BooksOnIPhone
@@ -143,8 +143,9 @@ final class LibraryModel {
 
     init(
         recents: RecentBooks = RecentBooks(), finished: FinishedBooks = FinishedBooks(), onIPhone: BooksOnIPhone = BooksOnIPhone(),
-        imported: ImportedBooks = ImportedBooks()
+        imported: ImportedBooks = ImportedBooks(), covers: CoverCache = CoverCache()
     ) {
+        self.covers = covers
         self.recents = recents
         self.finished = finished
         self.onIPhone = onIPhone
@@ -241,6 +242,7 @@ final class LibraryModel {
         connection += 1
         mergeContinueReading()
         serverRemoved(id)
+        Task { await covers.removeFiles(of: id) }
     }
 
     /// Every server goes, as after a debug disconnect.

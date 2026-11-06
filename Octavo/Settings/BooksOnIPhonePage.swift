@@ -87,6 +87,32 @@ struct BooksOnIPhonePage: View {
     }
 }
 
+/// Clear covers, with what they take. Nothing asks first: nothing is lost,
+/// since they download again.
+struct ClearCoversRow: View {
+    @Environment(LibraryModel.self) private var library
+    /// `nil` until it's been measured.
+    @State private var size: Int?
+
+    var body: some View {
+        Button {
+            size = 0
+            Task { await library.covers.clear() }
+        } label: {
+            LabeledContent {
+                Text(size.map { $0 == 0 ? "None" : ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "")
+            } label: {
+                Text("Clear covers")
+                    .foregroundStyle((size ?? 0) == 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
+            }
+            .contentShape(.rect)
+        }
+        .foregroundStyle(.primary)
+        .disabled((size ?? 0) == 0)
+        .task { size = await library.covers.filesSize() }
+    }
+}
+
 /// A downloaded book: its cover, title and author, and its size.
 private struct DownloadedBookRow: View {
     let book: DownloadedBook
