@@ -241,7 +241,7 @@ final class ReaderCoverMotion {
     /// Unfolding on a cover: the window has moved to the inner display once
     /// the hinge's region shows in it, and the leaves start.
     func windowChanged(_ window: UnfoldedWindow) {
-        guard leavesOnly, !isOver, frames == nil, pages == nil, let hinge = window.hinge, let size = ShellModel.keyWindow?.bounds.size else { return }
+        guard leavesOnly, !isOver, frames == nil, pages == nil, let hinge = window.hinge, let size = UIWindow.key?.bounds.size else { return }
         windowSize = size
         hingeMiddle = Double(hinge.midX)
         let geometry = ReaderGeometry(size: size, safeArea: safeArea)
@@ -257,7 +257,7 @@ final class ReaderCoverMotion {
         paper = pages.paper
         showsWaiting = false
         guard frames == nil else { return }
-        if let size = ShellModel.keyWindow?.bounds.size { windowSize = size }
+        if let size = UIWindow.key?.bounds.size { windowSize = size }
         drawLines(layout)
         playLeaves()
     }
@@ -289,7 +289,7 @@ final class ReaderCoverMotion {
     private static let waitBeforeSpinner = 0.75
 
     private func playLeaves() {
-        guard let window = ShellModel.keyWindow else { return end() }
+        guard let window = UIWindow.key else { return end() }
         let link = UIUpdateLink(view: window) { [weak self] link, info in
             guard let self else {
                 link.isEnabled = false

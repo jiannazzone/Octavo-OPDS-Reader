@@ -122,6 +122,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 **Sturdier:** let a root screen supply its own title, as Settings already does with `ScreenTitle`. Alternatively, keep one `HomeState` enum on `LibraryModel` that both read.
 
 ### 3. The cover motion learns where the cover is through side channels
+
+**Fixed:** both screens report into one place, `ShellModel.coverSpots` (`CoverSpots`), and `BookPage` no longer holds view geometry. Home's spot exists only once its cover, page and strip are all measured. The shell goes by the spread the tab's stack measured (`isTwoPages(in:)`) instead of the cover's width; each tab keeps its own, because a tab out of sight measures one page and, with one reading for all, switching tabs made an unfolded book's screen open with a one-page motion (seen on this branch before the change; the same reading drives Settings' pairing), and the window lookup is `UIWindow.key`, not the Shell's. On the way: Home's Open never played the cover motion once Home had loaded (on `main` too), because the page Home showed while loading went after the loaded one had reported and cleared it. A page now clears only its own report.
 **Structural risk · M**
 
 **Where:**
@@ -477,7 +479,7 @@ These need no UX decision; they keep today's look and behaviour.
 3. **`SpreadPages` and `.onLeftPage()`** (item 8). Fix the Library failure branch with it (item 9). M. **Done.**
 4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S. **Done.**
 5. **Home's state in one place, or Home draws its own title** (item 2). S. **Done** (both).
-6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M.
+6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M. **Done** (one store the screens report to, rather than an anchor preference).
 7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each.
 8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps.
 

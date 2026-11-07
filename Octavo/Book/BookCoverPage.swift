@@ -29,13 +29,13 @@ struct BookCoverPage: View {
         let thumbnail = shell.library.covers.cachedImage(for: sourced, size: .thumbnail)
         Group {
             SpreadPages { _ in
-                BookCoverArt(page: page, thumbnail: thumbnail)
+                BookCoverArt(page: page, thumbnail: thumbnail, book: sourced.id)
                     .ignoresSafeArea(edges: .vertical)
             } right: { _ in
                 BookInfoPage(page: page, source: source, sourceID: sourceID)
             } folded: {
                 ZStack(alignment: .bottom) {
-                    BookCoverArt(page: page, thumbnail: thumbnail)
+                    BookCoverArt(page: page, thumbnail: thumbnail, book: sourced.id)
                         .ignoresSafeArea()
                         .onTapGesture {
                             guard page.isExpanded else { return }
@@ -54,6 +54,7 @@ struct BookCoverPage: View {
             shell.opener.clearFailure(sourced)
             shell.places.refresh(sourced)
         }
+
         .onChange(of: page.details?.book) { _, book in
             // A mark set before they arrived is newer than they are.
             guard let book, page.markedFinished == nil else { return }
@@ -92,6 +93,13 @@ struct BookInfoPage: View {
 struct BookCoverArt: View {
     let page: BookPage
     var thumbnail: UIImage?
+    /// The book whose screen this is, for where its cover is
+    /// (`ShellModel.coverSpots`).
+    let book: SourcedBook.ID
+    @Environment(ShellModel.self) private var shell
+    /// Where it was last laid out, to report again on appearing.
+    @State private var frame: CGRect?
+    @State private var reporter = UUID()
 
     var body: some View {
         Color(.secondarySystemBackground)
@@ -105,7 +113,14 @@ struct BookCoverArt: View {
             }
             .clipped()
             .animation(.easeOut(duration: 0.2), value: page.cover)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { page.coverFrame = $0 }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                self.frame = frame
+                shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter)
+            }
+            .onAppear {
+                if let frame { shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter) }
+            }
+            .onDisappear { shell.coverSpots.bookScreenGone(book, reporter: reporter) }
             .accessibilityElement()
             .accessibilityLabel(page.current.title.isEmpty ? "Cover" : "Cover of \(page.current.title)")
     }

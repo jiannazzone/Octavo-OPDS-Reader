@@ -69,6 +69,19 @@ struct SettingsNavigationTests {
         #expect(model[path: .home].routes == [.settings, .settingsPage(.server(SampleLibrarySource.id))])
     }
 
+    // Switching tabs, the tab going out of sight measures one page; the tab
+    // on screen still goes by its own two.
+    @Test func eachTabGoesByItsOwnSpread() {
+        let model = shell(.duoFolded)
+        model.spreads[.home] = .duoUnfolded
+        model.spreads[.library] = .duoFolded
+        model.openSettings()
+        model.push(.settingsPage(.storage))
+        #expect(model[path: .home].lastMove == .replace)
+        model.back(.home)
+        #expect(model[path: .home].routes.isEmpty)
+    }
+
     // Without the list beneath, a page opens over what's there like any
     // screen.
     @Test func aPageWithoutItsListIsPushed() {
