@@ -39,6 +39,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 - **Sections as shelves** (All books, Recently added, Collections, Series, Authors, or an OPDS server's own sections): each a heading ("All · 7 ›") that opens the section, over one row of its covers running across both pages, skipping the hinge (three covers folded). A book on a shelf opens its own screen. A section without covers is just its heading. One layout for every server; a chips layout may come later as an option. (Replaced the contents-page rows after seeing them unfolded: the row split at the hinge and the chevron sat mid-screen.)
 - Dividers may run across the whole spread, fold included.
 - **Each section fills the whole spread** (a grid of covers across both pages, or a list flowing from the left page onto the right).
+- **A pressed row or cover dims lightly** (Adam, 2026-11-07): the same for books, collections, series and authors, and wrapped lines stay to the leading edge at every text size. Before, collection, series and author rows faded almost white, as the system's buttons do.
 
 ### Series and authors (Adam, 2026-11-01)
 - **Series: cover stacks.** The Series list is a grid across both pages; each series is a small stack of its first covers with its name and book count under it. Opening one shows its books numbered in reading order. On the Library page, a shelf of series (or authors) shows the same tiles, each opening that series. Adam was split between this and rows; built as stacks to judge on the device.
