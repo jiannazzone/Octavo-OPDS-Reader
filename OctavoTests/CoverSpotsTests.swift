@@ -30,7 +30,7 @@ struct CoverSpotsTests {
     @Test func onHomeItsHomesSpotForItsBook() throws {
         let spots = CoverSpots()
         spots.reportHome(homeReport(), from: UUID())
-        spots.bookScreens[Self.book.id] = Self.cover
+        spots.reportBookScreen(Self.book.id, cover: Self.cover, from: UUID())
         let spot = try #require(spots.home.spot)
         #expect(spots.spot(for: Self.book.id, onHome: true, top: nil) == .home(spot))
         #expect(spots.spot(for: Self.other.id, onHome: true, top: nil) == nil)
@@ -53,11 +53,24 @@ struct CoverSpotsTests {
     // counts.
     @Test func elsewhereItsTheBooksScreenOnTop() {
         let spots = CoverSpots()
-        spots.bookScreens[Self.book.id] = Self.cover
+        spots.reportBookScreen(Self.book.id, cover: Self.cover, from: UUID())
         #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.book)) == .bookScreen(Self.cover))
         #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.other)) == nil)
         #expect(spots.spot(for: Self.book.id, onHome: false, top: SampleRoutes.collections) == nil)
-        spots.bookScreens[Self.book.id] = .zero
+        spots.reportBookScreen(Self.book.id, cover: .zero, from: UUID())
         #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.book)) == nil)
+    }
+
+    // A fold makes the cover's view again; the old one going mustn't clear
+    // the new one's spot.
+    @Test func aBookScreenGoingClearsOnlyItsOwnReport() {
+        let spots = CoverSpots()
+        let before = UUID(), after = UUID()
+        spots.reportBookScreen(Self.book.id, cover: Self.cover, from: before)
+        spots.reportBookScreen(Self.book.id, cover: Self.page, from: after)
+        spots.bookScreenGone(Self.book.id, reporter: before)
+        #expect(spots.bookScreens[Self.book.id] == Self.page)
+        spots.bookScreenGone(Self.book.id, reporter: after)
+        #expect(spots.bookScreens[Self.book.id] == nil)
     }
 }

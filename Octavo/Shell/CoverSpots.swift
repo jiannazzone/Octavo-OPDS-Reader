@@ -16,7 +16,8 @@ final class CoverSpots {
     private var homeReporter: UUID?
     /// Each book's screen's cover, by book: a screen under another keeps its
     /// own.
-    var bookScreens: [SourcedBook.ID: CGRect] = [:]
+    private(set) var bookScreens: [SourcedBook.ID: CGRect] = [:]
+    private var bookScreenReporters: [SourcedBook.ID: UUID] = [:]
 
     func reportHome(_ report: HomeCoverReport, from reporter: UUID) {
         home = report
@@ -27,6 +28,20 @@ final class CoverSpots {
         guard homeReporter == reporter else { return }
         home = HomeCoverReport()
         homeReporter = nil
+    }
+
+    /// A book's screen's cover. Its view reports again whenever it appears
+    /// (a tab switch takes it away and back without moving it), and a fold
+    /// makes the view again, so the one going may not be the last to report.
+    func reportBookScreen(_ book: SourcedBook.ID, cover: CGRect, from reporter: UUID) {
+        bookScreens[book] = cover
+        bookScreenReporters[book] = reporter
+    }
+
+    func bookScreenGone(_ book: SourcedBook.ID, reporter: UUID) {
+        guard bookScreenReporters[book] == reporter else { return }
+        bookScreens[book] = nil
+        bookScreenReporters[book] = nil
     }
 
     /// The cover the book opens from, or closes onto.

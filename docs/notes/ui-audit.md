@@ -123,7 +123,7 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 
 ### 3. The cover motion learns where the cover is through side channels
 
-**Fixed:** both screens report into one place, `ShellModel.coverSpots` (`CoverSpots`), and `BookPage` no longer holds view geometry. Home's spot exists only once its cover, page and strip are all measured. The shell goes by its measured spread (`isTwoPages`) instead of the cover's width, and the window lookup is `UIWindow.key`, not the Shell's. On the way: Home's Open never played the cover motion once Home had loaded (on `main` too), because the page Home showed while loading went after the loaded one had reported and cleared it. A page now clears only its own report.
+**Fixed:** both screens report into one place, `ShellModel.coverSpots` (`CoverSpots`), and `BookPage` no longer holds view geometry. Home's spot exists only once its cover, page and strip are all measured. The shell goes by the spread the tab's stack measured (`isTwoPages(in:)`) instead of the cover's width; each tab keeps its own, because a tab out of sight measures one page and, with one reading for all, switching tabs made an unfolded book's screen open with a one-page motion (seen on this branch before the change; the same reading drives Settings' pairing), and the window lookup is `UIWindow.key`, not the Shell's. On the way: Home's Open never played the cover motion once Home had loaded (on `main` too), because the page Home showed while loading went after the loaded one had reported and cleared it. A page now clears only its own report.
 **Structural risk · M**
 
 **Where:**

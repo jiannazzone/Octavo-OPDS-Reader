@@ -70,16 +70,28 @@ final class ShellModel {
     /// A debug launch argument is connecting a server: the tabs show, not
     /// setup, while it does.
     private var connectingAtLaunch = false
-    /// The spread a tab measured last, which a tab opening for the first
-    /// time lays out for until it has measured its own (`ScreenStack`), and
-    /// navigation goes by (`ShellPath.open`, `ShellPath.back`).
+    /// The spread the tab on screen measured last, which a tab opening for
+    /// the first time lays out for until it has measured its own
+    /// (`ScreenStack`).
     @ObservationIgnored var lastSpread: Spread?
+    /// Each tab's spread, as its own stack measured it. A tab out of sight
+    /// still measures, without the hinge's region (switching tabs took two
+    /// pages to one for every tab), so each goes by its own.
+    @ObservationIgnored var spreads: [ShellTab: Spread] = [:]
 
-    /// Two pages, for navigation: what `ShellPath` pairs up, and what the
-    /// stack hides for it. The spread on screen, which a tap landed on (an
-    /// unfold reports before the scene moves), not the hinge, which says open
-    /// on a Duo turned sideways too.
-    var isTwoPages: Bool { lastSpread?.isTwoPages == true }
+    /// Two pages in `tab`, for navigation there: what `ShellPath` pairs up,
+    /// and what the stack hides for it. The spread on screen, which a tap
+    /// landed on (an unfold reports before the scene moves), not the hinge,
+    /// which says open on a Duo turned sideways too.
+    func isTwoPages(in tab: ShellTab) -> Bool {
+        (spreads[tab] ?? lastSpread)?.isTwoPages == true
+    }
+
+    /// The tab whose screens are showing: setup's, while it shows instead of
+    /// the tabs.
+    func isShowing(_ tab: ShellTab) -> Bool {
+        showsSetup ? tab == .setup : tab == self.tab
+    }
 
     /// A debug override for the cover's strip, to look at its states without
     /// a failing download.
@@ -537,9 +549,9 @@ final class ShellModel {
     /// setup.
     func push(_ route: ShellRoute) {
         if case .setup = route {
-            self[path: setupTab].open(route, twoPages: isTwoPages)
+            self[path: setupTab].open(route, twoPages: isTwoPages(in: setupTab))
         } else {
-            self[path: tab].open(route, twoPages: isTwoPages)
+            self[path: tab].open(route, twoPages: isTwoPages(in: tab))
         }
     }
 
@@ -550,7 +562,7 @@ final class ShellModel {
 
     /// Back, or a swipe from the edge.
     func back(_ tab: ShellTab) {
-        self[path: tab].back(twoPages: isTwoPages)
+        self[path: tab].back(twoPages: isTwoPages(in: tab))
     }
 
     func popToRoot(_ tab: ShellTab) {
@@ -716,7 +728,7 @@ final class ShellModel {
             coverFrame: frame, windowSize: window.bounds.size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
             closing: pages,
             // Cover | Details unfolded; the cover fills the screen folded.
-            spread: isTwoPages,
+            spread: isTwoPages(in: tab),
             reduceMotion: UIAccessibility.isReduceMotionEnabled,
             paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )

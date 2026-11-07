@@ -54,9 +54,7 @@ struct BookCoverPage: View {
             shell.opener.clearFailure(sourced)
             shell.places.refresh(sourced)
         }
-        // Its cover's spot goes with the screen, not with the cover's view,
-        // which a fold makes again.
-        .onDisappear { shell.coverSpots.bookScreens[sourced.id] = nil }
+
         .onChange(of: page.details?.book) { _, book in
             // A mark set before they arrived is newer than they are.
             guard let book, page.markedFinished == nil else { return }
@@ -99,6 +97,9 @@ struct BookCoverArt: View {
     /// (`ShellModel.coverSpots`).
     let book: SourcedBook.ID
     @Environment(ShellModel.self) private var shell
+    /// Where it was last laid out, to report again on appearing.
+    @State private var frame: CGRect?
+    @State private var reporter = UUID()
 
     var body: some View {
         Color(.secondarySystemBackground)
@@ -112,7 +113,14 @@ struct BookCoverArt: View {
             }
             .clipped()
             .animation(.easeOut(duration: 0.2), value: page.cover)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { shell.coverSpots.bookScreens[book] = $0 }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                self.frame = frame
+                shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter)
+            }
+            .onAppear {
+                if let frame { shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter) }
+            }
+            .onDisappear { shell.coverSpots.bookScreenGone(book, reporter: reporter) }
             .accessibilityElement()
             .accessibilityLabel(page.current.title.isEmpty ? "Cover" : "Cover of \(page.current.title)")
     }

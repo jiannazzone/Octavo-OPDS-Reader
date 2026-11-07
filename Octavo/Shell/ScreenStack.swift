@@ -113,16 +113,23 @@ struct ScreenStack<Root: View>: View {
         guard new.width >= Spread.minimumPageWidth else { return }
         if let old = measured, old.width != new.width {
             measured = new
-            shell.lastSpread = new
+            keep(new)
             return
         }
         // Before the region arrives, a stack opening at the width the
         // other tabs have takes their split.
         let settled = if measured == nil, new.pages == nil, let known = shell.lastSpread, known.width == new.width { known } else { new }
-        shell.lastSpread = settled
+        keep(settled)
         var instant = Transaction()
         instant.disablesAnimations = true
         withTransaction(instant) { measured = settled }
+    }
+
+    /// The tab's spread for its navigation, and for a tab opening later if
+    /// this one is showing (a tab out of sight measures without the hinge).
+    private func keep(_ spread: Spread) {
+        shell.spreads[tab] = spread
+        if shell.isShowing(tab) { shell.lastSpread = spread }
     }
 
     /// Every screen in the stack, each under the next. A screen stays put
@@ -150,7 +157,7 @@ struct ScreenStack<Root: View>: View {
         // posture Back does, so it's hidden exactly when Back leaves both.
         // With Reduce Motion it waits for a swipe, or the one beneath would
         // show through as the screen above fades in.
-        .opacity(path.isDrawnByTheOneAbove(id.depth, twoPages: shell.isTwoPages) && (!reduceMotion || swipe != nil) ? 0 : 1)
+        .opacity(path.isDrawnByTheOneAbove(id.depth, twoPages: shell.isTwoPages(in: tab)) && (!reduceMotion || swipe != nil) ? 0 : 1)
     }
 
     private func back() {
