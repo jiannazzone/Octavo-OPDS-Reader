@@ -99,9 +99,13 @@ nonisolated struct ReaderNotePlacement: Equatable, Sendable {
 
 /// The reader's font as the card can draw it. A CSS family, reduced to one iOS
 /// has: a book's own embedded font isn't known outside the page, so that comes
-/// out as the family it falls back to.
+/// out as the family it falls back to. Our bundled fonts are registered for the
+/// card (`ReaderFont.cardFamilies`), and come out as themselves.
 nonisolated enum ReaderNoteTypeface: Equatable, Sendable {
     case named(String)
+    /// One of `ReaderFont`'s bundled fonts, drawn from the same files as on the
+    /// page.
+    case bundled(ReaderFont)
     case serif
     case sansSerif
     case monospaced
@@ -123,8 +127,14 @@ nonisolated enum ReaderNoteTypeface: Equatable, Sendable {
             case "sans-serif": self = .named("Helvetica")
             case "monospace": self = .named("Courier")
             case let family:
-                guard let found = installed[family] else { continue }
-                self = .named(found)
+                if let bundled = ReaderFont.allCases.first(where: { $0.bundledName == family }) {
+                    // Not registered: the page's next one, as for a book's own.
+                    guard let name = bundled.bundledFamily, installed[name.lowercased()] != nil else { continue }
+                    self = .bundled(bundled)
+                } else {
+                    guard let found = installed[family] else { continue }
+                    self = .named(found)
+                }
             }
             return
         }

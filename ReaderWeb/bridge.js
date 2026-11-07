@@ -1547,11 +1547,16 @@ const markBox = a => {
 
 // How far apart the lines of `block` are drawn: `line-height: normal` doesn't
 // say. The closest two lines, leaving out a raised mark's smaller box, which
-// has a top of its own.
+// has a top of its own. The block's own text has the commonest box: in a font
+// with tall lines (OpenDyslexic's) a mark's box is taller than the font size.
 const linePitch = (block, size) => {
     const range = block.ownerDocument.createRange()
     range.selectNodeContents(block)
-    const tops = [...range.getClientRects()].filter(rect => rect.height >= size).map(rect => rect.top).sort((a, b) => a - b)
+    const rects = [...range.getClientRects()].filter(rect => rect.height >= size)
+    const counts = new Map()
+    for (const rect of rects) counts.set(Math.round(rect.height), (counts.get(Math.round(rect.height)) ?? 0) + 1)
+    const text = [...counts].reduce((most, entry) => entry[1] > most[1] ? entry : most, [0, 0])[0]
+    const tops = rects.filter(rect => Math.round(rect.height) >= text).map(rect => rect.top).sort((a, b) => a - b)
     const gaps = tops.slice(1).map((top, index) => top - tops[index]).filter(gap => gap >= size * 0.9)
     return gaps.length ? Math.min(...gaps) : null
 }

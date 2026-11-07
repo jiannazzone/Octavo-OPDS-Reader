@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 import UIKit
 
@@ -116,7 +117,7 @@ private struct ReaderNoteText: View {
     let color: Color
 
     var body: some View {
-        let typeface = ReaderNoteTypeface(cssFamily: note.font.family, installed: Set(UIFont.familyNames))
+        let typeface = ReaderNoteTypeface(cssFamily: note.font.family, installed: ReaderFont.cardFamilies)
         let size = note.font.size
         VStack(alignment: .leading, spacing: size * 0.6) {
             ForEach(note.blocks.indices, id: \.self) { index in
@@ -140,10 +141,8 @@ private struct ReaderNoteText: View {
         block.runs.reduce(into: AttributedString()) { text, run in
             var part = AttributedString(run.text)
             let raised = run.sup == true || run.sub == true
-            var font = (run.code == true ? ReaderNoteTypeface.monospaced : typeface).font(size: raised ? size * 0.72 : size)
-            if run.italic == true { font = font.italic() }
-            if run.bold == true { font = font.bold() }
-            part.font = font
+            let face = run.code == true ? ReaderNoteTypeface.monospaced : typeface
+            part.font = face.font(size: raised ? size * 0.72 : size, italic: run.italic == true, bold: run.bold == true)
             if run.sup == true { part.baselineOffset = size * 0.35 }
             if run.sub == true { part.baselineOffset = -size * 0.15 }
             text.append(part)
@@ -154,22 +153,65 @@ private struct ReaderNoteText: View {
 extension ReaderNoteTypeface {
     /// A fixed size, as the page's text is: Text and Theme sets it, not Dynamic
     /// Type.
-    func font(size: Double) -> Font {
+    func font(size: Double, italic: Bool = false, bold: Bool = false) -> Font {
+        var font: Font
         switch self {
-        case .named(let family): .custom(family, fixedSize: size)
-        case .serif: .system(size: size, design: .serif)
-        case .sansSerif: .system(size: size)
-        case .monospaced: .system(size: size, design: .monospaced)
+        case .named(let family): font = .custom(family, fixedSize: size)
+        // Its face picked by Core Text, with the page's ligatures setting.
+        case .bundled(let bundled): return Font(bundled.cardFont(size: size, italic: italic, bold: bold))
+        case .serif: font = .system(size: size, design: .serif)
+        case .sansSerif: font = .system(size: size)
+        case .monospaced: font = .system(size: size, design: .monospaced)
         }
+        if italic { font = font.italic() }
+        if bold { font = font.bold() }
+        return font
     }
 
     func uiFont(size: Double) -> UIFont {
         let system = UIFont.systemFont(ofSize: size)
         return switch self {
         case .named(let family): UIFont(descriptor: UIFontDescriptor(fontAttributes: [.family: family]), size: size)
+        case .bundled(let bundled): bundled.cardFont(size: size)
         case .serif: system.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: size) } ?? system
         case .sansSerif: system
         case .monospaced: system.fontDescriptor.withDesign(.monospaced).map { UIFont(descriptor: $0, size: size) } ?? system
         }
+    }
+}
+
+extension ReaderFont {
+    /// The families the card can draw: the ones iOS has, and the bundled ones
+    /// (#83), which SwiftUI can't see on the page. Those are registered with
+    /// Core Text, for this run of the app, the first time a card asks: the same
+    /// WOFF2 files the page loads, which Core Text reads as they are.
+    static var cardFamilies: Set<String> {
+        _ = registered
+        return Set(UIFont.familyNames)
+    }
+
+    private static let registered: Void = {
+        guard let fonts = Bundle.main.url(forResource: "ReaderWeb", withExtension: nil)?.appending(path: "fonts") else { return }
+        for face in allCases.flatMap(\.bundledFaces) {
+            CTFontManagerRegisterFontsForURL(fonts.appending(path: face.file) as CFURL, .process, nil)
+        }
+    }()
+
+    /// A bundled font's face, as the page draws it: bold is Atkinson's 700
+    /// instance or OpenDyslexic's bold file, and OpenDyslexic has no ligatures.
+    /// The traits go in as attributes: `withSymbolicTraits` finds none of
+    /// OpenDyslexic's faces, which carry another trait besides.
+    func cardFont(size: Double, italic: Bool = false, bold: Bool = false) -> UIFont {
+        var traits: UIFontDescriptor.SymbolicTraits = []
+        if italic { traits.insert(.traitItalic) }
+        if bold { traits.insert(.traitBold) }
+        var attributes: [UIFontDescriptor.AttributeName: Any] = [
+            .family: bundledFamily ?? "",
+            .traits: [UIFontDescriptor.TraitKey.symbolic: traits.rawValue],
+        ]
+        if !usesLigatures {
+            attributes[.featureSettings] = [[kCTFontOpenTypeFeatureTag: "liga", kCTFontOpenTypeFeatureValue: 0]]
+        }
+        return UIFont(descriptor: UIFontDescriptor(fontAttributes: attributes), size: size)
     }
 }
