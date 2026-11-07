@@ -205,7 +205,9 @@ struct CurrentBookPage: View {
     let book: SourcedBook?
     let width: CGFloat
     @Environment(ShellModel.self) private var shell
-    @State private var spot = HomeCoverSpot()
+    @State private var report = HomeCoverReport()
+    /// This page, to Home's cover spot (`CoverSpots.homeGone`).
+    @State private var reporter = UUID()
 
     var body: some View {
         // A page that fits, in a scroll view all the same so it pulls to
@@ -223,33 +225,33 @@ struct CurrentBookPage: View {
             if let book {
                 CoverImage(book: book, size: .full)
                     .pageBlur(width: width)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { spot.page = $0 }
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { report.page = $0 }
             } else {
                 Color(.secondarySystemBackground)
             }
         }
         .ignoresSafeArea(.container, edges: .bottom)
         // Where Open moves the cover from, and Back brings it back to.
-        .onChange(of: book, initial: true) { spot.book = book }
-        .onChange(of: spot) { shell.homeCover = spot }
-        .onAppear { shell.homeCover = spot }
-        .onDisappear { shell.homeCover = HomeCoverSpot() }
+        .onChange(of: book, initial: true) { report.book = book }
+        .onChange(of: report) { shell.coverSpots.reportHome(report, from: reporter) }
+        .onAppear { shell.coverSpots.reportHome(report, from: reporter) }
+        .onDisappear { shell.coverSpots.homeGone(reporter) }
     }
 
     private var page: some View {
         VStack(spacing: 12) {
             if let book {
                 OpenButton(route: .cover(book)) {
-                    WholeCover(book: book, loaded: $spot.image)
+                    WholeCover(book: book, loaded: $report.image)
                         .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: HomeCoverSpot.badgeSize) }
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { spot.cover = $0 }
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { report.cover = $0 }
                         .shadow(color: .black.opacity(HomeCoverSpot.shadowOpacity), radius: HomeCoverSpot.shadowRadius, y: HomeCoverSpot.shadowY)
                 }
                 .frame(maxHeight: .infinity)
                 .accessibilityLabel(book.book.title.isEmpty ? "Cover" : "Cover of \(book.book.title)")
                 .accessibilityValue(shell.marks(of: book).accessibilityValue)
                 CurrentBookStrip(book: book)
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { spot.stripTop = $0 }
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { report.stripTop = $0 }
             } else {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(.quaternary)

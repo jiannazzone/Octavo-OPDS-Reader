@@ -195,6 +195,9 @@ enum ReaderRemote {
         case "coverMotion":
             guard let motion = shell.coverMotion else { return "no cover motion" }
             return motion.debugState
+        case "coverSpots":
+            let home = shell.coverSpots.home
+            return "home book \(home.book?.book.title ?? "nil") cover \(home.cover.map { "\($0)" } ?? "nil") page \(home.page.map { "\($0)" } ?? "nil") strip \(home.stripTop.map { "\($0)" } ?? "nil") spot \(home.spot != nil) books \(shell.coverSpots.bookScreens.count)"
         case "turnProbe":
             guard let reader else { return "no open reader" }
             return await TurnProbe.run(reader)

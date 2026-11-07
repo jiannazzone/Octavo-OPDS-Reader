@@ -623,8 +623,9 @@ final class ShellModel {
     @ObservationIgnored private var opensByUnfold = false
     /// A motion already made for the book about to open (the tour's).
     @ObservationIgnored private var pendingCoverMotion: ReaderCoverMotion?
-    /// Home's cover unfolded, as `CurrentBookPage` lays it out.
-    @ObservationIgnored var homeCover = HomeCoverSpot()
+    /// Where Home and the books' screens show their covers, for the cover's
+    /// motion.
+    let coverSpots = CoverSpots()
 
     /// Every way out of the reader: Back, a fold, an import, the tour, and
     /// `change` with it. It goes at once, with no animation: anything still
@@ -672,7 +673,7 @@ final class ShellModel {
         guard reading == nil, let progress = places.progress(of: SourcedBook(source: book.source, book: book.book)),
               ReaderLeaves.play(fraction: progress, pageTurn: pageTurn, reduceMotion: UIAccessibility.isReduceMotionEnabled)
         else { return nil }
-        let window = Self.keyWindow
+        let window = UIWindow.key
         return ReaderCoverMotion(
             unfoldingAt: progress, windowSize: window?.bounds.size ?? .zero, paper: window.map(Self.paper(in:)) ?? .white, leafStyle: leafStyle
         )
@@ -693,44 +694,38 @@ final class ShellModel {
     /// Home: a picture of the screen to open from, or of your pages to close
     /// from.
     private func coverMotion(for book: OpenedBook, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
-        if let spot = homeCover(of: book) { return homeCoverMotion(from: spot, closing: pages) }
-        guard case .cover(let shown)? = self[path: tab].top, shown.id == SourcedBook.ID(source: book.source, book: book.book.id),
-              let page = self.pages.existingPage(for: shown.id), let frame = page.coverFrame,
-              let window = Self.keyWindow,
-              frame.width > 0, frame.height > 0
+        let id = SourcedBook.ID(source: book.source, book: book.book.id)
+        let onHome = tour == nil && tab == .home && self[path: .home].top == nil
+        switch coverSpots.spot(for: id, onHome: onHome, top: self[path: tab].top) {
+        case .home(let spot)?: return homeCoverMotion(from: spot, closing: pages)
+        case .bookScreen(let frame)?: return bookScreenCoverMotion(id, frame: frame, closing: pages)
+        case nil: return nil
+        }
+    }
+
+    /// From the book's own screen: the cover where the screen has it.
+    private func bookScreenCoverMotion(_ id: SourcedBook.ID, frame: CGRect, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
+        guard case .cover(let shown)? = self[path: tab].top, let page = self.pages.existingPage(for: id),
+              let window = UIWindow.key
         else { return nil }
         let screen = pages == nil ? window.snapshotView(afterScreenUpdates: false) : nil
         guard pages != nil || screen != nil else { return nil }
-        let size = window.bounds.size
         let thumbnail = library.covers.cachedImage(for: shown, size: .thumbnail)
         return ReaderCoverMotion(
             cover: page.cover ?? thumbnail, title: page.current.title, author: page.authorLine,
-            coverFrame: frame, windowSize: size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
+            coverFrame: frame, windowSize: window.bounds.size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
             closing: pages,
-            // Cover | Details: the cover has half the screen or less.
-            spread: frame.width < size.width * 0.75,
+            // Cover | Details unfolded; the cover fills the screen folded.
+            spread: isTwoPages,
             reduceMotion: UIAccessibility.isReduceMotionEnabled,
             paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
     }
 
-    /// Home's cover, if Home shows `book` on its left page.
-    private func homeCover(of book: OpenedBook) -> HomeCoverSpot? {
-        let spot = homeCover
-        guard tour == nil, tab == .home, self[path: .home].top == nil,
-              spot.book?.id == SourcedBook.ID(source: book.source, book: book.book.id),
-              let window = Self.keyWindow, window.bounds.intersects(spot.cover),
-              spot.cover.width > 0, spot.cover.height > 0, spot.page.width > 0, spot.page.height > 0,
-              // The strip's measured, or the cover's copy wouldn't be hidden.
-              spot.stripTop > spot.page.minY
-        else { return nil }
-        return spot
-    }
-
     /// From Home unfolded: the cover moves from its spot to where the book's
     /// screen would have it on the right page, and on as from there.
     private func homeCoverMotion(from spot: HomeCoverSpot, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
-        guard let book = spot.book, let window = Self.keyWindow else { return nil }
+        guard let book = spot.book, let window = UIWindow.key, window.bounds.intersects(spot.cover) else { return nil }
         let screen = pages == nil ? window.snapshotView(afterScreenUpdates: false) : nil
         guard pages != nil || screen != nil else { return nil }
         let size = window.bounds.size
@@ -745,10 +740,6 @@ final class ShellModel {
             closing: pages, spread: true, reduceMotion: UIAccessibility.isReduceMotionEnabled,
             paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
-    }
-
-    static var keyWindow: UIWindow? {
-        UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first(where: \.isKeyWindow)
     }
 
     /// The page's colour in the reader's theme, where a cover has left.
@@ -997,7 +988,7 @@ final class ShellModel {
     }
 
     private func tourCoverMotion(from frame: CGRect) -> ReaderCoverMotion? {
-        guard let window = Self.keyWindow, frame.width > 0, frame.height > 0,
+        guard let window = UIWindow.key, frame.width > 0, frame.height > 0,
               let screen = window.snapshotView(afterScreenUpdates: false)
         else { return nil }
         return ReaderCoverMotion(

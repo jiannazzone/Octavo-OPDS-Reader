@@ -167,3 +167,7 @@ Night mode shouldn't be pure black. Night's page is `#121212` today (`ReaderThem
 ## Aa didn't respond (Adam, 2026-11-07)
 
 Once, the reader's Aa button (Text and Theme) didn't respond. Adam can't reproduce it. Noted in case it comes back; nothing to fix yet.
+
+## Home's left page as the cover, full screen (Adam, 2026-11-07)
+
+Unfolded, Home's left page should show the book's cover full screen, the same as the outer display shows it: edge to edge, not the whole cover inset on its own blur with the glass strip under it (`CurrentBookPage`). To show Adam as a picture before building. It changes where Home's cover motion starts (`HomeCoverSpot`, `ReaderCoverMotion`'s Home path), which would then start much as a book's screen's does.
