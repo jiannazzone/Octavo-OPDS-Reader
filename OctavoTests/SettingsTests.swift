@@ -156,7 +156,7 @@ struct RemoveServerTests {
     }
 
     @Test func keepingBooksLeavesThemOnTheIPhone() async {
-        await model.removeServer(Self.server, removingBooks: false)
+        await model.serverActions.remove(Self.server, removingBooks: false)
         #expect(model.library.server == nil)
         #expect(model.needsSetup)
         #expect(model.servers.load().servers.isEmpty)
@@ -167,7 +167,7 @@ struct RemoveServerTests {
     }
 
     @Test func removingBooksDeletesTheServersOnly() async {
-        await model.removeServer(Self.server, removingBooks: true)
+        await model.serverActions.remove(Self.server, removingBooks: true)
         #expect(model.opener.localFile(for: downloaded) == nil)
         #expect(model.opener.localFile(for: imported) != nil)
         #expect(model.library.onIPhone.books().map(\.id) == [imported.id])
@@ -176,7 +176,7 @@ struct RemoveServerTests {
     // Nothing of it stays on the iPhone, its address and account included
     // (Adam, 2026-11-05).
     @Test func removingBooksLeavesNothingOfTheServer() async {
-        await model.removeServer(Self.server, removingBooks: true)
+        await model.serverActions.remove(Self.server, removingBooks: true)
         #expect(!hasPlace(downloaded))
         #expect(!hasBookmarks(downloaded))
         #expect(model.removedServers.load().isEmpty)
@@ -185,7 +185,7 @@ struct RemoveServerTests {
     }
 
     @Test func keepingBooksKeepsItsPlacesToo() async {
-        await model.removeServer(Self.server, removingBooks: false)
+        await model.serverActions.remove(Self.server, removingBooks: false)
         #expect(hasPlace(downloaded))
         #expect(hasBookmarks(downloaded))
         #expect(model.removedServers.load().map(\.id) == [Self.server])
@@ -196,14 +196,14 @@ struct RemoveServerTests {
     @Test func aKeptBookKnownOnlyFromContinueReadingStaysListed() async throws {
         try model.library.onIPhone.remove(downloaded.id)
         #expect(model.downloads(on: Self.server).count == 1)
-        await model.removeServer(Self.server, removingBooks: false)
+        await model.serverActions.remove(Self.server, removingBooks: false)
         #expect(model.downloads().map(\.book.id).contains(downloaded.id))
     }
 
     // BookOrbit numbers files from 1 on every server: another server (or
     // account) must not find the removed one's book 3 as its own.
     @Test func anotherServerFindsNoneOfTheRemovedOnesBooks() async {
-        await model.removeServer(Self.server, removingBooks: false)
+        await model.serverActions.remove(Self.server, removingBooks: false)
         let other = SavedServer.newID()
         await model.library.connect(Self.bookOrbit(id: other, account: "someone-else"))
         let sameNumber = SourcedBook(source: other, book: downloaded.book)
@@ -240,7 +240,7 @@ struct RemoveServerTests {
     // The same server and account, at a new ID: its books are where they
     // were, as "Keep books on iPhone" promised.
     @Test func theSameServerComingBackFindsItsBooks() async {
-        await model.removeServer(Self.server, removingBooks: false)
+        await model.serverActions.remove(Self.server, removingBooks: false)
         let back = SavedServer(id: SavedServer.newID(), kind: .bookOrbit, address: "http://localhost:3300", name: "BookOrbit", username: "octavo")
         model.setup.finished(back)
         let same = SourcedBook(source: back.id, book: downloaded.book)
@@ -259,7 +259,7 @@ struct RemoveServerTests {
             source: StubLibrarySource(downloadTime: .milliseconds(300))
         ))
         model.downloadBook(SourcedBook(source: Self.server, book: slow))
-        await model.removeServer(Self.server, removingBooks: true)
+        await model.serverActions.remove(Self.server, removingBooks: true)
         try await Task.sleep(for: .milliseconds(600))
         let file = try #require(StubLibrarySource().files.first)
         #expect(files.store.localFile(for: file, in: Self.server) == nil)
@@ -283,7 +283,7 @@ struct SignOutTests {
     @Test func signingOutShowsTheBannerAndKeepsTheServer() async {
         let model = makeShell()
         await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "BookOrbit", signsIn: true, source: StubLibrarySource()))
-        model.signOut(SampleLibrarySource.id)
+        model.serverActions.signOut(SampleLibrarySource.id)
         #expect(model.library.connectionProblem == .signedOut(server: "BookOrbit"))
         #expect(model.library.server != nil)
     }
@@ -303,7 +303,7 @@ struct SignOutTests {
         let source = OPDSSource(catalogURL: catalog, transport: OpenCatalog(), credentials: passwords, authScheme: .basic)
         await model.library.connect(LibraryServer(id: id, name: "COPS", username: "adam", signsIn: true, source: source))
 
-        model.signOut(id)
+        model.serverActions.signOut(id)
         #expect(model.servers.load()[id]?.signedOut == true)
         var waited = 0
         while try await passwords.load() != nil, waited < 200 {
@@ -312,7 +312,7 @@ struct SignOutTests {
         }
         #expect(try await passwords.load() == nil)
 
-        try await model.signInAgain(id, username: "adam", password: "new")
+        try await model.serverActions.signInAgain(id, username: "adam", password: "new")
         #expect(model.servers.load()[id]?.signedOut == nil)
         #expect(try await passwords.load()?.password == "new")
     }
@@ -320,7 +320,7 @@ struct SignOutTests {
     @Test func aCatalogWithoutAPasswordHasNothingToSignOutOf() async {
         let model = makeShell()
         await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "COPS", source: StubLibrarySource()))
-        model.signOut(SampleLibrarySource.id)
+        model.serverActions.signOut(SampleLibrarySource.id)
         #expect(model.library.connectionProblem == nil)
     }
 }

@@ -56,14 +56,14 @@ nonisolated enum DownloadOrder: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-extension ShellModel {
-    /// The books with a file on the iPhone: each one the iPhone downloaded,
-    /// or opened before it kept that list, once.
-    func downloads() -> [DownloadedBook] {
+extension BookOpener {
+    /// The books with a file on the iPhone, from `library`'s records: each
+    /// one the iPhone downloaded, or opened before it kept that list, once.
+    func downloads(listedIn library: LibraryModel) -> [DownloadedBook] {
         var seen = Set<String>()
         let records = library.onIPhone.books() + library.recents.records().map(\.book)
         return records.compactMap { record in
-            guard let url = opener.localFile(for: record),
+            guard let url = localFile(for: record),
                   seen.insert(url.lastPathComponent).inserted
             else { return nil }
             let values = try? url.resourceValues(forKeys: [.totalFileAllocatedSizeKey, .fileSizeKey, .creationDateKey])
@@ -73,8 +73,20 @@ extension ShellModel {
     }
 
     /// What Remove server counts as `server`'s downloads.
+    func downloads(on server: LibrarySourceID, listedIn library: LibraryModel) -> [DownloadedBook] {
+        downloads(listedIn: library).filter { $0.book.source == server }
+    }
+}
+
+extension ShellModel {
+    /// The books with a file on the iPhone (`BookOpener.downloads(listedIn:)`).
+    func downloads() -> [DownloadedBook] {
+        opener.downloads(listedIn: library)
+    }
+
+    /// What Remove server counts as `server`'s downloads.
     func downloads(on server: LibrarySourceID) -> [DownloadedBook] {
-        downloads().filter { $0.book.source == server }
+        opener.downloads(on: server, listedIn: library)
     }
 }
 

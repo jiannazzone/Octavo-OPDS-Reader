@@ -605,7 +605,7 @@ struct SignInAgainScreen: View {
         let password = password
         attempt.start { isCurrent in
             do {
-                try await shell.signInAgain(saved.id, username: username, password: password)
+                try await shell.serverActions.signInAgain(saved.id, username: username, password: password)
                 guard isCurrent() else { return }
                 self.password = ""
                 shell.pop(shell.tab)

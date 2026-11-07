@@ -14,7 +14,7 @@ struct DebugServerSection: View {
                 ForEach(library.connections, id: \.server.id) { connection in
                     LabeledContent(connection.server.name, value: connection.server.detail)
                 }
-                Button("Disconnect", role: .destructive) { shell.forgetServer() }
+                Button("Disconnect", role: .destructive) { shell.serverActions.forgetAll() }
             } else {
                 Button {
                     Task { await library.connectLocalBookOrbit() }
