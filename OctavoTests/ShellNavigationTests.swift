@@ -3,6 +3,7 @@ import Foundation
 import OctavoKit
 import SwiftUI
 import Testing
+import UIKit
 @testable import Octavo
 
 /// The spread's split at the hinge. Geometry from the iPhone Duo simulator
@@ -51,6 +52,45 @@ struct SpreadTests {
         let items = (1...5).map { Item(id: $0) }
         #expect(SpreadList<Item, EmptyView>.split(items, into: 2).map { $0.map(\.id) } == [[1, 2, 3], [4, 5]])
         #expect(SpreadList<Item, EmptyView>.split(items, into: 1).map { $0.map(\.id) } == [[1, 2, 3, 4, 5]])
+    }
+
+    /// Pages as wide as the last reading, which was wider than the room
+    /// (the inner display's full width, before the side column arrived):
+    /// the next reading is of the room, so the pages shrink to fit it
+    /// instead of holding the view at their width (duo-tabbar §7).
+    @MainActor @Test func readsTheRoomNotItsPages() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        defer { window.isHidden = true }
+        window.frame = CGRect(x: 0, y: 0, width: 300, height: 200)
+        let readings = SpreadReadings()
+        let host = UIHostingController(rootView: PagesAsWideAsTheirReading(readings: readings))
+        host.safeAreaRegions = []
+        window.rootViewController = host
+        window.isHidden = false
+        #expect(await eventually { readings.widths.last == 300 })
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(readings.widths.last == 300)
+        #expect(!readings.widths.contains(500))
+    }
+}
+
+@MainActor
+private final class SpreadReadings {
+    var widths: [CGFloat] = []
+}
+
+private struct PagesAsWideAsTheirReading: View {
+    let readings: SpreadReadings
+    @State private var width: CGFloat = 500
+
+    var body: some View {
+        Color.clear
+            .frame(width: width, height: 10)
+            .onSpreadChange { spread in
+                readings.widths.append(spread.width)
+                width = spread.width
+            }
     }
 }
 
