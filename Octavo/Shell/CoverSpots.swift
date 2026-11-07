@@ -3,87 +3,64 @@ import UIKit
 
 /// Where the screens show a book's cover, in the window, for the book
 /// opening and closing like a cover (`ReaderCoverMotion`): a book's own
-/// screen, and Home's left page unfolded. Each screen reports here as it lays
-/// out and takes its report away when it goes; the shell asks for the one
-/// under the reader. Not observed: nothing draws from it.
+/// screen, and Home's left page unfolded, which draw it alike
+/// (`BookCoverArt`). Each cover reports here as it lays out and as it
+/// appears, and takes its report away when it goes; the shell asks for the
+/// one under the reader. Not observed: nothing draws from it.
 @MainActor
 final class CoverSpots {
-    /// Home's, once it has measured all of it.
-    private(set) var home = HomeCoverReport()
-    /// The Home page that reported it. A page going clears only its own: the
-    /// page Home showed while loading goes after the one with your book has
-    /// reported, and cleared it, so Open had no cover to move.
-    private var homeReporter: UUID?
-    /// Each book's screen's cover, by book: a screen under another keeps its
-    /// own.
-    private(set) var bookScreens: [SourcedBook.ID: CGRect] = [:]
-    private var bookScreenReporters: [SourcedBook.ID: UUID] = [:]
-
-    func reportHome(_ report: HomeCoverReport, from reporter: UUID) {
-        home = report
-        homeReporter = reporter
+    /// The screen a cover is on. Home's stays under a book's screen pushed
+    /// over it, which may be the same book's, so each keeps its own.
+    enum Screen: Hashable {
+        case home
+        case book(SourcedBook.ID)
     }
 
-    func homeGone(_ reporter: UUID) {
-        guard homeReporter == reporter else { return }
-        home = HomeCoverReport()
-        homeReporter = nil
+    private(set) var spots: [Screen: CoverSpot] = [:]
+    /// The view that reported each. A view going clears only its own: a fold
+    /// makes the cover's view again, and Home's page while it loads goes after
+    /// the page with your book has reported, so the one going may not be the
+    /// last to report.
+    private var reporters: [Screen: UUID] = [:]
+
+    /// A cover's view reports whenever it appears, as well as when it moves:
+    /// a tab switch takes it away and back without moving it.
+    func report(_ spot: CoverSpot, on screen: Screen, from reporter: UUID) {
+        spots[screen] = spot
+        reporters[screen] = reporter
     }
 
-    /// A book's screen's cover. Its view reports again whenever it appears
-    /// (a tab switch takes it away and back without moving it), and a fold
-    /// makes the view again, so the one going may not be the last to report.
-    func reportBookScreen(_ book: SourcedBook.ID, cover: CGRect, from reporter: UUID) {
-        bookScreens[book] = cover
-        bookScreenReporters[book] = reporter
-    }
-
-    func bookScreenGone(_ book: SourcedBook.ID, reporter: UUID) {
-        guard bookScreenReporters[book] == reporter else { return }
-        bookScreens[book] = nil
-        bookScreenReporters[book] = nil
-    }
-
-    /// The cover the book opens from, or closes onto.
-    enum Spot: Equatable {
-        /// Home's left page (it has the cover, its blur and its strip).
-        case home(HomeCoverSpot)
-        /// A book's screen: the cover's frame.
-        case bookScreen(CGRect)
+    func gone(from screen: Screen, reporter: UUID) {
+        guard reporters[screen] == reporter else { return }
+        spots[screen] = nil
+        reporters[screen] = nil
     }
 
     /// `book`'s cover on the screen showing: Home's when Home's root is
     /// showing, else the book's screen's if that's on top.
-    func spot(for book: SourcedBook.ID, onHome: Bool, top: ShellRoute?) -> Spot? {
+    func spot(for book: SourcedBook.ID, onHome: Bool, top: ShellRoute?) -> CoverSpot? {
+        let screen: Screen
         if onHome {
-            guard let spot = home.spot, spot.book?.id == book else { return nil }
-            return .home(spot)
+            screen = .home
+        } else {
+            guard case .cover(let shown)? = top, shown.id == book else { return nil }
+            screen = .book(book)
         }
-        guard case .cover(let shown)? = top, shown.id == book,
-              let frame = bookScreens[book], !frame.isEmpty
-        else { return nil }
-        return .bookScreen(frame)
+        guard let spot = spots[screen], spot.book == book, !spot.frame.isEmpty else { return nil }
+        return spot
     }
 }
 
-/// What Home reports of its cover as each part is measured. Nothing until
-/// all of it is: a cover moving with its strip unmeasured would leave the
-/// cover's copy showing.
-struct HomeCoverReport: Equatable {
-    var book: SourcedBook?
+/// A cover as its screen draws it (`BookCoverArt`), for the cover's motion to
+/// start from or land on.
+struct CoverSpot: Equatable {
+    var book: SourcedBook.ID
+    /// In the window's coordinates.
+    var frame: CGRect
+    /// The picture showing, which outlives the cache; without one, the title.
     var image: UIImage?
-    var cover: CGRect?
-    var page: CGRect?
-    var stripTop: CGFloat?
-
-    /// The whole spot, once the cover, the page and the strip are measured
-    /// (and the strip is on the page, below its top).
-    var spot: HomeCoverSpot? {
-        guard let book, let cover, let page, let stripTop,
-              !cover.isEmpty, !page.isEmpty, stripTop > page.minY
-        else { return nil }
-        return HomeCoverSpot(book: book, image: image, cover: cover, page: page, stripTop: stripTop)
-    }
+    var title: String
+    var author: String
 }
 
 extension UIWindow {

@@ -198,8 +198,14 @@ enum ReaderRemote {
         case "spread":
             return "lastSpread \(shell.lastSpread.map { "\($0.width) pages \($0.pages.map { "\($0)" } ?? "nil")" } ?? "nil") twoPages \(shell.isTwoPages(in: shell.tab)) tabs \(shell.spreads.map { "\($0.key) \($0.value.isTwoPages)" }.sorted())"
         case "coverSpots":
-            let home = shell.coverSpots.home
-            return "home book \(home.book?.book.title ?? "nil") cover \(home.cover.map { "\($0)" } ?? "nil") page \(home.page.map { "\($0)" } ?? "nil") strip \(home.stripTop.map { "\($0)" } ?? "nil") spot \(home.spot != nil) books \(shell.coverSpots.bookScreens.map { "\($0.key.book.rawValue) \($0.value)" }.sorted())"
+            return shell.coverSpots.spots.map { screen, spot in
+                let name = switch screen {
+                case .home: "home"
+                case .book(let id): "book \(id.book.rawValue)"
+                }
+                return "\(name): \(spot.book.book.rawValue) \(spot.frame) image \(spot.image != nil)"
+            }
+            .sorted().joined(separator: "; ")
         case "turnProbe":
             guard let reader else { return "no open reader" }
             return await TurnProbe.run(reader)
@@ -232,7 +238,10 @@ enum ReaderRemote {
     /// place syncs as any BookOrbit book's does (`ShellModel.progressSync`).
     private static func openBookOrbit(_ fileID: Int?, shell: ShellModel, cover: Bool) async -> String? {
         guard let fileID else { return "needs fileID" }
-        guard let server = shell.library.server, let source = server.source as? BookOrbitSource else {
+        // The Library may show another server.
+        guard let server = shell.library.connections.map(\.server).first(where: { $0.source is BookOrbitSource }),
+              let source = server.source as? BookOrbitSource
+        else {
             return "not connected to BookOrbit; send signin first"
         }
         let id = LibraryFileID(rawValue: String(fileID))

@@ -87,15 +87,21 @@ struct BookInfoPage: View {
     }
 }
 
-/// The cover image in its space (`FittedCover`): the shelf's small copy
-/// until the full one loads, else a plain background. A book without a cover
-/// shows its title from the start.
+/// The cover image in its space (`FittedCover`): on a book's screen the
+/// shelf's small copy until the full one loads, else a plain background. A
+/// book without a cover shows its title once there's nothing more to load.
+/// Home's left page unfolded draws its cover with this too, as the folded
+/// book's screen does (decision 37).
 struct BookCoverArt: View {
-    let page: BookPage
-    var thumbnail: UIImage?
-    /// The book whose screen this is, for where its cover is
+    let image: UIImage?
+    /// Nothing more to load: without an image, the title shows.
+    let finished: Bool
+    let title: String
+    let author: String
+    /// The book, and the screen it's on, for where its cover is
     /// (`ShellModel.coverSpots`).
     let book: SourcedBook.ID
+    let screen: CoverSpots.Screen
     @Environment(ShellModel.self) private var shell
     /// Where it was last laid out, to report again on appearing.
     @State private var frame: CGRect?
@@ -104,25 +110,39 @@ struct BookCoverArt: View {
     var body: some View {
         Color(.secondarySystemBackground)
             .overlay {
-                if let cover = page.cover ?? thumbnail {
-                    FittedCover(image: cover)
+                if let image {
+                    FittedCover(image: image)
                         .transition(.opacity)
-                } else if page.book.cover == nil || page.coverFinished {
-                    BookTitleCover(title: page.current.title, author: page.authorLine)
+                } else if finished {
+                    BookTitleCover(title: title, author: author)
                 }
             }
             .clipped()
-            .animation(.easeOut(duration: 0.2), value: page.cover)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-                self.frame = frame
-                shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter)
-            }
-            .onAppear {
-                if let frame { shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter) }
-            }
-            .onDisappear { shell.coverSpots.bookScreenGone(book, reporter: reporter) }
+            .animation(.easeOut(duration: 0.2), value: image)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            .onChange(of: spot) { report() }
+            .onAppear { report() }
+            .onDisappear { shell.coverSpots.gone(from: screen, reporter: reporter) }
             .accessibilityElement()
-            .accessibilityLabel(page.current.title.isEmpty ? "Cover" : "Cover of \(page.current.title)")
+            .accessibilityLabel(title.isEmpty ? "Cover" : "Cover of \(title)")
+    }
+
+    private var spot: CoverSpot? {
+        frame.map { CoverSpot(book: book, frame: $0, image: image, title: title, author: author) }
+    }
+
+    private func report() {
+        if let spot { shell.coverSpots.report(spot, on: screen, from: reporter) }
+    }
+}
+
+extension BookCoverArt {
+    /// On the book's own screen.
+    init(page: BookPage, thumbnail: UIImage?, book: SourcedBook.ID) {
+        self.init(
+            image: page.cover ?? thumbnail, finished: page.book.cover == nil || page.coverFinished,
+            title: page.current.title, author: page.authorLine, book: book, screen: .book(book)
+        )
     }
 }
 
