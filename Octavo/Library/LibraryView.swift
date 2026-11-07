@@ -9,6 +9,23 @@ struct LibraryView: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
+        TitledScreen {
+            // With several servers, the title is the menu of them (decision 36).
+            Group {
+                if library.hasSeveralServers {
+                    LibraryServerMenu()
+                } else {
+                    ScreenTitle("Library")
+                }
+            }
+            .onLeftPage()
+        } content: {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if let server = library.server {
             if let root = library.root {
                 LibraryContents(source: server.id, sections: Self.sections(root))

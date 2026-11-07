@@ -106,10 +106,10 @@ struct AppShell: View {
     private var tabs: some View {
         TabView(selection: Binding(get: { model.tab }, set: { model.select($0) })) {
             Tab("Home", systemImage: "house", value: .home) {
-                ScreenStack(tab: .home, title: "Home") { HomeView() }
+                ScreenStack(tab: .home, title: nil) { HomeView() }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                ScreenStack(tab: .library, title: "Library", importsBooks: true) { LibraryView() }
+                ScreenStack(tab: .library, title: nil, importsBooks: true) { LibraryView() }
             }
             Tab(value: .search, role: .search) {
                 ScreenStack(tab: .search, title: "Search") { SearchView() }

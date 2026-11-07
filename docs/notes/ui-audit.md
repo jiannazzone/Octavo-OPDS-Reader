@@ -101,6 +101,8 @@ These all worked, and are worth knowing before reading the problems.
 This removes `pop(2)`, `twoPages:` and `isListUnderItsPage`.
 
 ### 2. Screen-specific flags in `ScreenFrame`
+
+**Fixed:** Home and the Library draw their own titles (`TitledScreen`, which `ScreenFrame` uses too), so the shared frame has no per-screen flags. Home decides its content and its title from one `HomeState`; `LibraryModel.homeShowsBooks` is gone.
 **Structural risk · S**
 
 **Where:**
@@ -474,7 +476,7 @@ These need no UX decision; they keep today's look and behaviour.
 2. **Settings' chosen page as state** (item 1). This removes Settings from the shell. M. **Done** (as a declared left page).
 3. **`SpreadPages` and `.onLeftPage()`** (item 8). Fix the Library failure branch with it (item 9). M. **Done.**
 4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S. **Done.**
-5. **Home's state in one place, or Home draws its own title** (item 2). S.
+5. **Home's state in one place, or Home draws its own title** (item 2). S. **Done** (both).
 6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M.
 7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each.
 8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps.

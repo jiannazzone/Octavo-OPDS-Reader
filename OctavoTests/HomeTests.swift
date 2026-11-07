@@ -29,13 +29,13 @@ import Testing
     // invitation.
     @Test func homeShowsBooksOnlyWithBooksInProgress() async {
         let nothing = makeShell().library
-        #expect(!nothing.homeShowsBooks)
+        #expect(!HomeState(nothing).showsBooks)
         await nothing.connectSampleLibrary(nothingInProgress: true)
-        #expect(!nothing.homeShowsBooks)
+        #expect(!HomeState(nothing).showsBooks)
 
         let reading = makeShell().library
         await reading.connectSampleLibrary()
-        #expect(reading.homeShowsBooks)
+        #expect(HomeState(reading).showsBooks)
     }
 
     // The shelf beside your books leaves them out, and with nothing else to
