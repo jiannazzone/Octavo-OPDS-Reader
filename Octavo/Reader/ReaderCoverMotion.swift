@@ -181,10 +181,12 @@ final class ReaderCoverMotion {
     /// it was, folded where it is.
     func frame(slide: Double) -> CGRect {
         guard spread else { return coverFrame }
-        let from = coverFrame
         let to = rightPage
         func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * slide }
-        return CGRect(x: mix(from.minX, to.minX), y: mix(from.minY, to.minY), width: mix(from.width, to.width), height: mix(from.height, to.height))
+        return CGRect(
+            x: mix(coverFrame.minX, to.minX), y: mix(coverFrame.minY, to.minY),
+            width: mix(coverFrame.width, to.width), height: mix(coverFrame.height, to.height)
+        )
     }
 
     #if DEBUG
