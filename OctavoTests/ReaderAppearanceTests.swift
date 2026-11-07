@@ -77,6 +77,41 @@ struct ReaderAppearanceTests {
         #expect(css.contains("[align=\"center\"] { text-align: center; }"))
     }
 
+    // The bundled fonts (#83) bring their own faces, from the reader's
+    // `fonts/` only, with an italic for each; the ones iOS ships need none.
+    @Test(arguments: [
+        (ReaderFont.atkinson, "octavo-atkinson-hyperlegible-next, sans-serif", ["AtkinsonHyperlegibleNext.woff2", "AtkinsonHyperlegibleNext-Italic.woff2"]),
+        (.openDyslexic, "octavo-opendyslexic, sans-serif", ["OpenDyslexic-Regular.woff2", "OpenDyslexic-Bold.woff2", "OpenDyslexic-Italic.woff2", "OpenDyslexic-Bold-Italic.woff2"]),
+    ])
+    func bundledFontsBringTheirFaces(font: ReaderFont, family: String, files: [String]) {
+        #expect(font.cssFamily == family)
+        let css = ReaderAppearance(font: font).script(darkMode: false).css
+        #expect(css.contains("font-family: \(family) !important"))
+        let sources = css.matches(of: #/url\("([^"]+)"\)/#).map { String($0.output.1) }
+        #expect(sources == files.map { "octavo://app/fonts/\($0)" })
+        #expect(css.matches(of: #/@font-face \{[^}]*font-style: italic;/#).count == files.count / 2)
+    }
+
+    // OpenDyslexic's "fi" ligatures leave a gap.
+    @Test func openDyslexicHasNoLigatures() {
+        #expect(ReaderFont.openDyslexic.fontFaces.matches(of: #/font-feature-settings: "liga" 0;/#).count == 4)
+        #expect(!ReaderFont.atkinson.fontFaces.contains("font-feature-settings"))
+    }
+
+    @Test func fontsIOSShipsNeedNoFaces() {
+        for font in ReaderFont.allCases where font != .atkinson && font != .openDyslexic {
+            #expect(font.fontFaces.isEmpty)
+            #expect(!ReaderAppearance(font: font).script(darkMode: false).css.contains("@font-face"))
+        }
+    }
+
+    // A saved choice goes by its raw value.
+    @Test func fontsKeepTheirSavedNames() {
+        #expect(ReaderFont.allCases.map(\.rawValue)
+            == ["book", "newYork", "georgia", "iowan", "palatino", "charter", "sanSerif", "atkinson", "openDyslexic"])
+        #expect(ReaderAppearance(rawValue: #"{"font":"openDyslexic"}"#)?.font == .openDyslexic)
+    }
+
     // MARK: Saved value
 
     // `@AppStorage` keeps it as `rawValue`; encoding once recursed through

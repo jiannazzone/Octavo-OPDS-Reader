@@ -7,24 +7,28 @@ import WebKit
 /// and the bridge's `fetch` of the book same-origin.
 ///
 /// - `octavo://app/<path>` → `<path>` inside the bundled `ReaderWeb/` folder.
+///   The bundled fonts are at `fonts/`.
 /// - `octavo://app/book/<name>` → the book file this handler was made for.
 nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
     static let scheme = "octavo"
     static let host = "app"
     static let readerURL = URL(string: "\(scheme)://\(host)/reader.html")!
+    /// `ReaderWeb/fonts/`, where `ReaderFont`'s bundled fonts load from.
+    static let fontsURL = "\(scheme)://\(host)/fonts/"
 
     /// Sent with every reader response. foliate-js renders book content in
     /// same-origin `blob:` iframes that must allow scripts (WebKit bug
     /// 218086), so this policy, which those iframes inherit, is the only thing
     /// stopping a book's own JavaScript. Only our bundled scripts may run (by
     /// path, so the book at `/book/` is never a script source, even though it
-    /// is same-origin), and nothing may load from the network.
+    /// is same-origin), and nothing may load from the network. Fonts, by path
+    /// too, are the bundled ones and a book's own (`blob:`, `data:`).
     static let contentSecurityPolicy = [
         "default-src 'self'",
         "script-src \(scheme)://\(host)/bridge.js \(scheme)://\(host)/foliate-js/",
         "style-src 'self' 'unsafe-inline' blob: data:",
         "img-src 'self' blob: data:",
-        "font-src 'self' blob: data:",
+        "font-src \(fontsURL) blob: data:",
         "media-src 'self' blob: data:",
         "connect-src 'self' blob:",
         "frame-src blob:",
@@ -63,6 +67,10 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
         if path.hasPrefix("/book/") { return bookFile }
         let relative = path.drop(while: { $0 == "/" })
         guard !relative.isEmpty else { return nil }
+        // WebKit resolves `.` and `..` before it asks, so any here came
+        // percent-encoded (`fonts/..%2Freader.html`): the CSP's path sources
+        // read that as inside `fonts/`, but it would map outside it.
+        guard !relative.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else { return nil }
         let file = webRoot.appending(path: String(relative)).standardizedFileURL
         // Reject `..` escapes.
         let root = webRoot.path(percentEncoded: false)
@@ -79,6 +87,7 @@ nonisolated struct ReaderSchemeHandler: URLSchemeHandler {
         case "css": "text/css"
         case "json": "application/json"
         case "svg": "image/svg+xml"
+        case "woff2": "font/woff2"
         case "txt", "md": "text/plain"
         case "epub": "application/epub+zip"
         case "cbz": "application/vnd.comicbook+zip"
