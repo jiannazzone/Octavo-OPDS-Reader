@@ -1063,7 +1063,8 @@ const placeOnScreen = cfis => (Array.isArray(cfis) ? cfis : []).map(cfi => {
 //   <html>, so every CFI stays the same.
 // - A Content-Security-Policy <meta> first in <head>: no scripts, frames,
 //   objects or network at all. Only <head> changes, and CFIs go through
-//   <body>.
+//   <body>. Fonts as in the reader's CSP: the bundled ones (Swift's
+//   `ReaderSchemeHandler.fontsURL`) and the book's own.
 const SCRIPT_TYPE_BLOCKED = 'application/x-octavo-blocked'
 const XLINK = 'http://www.w3.org/1999/xlink'
 const XHTML_NS = 'http://www.w3.org/1999/xhtml'
@@ -1073,7 +1074,7 @@ const SECTION_POLICY = [
     "script-src 'none'",
     "style-src 'self' 'unsafe-inline' blob: data:",
     "img-src 'self' blob: data:",
-    "font-src 'self' blob: data:",
+    `font-src ${new URL('fonts/', import.meta.url).href} blob: data:`,
     "media-src 'self' blob: data:",
     "connect-src 'none'",
     "object-src 'none'",
