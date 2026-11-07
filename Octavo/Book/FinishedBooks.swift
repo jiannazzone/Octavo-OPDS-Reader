@@ -30,7 +30,7 @@ nonisolated struct FinishedBooks: Sendable {
         try JSONEncoder().encode(kept).write(to: fileURL, options: .atomic)
     }
 
-    private func books() -> Set<SourcedBook.ID> {
+    func books() -> Set<SourcedBook.ID> {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
         return (try? JSONDecoder().decode(Set<SourcedBook.ID>.self, from: data)) ?? []
     }

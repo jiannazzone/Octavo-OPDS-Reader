@@ -144,9 +144,11 @@ Should Margins in Customize be a slider with detents instead of a picker? Today 
 
 ## A mark for finished books on covers (Adam, 2026-11-06)
 
-Finished books should have an indicator on the cover. Downloaded covers already have a check (`DownloadBadge`, `docs/design/direction.md`), so the two would conflict. Adam's proposal: finished takes the check, and downloaded becomes `arrow.down.to.line` or `arrow.down.to.line.compact`.
+Finished books should have an indicator on the cover. Downloaded covers had a check, so the two would conflict. Adam's proposal: finished takes the check, and downloaded becomes `arrow.down.to.line` or `arrow.down.to.line.compact`.
 
-Measured at a 12 pt bold font: the check is 14 × 13, the compact arrow 13 × 13 and the other 13 × 15, so the compact one is the likelier fit in the 22 pt disc. To work out: a book can be both, so a cover may need room for two marks, and an arrow could read as "tap to download". Not designed or tried on a cover yet.
+Measured at a 12 pt bold font: the check is 14 × 13, the compact arrow 13 × 13 and the other 13 × 15, so the compact one is the likelier fit in the 22 pt disc. A book can be both, so a cover needs room for two marks.
+
+Decided and built 2026-11-06: `CoverBadge` puts both in one dark capsule in the same corner, check first, with the compact arrow. Adam chose it from simulator screenshots over two discs; he'd also seen mocks of opposite corners and of finished alone. `docs/design/direction.md`, Getting books onto the iPhone.
 
 ## Home feels empty unfolded (Adam, 2026-11-06)
 

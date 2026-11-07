@@ -33,6 +33,8 @@ final class FeedModel {
 
     @ObservationIgnored private let library: any LibrarySource
     @ObservationIgnored private let report: (any Error) -> Void
+    /// A page arrived, with the server's latest word on its books.
+    @ObservationIgnored private let listed: ([LibraryBook]) -> Void
     @ObservationIgnored private var next: LibraryLink?
     /// The pages loaded so far: a server whose next page is one of these is
     /// looping, and the list ends there.
@@ -43,11 +45,15 @@ final class FeedModel {
     /// are, so a list that never ends stops here.
     static let maxPagesToLoadAll = 100
 
-    init(link: LibraryLink, source: LibrarySourceID, library: any LibrarySource, report: @escaping (any Error) -> Void) {
+    init(
+        link: LibraryLink, source: LibrarySourceID, library: any LibrarySource, report: @escaping (any Error) -> Void,
+        listed: @escaping ([LibraryBook]) -> Void = { _ in }
+    ) {
         self.link = link
         self.source = source
         self.library = library
         self.report = report
+        self.listed = listed
     }
 
     /// The first page, unless it's loaded or loading (then this waits for it).
@@ -127,6 +133,7 @@ final class FeedModel {
         next = feed.next.flatMap { fetched.contains($0) ? nil : $0 }
         hasMore = next != nil
         state = .loaded
+        listed(feed.books)
     }
 }
 

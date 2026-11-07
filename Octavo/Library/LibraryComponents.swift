@@ -51,7 +51,7 @@ struct BookGridCell: View {
         OpenButton(route: .cover(book)) {
             VStack(spacing: 4) {
                 BookCover(book: book)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book) }
+                    .overlay(alignment: .bottomTrailing) { CoverBadge(book: book) }
                 if numbered {
                     Text(book.book.series?.position.map(Self.number) ?? "")
                         .font(.subheadline)
@@ -68,7 +68,7 @@ struct BookGridCell: View {
             }
         }
         .accessibilityLabel(Self.accessibilityLabel(book.book, numbered: numbered))
-        .accessibilityValue(DownloadBadge.accessibilityValue(shell.opener.status(of: book)))
+        .accessibilityValue(shell.marks(of: book).accessibilityValue)
     }
 
     /// 1, 2, 2.5.
@@ -83,47 +83,89 @@ struct BookGridCell: View {
     }
 }
 
-/// On a cover: a check once the book is on the iPhone, a ring while it
-/// downloads, nothing otherwise (`docs/design/direction.md`, Getting books
-/// onto the iPhone). A dark disc, so it reads on any cover.
-struct DownloadBadge: View {
+/// What a cover says about its book: finished, and on the iPhone or on its
+/// way (`docs/design/direction.md`, Getting books onto the iPhone).
+struct CoverMarks: Equatable {
+    enum Download: Equatable {
+        case downloaded
+        case downloading(Double)
+    }
+
+    var finished: Bool
+    var download: Download?
+
+    init(finished: Bool, status: BookOpener.Status) {
+        self.finished = finished
+        switch status {
+        case .downloaded: download = .downloaded
+        case .downloading(let fraction, _): download = .downloading(fraction)
+        case .notDownloaded, .failed, .protected: download = nil
+        }
+    }
+
+    var isEmpty: Bool { !finished && download == nil }
+
+    /// For the cover's own label: "Finished, downloaded", "Downloading, 40%".
+    var accessibilityValue: String {
+        let download: String? = switch self.download {
+        case .downloaded: finished ? "downloaded" : "Downloaded"
+        case .downloading(let fraction):
+            "\(finished ? "downloading" : "Downloading"), \(fraction.formatted(.percent.precision(.fractionLength(0))))"
+        case nil: nil
+        }
+        return [finished ? "Finished" : nil, download].compactMap(\.self).joined(separator: ", ")
+    }
+}
+
+extension ShellModel {
+    func marks(of book: SourcedBook) -> CoverMarks {
+        CoverMarks(finished: library.isFinished(book), status: opener.status(of: book))
+    }
+}
+
+/// On a cover: a check on a finished book, then an arrow once it's on the
+/// iPhone or a ring while it downloads, nothing otherwise. A dark capsule, so
+/// it reads on any cover; with one mark it's a disc.
+struct CoverBadge: View {
     let book: SourcedBook
     var size: CGFloat = 22
     @Environment(ShellModel.self) private var shell
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        switch shell.opener.status(of: book) {
-        case .downloaded:
-            Image(systemName: "checkmark")
-                .font(.system(size: size * 0.5, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: size, height: size)
-                .background(.black.opacity(0.6), in: .circle)
-                .padding(size / 4)
-                .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
-        case .downloading(let fraction, _):
-            Circle()
-                .trim(from: 0, to: max(fraction, 0.02))
-                .stroke(.white, style: StrokeStyle(lineWidth: size / 9, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .padding(size / 5)
-                .background(.black.opacity(0.6), in: .circle)
-                .frame(width: size, height: size)
-                .padding(size / 4)
-                .animation(.linear(duration: 0.2), value: fraction)
-        case .notDownloaded, .failed, .protected:
-            EmptyView()
+        let marks = shell.marks(of: book)
+        if !marks.isEmpty {
+            HStack(spacing: size * 0.08) {
+                if marks.finished { symbol("checkmark") }
+                switch marks.download {
+                case .downloaded: symbol("arrow.down.to.line.compact")
+                case .downloading(let fraction): ring(fraction)
+                case nil: EmptyView()
+                }
+            }
+            .padding(.horizontal, size / 5)
+            .frame(height: size)
+            .background(.black.opacity(0.6), in: .capsule)
+            .padding(size / 4)
+            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+            .accessibilityHidden(true)
         }
     }
 
-    /// For the cover's own label: "Downloaded", "Downloading, 40%".
-    static func accessibilityValue(_ status: BookOpener.Status) -> String {
-        switch status {
-        case .downloaded: "Downloaded"
-        case .downloading(let fraction, _): "Downloading, \(fraction.formatted(.percent.precision(.fractionLength(0))))"
-        case .notDownloaded, .failed, .protected: ""
-        }
+    private func symbol(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: size * 0.5, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: size * 3 / 5, height: size * 3 / 5)
+    }
+
+    private func ring(_ fraction: Double) -> some View {
+        Circle()
+            .trim(from: 0, to: max(fraction, 0.02))
+            .stroke(.white, style: StrokeStyle(lineWidth: size / 9, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+            .frame(width: size * 3 / 5, height: size * 3 / 5)
+            .animation(.linear(duration: 0.2), value: fraction)
     }
 }
 

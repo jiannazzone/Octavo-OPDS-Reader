@@ -66,10 +66,10 @@ What each motion does with the setting on:
 | Bookmark ribbon, search bar, server place bar | Fade | `ReaderView` |
 | Scrubber's zoom, the tour's page lift | Off | `ReaderScrubber`, `ReaderPageTurn.hintMotion` |
 | The book sheet, folded | Grows without the bounce, 0.2 s, as the system's sheets do | `BookSheet` |
-| The download check | Fades | `DownloadBadge` |
-| The download ring's progress | Stays, since it's the progress | `DownloadBadge` |
+| A cover's marks | Fade | `CoverBadge` |
+| The download ring's progress | Stays, since it's the progress | `CoverBadge` |
 
-Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). Adam watched the rest on his Duo, except the download check, which is from the code. Footnotes, going back, Import from Files, Open in Octavo and the rows marked folded were walked with the setting on, and their motion is from the code, not watched.
+Seen frame by frame in recordings with the setting on: pushes, Back and Settings cross-fading unfolded (`accessibility/reduce-motion-pushes.jpg`), and a book opening folded (`accessibility/reduce-motion-opening.jpg`). Adam watched the rest on his Duo, except a cover's marks, which are from the code. Footnotes, going back, Import from Files, Open in Octavo and the rows marked folded were walked with the setting on, and their motion is from the code, not watched.
 
 ## Dark Interface
 
@@ -122,7 +122,8 @@ Grey versions of the same screenshots, folded, light and dark, plus the first to
 | A search match in the results | Bold |
 | A search match on the page | A box |
 | A bookmark | Filled symbol, and the ribbon |
-| A downloaded book | A check |
+| A finished book | A check, and the cover's VoiceOver value |
+| A downloaded book | An arrow, and the cover's VoiceOver value |
 | Progress | The bar's length, and a percentage |
 | Switches | The thumb's position |
 | An error | A symbol and words |
