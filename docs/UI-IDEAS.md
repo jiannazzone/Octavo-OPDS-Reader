@@ -117,7 +117,7 @@ Folding while reading closes the book back to its screen, the cover (`ShellModel
 
 ## KOReader sync for OPDS servers (Adam, 2026-11-04)
 
-OPDS servers sometimes run a KOReader sync server alongside them for reading progress. Adam: look into it. It's already on the "Later" list (`docs/design/direction.md`, v1 scope) and has a slot in the design (`KOSync`, percentage only, in `CLAUDE.md`; the server setup's sync step comes back once it exists). Not looked into yet. To find out: how the protocol works, how it matches a book to a file, and how close a percentage lands compared with a CFI.
+OPDS servers sometimes run a KOReader sync server alongside them for reading progress. Adam: look into it. Measured 2026-11-06 and dropped from the first release (`docs/notes/koreader-sync.md`). If it comes back after launch: one KOReader account in Settings, for OPDS and Files books, with no per-server settings. Test it on real KOReader first.
 
 ## Back always there in the reader (Adam, 2026-11-04)
 
