@@ -113,7 +113,7 @@ All on 'Octavo Reader Duo' with this build (margins Medium), 2026-11-01.
 
 - `openLocal` (`name`): a book in the app's Documents straight into the reader (no sync).
 - `signin`: `LibraryModel.connectLocalBookOrbit` (one login; 5 per minute per IP).
-- `open` (`fileID`): the BookOrbit book holding that file, through `ShellModel.openBook` (download, Continue reading), with a `BookOrbitProgressSync` for that file. Only books a script opens sync; the app's own sync is #11.
+- `open` (`fileID`): the BookOrbit book holding that file, through `ReaderPresenter.open` (download, Continue reading), with a `BookOrbitProgressSync` for that file. Only books a script opens sync; the app's own sync is #11.
 - `detail` (`fileID`): the book's cover page in the Library tab, for `handoff.sh`. BookOrbit books only: a book in Documents has no cover page, so `handoff.sh`'s local-book form no longer works.
 - `keyboard` (`on`): shows or hides the keyboard over the reader through a hidden text field.
 - `controls`: shows or hides the column's buttons and the bar, for a picture of them without a tap.
@@ -126,13 +126,13 @@ All on 'Octavo Reader Duo' with this build (margins Medium), 2026-11-01.
 
 Written for the custom shell that replaces `PaneStack` after #17 (Adam, 2026-11-01). The reader asks for one optional book and a way to close it; it handles its hinge, book mode, layout, controls and insets itself.
 
-1. **A layer over everything** for `ShellModel.reading`, in the same view hierarchy: never a modal presentation (an unfold leaves one on its side, `duo-tabbar.md` §6), `.id(book.reader)`, and no fade-out on close (section 6).
+1. **A layer over everything** for `ReaderPresenter.reading`, in the same view hierarchy: never a modal presentation (an unfold leaves one on its side, `duo-tabbar.md` §6), `.id(book.reader)`, and no fade-out on close (section 6).
 2. **The whole window, side column included, while reading.** The reader's controls live in the column and its page takes taps there (book mode). No shell view may draw over it, take taps over it or claim the column; a custom tab column or toolbar goes under the reading layer or hides.
 3. **Its own column controls.** They are the system toolbar of the reader's `NavigationStack`. If the shell's buttons go custom, either leave the reader's as they are or give it the same component (vertical glass group under the clock, show/hide, disabled states, VoiceOver, a sideways placement).
 4. **The window's frame and safe area**, untouched: the reader measures the safe area and the hinge's regions itself, so no padding, `safeAreaInset`, offset or transform around the layer, and the column must stay a trailing safe area (or its width must reach the reader another way).
-5. **The unfold hook:** `.onHingeChange` → `ShellModel.hingeChanged` → the selected tab's deepest route's book → `openBook` → `reading`. The hinge reports about 200 ms before the scene moves, so the folded screen's book must still be known then.
+5. **The unfold hook:** `.onHingeChange` → `ShellModel.hingeChanged` → the selected tab's deepest route's book → `ReaderPresenter.open` → `reading`. The hinge reports about 200 ms before the scene moves, so the folded screen's book must still be known then.
 6. **Little work under the reader on a fold**, and the screen beneath unchanged, so the reader's single re-layout per fold holds and Back after a fold lands where the book opened.
-7. **The DEBUG hook's API:** `reading`, `openBook(_:)`, `tab`, `[path:].routes`, and `ReaderRemote.run(shell:)` started by the shell.
+7. **The DEBUG hook's API:** `reader.reading`, `reader.open(_:)`, `tab`, `[path:].routes`, and `ReaderRemote.run(shell:)` started by the shell.
 
 ## 10. Open risks
 

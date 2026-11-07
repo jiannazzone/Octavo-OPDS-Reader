@@ -62,7 +62,7 @@ struct BookCoverPage: View {
         }
         .onChange(of: scenePhase) { _, phase in
             // Not under the reader: its own pushes keep the place current.
-            guard phase == .active, shell.reading == nil else { return }
+            guard phase == .active, shell.reader.reading == nil else { return }
             shell.places.refresh(sourced)
         }
     }
@@ -99,7 +99,7 @@ struct BookCoverArt: View {
     let title: String
     let author: String
     /// The book, and the screen it's on, for where its cover is
-    /// (`ShellModel.coverSpots`).
+    /// (`ReaderPresenter.coverSpots`).
     let book: SourcedBook.ID
     let screen: CoverSpots.Screen
     @Environment(ShellModel.self) private var shell
@@ -122,7 +122,7 @@ struct BookCoverArt: View {
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
             .onChange(of: spot) { report() }
             .onAppear { report() }
-            .onDisappear { shell.coverSpots.gone(from: screen, reporter: reporter) }
+            .onDisappear { shell.reader.coverSpots.gone(from: screen, reporter: reporter) }
             .accessibilityElement()
             .accessibilityLabel(title.isEmpty ? "Cover" : "Cover of \(title)")
     }
@@ -132,7 +132,7 @@ struct BookCoverArt: View {
     }
 
     private func report() {
-        if let spot { shell.coverSpots.report(spot, on: screen, from: reporter) }
+        if let spot { shell.reader.coverSpots.report(spot, on: screen, from: reporter) }
     }
 }
 

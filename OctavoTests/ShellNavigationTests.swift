@@ -374,8 +374,8 @@ struct ShellModelTests {
         model.select(.library)
         model[path: .library].replace([SampleRoutes.collections, .cover(Self.book)])
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
-        #expect(model.reading?.book.id == Self.book.book.id)
+        #expect(await eventually { model.reader.reading != nil })
+        #expect(model.reader.reading?.book.id == Self.book.book.id)
     }
 
     // Nothing downloads until Download or Open is tapped.
@@ -385,7 +385,7 @@ struct ShellModelTests {
         model.select(.library)
         model[path: .library].replace([.cover(Self.book)])
         model.hingeChanged(.unfold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model.opener.status(of: Self.book) == .notDownloaded)
         #expect(model[path: .library].top == .cover(Self.book))
     }
@@ -395,31 +395,31 @@ struct ShellModelTests {
         model.select(.library)
         model[path: .library].replace([.cover(Self.book), SampleRoutes.collections])
         model.hingeChanged(.unfold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model[path: .library].routes == [.cover(Self.book), SampleRoutes.collections])
     }
 
     @Test func unfoldingOnARootDoesNothing() {
         let model = makeShell()
         model.hingeChanged(.unfold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
     }
 
     @Test func onlyTheSelectedTabCounts() {
         let model = makeShell()
         model[path: .library].replace([.cover(Self.book)])
         model.hingeChanged(.unfold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
     }
 
     // Opened from Home, so its screen isn't on the stack yet.
     @Test func foldingWhileReadingClosesTheBookToItsScreen() async throws {
         let files = try TemporaryBookFiles()
         let model = await connectedShell(files)
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
         model.hingeChanged(.fold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model[path: .home].top == .cover(Self.book))
     }
 
@@ -428,10 +428,10 @@ struct ShellModelTests {
         let model = await connectedShell(files)
         model.select(.library)
         model[path: .library].replace([.cover(Self.book)])
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
         model.hingeChanged(.fold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model[path: .library].routes == [.cover(Self.book)])
     }
 
@@ -452,15 +452,15 @@ struct ShellModelTests {
         await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", source: StubLibrarySource()))
         model.select(.library)
         model[path: .library].replace([.cover(Self.book)])
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
-        let open = model.reading
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
+        let open = model.reader.reading
         model.hingeChanged(.fold)
-        #expect(model.reading == open)
+        #expect(model.reader.reading == open)
         #expect(model[path: .library].routes == [.cover(Self.book)])
         model.hingeChanged(.unfold)
-        #expect(model.reading == open)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.reading == open)
+        #expect(model.reader.coverMotion == nil)
     }
 
     // A cover still opening the book was laid out for the other display.
@@ -468,15 +468,15 @@ struct ShellModelTests {
         let files = try TemporaryBookFiles()
         let model = makeShell(opener: BookOpener(files: files.store), defaults: .closingBookWhenFolded(false))
         await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", source: StubLibrarySource()))
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
-        model.coverMotion = ReaderCoverMotion(
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
+        model.reader.coverMotion = ReaderCoverMotion(
             cover: nil, title: "", author: "", coverFrame: CGRect(x: 0, y: 0, width: 10, height: 10), windowSize: CGSize(width: 20, height: 20),
             bookScreen: nil, spread: true, reduceMotion: false, paper: .white
         )
         model.hingeChanged(.fold)
-        #expect(model.reading != nil)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.reading != nil)
+        #expect(model.reader.coverMotion == nil)
     }
 
     private func coverMotion(closing: Bool) -> ReaderCoverMotion {
@@ -491,52 +491,52 @@ struct ShellModelTests {
     @Test func unfoldingTakesAwayACoverStillOpening() async throws {
         let files = try TemporaryBookFiles()
         let model = await connectedShell(files)
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
-        model.coverMotion = coverMotion(closing: false)
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
+        model.reader.coverMotion = coverMotion(closing: false)
         model.hingeChanged(.unfold)
-        #expect(model.reading != nil)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.reading != nil)
+        #expect(model.reader.coverMotion == nil)
     }
 
     @Test func foldingTakesAwayACoverStillClosing() {
         let model = makeShell()
-        model.coverMotion = coverMotion(closing: true)
+        model.reader.coverMotion = coverMotion(closing: true)
         model.hingeChanged(.fold)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.coverMotion == nil)
     }
 
     @Test func repeatedHingeReportsLeaveTheCover() {
         let model = makeShell()
         let motion = coverMotion(closing: true)
-        model.coverMotion = motion
+        model.reader.coverMotion = motion
         model.hingeChanged(.none)
-        #expect(model.coverMotion === motion)
+        #expect(model.reader.coverMotion === motion)
     }
 
     // An import, say, while a cover is still opening the book.
     @Test func closingTheReaderTakesAwayACoverStillOpening() async throws {
         let files = try TemporaryBookFiles()
         let model = await connectedShell(files)
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
-        model.coverMotion = coverMotion(closing: false)
-        model.closeReader()
-        #expect(model.reading == nil)
-        #expect(model.coverMotion == nil)
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
+        model.reader.coverMotion = coverMotion(closing: false)
+        model.reader.close()
+        #expect(model.reader.reading == nil)
+        #expect(model.reader.coverMotion == nil)
     }
 
     // Back draws the closing cover, then the reader goes.
     @Test func closingTheReaderKeepsBacksCover() async throws {
         let files = try TemporaryBookFiles()
         let model = await connectedShell(files)
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
         let closing = coverMotion(closing: true)
-        model.coverMotion = closing
-        model.closeReader()
-        #expect(model.reading == nil)
-        #expect(model.coverMotion === closing)
+        model.reader.coverMotion = closing
+        model.reader.close()
+        #expect(model.reader.reading == nil)
+        #expect(model.reader.coverMotion === closing)
     }
 
     @Test func foldingWithoutABookDoesNothing() {
@@ -545,7 +545,7 @@ struct ShellModelTests {
         model[path: .library].replace([.cover(Self.book)])
         model.hingeChanged(.fold)
         model.hingeChanged(.none)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model[path: .library].routes == [.cover(Self.book)])
     }
 
@@ -585,8 +585,8 @@ struct ShellModelTests {
         #expect(model.library.continueReading.isEmpty)
 
         let alice = SampleRoutes.book(3)
-        model.openBook(alice)
-        #expect(await eventually { model.reading != nil })
+        model.reader.open(alice)
+        #expect(await eventually { model.reader.reading != nil })
         #expect(model.library.continueReading.map(\.id) == [alice.id])
     }
 
@@ -596,7 +596,7 @@ struct ShellModelTests {
         let model = makeShell()
         await model.library.connectSampleLibrary()
         let alice = SampleRoutes.book(3)
-        model.openBook(alice)
+        model.reader.open(alice)
         #expect(await eventually {
             if case .failed = model.opener.status(of: alice) { true } else { false }
         })

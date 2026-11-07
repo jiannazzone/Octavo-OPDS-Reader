@@ -264,7 +264,7 @@ struct RemoveServerTests {
         let file = try #require(StubLibrarySource().files.first)
         #expect(files.store.localFile(for: file, in: Self.server) == nil)
         #expect(model.opener.status(of: SourcedBook(source: Self.server, book: slow)) == .notDownloaded)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
     }
 
     @Test func theQuestionCountsTheBooks() {

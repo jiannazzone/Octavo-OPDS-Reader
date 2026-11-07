@@ -37,17 +37,17 @@ struct AppShell: View {
             .accessibilityHidden(isCovered)
             if model.tour != nil || model.tourWaitsForHinge {
                 TourScreen()
-                    .accessibilityHidden(model.reading != nil)
+                    .accessibilityHidden(model.reader.reading != nil)
                     .transition(.identity)
             }
-            if let book = model.reading {
+            if let book = model.reader.reading {
                 ReaderView(
-                    book: book, bookmarkSync: model.readingBookmarkSync,
-                    progressSync: model.readingProgressSync, listedPlace: model.readingListedPlace,
+                    book: book, bookmarkSync: model.reader.bookmarkSync,
+                    progressSync: model.reader.progressSync, listedPlace: model.reader.listedPlace,
                     connectionReturns: model.connection.returns,
-                    opened: { [motion = model.coverMotion] pages in motion?.readerOpened(pages) },
-                    closing: { model.readerClosing($0) }
-                ) { model.closeReader() }
+                    opened: { [motion = model.reader.coverMotion] pages in motion?.readerOpened(pages) },
+                    closing: { model.reader.closing($0) }
+                ) { model.reader.close() }
                     // Another book is another reader: its own model, hooks
                     // and controls, and the old one closes (flushing its
                     // position).
@@ -58,9 +58,9 @@ struct AppShell: View {
                     // WebKit traps on (open, close, open again, unfold).
                     // Opened from its cover, it's there at once, under the
                     // cover's motion.
-                    .transition(.asymmetric(insertion: model.coverMotion == nil ? .opacity : .identity, removal: .identity))
+                    .transition(.asymmetric(insertion: model.reader.coverMotion == nil ? .opacity : .identity, removal: .identity))
             }
-            if let motion = model.coverMotion {
+            if let motion = model.reader.coverMotion {
                 ReaderCoverMotionView(motion: motion)
                     .transition(.identity)
             }
@@ -87,7 +87,7 @@ struct AppShell: View {
             try? await Task.sleep(for: .seconds(0.75))
             model.hingeStayedSilent()
         }
-        .animation(.default, value: model.reading)
+        .animation(.default, value: model.reader.reading)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.retryUnsentPlaces() }
         }
@@ -100,7 +100,7 @@ struct AppShell: View {
     }
 
     private var isCovered: Bool {
-        model.reading != nil || model.tour != nil || model.tourWaitsForHinge
+        model.reader.reading != nil || model.tour != nil || model.tourWaitsForHinge
     }
 
     private var tabs: some View {

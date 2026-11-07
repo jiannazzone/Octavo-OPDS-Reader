@@ -19,22 +19,10 @@ final class ShellModel {
 
     /// The books, and where they come from.
     let library: LibraryModel
-    /// The book open in the reader, which covers the tabs.
-    var reading: OpenedBook? {
-        didSet {
-            if let closed = oldValue, closed != reading {
-                places.readerClosed()
-                library.mergeContinueReading()
-            }
-        }
-    }
-    /// The library of the book in the reader, for its screen when a fold
-    /// closes it.
-    private var readingSource: LibrarySourceID?
-    /// Downloads books and opens them in `reading`.
+    /// The reader over the tabs, the book in it and its cover's motion.
+    let reader: ReaderPresenter
+    /// Downloads books and opens them in the reader.
     let opener: BookOpener
-    /// The books asked to open, until they do.
-    private var opening: Set<SourcedBook.ID> = []
     /// The book screens' state, kept across folds.
     let pages = BookPages()
     /// Where each book opens, and whether its place has synced (step 13).
@@ -113,7 +101,14 @@ final class ShellModel {
         self.removedServers = removedServers
         places = BookPlaces(store: positions) { [library] in ShellModel.progressSync(for: $0, on: library.server($0.source)) }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
-        opener.onOpen = { [weak self] in self?.opened($0) }
+        reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
+        reader.underneath = { [weak self] in
+            guard let self else { return ReaderPresenter.Underneath() }
+            return ReaderPresenter.Underneath(
+                onHome: tab == .home && self[path: .home].top == nil,
+                top: self[path: tab].top, twoPages: isTwoPages(in: tab), inTour: tour != nil
+            )
+        }
         library.serverAdded = { [weak self] in
             guard let self else { return }
             search.reset()
@@ -351,7 +346,7 @@ final class ShellModel {
         finishTour()
         importFailures += failures
         setupImportFailures = []
-        closeReader()
+        reader.close()
         tab = .library
         self[path: .library].replace(imported.isEmpty || library.server == nil ? [] : [.onIPhone])
     }
@@ -467,7 +462,7 @@ final class ShellModel {
         try? ServerCredentials.removeAll(serverID: id.rawValue)
         // Nothing still downloading lands, or opens, afterwards.
         opener.cancelAll(in: id)
-        opening = opening.filter { $0.source != id }
+        reader.forgetRequests(in: id)
         let downloads = downloads(on: id)
         if removingBooks {
             for download in downloads { opener.removeDownload(download.book) }
@@ -584,15 +579,6 @@ final class ShellModel {
 
     // MARK: Books
 
-    /// Opens `book` in the reader, downloading it first if it isn't on the
-    /// iPhone yet, and once it opens puts it first in Continue reading.
-    func openBook(_ book: SourcedBook) {
-        guard let source = library.source(for: book.source), opener.canOpen(book.book) else { return }
-        opening.insert(book.id)
-        if opener.status(of: book) != .downloaded { library.bookDownloading(book) }
-        opener.open(book, from: source)
-    }
-
     /// Downloads `book` without opening it (the details' Download button).
     func downloadBook(_ book: SourcedBook) {
         guard let source = library.source(for: book.source) else { return }
@@ -600,165 +586,11 @@ final class ShellModel {
         opener.download(book, from: source)
     }
 
-    /// Only a book that reaches the reader joins Continue reading: not one
-    /// whose download failed or was cancelled.
-    private func opened(_ book: OpenedBook) {
-        let source = opening.remove(SourcedBook.ID(source: book.source, book: book.book.id)).map(\.source)
-        // A download that finishes during the tour stays on the iPhone. It
-        // mustn't open with the tour's card, or a replay's place.
-        if tour != nil, book.book.id != .sample { return }
-        if source != nil {
-            library.bookOpened(SourcedBook(source: book.source, book: book.book))
-        }
-        let motion = opensByUnfold ? leavesMotion(opening: book) : pendingCoverMotion ?? coverMotion(opening: book)
-        opensByUnfold = false
-        pendingCoverMotion = nil
-        motion?.onFinished = { [weak self, weak motion] in
-            if self?.coverMotion === motion { self?.coverMotion = nil }
-        }
-        coverMotion = motion
-        readingSource = source
-        reading = book
-    }
-
-    // MARK: A book opening like a cover (decision 28)
-
-    /// The cover opening the book, drawn over the reader while it opens.
-    /// One taken away before it's over stops for good.
-    var coverMotion: ReaderCoverMotion? {
-        didSet {
-            if oldValue !== coverMotion { oldValue?.cancel() }
-        }
-    }
-    /// The book is opening because the Duo unfolded on its screen: the fold
-    /// is the cover's motion then (decision 10).
-    @ObservationIgnored private var opensByUnfold = false
-    /// A motion already made for the book about to open (the tour's).
-    @ObservationIgnored private var pendingCoverMotion: ReaderCoverMotion?
-    /// Where Home and the books' screens show their covers, for the cover's
-    /// motion.
-    let coverSpots = CoverSpots()
-
-    /// Every way out of the reader: Back, a fold, an import, the tour, and
-    /// `change` with it. It goes at once, with no animation: anything still
-    /// animating in a leaving reader (the tour card's fade, the ring's pulse)
-    /// keeps it and its web page on screen a moment longer, and a fold
-    /// meanwhile has SwiftUI rebuild that web view, which WebKit traps on
-    /// (`AppShell`). A cover still opening the book goes with it; Back's
-    /// cover, closing it (`readerClosing`), plays on.
-    func closeReader(_ change: () -> Void = {}) {
-        if coverMotion?.closing == false { coverMotion = nil }
-        pendingCoverMotion = nil
-        var instant = Transaction()
-        instant.disablesAnimations = true
-        withTransaction(instant) {
-            reading = nil
-            change()
-        }
-    }
-
-    /// Back from the reader (not a fold, whose motion is the fold): onto the
-    /// book's own screen, or Home with the book's cover on its left page,
-    /// the opening plays backwards. `pages` are the reader's, taken as Back
-    /// was tapped; the reader then goes at once.
-    func readerClosing(_ pages: ReaderCoverPages) {
-        guard let book = reading else { return }
-        coverMotion = nil
-        let motion = coverMotion(for: book, closing: pages)
-        motion?.onFinished = { [weak self, weak motion] in
-            if self?.coverMotion === motion { self?.coverMotion = nil }
-        }
-        coverMotion = motion
-    }
-
-    /// From the book's own screen, or Home's left page unfolded, its cover
-    /// opens it; from anywhere else the reader fades in as before.
-    private func coverMotion(opening book: OpenedBook) -> ReaderCoverMotion? {
-        guard reading == nil else { return nil }
-        return coverMotion(for: book, closing: nil)
-    }
-
-    /// Unfolding on a cover, past page 1 the leaves alone. It goes by where the
-    /// book's screen says it opens, so they're moving by the time your page is
-    /// ready; the last one carries the page itself.
-    private func leavesMotion(opening book: OpenedBook) -> ReaderCoverMotion? {
-        guard reading == nil, let progress = places.progress(of: SourcedBook(source: book.source, book: book.book)),
-              ReaderLeaves.play(fraction: progress, pageTurn: pageTurn, reduceMotion: UIAccessibility.isReduceMotionEnabled)
-        else { return nil }
-        let window = UIWindow.key
-        return ReaderCoverMotion(
-            unfoldingAt: progress, windowSize: window?.bounds.size ?? .zero, paper: window.map(Self.paper(in:)) ?? .white, leafStyle: leafStyle
-        )
-    }
-
-    private var pageTurn: ReaderPageTurn {
-        defaults.string(forKey: ReaderPageTurn.key).flatMap(ReaderPageTurn.init(rawValue:)) ?? .standard
-    }
-
-    private var leafStyle: ReaderLeafStyle {
-        ReaderLeafStyle(
-            appearance: UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance(),
-            margins: defaults.string(forKey: ReaderMargins.key).flatMap(ReaderMargins.init(rawValue:)) ?? .standard
-        )
-    }
-
-    /// The cover's motion for `book` over its own screen, the top one, or
-    /// Home unfolded: a picture of the screen to open from, or of your pages
-    /// to close from.
-    private func coverMotion(for book: OpenedBook, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
-        let id = SourcedBook.ID(source: book.source, book: book.book.id)
-        let onHome = tour == nil && tab == .home && self[path: .home].top == nil
-        guard let spot = coverSpots.spot(for: id, onHome: onHome, top: self[path: tab].top),
-              let window = UIWindow.key, window.bounds.intersects(spot.frame)
-        else { return nil }
-        let screen = pages == nil ? window.snapshotView(afterScreenUpdates: false) : nil
-        guard pages != nil || screen != nil else { return nil }
-        return ReaderCoverMotion(
-            cover: spot.image, title: spot.title, author: spot.author,
-            coverFrame: spot.frame, windowSize: window.bounds.size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
-            closing: pages,
-            // Cover | Details (or Home's spread) unfolded; the cover fills the
-            // screen folded.
-            spread: isTwoPages(in: tab),
-            reduceMotion: UIAccessibility.isReduceMotionEnabled,
-            paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
-        )
-    }
-
-    /// The page's colour in the reader's theme, where a cover has left.
-    private static func paper(in window: UIWindow) -> Color {
-        let appearance = UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance()
-        let darkMode = window.traitCollection.userInterfaceStyle == .dark
-        return Color(hex: appearance.theme(darkMode: darkMode).background)
-    }
-
     /// Sends the places that didn't reach the server (`BookPlaces.retryUnsent`):
     /// when a server connects (launch too), when the app comes back and when
     /// the connection does. The open book's goes through its reader.
     func retryUnsentPlaces() {
-        Task { await places.retryUnsent(except: reading?.reader.id) }
-    }
-
-    /// Where the open book's bookmarks sync (decision 18): BookOrbit's own,
-    /// for its books. Anything else keeps them on the iPhone.
-    var readingBookmarkSync: (any BookmarkSync)? {
-        guard let book = reading, let readingSource, let source = library.source(for: readingSource) as? BookOrbitSource,
-              let bookID = Int(book.book.id.rawValue)
-        else { return nil }
-        return BookOrbitBookmarkSync(client: source.client, bookID: bookID, fileID: Int(book.file.id.rawValue))
-    }
-
-    /// Where the open book's place syncs (decision 6), through `places`, so
-    /// the reader reuses the pull its screen just made.
-    var readingProgressSync: (any ProgressSync)? {
-        guard let book = reading, let readingSource else { return nil }
-        return places.readerSync(for: SourcedBook(source: readingSource, book: book.book))
-    }
-
-    /// The server's place for the open book as the library list gave it,
-    /// where the reader opens if it can't pull.
-    var readingListedPlace: SyncedPosition? {
-        reading.flatMap { BookPlaces.listed($0.book) }
+        Task { await places.retryUnsent(except: reader.reading?.reader.id) }
     }
 
     /// Where `book`'s place syncs: its BookOrbit server, if setup chose to
@@ -795,31 +627,31 @@ final class ShellModel {
     /// Either way, a cover opening or closing a book goes: it's drawn for the
     /// display it started on, and the fold is the motion now.
     func hingeChanged(_ transition: HingeTransition) {
-        if transition != .none { coverMotion = nil }
+        if transition != .none { reader.coverMotion = nil }
         if tour != nil { return tourHingeChanged(transition) }
         switch transition {
         case .unfold:
-            guard reading == nil, case .cover(let book)? = self[path: tab].top,
+            guard reader.reading == nil, case .cover(let book)? = self[path: tab].top,
                   opener.status(of: book) == .downloaded
             else { return }
-            opensByUnfold = true
-            openBook(book)
+            reader.open(book, .unfolded)
         case .fold:
-            guard let book = reading else { return }
-            if ReaderSettings.closesBookWhenFolded(in: defaults) { closeToItsScreen(book) }
+            guard reader.reading != nil else { return }
+            if ReaderSettings.closesBookWhenFolded(in: defaults) { closeToItsScreen() }
         case .none:
             break
         }
     }
 
-    /// Closes the reader onto `book`'s screen, opening that screen if the
+    /// Closes the reader onto its book's screen, opening that screen if the
     /// book was opened from somewhere else (Home's debug launch argument).
     /// A book with no screen to go to goes back to setup.
-    private func closeToItsScreen(_ book: OpenedBook) {
-        closeReader()
-        guard !needsSetup, let source = readingSource else { return }
-        if case .cover(let shown)? = self[path: tab].top, shown.id == SourcedBook.ID(source: source, book: book.book.id) { return }
-        self[path: tab].replace(self[path: tab].routes + [.cover(SourcedBook(source: source, book: book.book))])
+    private func closeToItsScreen() {
+        let book = reader.readingBook
+        reader.close()
+        guard !needsSetup, let book else { return }
+        if case .cover(let shown)? = self[path: tab].top, shown.id == book.id { return }
+        self[path: tab].replace(self[path: tab].routes + [.cover(book)])
     }
 
     // MARK: The tour (decisions 29 and 30)
@@ -907,7 +739,7 @@ final class ShellModel {
 
     /// Show the tour, in Settings: from the beginning, and back to Settings.
     func showTour() {
-        guard tour == nil, reading == nil else { return }
+        guard tour == nil, reader.reading == nil else { return }
         let place = TourReplayPlace()
         SampleBook.startAtFirstChapter(in: place.positions)
         tourReplayPlace = place
@@ -920,15 +752,15 @@ final class ShellModel {
     }
 
     /// The sample book for the tour. A new install's is the one on the shelf,
-    /// through `openBook`, so it joins Continue reading. A replay's is the
+    /// through the library, so it joins Continue reading. A replay's is the
     /// app's own copy with nowhere to save its place: nothing goes back on the
     /// shelf if it was removed, and no place moves if it wasn't.
-    private func openTourBook() {
+    private func openTourBook(_ opening: ReaderPresenter.Opening = .tapped) {
         if tour?.isReplay == true {
             guard let url = SampleBook.bundledFile, let file = SampleBook.book.primaryFile else { return finishTour() }
-            opened(OpenedBook(book: SampleBook.book, source: .files, file: file, url: url))
+            reader.open(copy: OpenedBook(book: SampleBook.book, source: .files, file: file, url: url), opening)
         } else if let sample = installSampleBook() {
-            openBook(sample)
+            reader.open(sample, opening)
         } else {
             finishTour()
         }
@@ -946,15 +778,14 @@ final class ShellModel {
     /// tour (`hingeChanged`): this also hears a change made while the app was
     /// away (`hingeReported`).
     private func tourHingeChanged(_ transition: HingeTransition) {
-        if transition != .none { coverMotion = nil }
+        if transition != .none { reader.coverMotion = nil }
         switch transition {
         case .fold:
-            closeReader { tour?.handle(.folded) }
+            reader.close { tour?.handle(.folded) }
         case .unfold:
             guard tour?.step == .cover else { return }
             tour?.handle(.unfolded)
-            opensByUnfold = true
-            openTourBook()
+            openTourBook(.unfolded)
         case .none:
             break
         }
@@ -965,23 +796,10 @@ final class ShellModel {
     /// start from, and the reader fades in.
     func tourContinueWithoutClosing(coverFrame: CGRect?) {
         guard tour?.step == .closeYourIPhone else { return }
-        pendingCoverMotion = coverFrame.flatMap(tourCoverMotion)
+        // Taken before the step changes the screen.
+        let motion = coverFrame.flatMap(reader.sampleCoverMotion(from:))
         tour?.handle(.continueWithoutClosing)
-        openTourBook()
-    }
-
-    private func tourCoverMotion(from frame: CGRect) -> ReaderCoverMotion? {
-        guard let window = UIWindow.key, frame.width > 0, frame.height > 0,
-              let screen = window.snapshotView(afterScreenUpdates: false)
-        else { return nil }
-        return ReaderCoverMotion(
-            cover: SampleBook.bundledCover.flatMap { UIImage(contentsOfFile: $0.path) },
-            title: SampleBook.book.title, author: "Jane Austen",
-            coverFrame: frame, windowSize: window.bounds.size,
-            bookScreen: ReaderSnapshot(view: screen, frame: window.bounds),
-            spread: true, reduceMotion: UIAccessibility.isReduceMotionEnabled,
-            paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
-        )
+        openTourBook(motion.map { .motion($0) } ?? .tapped)
     }
 
     /// Skip, on any tour screen, or Not now on the last card: Home with the
@@ -1014,8 +832,8 @@ final class ShellModel {
 
     private func finishTour() {
         guard let finished = tour else { return }
-        coverMotion = nil
-        closeReader { tour = nil }
+        reader.coverMotion = nil
+        reader.close { tour = nil }
         tourReplayPlace?.clear()
         tourReplayPlace = nil
         guard !finished.isReplay else { return }
@@ -1043,8 +861,8 @@ final class ShellModel {
         guard tour != nil || tourWaitsForHinge else { return }
         tourWaitsForHinge = false
         tourRecord.set(.played)
-        coverMotion = nil
-        closeReader { tour = nil }
+        reader.coverMotion = nil
+        reader.close { tour = nil }
         tourReplayPlace?.clear()
         tourReplayPlace = nil
     }
@@ -1052,7 +870,7 @@ final class ShellModel {
     /// For the remote: where the tour is.
     var debugTourState: String {
         guard let tour else { return tourWaitsForHinge ? "waiting for the hinge" : "none, record \(tourRecord.state?.rawValue ?? "nil")" }
-        return "\(tour.step) resumes \(String(describing: tour.resumes)) replay \(tour.isReplay) reading \(reading != nil)"
+        return "\(tour.step) resumes \(String(describing: tour.resumes)) replay \(tour.isReplay) reading \(reader.reading != nil)"
     }
     #endif
 
@@ -1138,7 +956,7 @@ final class ShellModel {
             default: break
             }
             if reads, let first = library.continueReading.first {
-                openBook(first)
+                reader.open(first)
             }
             if let query { search.query = query }
         }

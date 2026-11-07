@@ -37,7 +37,7 @@ struct CoverScreen: View {
                     shell.push(.feed(entry, from: book.source))
                 }
                 .environment(\.openBook) { opened in
-                    shell.openBook(SourcedBook(source: book.source, book: opened))
+                    shell.reader.open(SourcedBook(source: book.source, book: opened))
                 }
                 .environment(\.downloadBook) { downloading in
                     shell.downloadBook(SourcedBook(source: book.source, book: downloading))

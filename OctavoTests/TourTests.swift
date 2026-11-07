@@ -301,7 +301,7 @@ struct TourShellTests {
     /// `model` on the tour's last card, its book open.
     private func onTheLastCard(_ model: ShellModel) async -> ShellModel {
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         for event in [TourFlow.Event.pageTurned, .reader(.controls), .reader(.panel), .done] { model.tourEvent(event) }
         #expect(model.tour?.step == .addYourBooks)
         return model
@@ -310,10 +310,10 @@ struct TourShellTests {
     @Test func aNewInstallStartsFromTheHinge() {
         let unfolded = TourShellTests.startedSeparately(.open)
         #expect(unfolded.tour?.step == .closeYourIPhone)
-        #expect(unfolded.reading == nil)
+        #expect(unfolded.reader.reading == nil)
         let folded = TourShellTests.startedSeparately(.closed)
         #expect(folded.tour?.step == .cover)
-        #expect(folded.reading == nil)
+        #expect(folded.reader.reading == nil)
     }
 
     private static func startedSeparately(_ fold: HingeTransition.Fold) -> ShellModel {
@@ -326,7 +326,7 @@ struct TourShellTests {
     @Test func withoutAFoldItStartsInTheBook() async {
         let model = started(fold: nil)
         #expect(model.tour?.step == .turnThePage)
-        #expect(await eventually { model.reading?.book.id == .sample })
+        #expect(await eventually { model.reader.reading?.book.id == .sample })
     }
 
     // Reports without a hinge say nothing until the wait is over.
@@ -360,11 +360,11 @@ struct TourShellTests {
         #expect(model.onIPhoneBooks().map(\.book.id) == [.sample])
         model.hingeChanged(.unfold)
         #expect(model.tour?.step == .turnThePage)
-        #expect(await eventually { model.reading?.book.id == .sample })
+        #expect(await eventually { model.reader.reading?.book.id == .sample })
         #expect(model.library.continueReading.map(\.book.id) == [.sample])
         // The fold is the cover's motion, and Chapter I is past page 1.
-        #expect(model.coverMotion?.leavesOnly == true)
-        #expect(model.coverMotion?.leaves?.count == 2)
+        #expect(model.reader.coverMotion?.leavesOnly == true)
+        #expect(model.reader.coverMotion?.leaves?.count == 2)
     }
 
     // Folding mid-tour closes the book without opening its screen; unfolding
@@ -372,16 +372,16 @@ struct TourShellTests {
     @Test func aFoldClosesTheBookAndAnUnfoldResumes() async {
         let model = started()
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         model.tourEvent(.pageTurned)
         model.hingeChanged(.fold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model.tour?.step == .cover)
         #expect(model.tour?.coverLine == "Open your iPhone to continue")
         #expect(model[path: .home].routes.isEmpty)
         model.hingeChanged(.unfold)
         #expect(model.tour?.step == .bringUpControls)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
     }
 
     // Close book when folded is for reading, not the tour.
@@ -389,10 +389,10 @@ struct TourShellTests {
         let model = makeShell(tourRecord: record, importer: { BookImporter(store: $0, inspect: ImportFixtures.inspect()) }, defaults: .closingBookWhenFolded(false))
         model.hingeReported(.closed)
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         model.tourEvent(.pageTurned)
         model.hingeChanged(.fold)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model.tour?.step == .cover)
     }
 
@@ -402,25 +402,25 @@ struct TourShellTests {
         let model = started()
         model.hingeReported(.open)
         #expect(model.tour?.step == .turnThePage)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         model.hingeReported(.closed)
         #expect(model.tour?.step == .cover)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         // The repeats change nothing.
         model.hingeReported(.closed)
         #expect(model.tour?.step == .cover)
         model.hingeReported(.open)
         model.hingeChanged(.unfold)
         #expect(model.tour?.step == .turnThePage)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
     }
 
     // A hinge that reports late, on a tour already started without one.
     @Test func aLateHingeStillClosesTheBook() async {
         let model = started(fold: nil)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         model.hingeReported(.closed)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model.tour?.step == .cover)
     }
 
@@ -437,7 +437,7 @@ struct TourShellTests {
         let sourced = SourcedBook(source: LibrarySourceID(rawValue: "tour-download"), book: book)
         model.opener.open(sourced, from: source)
         #expect(await eventually { model.opener.status(of: sourced) == .downloaded })
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model.tour?.step == .cover)
     }
 
@@ -454,7 +454,7 @@ struct TourShellTests {
         let model = started(fold: .open)
         model.skipTour()
         #expect(model.tour == nil)
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(!model.needsSetup)
         #expect(!model.showsSetup)
         #expect(model.tab == .home)
@@ -465,7 +465,7 @@ struct TourShellTests {
     @Test func notNowClosesTheReaderOnHome() async {
         let model = await onTheLastCard(started())
         model.skipTour()
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model.tour == nil)
         #expect(model.tab == .home)
         #expect(model[path: .home].routes.isEmpty)
@@ -477,7 +477,7 @@ struct TourShellTests {
     @Test func addBooksOpensAddYourBooksAndSkipLeavesIt() async {
         let model = await onTheLastCard(started())
         model.tourAddBooks()
-        #expect(model.reading == nil)
+        #expect(model.reader.reading == nil)
         #expect(model.tour == nil)
         #expect(model.showsSetup)
         #expect(model.addsBooksAfterTour)
@@ -562,10 +562,10 @@ struct TourShellTests {
     @Test func aRefusedSharedFileLeavesTheTourPlaying() async throws {
         let model = started()
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         await model.importBooks([try ImportFixtures.drmMobi(in: folder)])
         #expect(model.tour?.step == .turnThePage)
-        #expect(model.reading != nil)
+        #expect(model.reader.reading != nil)
         #expect(model.importFailures == [ImportFailure(fileName: "Kindred.mobi", reason: .drmProtected)])
     }
 
@@ -619,7 +619,7 @@ struct TourShellTests {
         let model = settings(fold: nil)
         model.showTour()
         #expect(model.tour?.step == .turnThePage)
-        #expect(await eventually { model.reading?.book.id == .sample })
+        #expect(await eventually { model.reader.reading?.book.id == .sample })
     }
 
     // A removed book stays removed, "cannot be recovered" stays true, and
@@ -628,8 +628,8 @@ struct TourShellTests {
         let model = settings(fold: .closed)
         model.showTour()
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
-        #expect(model.reading?.reader.fileURL == SampleBook.bundledFile)
+        #expect(await eventually { model.reader.reading != nil })
+        #expect(model.reader.reading?.reader.fileURL == SampleBook.bundledFile)
         #expect(model.library.imported.all().isEmpty)
         #expect(model.onIPhoneBooks().isEmpty)
         #expect(model.library.continueReading.isEmpty)
@@ -656,12 +656,12 @@ struct TourShellTests {
         let model = settings(fold: .closed)
         model.showTour()
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         let place = try #require(model.tourReplayPlace)
-        let id = try #require(model.reading).reader.id
+        let id = try #require(model.reader.reading).reader.id
         #expect(place.positions.position(forBook: id) == SampleBook.firstChapter)
         let reader = ReaderModel(
-            book: try #require(model.reading).reader, store: place.positions, bookmarks: ReaderBookmarks(bookID: id, store: place.bookmarks)
+            book: try #require(model.reader.reading).reader, store: place.positions, bookmarks: ReaderBookmarks(bookID: id, store: place.bookmarks)
         )
         reader.handle(.opened(.init(restoredFrom: "start", sectionCount: 1, isFixedLayout: false)))
         reader.handle(.relocate(.init(cfi: "epubcfi(/6/4!/4/2/1:0)", fraction: 0.1)))
@@ -683,7 +683,7 @@ struct TourShellTests {
         model.hingeReported(.closed)
         model.showTour()
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading?.book.id == sample.book.id })
+        #expect(await eventually { model.reader.reading?.book.id == sample.book.id })
         model.skipTour()
         #expect(model.library.continueReading.map(\.book.id) == reading)
     }
@@ -731,23 +731,23 @@ struct TourShellTests {
             cover: nil, title: "", author: "", coverFrame: CGRect(x: 0, y: 0, width: 10, height: 10), windowSize: CGSize(width: 20, height: 20),
             bookScreen: nil, spread: false, reduceMotion: false, paper: .white
         )
-        model.coverMotion = stale
+        model.reader.coverMotion = stale
         model.hingeReported(.open)
-        #expect(model.coverMotion !== stale)
-        #expect(await eventually { model.reading != nil })
+        #expect(model.reader.coverMotion !== stale)
+        #expect(await eventually { model.reader.reading != nil })
     }
 
     // A fold while the cover is still opening the book leaves nothing behind.
     @Test func aFoldTakesAwayACoverStillOpening() async {
         let model = shell(state: .played)
         let sample = model.installSampleBook()!
-        model.openBook(sample)
-        #expect(await eventually { model.reading != nil })
-        model.coverMotion = ReaderCoverMotion(
+        model.reader.open(sample)
+        #expect(await eventually { model.reader.reading != nil })
+        model.reader.coverMotion = ReaderCoverMotion(
             cover: nil, title: "", author: "", coverFrame: CGRect(x: 0, y: 0, width: 10, height: 10), windowSize: CGSize(width: 20, height: 20),
             bookScreen: nil, spread: true, reduceMotion: false, paper: .white
         )
         model.hingeChanged(.fold)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.coverMotion == nil)
     }
 }

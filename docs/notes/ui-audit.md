@@ -173,6 +173,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 
 `ShellModel` keeps navigation. Each move is mechanical, and tests already cover most of it.
 
+**Step 1 done:** `ReaderPresenter` (`Octavo/Shell/ReaderPresenter.swift`) holds the open book, every way in (`open`, with how it opens: tapped, unfolded or a motion already made) and out (`close`, `closing`), the cover's motion and `coverSpots`, and the open book's sync. The shell tells it what's under the reader (`Underneath`) and still decides what a fold does. The tour and the server actions are steps 2 and 3.
+
 ### 5. A timer stands in for "this iPhone has no hinge"
 **Structural risk · S**
 
@@ -207,7 +209,7 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 - `ScreenStack` measures its spread, then also stores it in a shared, unobserved `lastSpread` (`ShellModel.swift:73-75`, `ScreenStack.swift:109-125`). It's a deliberate fallback for a tab's first layout, but it's a second copy of the posture.
 
 **Polish (S):**
-- The tour's cover motion hard-codes `author: "Jane Austen"` (`ShellModel.swift:994`).
+- The tour's cover motion hard-codes `author: "Jane Austen"` (`ShellModel.swift:994`). **Fixed:** it reads the sample book's authors.
 - Unfolded, a swipe back needs 35% of the spread's width (about 300 pt) instead of a page's (`ScreenStack.swift:176`).
 
 ## Screens
@@ -449,7 +451,7 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 
 **Structural risk (S):**
 - The posture is mapped from `DeviceHingeContext` twice, in the reader (`ReaderWebView.swift:32-36, 78-87`) and the shell (`AppShell.swift:81-84`, `HingeTransition.swift:33-41`), and their order is unspecified. They agree today.
-- `opensByUnfold` leaks into the next Open if `openBook` returns early (`ShellModel.swift:591, 817`). That's rare: it needs the book's server to be gone.
+- `opensByUnfold` leaks into the next Open if `openBook` returns early (`ShellModel.swift:591, 817`). That's rare: it needs the book's server to be gone. **Fixed** (item 4, step 1): how a book opens is set only once it's on its way.
 
 **Polish (S):**
 - `.fixedSize()` cancels the back bar's `minimumScaleFactor` (`ReaderView.swift:153`, `ReaderTrip.swift:84`).
@@ -483,7 +485,7 @@ These need no UX decision; they keep today's look and behaviour.
 5. **Home's state in one place, or Home draws its own title** (item 2). S. **Done** (both).
 6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M. **Done** (one store the screens report to, rather than an anchor preference).
 7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each. **`ReaderChromeLayout` done**; the tour context is still open.
-8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps.
+8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps. **ReaderPresenter done**; the tour and the server actions are still in `ShellModel`.
 
 The small fixes go in whenever their area is next touched: items 6, 10, 12, 13, 19, 20 and the smaller items.
 

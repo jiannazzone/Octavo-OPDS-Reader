@@ -113,7 +113,7 @@ struct HomeContent: View {
             .onAppear { refreshPlaces() }
             .onChange(of: books?.map(\.id)) { refreshPlaces() }
             .onChange(of: scenePhase) { _, phase in
-                guard phase == .active, shell.reading == nil else { return }
+                guard phase == .active, shell.reader.reading == nil else { return }
                 refreshPlaces(again: true)
             }
     }
@@ -311,7 +311,7 @@ private struct CurrentBookStrip: View {
         .padding(16)
         .glassEffect(in: .rect(cornerRadius: 28))
         .environment(\.openBook) { opened in
-            shell.openBook(SourcedBook(source: book.source, book: opened))
+            shell.reader.open(SourcedBook(source: book.source, book: opened))
         }
         .environment(\.downloadBook) { downloading in
             shell.downloadBook(SourcedBook(source: book.source, book: downloading))
