@@ -812,11 +812,11 @@ struct SeveralServersShellTests {
 
     @Test func theNameIsYoursOrItsOwn() {
         model.setup.finished(first)
-        model.rename(first.id, to: "  Home  ")
+        model.serverActions.rename(first.id, to: "  Home  ")
         #expect(model.library.server(first.id)?.name == "Home")
         #expect(model.servers.load()[first.id]?.customName == "Home")
         #expect(model.servers.load()[first.id]?.name == "Calibre-Web")
-        model.rename(first.id, to: "")
+        model.serverActions.rename(first.id, to: "")
         #expect(model.library.server(first.id)?.name == "Calibre-Web")
         #expect(model.servers.load()[first.id]?.customName == nil)
     }
@@ -824,7 +824,7 @@ struct SeveralServersShellTests {
     @Test func chosenIsRemembered() {
         model.setup.finished(first)
         model.setup.finished(second)
-        model.chooseServer(first.id)
+        model.serverActions.choose(first.id)
         #expect(model.library.server?.id == first.id)
         #expect(model.servers.load().chosen == first.id)
     }
@@ -895,7 +895,7 @@ struct SeveralServersShellTests {
         model.openSettings()
         model.push(.settingsPage(.server(first.id)))
 
-        await model.removeServer(first.id, removingBooks: true)
+        await model.serverActions.remove(first.id, removingBooks: true)
 
         #expect(model.servers.load().servers.map(\.id) == [second.id])
         #expect(model.library.server?.id == second.id)
@@ -918,7 +918,7 @@ struct SeveralServersShellTests {
         let books = files.store.directory
         try write(to: books.appending(path: file("unnamed").storageKey(in: first.id) + ".epub"))
         try write(to: books.appending(path: file("unnamed").storageKey(in: second.id) + ".epub"))
-        await model.removeServer(first.id, removingBooks: true)
+        await model.serverActions.remove(first.id, removingBooks: true)
         let left = try FileManager.default.contentsOfDirectory(atPath: books.path)
         #expect(left == [file("unnamed").storageKey(in: second.id) + ".epub"])
     }
@@ -927,7 +927,7 @@ struct SeveralServersShellTests {
         model.setup.finished(first)
         let name = file("unnamed").storageKey(in: first.id) + ".epub"
         try write(to: files.store.directory.appending(path: name))
-        await model.removeServer(first.id, removingBooks: false)
+        await model.serverActions.remove(first.id, removingBooks: false)
         #expect(try FileManager.default.contentsOfDirectory(atPath: files.store.directory.path) == [name])
     }
 
@@ -938,7 +938,7 @@ struct SeveralServersShellTests {
         withAccount.username = "adam"
         model.setup.finished(withAccount)
         await #expect(throws: LibraryError.self) {
-            try await model.signInAgain(first.id, username: "sam", password: "secret")
+            try await model.serverActions.signInAgain(first.id, username: "sam", password: "secret")
         }
         #expect(model.servers.load()[first.id]?.username == "adam")
         #expect(model.library.server(first.id)?.username == "adam")
@@ -952,7 +952,7 @@ struct SeveralServersShellTests {
         let bookFile = try #require(kept.book.readableFile)
         try write(to: #require(files.store.url(for: bookFile, in: kept.source)))
         try model.library.onIPhone.record(kept)
-        await model.removeServer(first.id, removingBooks: false)
+        await model.serverActions.remove(first.id, removingBooks: false)
         // A folder where the list goes: it can't be written.
         try FileManager.default.removeItem(at: model.servers.fileURL)
         try FileManager.default.createDirectory(at: model.servers.fileURL, withIntermediateDirectories: true)
@@ -967,7 +967,7 @@ struct SeveralServersShellTests {
 
     @Test func removingTheLastIsAsItWas() async {
         model.setup.finished(first)
-        await model.removeServer(first.id, removingBooks: false)
+        await model.serverActions.remove(first.id, removingBooks: false)
         #expect(model.needsSetup)
         #expect(model.servers.load().servers.isEmpty)
     }
@@ -979,14 +979,14 @@ struct SeveralServersShellTests {
         let bookFile = try #require(kept.book.readableFile)
         try write(to: #require(files.store.url(for: bookFile, in: kept.source)))
         try model.library.onIPhone.record(kept)
-        await model.removeServer(first.id, removingBooks: false)
+        await model.serverActions.remove(first.id, removingBooks: false)
         #expect(model.removedServers.load().map(\.id) == [first.id])
 
         // Another one comes and goes, and they're still there.
         model.setup.finished(second)
         #expect(model.opener.localFile(for: SourcedBook(source: second.id, book: book())) == nil)
         #expect(model.opener.localFile(for: kept) != nil)
-        await model.removeServer(second.id, removingBooks: false)
+        await model.serverActions.remove(second.id, removingBooks: false)
         #expect(model.removedServers.load().count == 2)
 
         let back = SavedServer(id: SavedServer.newID(), kind: .opds, address: first.address, name: "Calibre-Web")
@@ -1005,7 +1005,7 @@ struct SeveralServersShellTests {
         ))
         let place = try #require(SourcedBook(source: id, book: book()).storageKey)
         try model.places.store.save(ReadingPosition(fraction: 0.3), forBook: place)
-        await model.removeServer(id, removingBooks: false)
+        await model.serverActions.remove(id, removingBooks: false)
         #expect(model.removedServers.load().isEmpty)
         #expect(model.places.store.progress(forBook: place) == nil)
     }

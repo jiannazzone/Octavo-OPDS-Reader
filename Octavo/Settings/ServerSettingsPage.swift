@@ -68,7 +68,7 @@ struct ServerSettingsPage: View {
             }
         }
         .alert("Sign out of \(server.name)?", isPresented: $confirmsSignOut) {
-            Button("Sign out", role: .destructive) { shell.signOut(id) }
+            Button("Sign out", role: .destructive) { shell.serverActions.signOut(id) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(server.syncsProgress
@@ -95,7 +95,7 @@ struct ServerSettingsPage: View {
     /// Done on the keyboard, or leaving the row.
     private func keepName() {
         guard let typedName else { return }
-        shell.rename(id, to: typedName)
+        shell.serverActions.rename(id, to: typedName)
         self.typedName = nil
     }
 
@@ -113,7 +113,7 @@ struct ServerSettingsPage: View {
     }
 
     private func remove(removingBooks: Bool) {
-        Task { await shell.removeServer(id, removingBooks: removingBooks) }
+        Task { await shell.serverActions.remove(id, removingBooks: removingBooks) }
     }
 
     /// "Its 12 downloaded books use 48 MB. Remove them too, or keep them on

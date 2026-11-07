@@ -135,7 +135,7 @@ struct LibraryServerMenu: View {
                     let isChosen = connection.server.id == library.server?.id
                     row(connection.server.name, symbol: "checkmark", showsSymbol: isChosen) {
                         isOpen = false
-                        shell.chooseServer(connection.server.id)
+                        shell.serverActions.choose(connection.server.id)
                     }
                     .accessibilityAddTraits(isChosen ? .isSelected : [])
                 }

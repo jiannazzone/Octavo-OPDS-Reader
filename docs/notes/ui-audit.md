@@ -177,6 +177,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 
 **Step 2 done:** `TourController` (`Octavo/Tour/TourController.swift`) holds the tour: when it starts (the hinge, an import opening the app), its replay, what a fold or an unfold does to its steps, and how it ends. Setup and imports ask it one thing, `isActive`, instead of reading its flags, and an import ends it with `endForImport`. The shell lends it the sample book and is told when a new install's tour has played. The tour's Add books stays in the shell, since it's setup's first screen. The server actions are step 3.
 
+**Step 3 done:** `ServerActions` (`Octavo/Shell/ServerActions.swift`) holds what can be done to a saved server: keeping one setup added (and taking back a removed server's books), signing in again, signing out, choosing, renaming, removing, and the debug Disconnect. The code moved unchanged; `ShellModel` keeps where each lands (showing the sign-in screen, setup's end) and no longer touches the Keychain. With the reader, the tour and the server actions out, `ShellModel` is navigation, setup's landing, imports and the debug launch arguments (652 lines, from 1,199).
+
 ### 5. A timer stands in for "this iPhone has no hinge"
 **Structural risk · S**
 
@@ -487,7 +489,7 @@ These need no UX decision; they keep today's look and behaviour.
 5. **Home's state in one place, or Home draws its own title** (item 2). S. **Done** (both).
 6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M. **Done** (one store the screens report to, rather than an anchor preference).
 7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each. **`ReaderChromeLayout` done**; the tour context is still open.
-8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps. **ReaderPresenter and TourController done**; the server actions are still in `ShellModel`.
+8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps. **Done**: ReaderPresenter, TourController and ServerActions.
 
 The small fixes go in whenever their area is next touched: items 6, 10, 12, 13, 19, 20 and the smaller items.
 

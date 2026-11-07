@@ -368,7 +368,7 @@ struct OtherWaysInShellTests {
         model.installSampleBook()
         model.opener.removeAllDownloads()
         #expect(Set(model.onIPhoneBooks().map(\.book.title)) == ["Persuasion", "Pride and Prejudice"])
-        await model.removeServer(LibrarySourceID(rawValue: "keep-server"), removingBooks: true)
+        await model.serverActions.remove(LibrarySourceID(rawValue: "keep-server"), removingBooks: true)
         #expect(Set(model.onIPhoneBooks().map(\.book.title)) == ["Persuasion", "Pride and Prejudice"])
         #expect(model.downloads(on: LibrarySourceID(rawValue: "keep-server")).isEmpty)
         // Books are still on the iPhone: the Library, not setup.
