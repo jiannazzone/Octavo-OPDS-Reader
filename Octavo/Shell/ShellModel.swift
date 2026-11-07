@@ -21,6 +21,8 @@ final class ShellModel {
     let library: LibraryModel
     /// The reader over the tabs, the book in it and its cover's motion.
     let reader: ReaderPresenter
+    /// A new install's tour, and its replay from Settings.
+    let tour: TourController
     /// Downloads books and opens them in the reader.
     let opener: BookOpener
     /// The book screens' state, kept across folds.
@@ -41,8 +43,6 @@ final class ShellModel {
     let bookmarks: BookmarkStore
     /// Copies books in from Files.
     let importer: BookImporter
-    /// Whether a new install's tour has played (decision 30).
-    private let tourRecord: TourRecord
     /// Where the reading settings the shell acts on are kept.
     private let defaults: UserDefaults
     /// The Files picker is showing (Import from Files, or the Library's +).
@@ -92,7 +92,6 @@ final class ShellModel {
         tourRecord: TourRecord = TourRecord(), defaults: UserDefaults = .standard
     ) {
         self.library = library
-        self.tourRecord = tourRecord
         self.defaults = defaults
         self.importer = importer ?? BookImporter(store: library.imported)
         self.opener = opener
@@ -102,13 +101,21 @@ final class ShellModel {
         places = BookPlaces(store: positions) { [library] in ShellModel.progressSync(for: $0, on: library.server($0.source)) }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
+        tour = TourController(record: tourRecord, reader: reader)
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
             return ReaderPresenter.Underneath(
                 onHome: tab == .home && self[path: .home].top == nil,
-                top: self[path: tab].top, twoPages: isTwoPages(in: tab), inTour: tour != nil
+                top: self[path: tab].top, twoPages: isTwoPages(in: tab), inTour: tour.playing != nil
             )
         }
+        tour.installSampleBook = { [weak self] in self?.installSampleBook() }
+        tour.played = { [weak self] landsOnHome in
+            guard let self else { return }
+            if let sample = installSampleBook() { library.bookOpened(sample) }
+            if landsOnHome { tab = .home }
+        }
+        tour.isImporting = { [weak self] in self?.isImporting ?? false }
         library.serverAdded = { [weak self] in
             guard let self else { return }
             search.reset()
@@ -151,7 +158,18 @@ final class ShellModel {
         #if DEBUG
         applyLaunchArguments()
         #endif
-        prepareTour()
+        tour.prepare(hasEarlierData: hasEarlierData)
+    }
+
+    /// Anything an earlier install left, for whether the tour plays.
+    private var hasEarlierData: Bool {
+        let manager = FileManager.default
+        return servers.hasFile
+            || !library.imported.all().isEmpty
+            || !library.recents.records().isEmpty
+            || !library.onIPhone.books().isEmpty
+            || manager.fileExists(atPath: places.store.directory.path)
+            || manager.fileExists(atPath: bookmarks.directory.path)
     }
 
     subscript(path tab: ShellTab) -> ShellPath {
@@ -180,7 +198,7 @@ final class ShellModel {
     /// install starts with the tour instead, which leaves the sample book on
     /// the shelf (decision 30), so this is after removing what was there.
     var needsSetup: Bool {
-        library.server == nil && !connectingAtLaunch && !library.hasBooks && tour == nil && !tourWaitsForHinge
+        library.server == nil && !connectingAtLaunch && !library.hasBooks && !tour.isActive
     }
 
     /// Setup's first screen shows instead of the tabs: no choice but setup,
@@ -311,7 +329,7 @@ final class ShellModel {
         importsRunning += 1
         defer {
             importsRunning -= 1
-            startTourIfHingeKnown()
+            tour.startIfHingeKnown()
         }
         var failures: [ImportFailure] = []
         var imported: [SourcedBook] = []
@@ -327,7 +345,7 @@ final class ShellModel {
         opener.filesChanged()
         // Sent here mid-tour with nothing that came in: the tour carries on,
         // and the Library's banner says why afterwards.
-        if tour != nil || tourWaitsForHinge, imported.isEmpty {
+        if tour.isActive, imported.isEmpty {
             importFailures += failures
             return
         }
@@ -336,14 +354,7 @@ final class ShellModel {
             return
         }
         addsBooksAfterTour = false
-        // Opened with this file on a new install: it's what they came for
-        // (Adam, 2026-11-03). The sample book is there all the same.
-        if tourWaitsForHinge {
-            tourWaitsForHinge = false
-            tourRecord.set(.played)
-            if let sample = installSampleBook() { library.bookOpened(sample) }
-        }
-        finishTour()
+        tour.endForImport()
         importFailures += failures
         setupImportFailures = []
         reader.close()
@@ -628,7 +639,7 @@ final class ShellModel {
     /// display it started on, and the fold is the motion now.
     func hingeChanged(_ transition: HingeTransition) {
         if transition != .none { reader.coverMotion = nil }
-        if tour != nil { return tourHingeChanged(transition) }
+        if tour.playing != nil { return tour.hingeChanged(transition) }
         switch transition {
         case .unfold:
             guard reader.reading == nil, case .cover(let book)? = self[path: tab].top,
@@ -654,166 +665,18 @@ final class ShellModel {
         self[path: tab].replace(self[path: tab].routes + [.cover(book)])
     }
 
-    // MARK: The tour (decisions 29 and 30)
+    // MARK: The tour's Add books (decision 30)
 
-    /// The tour, while it plays. It covers the tabs: `TourScreen` for its
-    /// first two steps, the reader with its card for the rest.
-    private(set) var tour: TourFlow?
-    /// A new install's first launch, until the hinge says how the tour starts.
-    private(set) var tourWaitsForHinge = false
     /// The tour's Add books: setup's first screen with Skip, until that or
     /// setup's own end.
     private(set) var addsBooksAfterTour = false
-    /// A replay's place, so it never touches the book's (`TourReplayPlace`).
-    private(set) var tourReplayPlace: TourReplayPlace?
-    /// The hinge as last reported, `nil` while it's said nothing.
-    @ObservationIgnored private var hingeFold: HingeTransition.Fold?
-    @ObservationIgnored private var hingeIsSilent = false
 
-    /// Whether this launch plays the tour: a new install (`TourRecord`), or
-    /// one that didn't finish it.
-    private func prepareTour() {
-        #if DEBUG
-        guard !debugLaunchSkipsTour else { return }
-        #endif
-        let manager = FileManager.default
-        let hasEarlierData = servers.hasFile
-            || !library.imported.all().isEmpty
-            || !library.recents.records().isEmpty
-            || !library.onIPhone.books().isEmpty
-            || manager.fileExists(atPath: places.store.directory.path)
-            || manager.fileExists(atPath: bookmarks.directory.path)
-        tourWaitsForHinge = tourRecord.shouldPlay(
-            hasEarlierData: hasEarlierData, protectedDataAvailable: UIApplication.shared.isProtectedDataAvailable
-        )
-    }
-
-    /// Every report from the hinge (`onHingeChange` fires once on appear): the
-    /// first with a hinge says how a new install's tour starts. After that the
-    /// tour follows it, even if the change itself was never reported, as when
-    /// the iPhone was opened or closed while the app was away.
-    func hingeReported(_ fold: HingeTransition.Fold?) {
-        guard let fold else { return }
-        #if DEBUG
-        guard !UserDefaults.standard.bool(forKey: "tourNoFold") else { return }
-        #endif
-        hingeFold = fold
-        if let step = tour?.step {
-            if fold == .open, step == .cover {
-                tourHingeChanged(.unfold)
-            } else if fold == .closed, step != .cover {
-                tourHingeChanged(.fold)
-            }
-        }
-        startTourIfHingeKnown()
-    }
-
-    /// The hinge hasn't said anything by now: this iPhone has no fold.
-    func hingeStayedSilent() {
-        hingeIsSilent = true
-        startTourIfHingeKnown()
-    }
-
-    /// Not while a file is coming in: opened with one, the tour waits to see
-    /// whether it arrives (`importBooks`).
-    private func startTourIfHingeKnown() {
-        guard tourWaitsForHinge, importsRunning == 0 else { return }
-        if let hingeFold {
-            startTour(fold: hingeFold)
-        } else if hingeIsSilent {
-            startTour(fold: nil)
-        }
-    }
-
-    private func startTour(fold: HingeTransition.Fold?) {
-        tourWaitsForHinge = false
-        tourRecord.set(.playing)
-        guard installSampleBook() != nil else {
-            // Nothing to teach with (no room for its copy): setup for now,
-            // and the next launch tries again.
-            tourRecord.set(.new)
-            return
-        }
-        begin(TourFlow(fold: fold))
-    }
-
-    /// Show the tour, in Settings: from the beginning, and back to Settings.
-    func showTour() {
-        guard tour == nil, reader.reading == nil else { return }
-        let place = TourReplayPlace()
-        SampleBook.startAtFirstChapter(in: place.positions)
-        tourReplayPlace = place
-        begin(TourFlow(fold: hingeFold, isReplay: true))
-    }
-
-    private func begin(_ flow: TourFlow) {
-        tour = flow
-        if flow.isInBook { openTourBook() }
-    }
-
-    /// The sample book for the tour. A new install's is the one on the shelf,
-    /// through the library, so it joins Continue reading. A replay's is the
-    /// app's own copy with nowhere to save its place: nothing goes back on the
-    /// shelf if it was removed, and no place moves if it wasn't.
-    private func openTourBook(_ opening: ReaderPresenter.Opening = .tapped) {
-        if tour?.isReplay == true {
-            guard let url = SampleBook.bundledFile, let file = SampleBook.book.primaryFile else { return finishTour() }
-            reader.open(copy: OpenedBook(book: SampleBook.book, source: .files, file: file, url: url), opening)
-        } else if let sample = installSampleBook() {
-            reader.open(sample, opening)
-        } else {
-            finishTour()
-        }
-    }
-
-    /// One of the reader's events, or a card's Start or Done.
-    func tourEvent(_ event: TourFlow.Event) {
-        tour?.handle(event)
-    }
-
-    /// Mid-tour a fold closes the book, as always, and the step waits on the
-    /// cover; unfolding on the cover opens the book at that step.
-    ///
-    /// Either way a cover opening or closing the book goes, as outside the
-    /// tour (`hingeChanged`): this also hears a change made while the app was
-    /// away (`hingeReported`).
-    private func tourHingeChanged(_ transition: HingeTransition) {
-        if transition != .none { reader.coverMotion = nil }
-        switch transition {
-        case .fold:
-            reader.close { tour?.handle(.folded) }
-        case .unfold:
-            guard tour?.step == .cover else { return }
-            tour?.handle(.unfolded)
-            openTourBook(.unfolded)
-        case .none:
-            break
-        }
-    }
-
-    /// Continue without closing: the cover at `coverFrame` (in the window)
-    /// opens the book as a book's screen does (decision 28). No left page to
-    /// start from, and the reader fades in.
-    func tourContinueWithoutClosing(coverFrame: CGRect?) {
-        guard tour?.step == .closeYourIPhone else { return }
-        // Taken before the step changes the screen.
-        let motion = coverFrame.flatMap(reader.sampleCoverMotion(from:))
-        tour?.handle(.continueWithoutClosing)
-        openTourBook(motion.map { .motion($0) } ?? .tapped)
-    }
-
-    /// Skip, on any tour screen, or Not now on the last card: Home with the
-    /// sample book under Continue reading; replayed, back to Settings.
-    func skipTour() {
-        finishTour()
-    }
-
-    /// Add books on the last card: the reader closes for Add your books, whose
-    /// steps end on Home as they always do. A server is already there on a
-    /// replay, and this adds another (decision 36).
+    /// Add books on the tour's last card: the reader closes for Add your
+    /// books, whose steps end on Home as they always do. A server is already
+    /// there on a replay, and this adds another (decision 36).
     func tourAddBooks() {
         let hasServer = library.server != nil
-        finishTour()
+        tour.finish()
         if hasServer {
             push(.setup(.choose))
         } else {
@@ -829,50 +692,6 @@ final class ShellModel {
         setup.reset()
         self[path: .setup].replace([])
     }
-
-    private func finishTour() {
-        guard let finished = tour else { return }
-        reader.coverMotion = nil
-        reader.close { tour = nil }
-        tourReplayPlace?.clear()
-        tourReplayPlace = nil
-        guard !finished.isReplay else { return }
-        tourRecord.set(.played)
-        if let sample = installSampleBook() { library.bookOpened(sample) }
-        tab = .home
-    }
-
-    #if DEBUG
-    /// A launch argument setting up a state to look at means someone's
-    /// checking something else, on what may be a fresh install.
-    private var debugLaunchSkipsTour: Bool {
-        let defaults = UserDefaults.standard
-        // The test host isn't a new install, whatever its simulator says. Tests
-        // of the tour pass a record of their own.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil, tourRecord.defaults === defaults { return true }
-        return ["connectBookOrbit", "connectOPDS", "sampleLibrary", "shellOpen", "shellReading", "shellTab", "shellConnection",
-                "shellCoverStrip", "searchQuery", "forgetServer", "setupCatalog"]
-            .contains { defaults.object(forKey: $0) != nil }
-    }
-
-    /// The debug remote's reader commands: scripts check something else, on
-    /// what may be a fresh install.
-    func debugEndTour() {
-        guard tour != nil || tourWaitsForHinge else { return }
-        tourWaitsForHinge = false
-        tourRecord.set(.played)
-        reader.coverMotion = nil
-        reader.close { tour = nil }
-        tourReplayPlace?.clear()
-        tourReplayPlace = nil
-    }
-
-    /// For the remote: where the tour is.
-    var debugTourState: String {
-        guard let tour else { return tourWaitsForHinge ? "waiting for the hinge" : "none, record \(tourRecord.state?.rawValue ?? "nil")" }
-        return "\(tour.step) resumes \(String(describing: tour.resumes)) replay \(tour.isReplay) reading \(reader.reading != nil)"
-    }
-    #endif
 
     #if DEBUG
     /// Launch arguments that set up a state to look at:

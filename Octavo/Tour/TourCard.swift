@@ -84,9 +84,9 @@ private struct TourCard: View {
     @ViewBuilder private var buttons: some View {
         switch step {
         case .makeItYours:
-            Button("Done") { shell.tourEvent(.done) }
+            Button("Done") { shell.tour.handle(.done) }
         case .addYourBooks:
-            Button("Not now") { shell.skipTour() }
+            Button("Not now") { shell.tour.finish() }
                 .tint(.secondary)
             Button("Add books") { shell.tourAddBooks() }
         default:

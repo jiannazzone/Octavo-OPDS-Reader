@@ -142,7 +142,7 @@ struct SettingsList: View {
             }
             Section {
                 Button {
-                    shell.showTour()
+                    shell.tour.show()
                 } label: {
                     HStack {
                         Text("Show the tour")

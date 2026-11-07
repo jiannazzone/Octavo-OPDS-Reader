@@ -35,7 +35,7 @@ struct ReaderView: View {
     var body: some View {
         ZStack {
             if let model {
-                ReaderScreen(model: model, connectionReturns: connectionReturns, tourStep: shell.tour?.step) { [closing, close] in
+                ReaderScreen(model: model, connectionReturns: connectionReturns, tourStep: shell.tour.playing?.step) { [closing, close] in
                     closing(model.coverPages())
                     close()
                 }
@@ -62,7 +62,7 @@ struct ReaderView: View {
             guard model?.book != book.reader else { return }
             // A tour replayed from Settings saves nothing of its own
             // (decision 30).
-            let replay = shell.tourReplayPlace
+            let replay = shell.tour.replayPlace
             let bookmarks = ReaderBookmarks(bookID: book.reader.id, store: replay?.bookmarks ?? BookmarkStore(), sync: bookmarkSync)
             #if DEBUG
             let cfiShape = ReaderRemote.cfiShape
@@ -220,13 +220,13 @@ private struct ReaderScreen: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: model.note)
                 .overlay(alignment: .topLeading) {
-                    if let step = shell.tour?.step, model.phase == .open, shell.reader.coverMotion == nil, let geometry = model.geometry {
+                    if let step = shell.tour.playing?.step, model.phase == .open, shell.reader.coverMotion == nil, let geometry = model.geometry {
                         let onOnePage = panel != nil && !(model.layout.columns == 2 && model.layout.fold != nil)
                         TourCardSlot(step: step, geometry: geometry, layout: model.layout, sheetHeight: onOnePage ? sheetHeight : nil)
                             .id(step)
                     }
                 }
-                .animation(.easeOut(duration: 0.2), value: shell.tour?.step)
+                .animation(.easeOut(duration: 0.2), value: shell.tour.playing?.step)
                 .ignoresSafeArea()
                 .accessibilityAction(named: Text(controls.showsBar ? "Hide Controls" : "Show Controls")) {
                     withAnimation { controls.toggle() }
@@ -288,14 +288,14 @@ private struct ReaderScreen: View {
             }
         }
         .onChange(of: tourReaderState, initial: true) { _, state in
-            shell.tourEvent(.reader(state))
+            shell.tour.handle(.reader(state))
         }
-        .onChange(of: shell.tour?.step) { _, step in
+        .onChange(of: shell.tour.playing?.step) { _, step in
             // Done: on to the last card, with the page clear.
             if step == .addYourBooks { backToReading() }
             // A step may start with what it asks for already done.
-            shell.tourEvent(.reader(tourReaderState))
-            if let card = shell.tour?.step.card {
+            shell.tour.handle(.reader(tourReaderState))
+            if let card = shell.tour.playing?.step.card {
                 AccessibilityNotification.Announcement("\(card.title). \(card.message)").post()
             }
         }
@@ -347,7 +347,7 @@ private struct ReaderScreen: View {
             model.onBookModeChange = { _ in
                 withAnimation(.easeOut(duration: 0.2)) { controls.wrappedValue.hide() }
             }
-            model.onPageTurned = { [weak shell] in shell?.tourEvent(.pageTurned) }
+            model.onPageTurned = { [weak shell] in shell?.tour.handle(.pageTurned) }
         }
         #if DEBUG
         .readerRemote(model, back: close)
@@ -360,13 +360,13 @@ private struct ReaderScreen: View {
     private var chrome: ReaderChromeLayout {
         ReaderChromeLayout(state: ReaderChromeLayout.State(
             isOpen: model.phase == .open, hasTrip: model.trip != nil, panelOpen: panel != nil, noteOpen: model.note != nil,
-            inTour: shell.tour != nil, searchStepping: model.search.isStepping, serverPlace: model.serverPlace,
+            inTour: shell.tour.playing != nil, searchStepping: model.search.isStepping, serverPlace: model.serverPlace,
             showsBar: controls.showsBar, twoPages: model.layout.columns == 2
         ))
     }
 
     private var hintsPageTurn: Bool {
-        shell.tour?.step == .turnThePage && model.phase == .open && shell.reader.coverMotion == nil && !controls.coversPage && panel == nil
+        shell.tour.playing?.step == .turnThePage && model.phase == .open && shell.reader.coverMotion == nil && !controls.coversPage && panel == nil
     }
 
     /// What the tour's steps in the book look at.
@@ -400,12 +400,12 @@ private struct ReaderScreen: View {
     /// takes its place in the tour, as the way out. Two `if`s: with an `else`,
     /// Skip's word comes up blank.
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
-        if shell.tour != nil {
+        if shell.tour.playing != nil {
             ToolbarItem(placement: .topBarTrailing) {
-                TourSkipButton { shell.skipTour() }
+                TourSkipButton { shell.tour.finish() }
             }
         }
-        if shell.tour == nil {
+        if shell.tour.playing == nil {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Back", systemImage: "chevron.backward", action: close)
                     .tint(controls.buttonsVisible ? nil : Color.secondary)
@@ -418,7 +418,7 @@ private struct ReaderScreen: View {
         ToolbarItemGroup(placement: .topBarTrailing) {
             if controls.buttonsVisible {
                 panelButton(.contents, title: "Contents", systemImage: "list.bullet")
-                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size", lit: shell.tour?.step.litButton == .textAndTheme)
+                panelButton(.textAndTheme, title: "Text and Theme", systemImage: "textformat.size", lit: shell.tour.playing?.step.litButton == .textAndTheme)
                 panelButton(.search, title: "Search in Book", systemImage: "magnifyingglass")
                 let bookmarked = model.bookmarks.pageIsBookmarked
                 Button(bookmarked ? "Remove Bookmark" : "Bookmark", systemImage: bookmarked ? "bookmark.fill" : "bookmark") {
@@ -539,7 +539,7 @@ private struct ReaderScreen: View {
         Button("Show Controls", systemImage: "ellipsis") {
             withAnimation(.easeOut(duration: 0.2)) { controls.show() }
         }
-        .tint(shell.tour?.step.litButton == .showControls ? .accentColor : .secondary)
+        .tint(shell.tour.playing?.step.litButton == .showControls ? .accentColor : .secondary)
     }
 }
 
