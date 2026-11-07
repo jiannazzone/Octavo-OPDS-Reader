@@ -402,7 +402,7 @@ private struct ReaderScreen: View {
     @ToolbarContentBuilder private var buttons: some ToolbarContent {
         if shell.tour.playing != nil {
             ToolbarItem(placement: .topBarTrailing) {
-                TourSkipButton { shell.tour.skip() }
+                TourSkipButton { shell.tour.finish() }
             }
         }
         if shell.tour.playing == nil {

@@ -110,10 +110,10 @@ final class ShellModel {
             )
         }
         tour.installSampleBook = { [weak self] in self?.installSampleBook() }
-        tour.played = { [weak self] in
+        tour.played = { [weak self] landsOnHome in
             guard let self else { return }
             if let sample = installSampleBook() { library.bookOpened(sample) }
-            tab = .home
+            if landsOnHome { tab = .home }
         }
         tour.isImporting = { [weak self] in self?.isImporting ?? false }
         library.serverAdded = { [weak self] in

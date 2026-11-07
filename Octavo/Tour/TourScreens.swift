@@ -32,7 +32,7 @@ private struct TourColumn<Content: View>: View {
             content()
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        TourSkipButton { shell.tour.skip() }
+                        TourSkipButton { shell.tour.finish() }
                     }
                 }
                 .toolbarTitleDisplayMode(.inline)

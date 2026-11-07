@@ -28,9 +28,10 @@ final class TourController {
     /// The sample book on the shelf, copied there if it isn't
     /// (`ShellModel.installSampleBook`): `nil` with no room for it.
     @ObservationIgnored var installSampleBook: () -> SourcedBook? = { nil }
-    /// A new install's tour is over: Home, with the sample book first in
-    /// Continue reading.
-    @ObservationIgnored var played: () -> Void = {}
+    /// A new install's tour is over: the sample book first in Continue
+    /// reading, and Home if the tour itself ended (not an import, which goes
+    /// to the Library).
+    @ObservationIgnored var played: (_ landsOnHome: Bool) -> Void = { _ in }
     /// Files are coming in: a new install opened with one waits to see
     /// whether it arrives.
     @ObservationIgnored var isImporting: () -> Bool = { false }
@@ -179,21 +180,23 @@ final class TourController {
     // MARK: Ending
 
     /// Skip, on any tour screen, or Not now on the last card: Home with the
-    /// sample book under Continue reading; replayed, back to Settings.
-    func skip() {
-        finish()
-    }
-
-    /// The tour ends, closing the reader at once with any cover's motion.
+    /// sample book under Continue reading; replayed, back to Settings. Add
+    /// books and an import end it this way too.
     func finish() {
         guard let finished = playing else { return }
+        end()
+        guard !finished.isReplay else { return }
+        record.set(.played)
+        played(true)
+    }
+
+    /// Takes the tour away: the reader closes at once with any cover's
+    /// motion, and a replay's place goes.
+    private func end() {
         reader.coverMotion = nil
         reader.close { playing = nil }
         replayPlace?.clear()
         replayPlace = nil
-        guard !finished.isReplay else { return }
-        record.set(.played)
-        played()
     }
 
     /// Files came in: they're what the tour gives way to. Opened with them on
@@ -203,7 +206,7 @@ final class TourController {
         if waitsForHinge {
             waitsForHinge = false
             record.set(.played)
-            played()
+            played(false)
         }
         finish()
     }
@@ -227,10 +230,7 @@ final class TourController {
         guard isActive else { return }
         waitsForHinge = false
         record.set(.played)
-        reader.coverMotion = nil
-        reader.close { playing = nil }
-        replayPlace?.clear()
-        replayPlace = nil
+        end()
     }
 
     /// For the remote: where the tour is.

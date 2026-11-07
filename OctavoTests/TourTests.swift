@@ -340,7 +340,7 @@ struct TourShellTests {
     @Test func itPlaysOnceAndNotAfterAFinishedOne() async {
         let model = started()
         #expect(record.state == .playing)
-        model.tour.skip()
+        model.tour.finish()
         #expect(record.state == .played)
         let next = makeShell(tourRecord: record)
         #expect(!next.tour.waitsForHinge)
@@ -452,7 +452,7 @@ struct TourShellTests {
     // reading though it never opened.
     @Test func skipLandsOnHomeWithTheSampleBook() {
         let model = started(fold: .open)
-        model.tour.skip()
+        model.tour.finish()
         #expect(model.tour.playing == nil)
         #expect(model.reader.reading == nil)
         #expect(!model.needsSetup)
@@ -464,7 +464,7 @@ struct TourShellTests {
 
     @Test func notNowClosesTheReaderOnHome() async {
         let model = await onTheLastCard(started())
-        model.tour.skip()
+        model.tour.finish()
         #expect(model.reader.reading == nil)
         #expect(model.tour.playing == nil)
         #expect(model.tab == .home)
@@ -575,7 +575,7 @@ struct TourShellTests {
     // the last one goes back to setup (decision 6).
     @Test func removingTheSampleBookWithNothingElseGoesBackToSetup() throws {
         let model = started(fold: .open)
-        model.tour.skip()
+        model.tour.finish()
         let sample = try #require(model.onIPhoneBooks().first)
         #expect(model.library.hasBooks)
         model.removeImported(sample)
@@ -602,7 +602,7 @@ struct TourShellTests {
         #expect(model.tour.playing?.step == .closeYourIPhone)
         #expect(model.tour.playing?.isReplay == true)
         #expect(!model.needsSetup)
-        model.tour.skip()
+        model.tour.finish()
         #expect(model.tour.playing == nil)
         #expect(model[path: model.tab].routes == routes)
         #expect(model.tab == .home)
@@ -633,7 +633,7 @@ struct TourShellTests {
         #expect(model.library.imported.all().isEmpty)
         #expect(model.onIPhoneBooks().isEmpty)
         #expect(model.library.continueReading.isEmpty)
-        model.tour.skip()
+        model.tour.finish()
         #expect(model.library.imported.all().isEmpty)
         #expect(model.onIPhoneBooks().isEmpty)
         #expect(model.library.continueReading.isEmpty)
@@ -667,7 +667,7 @@ struct TourShellTests {
         reader.handle(.relocate(.init(cfi: "epubcfi(/6/4!/4/2/1:0)", fraction: 0.1)))
         #expect(place.positions.position(forBook: id) != nil)
         #expect(model.places.store.position(forBook: id) == nil)
-        model.tour.skip()
+        model.tour.finish()
         #expect(model.tour.replayPlace == nil)
         #expect(!FileManager.default.fileExists(atPath: place.directory.path))
     }
@@ -684,7 +684,7 @@ struct TourShellTests {
         model.tour.show()
         model.hingeChanged(.unfold)
         #expect(await eventually { model.reader.reading?.book.id == sample.book.id })
-        model.tour.skip()
+        model.tour.finish()
         #expect(model.library.continueReading.map(\.book.id) == reading)
     }
 
@@ -749,5 +749,90 @@ struct TourShellTests {
         )
         model.hingeChanged(.fold)
         #expect(model.reader.coverMotion == nil)
+    }
+}
+
+/// `TourController` on its own, with the shell's part stubbed: the sample
+/// book, being told it's played, and files coming in.
+@MainActor
+@Suite(.temporaryFiles)
+struct TourControllerTests {
+    private static let sample = SourcedBook(source: .files, book: SampleBook.book)
+
+    private final class Shell {
+        var sampleFits = true
+        var importing = false
+        var played: [Bool] = []
+    }
+
+    private func controller(_ record: TourRecord = .temporary(), shell: Shell) -> TourController {
+        let tour = TourController(record: record, reader: makeShell().reader)
+        tour.installSampleBook = { shell.sampleFits ? Self.sample : nil }
+        tour.played = { shell.played.append($0) }
+        tour.isImporting = { shell.importing }
+        return tour
+    }
+
+    @Test func aFileComingInHoldsTheStart() {
+        let shell = Shell()
+        shell.importing = true
+        let tour = controller(shell: shell)
+        tour.prepare(hasEarlierData: false)
+        tour.hingeReported(.closed)
+        #expect(tour.waitsForHinge)
+        #expect(tour.playing == nil)
+        shell.importing = false
+        tour.startIfHingeKnown()
+        #expect(tour.playing?.step == .cover)
+        #expect(!tour.waitsForHinge)
+    }
+
+    @Test func finishingANewInstallsTourLandsOnHome() {
+        let shell = Shell()
+        let record = TourRecord.temporary()
+        let tour = controller(record, shell: shell)
+        tour.prepare(hasEarlierData: false)
+        tour.hingeReported(.closed)
+        tour.finish()
+        #expect(tour.playing == nil)
+        #expect(shell.played == [true])
+        #expect(record.state == .played)
+    }
+
+    // The import goes to the Library, so not Home.
+    @Test func anImportOnANewInstallCountsAsPlayed() {
+        let shell = Shell()
+        shell.importing = true
+        let record = TourRecord.temporary()
+        let tour = controller(record, shell: shell)
+        tour.prepare(hasEarlierData: false)
+        tour.endForImport()
+        #expect(!tour.isActive)
+        #expect(shell.played == [false])
+        #expect(record.state == .played)
+    }
+
+    @Test func aReplayEndsWithoutBeingPlayed() {
+        let shell = Shell()
+        let tour = controller(.temporary(state: .played), shell: shell)
+        tour.hingeReported(.closed)
+        tour.show()
+        #expect(tour.playing?.isReplay == true)
+        tour.finish()
+        #expect(tour.playing == nil)
+        #expect(shell.played.isEmpty)
+    }
+
+    // No room for the sample book's copy: setup for now, and the next
+    // launch tries again.
+    @Test func noRoomForTheSampleBookLeavesItNew() {
+        let shell = Shell()
+        shell.sampleFits = false
+        let record = TourRecord.temporary()
+        let tour = controller(record, shell: shell)
+        tour.prepare(hasEarlierData: false)
+        tour.hingeReported(.closed)
+        #expect(tour.playing == nil)
+        #expect(record.state == .new)
     }
 }

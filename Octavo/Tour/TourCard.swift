@@ -86,7 +86,7 @@ private struct TourCard: View {
         case .makeItYours:
             Button("Done") { shell.tour.handle(.done) }
         case .addYourBooks:
-            Button("Not now") { shell.tour.skip() }
+            Button("Not now") { shell.tour.finish() }
                 .tint(.secondary)
             Button("Add books") { shell.tourAddBooks() }
         default:
