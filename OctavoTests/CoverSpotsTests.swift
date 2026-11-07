@@ -3,37 +3,38 @@ import Foundation
 import Testing
 @testable import Octavo
 
-/// Where the cover's motion starts or ends (`CoverSpots`): Home's spot once
-/// all of it is measured, else the book's screen on top.
+/// Where the cover's motion starts or ends (`CoverSpots`): Home's left page
+/// when Home shows, else the book's screen on top.
 @MainActor
 struct CoverSpotsTests {
     static let book = SampleRoutes.book(0)
     static let other = SampleRoutes.book(1)
-    static let cover = CGRect(x: 47, y: 18, width: 362, height: 543)
     static let page = CGRect(x: 0, y: 0, width: 455.5, height: 669)
 
-    private func homeReport(stripTop: CGFloat? = 588) -> HomeCoverReport {
-        HomeCoverReport(book: Self.book, cover: Self.cover, page: Self.page, stripTop: stripTop)
+    private func spot(_ book: SourcedBook = Self.book, frame: CGRect = Self.page) -> CoverSpot {
+        CoverSpot(book: book.id, frame: frame, image: nil, title: book.book.title, author: "")
     }
 
-    // A cover moving before its strip was measured left the cover's copy
-    // showing.
-    @Test func homesSpotWaitsForEveryPart() {
-        #expect(homeReport(stripTop: nil).spot == nil)
-        #expect(homeReport().spot?.cover == Self.cover)
-        var empty = homeReport()
-        empty.cover = .zero
-        #expect(empty.spot == nil)
-        #expect(HomeCoverReport().spot == nil)
-    }
-
-    @Test func onHomeItsHomesSpotForItsBook() throws {
+    @Test func onHomeItsHomesSpotForItsBook() {
         let spots = CoverSpots()
-        spots.reportHome(homeReport(), from: UUID())
-        spots.reportBookScreen(Self.book.id, cover: Self.cover, from: UUID())
-        let spot = try #require(spots.home.spot)
-        #expect(spots.spot(for: Self.book.id, onHome: true, top: nil) == .home(spot))
+        spots.report(spot(), on: .home, from: UUID())
+        #expect(spots.spot(for: Self.book.id, onHome: true, top: nil) == spot())
         #expect(spots.spot(for: Self.other.id, onHome: true, top: nil) == nil)
+        // Not the book's screen's, though it's the same book.
+        #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.book)) == nil)
+    }
+
+    // Home's root stays under a book's screen pushed over it: the same book's
+    // screen going mustn't take Home's spot with it.
+    @Test func homeAndTheSameBooksScreenKeepTheirOwn() {
+        let spots = CoverSpots()
+        let home = UUID(), screen = UUID()
+        let screenSpot = spot(frame: CGRect(x: 0, y: 0, width: 400, height: 669))
+        spots.report(spot(), on: .home, from: home)
+        spots.report(screenSpot, on: .book(Self.book.id), from: screen)
+        #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.book)) == screenSpot)
+        spots.gone(from: .book(Self.book.id), reporter: screen)
+        #expect(spots.spot(for: Self.book.id, onHome: true, top: nil) == spot())
     }
 
     // Home's page while it loads goes after the page with your book has
@@ -41,23 +42,23 @@ struct CoverSpotsTests {
     @Test func aPageGoingClearsOnlyItsOwnReport() {
         let spots = CoverSpots()
         let loading = UUID(), loaded = UUID()
-        spots.reportHome(HomeCoverReport(), from: loading)
-        spots.reportHome(homeReport(), from: loaded)
-        spots.homeGone(loading)
-        #expect(spots.home.spot != nil)
-        spots.homeGone(loaded)
-        #expect(spots.home.spot == nil)
+        spots.report(spot(Self.other), on: .home, from: loading)
+        spots.report(spot(), on: .home, from: loaded)
+        spots.gone(from: .home, reporter: loading)
+        #expect(spots.spots[.home] != nil)
+        spots.gone(from: .home, reporter: loaded)
+        #expect(spots.spots[.home] == nil)
     }
 
     // A book's screen under another keeps its spot, but only the one on top
     // counts.
     @Test func elsewhereItsTheBooksScreenOnTop() {
         let spots = CoverSpots()
-        spots.reportBookScreen(Self.book.id, cover: Self.cover, from: UUID())
-        #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.book)) == .bookScreen(Self.cover))
+        spots.report(spot(), on: .book(Self.book.id), from: UUID())
+        #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.book)) == spot())
         #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.other)) == nil)
         #expect(spots.spot(for: Self.book.id, onHome: false, top: SampleRoutes.collections) == nil)
-        spots.reportBookScreen(Self.book.id, cover: .zero, from: UUID())
+        spots.report(spot(frame: .zero), on: .book(Self.book.id), from: UUID())
         #expect(spots.spot(for: Self.book.id, onHome: false, top: .cover(Self.book)) == nil)
     }
 
@@ -66,11 +67,12 @@ struct CoverSpotsTests {
     @Test func aBookScreenGoingClearsOnlyItsOwnReport() {
         let spots = CoverSpots()
         let before = UUID(), after = UUID()
-        spots.reportBookScreen(Self.book.id, cover: Self.cover, from: before)
-        spots.reportBookScreen(Self.book.id, cover: Self.page, from: after)
-        spots.bookScreenGone(Self.book.id, reporter: before)
-        #expect(spots.bookScreens[Self.book.id] == Self.page)
-        spots.bookScreenGone(Self.book.id, reporter: after)
-        #expect(spots.bookScreens[Self.book.id] == nil)
+        let moved = spot(frame: CGRect(x: 0, y: 0, width: 400, height: 669))
+        spots.report(spot(), on: .book(Self.book.id), from: before)
+        spots.report(moved, on: .book(Self.book.id), from: after)
+        spots.gone(from: .book(Self.book.id), reporter: before)
+        #expect(spots.spots[.book(Self.book.id)] == moved)
+        spots.gone(from: .book(Self.book.id), reporter: after)
+        #expect(spots.spots[.book(Self.book.id)] == nil)
     }
 }

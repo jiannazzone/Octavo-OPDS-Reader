@@ -17,10 +17,10 @@ import UIKit
 /// which WebKit traps on; `AppShell`), so the motion draws your pages from
 /// pictures taken as Back was tapped, over the book's screen.
 ///
-/// From Home unfolded (Adam, 2026-11-07), the cover moves from Home's left
-/// page to where the book's screen would have it on the right page, growing
-/// on the way, while the left page turns to paper; from there it's the same.
-/// Back onto Home brings it back to its spot.
+/// Home's left page unfolded draws its cover as a book's screen does
+/// (decision 37), so from Home it's the same motion. Home's strip goes as the
+/// cover starts to move, as the folded sheet does as the cover swings, and
+/// Back onto Home brings the cover back under it.
 ///
 /// Past page 1 leaves go over too (`ReaderLeaves`), with your page on the last
 /// one instead of on the cover. Unfolding on a cover has no cover to swing, so
@@ -50,10 +50,9 @@ final class ReaderCoverMotion {
     let cover: UIImage?
     let title: String
     let author: String
-    /// Where the book's screen shows the cover, in the window's coordinates.
+    /// Where the book's screen (or Home) shows the cover, in the window's
+    /// coordinates.
     let coverFrame: CGRect
-    /// Opened from Home, where it has the cover instead.
-    let home: HomeCoverSpot?
     private(set) var windowSize: CGSize
     /// The book's screen as it was when the book opened, under the motion
     /// until the cover leaves it. Closing, the screen itself is underneath.
@@ -117,7 +116,7 @@ final class ReaderCoverMotion {
 
     /// Opening, from a picture of the book's screen; or closing, from
     /// pictures of your pages.
-    init(cover: UIImage?, title: String, author: String, coverFrame: CGRect, home: HomeCoverSpot? = nil, windowSize: CGSize,
+    init(cover: UIImage?, title: String, author: String, coverFrame: CGRect, windowSize: CGSize,
          bookScreen: ReaderSnapshot?, closing pages: ReaderCoverPages? = nil,
          spread: Bool, reduceMotion: Bool, paper: Color,
          pageTurn: ReaderPageTurn = .standard, leafStyle: ReaderLeafStyle = ReaderLeafStyle()) {
@@ -125,7 +124,6 @@ final class ReaderCoverMotion {
         self.title = title
         self.author = author
         self.coverFrame = coverFrame
-        self.home = home
         self.windowSize = windowSize
         self.bookScreen = bookScreen
         self.spread = spread
@@ -149,7 +147,6 @@ final class ReaderCoverMotion {
         title = ""
         author = ""
         coverFrame = .zero
-        home = nil
         self.windowSize = windowSize
         bookScreen = nil
         closing = false
@@ -181,10 +178,10 @@ final class ReaderCoverMotion {
     }
 
     /// The cover `slide` of the way to the right page: unfolded from where
-    /// it was (the book's screen or Home), folded where it is.
+    /// it was, folded where it is.
     func frame(slide: Double) -> CGRect {
         guard spread else { return coverFrame }
-        let from = home?.cover ?? coverFrame
+        let from = coverFrame
         let to = rightPage
         func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * slide }
         return CGRect(x: mix(from.minX, to.minX), y: mix(from.minY, to.minY), width: mix(from.width, to.width), height: mix(from.height, to.height))
@@ -193,7 +190,7 @@ final class ReaderCoverMotion {
     #if DEBUG
     /// For `ReaderRemote`'s `coverMotion`.
     var debugState: String {
-        "slide \(slide) swing \(swing) fade \(fade) bookScreen \(showsBookScreen) slid \(slid) swinging \(swinging) pages \(pages != nil) spine \(spine) cover \(coverFrame) home \(home.map { "\($0.cover)" } ?? "none") window \(windowSize) spread \(spread) leaves \(leaves?.count ?? 0) clock \(clock)"
+        "slide \(slide) swing \(swing) fade \(fade) bookScreen \(showsBookScreen) slid \(slid) swinging \(swinging) pages \(pages != nil) spine \(spine) cover \(coverFrame) window \(windowSize) spread \(spread) leaves \(leaves?.count ?? 0) clock \(clock)"
     }
     #endif
 
@@ -494,9 +491,7 @@ struct ReaderCoverMotionView: View {
                     .frame(width: screen.frame.width, height: screen.frame.height)
             }
             // With Reduce Motion the cover stays where it is and fades.
-            if motion.spread, !motion.reduceMotion, let home = motion.home {
-                homePage(home)
-            } else if motion.spread, !motion.reduceMotion {
+            if motion.spread, !motion.reduceMotion {
                 motion.paper
                     .frame(width: motion.coverFrame.width, height: motion.coverFrame.height)
                     .offset(x: motion.coverFrame.minX, y: motion.coverFrame.minY)
@@ -510,38 +505,6 @@ struct ReaderCoverMotionView: View {
                     .offset(x: motion.coverFrame.minX - gutter + motion.slide * (motion.rightPage.minX - motion.coverFrame.minX))
             }
         }
-    }
-
-    /// Home's left page without its cover: its blur again over the cover's
-    /// spot, down to the strip, and the page and the gutter turning to paper
-    /// as the cover moves, so it ends as the book's screen's does. Closing,
-    /// Home itself is underneath, its cover hidden the same way.
-    @ViewBuilder private func homePage(_ home: HomeCoverSpot) -> some View {
-        // Under the paper once the cover's over the right page.
-        if !motion.slid {
-            homeBackdrop(home)
-        }
-        motion.paper
-            .frame(width: max(motion.rightPage.minX - motion.coverFrame.minX, 0), height: motion.windowSize.height)
-            .offset(x: motion.coverFrame.minX)
-            .opacity(motion.slide)
-    }
-
-    private func homeBackdrop(_ home: HomeCoverSpot) -> some View {
-        let page = home.page
-        return Group {
-            if let image = motion.cover {
-                FittedCover(image: image)
-            } else {
-                home.standIn
-            }
-        }
-        .frame(width: page.width, height: page.height)
-        .clipped()
-        .pageBlur(width: page.width)
-        .frame(width: page.width, height: max(home.stripTop - page.minY, 0), alignment: .top)
-        .clipped()
-        .offset(x: page.minX, y: page.minY)
     }
 }
 
@@ -600,8 +563,8 @@ private struct ReaderCoverLeaf: View, Animatable {
     var body: some View {
         let size = motion.windowSize
         let width = Double(size.width)
-        // Unfolded it starts where the book's screen (or Home) has the cover,
-        // and swings once it's over the right page.
+        // Unfolded it starts where the book's screen has the cover, and
+        // swings once it's over the right page.
         let leaf = motion.frame(slide: slide)
         let hinge = motion.spread ? motion.spine : Double(motion.coverFrame.minX)
         let anchor = UnitPoint(x: width > 0 ? hinge / width : 0, y: 0.5)
@@ -624,38 +587,19 @@ private struct ReaderCoverLeaf: View, Animatable {
         .allowsHitTesting(false)
     }
 
-    /// The cover in `frame`. From Home it starts as Home draws it, rounded,
-    /// with its shadow and marks, and loses them as it moves: none of them is
-    /// drawn once it's over the right page.
-    @ViewBuilder private func front(_ frame: CGRect) -> some View {
-        let face = cover.frame(width: frame.width, height: frame.height)
-        if let home = motion.home, slide < 1 {
-            let homeLook = 1 - slide
-            face
-                .clipShape(.rect(cornerRadius: HomeCoverSpot.cornerRadius * homeLook))
-                .overlay(alignment: .bottomTrailing) {
-                    if let book = home.book {
-                        CoverBadge(book: book, size: HomeCoverSpot.badgeSize)
-                            .opacity(homeLook)
-                    }
-                }
-                .shadow(color: .black.opacity(HomeCoverSpot.shadowOpacity * homeLook), radius: HomeCoverSpot.shadowRadius, y: HomeCoverSpot.shadowY)
-        } else {
-            face.clipped()
-        }
+    /// The cover in `frame`.
+    private func front(_ frame: CGRect) -> some View {
+        cover
+            .frame(width: frame.width, height: frame.height)
+            .clipped()
     }
 
     /// As the book's screen draws it, so it doesn't jump as it starts to move.
-    /// From Home, a book without artwork starts as Home's stand-in.
     @ViewBuilder private var cover: some View {
         if let image = motion.cover {
             FittedCover(image: image)
         } else {
-            ZStack {
-                BookTitleCover(title: motion.title, author: motion.author)
-                motion.home?.standIn
-                    .opacity(1 - slide)
-            }
+            BookTitleCover(title: motion.title, author: motion.author)
         }
     }
 

@@ -703,53 +703,24 @@ final class ShellModel {
     }
 
     /// The cover's motion for `book` over its own screen, the top one, or
-    /// Home: a picture of the screen to open from, or of your pages to close
-    /// from.
+    /// Home unfolded: a picture of the screen to open from, or of your pages
+    /// to close from.
     private func coverMotion(for book: OpenedBook, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
         let id = SourcedBook.ID(source: book.source, book: book.book.id)
         let onHome = tour == nil && tab == .home && self[path: .home].top == nil
-        switch coverSpots.spot(for: id, onHome: onHome, top: self[path: tab].top) {
-        case .home(let spot)?: return homeCoverMotion(from: spot, closing: pages)
-        case .bookScreen(let frame)?: return bookScreenCoverMotion(id, frame: frame, closing: pages)
-        case nil: return nil
-        }
-    }
-
-    /// From the book's own screen: the cover where the screen has it.
-    private func bookScreenCoverMotion(_ id: SourcedBook.ID, frame: CGRect, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
-        guard case .cover(let shown)? = self[path: tab].top, let page = self.pages.existingPage(for: id),
-              let window = UIWindow.key
+        guard let spot = coverSpots.spot(for: id, onHome: onHome, top: self[path: tab].top),
+              let window = UIWindow.key, window.bounds.intersects(spot.frame)
         else { return nil }
         let screen = pages == nil ? window.snapshotView(afterScreenUpdates: false) : nil
         guard pages != nil || screen != nil else { return nil }
-        let thumbnail = library.covers.cachedImage(for: shown, size: .thumbnail)
         return ReaderCoverMotion(
-            cover: page.cover ?? thumbnail, title: page.current.title, author: page.authorLine,
-            coverFrame: frame, windowSize: window.bounds.size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
+            cover: spot.image, title: spot.title, author: spot.author,
+            coverFrame: spot.frame, windowSize: window.bounds.size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
             closing: pages,
-            // Cover | Details unfolded; the cover fills the screen folded.
+            // Cover | Details (or Home's spread) unfolded; the cover fills the
+            // screen folded.
             spread: isTwoPages(in: tab),
             reduceMotion: UIAccessibility.isReduceMotionEnabled,
-            paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
-        )
-    }
-
-    /// From Home unfolded: the cover moves from its spot to where the book's
-    /// screen would have it on the right page, and on as from there.
-    private func homeCoverMotion(from spot: HomeCoverSpot, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
-        guard let book = spot.book, let window = UIWindow.key, window.bounds.intersects(spot.cover) else { return nil }
-        let screen = pages == nil ? window.snapshotView(afterScreenUpdates: false) : nil
-        guard pages != nil || screen != nil else { return nil }
-        let size = window.bounds.size
-        // The book's screen's cover: the whole left page, top to bottom.
-        let bookScreenCover = CGRect(x: spot.page.minX, y: 0, width: spot.page.width, height: size.height)
-        return ReaderCoverMotion(
-            // The picture Home shows, which outlives the cache.
-            cover: spot.image ?? library.covers.cachedImage(for: book, size: .full) ?? library.covers.cachedImage(for: book, size: .thumbnail),
-            title: book.book.title, author: book.book.authors.formatted(.list(type: .and)),
-            coverFrame: bookScreenCover, home: spot, windowSize: size,
-            bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
-            closing: pages, spread: true, reduceMotion: UIAccessibility.isReduceMotionEnabled,
             paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
     }
