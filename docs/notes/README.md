@@ -37,5 +37,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `accessibility.md` (+ `accessibility/`) | #73 | The App Store's Accessibility Nutrition Labels: what Apple asks, the common tasks and what's been checked on what, what each motion does with Reduce Motion, how dark was measured, the audit probe and where it misleads |
 | `ci.md` | #19 | CI and the local tests: what runs where, why the app's tests left GitHub, which pull requests skip tests, timings, two flaky tests |
 | `xhtml-first-frame.md` | 2026-11-04 | Why a new WebKit process's first XHTML frame takes over a second (QuickLook's `dlopen`), book opens with and without it, warm-ups, why it doesn't matter on a real Duo (25 ms), rendering a book before the tap (tried, dropped), closed readers staying alive |
+| `koreader-sync.md` | 2026-11-06 | KOReader sync, measured and dropped from the first release: what Kavita, Komga and the standalone server do, how a book is matched, why a percentage can't work, what would go wrong, and what to test first if it comes back |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.
