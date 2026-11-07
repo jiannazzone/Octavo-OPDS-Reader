@@ -1,3 +1,4 @@
+import CoreGraphics
 import OctavoKit
 import Testing
 @testable import Octavo
