@@ -380,6 +380,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 **Sturdier:** one `closeReader()` that every way out uses: no animation, clear the motion, flush. It fits naturally in item 4's ReaderPresenter.
 
 ### 18. Who holds the strip along the bottom of the page is decided by booleans
+
+**Fixed:** `ReaderChromeLayout` (`Octavo/Reader/ReaderChromeLayout.swift`) decides who has the strip (the way back, Search's bar or BookOrbit's capsule, the page's footer) from one `State`, and gives the positions: the footer line, the way back, the footer bar's span and inset, the line a note card stops at and the tour card's bottom. `ReaderView`, `ReaderFooterLines`, `ReaderNotePlacement` and `TourCardSlot` use it; `ReaderChromeLayoutTests` covers each rule and position. The tour card's clearance is still its own scaled guess (96 pt), now named where it's used.
 **Structural risk · M**
 
 **Where:**
@@ -480,7 +482,7 @@ These need no UX decision; they keep today's look and behaviour.
 4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S. **Done.**
 5. **Home's state in one place, or Home draws its own title** (item 2). S. **Done** (both).
 6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M. **Done** (one store the screens report to, rather than an anchor preference).
-7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each.
+7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each. **`ReaderChromeLayout` done**; the tour context is still open.
 8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps.
 
 The small fixes go in whenever their area is next touched: items 6, 10, 12, 13, 19, 20 and the smaller items.

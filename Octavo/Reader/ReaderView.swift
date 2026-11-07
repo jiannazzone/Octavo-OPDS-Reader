@@ -138,7 +138,7 @@ private struct ReaderScreen: View {
         NavigationStack {
             // The bars take the footer's place: the progress bar, the step
             // bar while stepping through search matches, or the server's place.
-            ReaderWebView(model: model, showsFooter: showsFooter, hidesFooterChapter: backBarIsUp)
+            ReaderWebView(model: model, showsFooter: chrome.showsFooter, hidesFooterChapter: chrome.hidesFooterChapter)
                 .overlay { status }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
@@ -147,15 +147,15 @@ private struct ReaderScreen: View {
                     }
                 }
                 .overlay(alignment: .topLeading) {
-                    if backBarIsUp, let trip = model.trip, let geometry = model.geometry,
+                    if chrome.showsBackBar, let trip = model.trip, let geometry = model.geometry,
                        let left = model.layout.textColumns(inReaderWidth: Double(geometry.size.width))?.first?.lowerBound {
                         ReaderBackBar(trip: trip, back: model.goBack, stay: model.settleTrip)
                             .fixedSize()
-                            .offset(x: left, y: backBarTop(in: geometry))
+                            .offset(x: left, y: chrome.backBarTop(in: geometry, layout: model.layout, barHeight: barHeight))
                             .transition(.opacity)
                     }
                 }
-                .animation(.easeOut(duration: 0.2), value: backBarIsUp)
+                .animation(.easeOut(duration: 0.2), value: chrome.showsBackBar)
                 .animation(.easeOut(duration: 0.2), value: controls.showsBar)
                 .overlay(alignment: .topLeading) {
                     if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
@@ -166,11 +166,8 @@ private struct ReaderScreen: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
                 .overlay(alignment: .bottomLeading) {
-                    if let footerBar, let geometry = model.geometry {
-                        // Under the page, or the right page of a spread:
-                        // nothing spans the hinge (decision 9).
-                        let right = Double(geometry.size.width) - geometry.safeArea.right
-                        let left = model.layout.columns == 2 ? (model.layout.fold?.upperBound ?? geometry.safeArea.left) : geometry.safeArea.left
+                    if let footerBar = chrome.footerBar, let geometry = model.geometry {
+                        let span = ReaderChromeLayout.footerBarSpan(in: geometry, layout: model.layout)
                         Group {
                             switch footerBar {
                             case .search:
@@ -182,13 +179,13 @@ private struct ReaderScreen: View {
                                 )
                             }
                         }
-                        .frame(width: max(0, right - left))
-                        .padding(.leading, left)
-                        .padding(.bottom, max(geometry.safeArea.bottom, 12) + 4 + (stacksOverBackBar ? ReaderBackBar.height + 6 : 0))
+                        .frame(width: span.width)
+                        .padding(.leading, span.left)
+                        .padding(.bottom, chrome.footerBarBottomInset(in: geometry))
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                .animation(.easeOut(duration: 0.2), value: footerBar)
+                .animation(.easeOut(duration: 0.2), value: chrome.footerBar)
                 .overlay(alignment: .topLeading) {
                     if let panel, model.phase == .open, let geometry = model.geometry {
                         let fold = model.layout.columns == 2 ? model.layout.fold : nil
@@ -359,33 +356,13 @@ private struct ReaderScreen: View {
 
     private var darkMode: Bool { systemColorScheme == .dark }
 
-    /// The way back stays up with the controls hidden (decision 33). Not
-    /// under a panel or a note, or on one page while Search's bar has the
-    /// footer's place.
-    private var backBarIsUp: Bool {
-        guard model.trip != nil, panel == nil, model.note == nil, shell.tour == nil, model.phase == .open else { return false }
-        return !(model.search.isStepping && model.layout.columns != 2)
-    }
-
-    /// On one page, BookOrbit's capsule stacks above the way back (decision
-    /// 33). Open, they sit one under each page.
-    private var stacksOverBackBar: Bool {
-        guard backBarIsUp, model.layout.columns != 2, case .serverPlace = footerBar else { return false }
-        return true
-    }
-
-    /// The bars take the footer's place, except that on one page the way back
-    /// keeps the numbers beside it, with BookOrbit's capsule above.
-    private var showsFooter: Bool {
-        !controls.showsBar && (footerBar == nil || stacksOverBackBar)
-    }
-
-    /// In the footer's place, or just above the progress bar while it's up.
-    private func backBarTop(in geometry: ReaderGeometry) -> Double {
-        if controls.showsBar {
-            return ReaderLayout.barBottom(in: geometry) - barHeight - 8 - ReaderBackBar.height
-        }
-        return Double(geometry.size.height) - model.layout.bottomInset - ReaderLayout.verticalMargin / 2 - ReaderBackBar.height / 2
+    /// Who has the strip along the bottom of the page, and where it goes.
+    private var chrome: ReaderChromeLayout {
+        ReaderChromeLayout(state: ReaderChromeLayout.State(
+            isOpen: model.phase == .open, hasTrip: model.trip != nil, panelOpen: panel != nil, noteOpen: model.note != nil,
+            inTour: shell.tour != nil, searchStepping: model.search.isStepping, serverPlace: model.serverPlace,
+            showsBar: controls.showsBar, twoPages: model.layout.columns == 2
+        ))
     }
 
     private var hintsPageTurn: Bool {
@@ -513,18 +490,6 @@ private struct ReaderScreen: View {
             },
             close: closePanel
         )
-    }
-
-    /// What takes the footer's place while no panel or progress bar is up.
-    private enum FooterBar: Equatable {
-        case search
-        case serverPlace(ReaderServerPlace)
-    }
-
-    private var footerBar: FooterBar? {
-        guard panel == nil, !controls.showsBar, model.note == nil, model.phase == .open else { return nil }
-        if model.search.isStepping { return .search }
-        return model.serverPlace.map(FooterBar.serverPlace)
     }
 
     private var searchBar: some View {
@@ -814,7 +779,7 @@ struct ReaderFooterLines: View {
         if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width)),
            let first = columns.first, let last = columns.last {
             let spread = columns.count > 1
-            let centre = Double(geometry.size.height) - layout.bottomInset - ReaderLayout.verticalMargin / 2
+            let centre = ReaderChromeLayout.footerLineCentre(in: geometry, layout: layout)
             Group {
                 if spread {
                     line(chapter: hidesChapter ? nil : place.chapter, numbers: nil, in: first, centre: centre)
@@ -849,7 +814,7 @@ struct ReaderFooterLines: View {
                     .layoutPriority(1)
             }
         }
-        .frame(width: column.upperBound - column.lowerBound, height: 20)
-        .offset(x: column.lowerBound, y: centre - 10)
+        .frame(width: column.upperBound - column.lowerBound, height: ReaderChromeLayout.footerLineHeight)
+        .offset(x: column.lowerBound, y: centre - ReaderChromeLayout.footerLineHeight / 2)
     }
 }

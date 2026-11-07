@@ -74,8 +74,7 @@ nonisolated struct ReaderNotePlacement: Equatable, Sendable {
             span = spans[0]
         }
         top = geometry.safeArea.top + ReaderLayout.edgeInset
-        // `ReaderFooterLines` centres its 20 pt line in foliate's bottom margin.
-        bottom = Double(geometry.size.height) - layout.bottomInset - ReaderLayout.verticalMargin / 2 - 10 - Self.clearance
+        bottom = ReaderChromeLayout.footerLineTop(in: geometry, layout: layout) - Self.clearance
         markTop = mark.y
         markBottom = mark.y + mark.height
     }
