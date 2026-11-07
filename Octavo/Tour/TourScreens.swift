@@ -74,7 +74,7 @@ private struct TourCloseScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(.container, edges: .vertical)
         .background(Color(.systemBackground))
-        .onGeometryChange(for: Spread.self) { Spread($0) } action: { spread = $0 }
+        .onSpreadChange { spread = $0 }
     }
 
     private var leftSide: some View {

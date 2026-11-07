@@ -74,9 +74,7 @@ struct ScreenStack<Root: View>: View {
             // book) changes at once.
             .animation(path.lastMove == .replace ? nil : reduceMotion ? Self.fade : Self.slide, value: path)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: measured)
-            .onGeometryChange(for: Spread.self) { Spread($0) } action: { new in
-                spreadChanged(to: new)
-            }
+            .onSpreadChange { spreadChanged(to: $0) }
             .onGeometryChange(for: CGFloat.self) { $0.size.width + $0.safeAreaInsets.trailing } action: {
                 travel = $0 + Self.overshoot
             }
@@ -109,6 +107,9 @@ struct ScreenStack<Root: View>: View {
     /// animated from one page to two a tab opening for the first time
     /// visibly rearranged itself.
     private func spreadChanged(to new: Spread) {
+        // Narrower than a page: the layout before the stack's first real
+        // one (0 pt), which would make the next reading look like a fold.
+        guard new.width >= Spread.minimumPageWidth else { return }
         if let old = measured, old.width != new.width {
             measured = new
             shell.lastSpread = new

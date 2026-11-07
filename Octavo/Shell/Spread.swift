@@ -60,3 +60,17 @@ nonisolated struct Spread: Equatable, Sendable {
 extension EnvironmentValues {
     @Entry var spread = Spread.onePage
 }
+
+extension View {
+    /// Reads the spread of the space this view is offered. The view takes
+    /// exactly that width (`maxWidth` alone grows with what's inside): its
+    /// pages take fixed widths from the spread, so a view as wide as its
+    /// pages kept a wrong reading (the inner display's full width, without
+    /// the side column) for good (`docs/notes/duo-tabbar.md` §7). Pages
+    /// still too wide for a moment hang off the trailing edge, so the left
+    /// page stays put.
+    func onSpreadChange(_ action: @escaping (Spread) -> Void) -> some View {
+        frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
+            .onGeometryChange(for: Spread.self) { Spread($0) } action: { action($0) }
+    }
+}
