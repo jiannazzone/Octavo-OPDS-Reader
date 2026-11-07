@@ -28,8 +28,9 @@ import UIKit
 /// waiting for your page if it isn't ready.
 ///
 /// Drawn by `ReaderCoverMotionView` over the whole window, above the
-/// reader, which opens underneath it at once (`AppShell`). Folding while
-/// reading keeps its own motion, the fold.
+/// reader, which opens underneath it at once (`AppShell`). Folding or
+/// unfolding takes it away, opening or closing: it's drawn for the display it
+/// started on, and the fold is the motion then (`ShellModel.hingeChanged`).
 @Observable
 final class ReaderCoverMotion {
     /// Seconds: the cover moving onto the right page, its swing, and Reduce
@@ -38,6 +39,11 @@ final class ReaderCoverMotion {
     static let slideDuration = 0.23
     static let swingDuration = 0.33
     static let fadeDuration = 0.3
+    /// The longest an opening cover waits for the reader before it fades
+    /// anyway, onto the reader's own loading page and its Back. It takes
+    /// every touch while it's up, so a reader that never opened would
+    /// otherwise leave nothing to tap.
+    static let longestWait: Duration = .seconds(8)
 
     /// The cover's own picture, drawn as the book's screen draws it; a book
     /// without artwork shows its title.
@@ -90,7 +96,11 @@ final class ReaderCoverMotion {
 
     /// Called once the motion is over, to take it away.
     @ObservationIgnored var onFinished: (() -> Void)?
+    /// `longestWait`, which tests shorten.
+    @ObservationIgnored var longestWait = ReaderCoverMotion.longestWait
     @ObservationIgnored private var started = false
+    /// Ended, fading away or taken away (`cancel`): nothing more plays.
+    @ObservationIgnored private var isOver = false
     /// The cover has reached the right page, opening.
     private(set) var slid = false
     @ObservationIgnored private var swinging = false
@@ -193,14 +203,16 @@ final class ReaderCoverMotion {
     /// Called once the motion is on screen and the reader has started, so
     /// the move is seen.
     func start() {
-        guard !started else { return }
+        guard !started, !isOver else { return }
         started = true
         if closing { return close() }
+        waitForTheReader()
         // No cover to move: the leaves wait for the inner display.
         if leavesOnly { return }
         guard spread, !reduceMotion else {
             slid = true
-            return
+            // The reader may have opened already.
+            return swingIfReady()
         }
         withAnimation(.easeInOut(duration: Self.slideDuration)) {
             slide = 1
@@ -213,7 +225,7 @@ final class ReaderCoverMotion {
     /// The reader has opened your place (`nil` if it couldn't): the cover
     /// swings once it's over the right page.
     func readerOpened(_ pages: ReaderCoverPages?) {
-        guard self.pages == nil else { return }
+        guard self.pages == nil, !isOver else { return }
         guard let pages else { return finish(fading: true) }
         if leavesOnly { return unfoldedPages(pages) }
         self.pages = pages
@@ -229,7 +241,7 @@ final class ReaderCoverMotion {
     /// Unfolding on a cover: the window has moved to the inner display once
     /// the hinge's region shows in it, and the leaves start.
     func windowChanged(_ window: UnfoldedWindow) {
-        guard leavesOnly, frames == nil, pages == nil, let hinge = window.hinge, let size = ShellModel.keyWindow?.bounds.size else { return }
+        guard leavesOnly, !isOver, frames == nil, pages == nil, let hinge = window.hinge, let size = ShellModel.keyWindow?.bounds.size else { return }
         windowSize = size
         hingeMiddle = Double(hinge.midX)
         let geometry = ReaderGeometry(size: size, safeArea: safeArea)
@@ -240,11 +252,7 @@ final class ReaderCoverMotion {
     /// Your pages, for the last leaf to carry. One page (the Duo turned on its
     /// side, or a reader quicker than the scene) has no spine to leaf over.
     private func unfoldedPages(_ pages: ReaderCoverPages) {
-        guard pages.spine != nil, let layout = pages.layout else {
-            stopFrames()
-            onFinished?()
-            return
-        }
+        guard pages.spine != nil, let layout = pages.layout else { return end() }
         self.pages = pages
         paper = pages.paper
         showsWaiting = false
@@ -259,7 +267,7 @@ final class ReaderCoverMotion {
     }
 
     private func swingIfReady() {
-        guard slid, pages != nil, !swinging else { return }
+        guard slid, pages != nil, !swinging, !isOver else { return }
         swinging = true
         if reduceMotion { return finish(fading: true) }
         showsBookScreen = false
@@ -267,7 +275,7 @@ final class ReaderCoverMotion {
         withAnimation(spread ? .easeInOut(duration: swingDuration) : .easeIn(duration: swingDuration)) {
             swing = swungOver
         } completion: { [weak self] in
-            self?.onFinished?()
+            self?.end()
         }
     }
 
@@ -281,10 +289,7 @@ final class ReaderCoverMotion {
     private static let waitBeforeSpinner = 0.75
 
     private func playLeaves() {
-        guard let window = ShellModel.keyWindow else {
-            onFinished?()
-            return
-        }
+        guard let window = ShellModel.keyWindow else { return end() }
         let link = UIUpdateLink(view: window) { [weak self] link, info in
             guard let self else {
                 link.isEnabled = false
@@ -316,8 +321,7 @@ final class ReaderCoverMotion {
             swing = swungOver * curve.value(at: min(clock / swingDuration, 1))
         }
         guard clock >= leaves.end else { return }
-        stopFrames()
-        onFinished?()
+        end()
     }
 
     private func stopFrames() {
@@ -333,23 +337,50 @@ final class ReaderCoverMotion {
         withAnimation(spread ? .easeInOut(duration: swingDuration) : .easeOut(duration: swingDuration)) {
             swing = 0
         } completion: { [weak self] in
-            guard let self else { return }
-            guard spread else {
-                onFinished?()
-                return
-            }
+            // Taken away meanwhile: no slide back.
+            guard let self, !isOver else { return }
+            guard spread else { return end() }
             showsBookScreen = true
             withAnimation(.easeInOut(duration: Self.slideDuration)) {
                 slide = 0
             } completion: { [weak self] in
-                self?.onFinished?()
+                self?.end()
             }
         }
     }
 
-    /// Reduce Motion, or a book that couldn't open: the book's screen fades
-    /// away instead.
+    /// Opening, the cover rests until the reader has your place, but not for
+    /// good (`longestWait`).
+    private func waitForTheReader() {
+        Task { [weak self, longestWait] in
+            try? await Task.sleep(for: longestWait)
+            guard let self, pages == nil, !isOver else { return }
+            finish(fading: true)
+        }
+    }
+
+    /// Taken away before it's over (a fold, the reader closing): whatever the
+    /// reader says later plays nothing, and the leaves stop.
+    func cancel() {
+        isOver = true
+        stopFrames()
+    }
+
+    /// Played through, or with nothing left to play: it's taken away, and
+    /// nothing later (the reader, the time limit, an animation's completion)
+    /// plays it again.
+    private func end() {
+        guard !isOver else { return }
+        isOver = true
+        stopFrames()
+        onFinished?()
+    }
+
+    /// Reduce Motion, a book that couldn't open, or one that took too long:
+    /// the book's screen fades away instead.
     private func finish(fading: Bool) {
+        guard !isOver else { return }
+        isOver = true
         stopFrames()
         withAnimation(.easeOut(duration: Self.fadeDuration)) {
             fade = 1

@@ -332,6 +332,66 @@ struct ShellModelTests {
         #expect(model.coverMotion == nil)
     }
 
+    private func coverMotion(closing: Bool) -> ReaderCoverMotion {
+        ReaderCoverMotion(
+            cover: nil, title: "", author: "", coverFrame: CGRect(x: 0, y: 0, width: 10, height: 10), windowSize: CGSize(width: 20, height: 20),
+            bookScreen: nil, closing: closing ? ReaderCoverPages(paper: .white) : nil, spread: true, reduceMotion: false, paper: .white
+        )
+    }
+
+    // Open tapped folded, then unfolded before the cover had gone: it was
+    // laid out for the outer display.
+    @Test func unfoldingTakesAwayACoverStillOpening() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.openBook(Self.book)
+        #expect(await eventually { model.reading != nil })
+        model.coverMotion = coverMotion(closing: false)
+        model.hingeChanged(.unfold)
+        #expect(model.reading != nil)
+        #expect(model.coverMotion == nil)
+    }
+
+    @Test func foldingTakesAwayACoverStillClosing() {
+        let model = makeShell()
+        model.coverMotion = coverMotion(closing: true)
+        model.hingeChanged(.fold)
+        #expect(model.coverMotion == nil)
+    }
+
+    @Test func repeatedHingeReportsLeaveTheCover() {
+        let model = makeShell()
+        let motion = coverMotion(closing: true)
+        model.coverMotion = motion
+        model.hingeChanged(.none)
+        #expect(model.coverMotion === motion)
+    }
+
+    // An import, say, while a cover is still opening the book.
+    @Test func closingTheReaderTakesAwayACoverStillOpening() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.openBook(Self.book)
+        #expect(await eventually { model.reading != nil })
+        model.coverMotion = coverMotion(closing: false)
+        model.closeReader()
+        #expect(model.reading == nil)
+        #expect(model.coverMotion == nil)
+    }
+
+    // Back draws the closing cover, then the reader goes.
+    @Test func closingTheReaderKeepsBacksCover() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.openBook(Self.book)
+        #expect(await eventually { model.reading != nil })
+        let closing = coverMotion(closing: true)
+        model.coverMotion = closing
+        model.closeReader()
+        #expect(model.reading == nil)
+        #expect(model.coverMotion === closing)
+    }
+
     @Test func foldingWithoutABookDoesNothing() {
         let model = makeShell()
         model.select(.library)

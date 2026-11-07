@@ -47,7 +47,7 @@ struct AppShell: View {
                     connectionReturns: model.connection.returns,
                     opened: { [motion = model.coverMotion] pages in motion?.readerOpened(pages) },
                     closing: { model.readerClosing($0) }
-                ) { model.reading = nil }
+                ) { model.closeReader() }
                     // Another book is another reader: its own model, hooks
                     // and controls, and the old one closes (flushing its
                     // position).
