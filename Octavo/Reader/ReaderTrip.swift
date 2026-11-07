@@ -67,7 +67,7 @@ nonisolated struct ReaderTrip: Codable, Equatable, Sendable {
 /// "Back to page 312" with ✕, under the left page (decision 33). It stays up
 /// with the controls hidden, which go on the next tap.
 struct ReaderBackBar: View {
-    static let height = 38.0
+    nonisolated static let height = 38.0
 
     let trip: ReaderTrip
     let back: () -> Void

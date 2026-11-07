@@ -24,10 +24,7 @@ struct TourCardSlot: View {
     }
 
     private var bottom: Double {
-        if let sheetHeight {
-            return ReaderLayout.barBottom(in: geometry) - sheetHeight - 8
-        }
-        return ReaderLayout.barBottom(in: geometry) - barClearance
+        ReaderChromeLayout.tourCardBottom(in: geometry, sheetHeight: sheetHeight, barClearance: barClearance)
     }
 
     /// The left page's text, or the one page's.
