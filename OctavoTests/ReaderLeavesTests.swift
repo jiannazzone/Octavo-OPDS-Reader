@@ -292,6 +292,19 @@ struct ReaderLeavesMotionTests {
         #expect(motion.clock == 0)
     }
 
+    // Ended at once (one page), there's nothing left for the time limit.
+    @Test func anEndedMotionIsntEndedAgain() async throws {
+        let motion = unfolding()
+        motion.longestWait = .milliseconds(20)
+        var finishes = 0
+        motion.onFinished = { finishes += 1 }
+        motion.start()
+        motion.readerOpened(pages(fraction: 0.5, spread: false))
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(finishes == 1)
+        #expect(motion.fade == 0)
+    }
+
     // Turned on its side, the Duo unfolds onto one page.
     @Test func onePageEndsItAtOnce() {
         let motion = unfolding()

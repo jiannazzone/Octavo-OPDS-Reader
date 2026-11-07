@@ -99,7 +99,7 @@ final class ReaderCoverMotion {
     /// `longestWait`, which tests shorten.
     @ObservationIgnored var longestWait = ReaderCoverMotion.longestWait
     @ObservationIgnored private var started = false
-    /// Fading away, or taken away (`cancel`): nothing more plays.
+    /// Ended, fading away or taken away (`cancel`): nothing more plays.
     @ObservationIgnored private var isOver = false
     /// The cover has reached the right page, opening.
     private(set) var slid = false
@@ -252,11 +252,7 @@ final class ReaderCoverMotion {
     /// Your pages, for the last leaf to carry. One page (the Duo turned on its
     /// side, or a reader quicker than the scene) has no spine to leaf over.
     private func unfoldedPages(_ pages: ReaderCoverPages) {
-        guard pages.spine != nil, let layout = pages.layout else {
-            stopFrames()
-            onFinished?()
-            return
-        }
+        guard pages.spine != nil, let layout = pages.layout else { return end() }
         self.pages = pages
         paper = pages.paper
         showsWaiting = false
@@ -271,7 +267,7 @@ final class ReaderCoverMotion {
     }
 
     private func swingIfReady() {
-        guard slid, pages != nil, !swinging else { return }
+        guard slid, pages != nil, !swinging, !isOver else { return }
         swinging = true
         if reduceMotion { return finish(fading: true) }
         showsBookScreen = false
@@ -279,7 +275,7 @@ final class ReaderCoverMotion {
         withAnimation(spread ? .easeInOut(duration: swingDuration) : .easeIn(duration: swingDuration)) {
             swing = swungOver
         } completion: { [weak self] in
-            self?.onFinished?()
+            self?.end()
         }
     }
 
@@ -293,10 +289,7 @@ final class ReaderCoverMotion {
     private static let waitBeforeSpinner = 0.75
 
     private func playLeaves() {
-        guard let window = ShellModel.keyWindow else {
-            onFinished?()
-            return
-        }
+        guard let window = ShellModel.keyWindow else { return end() }
         let link = UIUpdateLink(view: window) { [weak self] link, info in
             guard let self else {
                 link.isEnabled = false
@@ -328,8 +321,7 @@ final class ReaderCoverMotion {
             swing = swungOver * curve.value(at: min(clock / swingDuration, 1))
         }
         guard clock >= leaves.end else { return }
-        stopFrames()
-        onFinished?()
+        end()
     }
 
     private func stopFrames() {
@@ -345,16 +337,14 @@ final class ReaderCoverMotion {
         withAnimation(spread ? .easeInOut(duration: swingDuration) : .easeOut(duration: swingDuration)) {
             swing = 0
         } completion: { [weak self] in
-            guard let self else { return }
-            guard spread else {
-                onFinished?()
-                return
-            }
+            // Taken away meanwhile: no slide back.
+            guard let self, !isOver else { return }
+            guard spread else { return end() }
             showsBookScreen = true
             withAnimation(.easeInOut(duration: Self.slideDuration)) {
                 slide = 0
             } completion: { [weak self] in
-                self?.onFinished?()
+                self?.end()
             }
         }
     }
@@ -364,7 +354,7 @@ final class ReaderCoverMotion {
     private func waitForTheReader() {
         Task { [weak self, longestWait] in
             try? await Task.sleep(for: longestWait)
-            guard let self, pages == nil else { return }
+            guard let self, pages == nil, !isOver else { return }
             finish(fading: true)
         }
     }
@@ -374,6 +364,16 @@ final class ReaderCoverMotion {
     func cancel() {
         isOver = true
         stopFrames()
+    }
+
+    /// Played through, or with nothing left to play: it's taken away, and
+    /// nothing later (the reader, the time limit, an animation's completion)
+    /// plays it again.
+    private func end() {
+        guard !isOver else { return }
+        isOver = true
+        stopFrames()
+        onFinished?()
     }
 
     /// Reduce Motion, a book that couldn't open, or one that took too long:

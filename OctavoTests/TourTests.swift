@@ -723,6 +723,20 @@ struct TourShellTests {
         #expect(model.needsSetup)
     }
 
+    // Unfolded while the app was away: the report alone still takes away a
+    // cover drawn for the outer display.
+    @Test func anUnfoldReportTakesAwayACover() async {
+        let model = started()
+        let stale = ReaderCoverMotion(
+            cover: nil, title: "", author: "", coverFrame: CGRect(x: 0, y: 0, width: 10, height: 10), windowSize: CGSize(width: 20, height: 20),
+            bookScreen: nil, spread: false, reduceMotion: false, paper: .white
+        )
+        model.coverMotion = stale
+        model.hingeReported(.open)
+        #expect(model.coverMotion !== stale)
+        #expect(await eventually { model.reading != nil })
+    }
+
     // A fold while the cover is still opening the book leaves nothing behind.
     @Test func aFoldTakesAwayACoverStillOpening() async {
         let model = shell(state: .played)

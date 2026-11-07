@@ -980,10 +980,14 @@ final class ShellModel {
 
     /// Mid-tour a fold closes the book, as always, and the step waits on the
     /// cover; unfolding on the cover opens the book at that step.
+    ///
+    /// Either way a cover opening or closing the book goes, as outside the
+    /// tour (`hingeChanged`): this also hears a change made while the app was
+    /// away (`hingeReported`).
     private func tourHingeChanged(_ transition: HingeTransition) {
+        if transition != .none { coverMotion = nil }
         switch transition {
         case .fold:
-            coverMotion = nil
             closeReader { tour?.handle(.folded) }
         case .unfold:
             guard tour?.step == .cover else { return }
