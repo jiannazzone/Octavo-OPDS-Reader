@@ -158,36 +158,67 @@ nonisolated enum ReaderFont: String, CaseIterable, Sendable, Codable, Identifiab
         case .palatino: "Palatino, 'Palatino Linotype', serif"
         case .charter: "Charter, serif"
         case .sanSerif: "-apple-system, system-ui, sans-serif"
-        case .atkinson: "octavo-atkinson-hyperlegible-next, sans-serif"
-        case .openDyslexic: "octavo-opendyslexic, sans-serif"
+        case .atkinson, .openDyslexic: "\(bundledName ?? ""), sans-serif"
         }
     }
+
+    /// A bundled font's file in `ReaderWeb/fonts/`, and the weights and style
+    /// it covers.
+    struct BundledFace: Equatable, Sendable {
+        var file: String
+        var weight: String
+        var italic = false
+    }
+
+    /// The name a bundled font goes by on the page; `nil` for the rest.
+    var bundledName: String? {
+        switch self {
+        case .atkinson: "octavo-atkinson-hyperlegible-next"
+        case .openDyslexic: "octavo-opendyslexic"
+        default: nil
+        }
+    }
+
+    /// The family a bundled font's files name themselves, which the footnote
+    /// card asks Core Text for (`ReaderNoteTypeface`).
+    var bundledFamily: String? {
+        switch self {
+        case .atkinson: "Atkinson Hyperlegible Next"
+        case .openDyslexic: "OpenDyslexic"
+        default: nil
+        }
+    }
+
+    /// A bundled font's files, for the page and the footnote card alike; empty
+    /// for the rest. Atkinson's files are variable, every weight.
+    var bundledFaces: [BundledFace] {
+        switch self {
+        case .atkinson: [
+            BundledFace(file: "AtkinsonHyperlegibleNext.woff2", weight: "200 800"),
+            BundledFace(file: "AtkinsonHyperlegibleNext-Italic.woff2", weight: "200 800", italic: true),
+        ]
+        case .openDyslexic: [
+            BundledFace(file: "OpenDyslexic-Regular.woff2", weight: "400"),
+            BundledFace(file: "OpenDyslexic-Bold.woff2", weight: "700"),
+            BundledFace(file: "OpenDyslexic-Italic.woff2", weight: "400", italic: true),
+            BundledFace(file: "OpenDyslexic-Bold-Italic.woff2", weight: "700", italic: true),
+        ]
+        default: []
+        }
+    }
+
+    /// OpenDyslexic's "fi" and "ffi" ligatures leave a gap ("fi rst", "o ffice");
+    /// the project's own later work drops them, so none are used here.
+    var usesLigatures: Bool { self != .openDyslexic }
 
     /// The `@font-face` rules a bundled font needs, from the reader's own
     /// `fonts/` (the one place its CSP takes fonts from, besides the book's
-    /// own); empty for the rest. Atkinson's files are variable, every weight.
-    /// OpenDyslexic's "fi" and "ffi" ligatures leave a gap ("fi rst", "o ffice");
-    /// the project's own later work drops them, so none are used here.
+    /// own); empty for the rest.
     var fontFaces: String {
-        switch self {
-        case .atkinson:
-            [
-                Self.fontFace("octavo-atkinson-hyperlegible-next", file: "AtkinsonHyperlegibleNext.woff2", weight: "200 800"),
-                Self.fontFace("octavo-atkinson-hyperlegible-next", file: "AtkinsonHyperlegibleNext-Italic.woff2", weight: "200 800", italic: true),
-            ].joined(separator: "\n")
-        case .openDyslexic:
-            [
-                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Regular.woff2", weight: "400", ligatures: false),
-                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Bold.woff2", weight: "700", ligatures: false),
-                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Italic.woff2", weight: "400", italic: true, ligatures: false),
-                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Bold-Italic.woff2", weight: "700", italic: true, ligatures: false),
-            ].joined(separator: "\n")
-        default: ""
-        }
-    }
-
-    private static func fontFace(_ family: String, file: String, weight: String, italic: Bool = false, ligatures: Bool = true) -> String {
-        "@font-face { font-family: \(family); src: url(\"\(ReaderSchemeHandler.fontsURL)\(file)\") format(\"woff2\"); font-weight: \(weight); font-style: \(italic ? "italic" : "normal");\(ligatures ? "" : " font-feature-settings: \"liga\" 0;") }"
+        guard let bundledName else { return "" }
+        return bundledFaces.map { face in
+            "@font-face { font-family: \(bundledName); src: url(\"\(ReaderSchemeHandler.fontsURL)\(face.file)\") format(\"woff2\"); font-weight: \(face.weight); font-style: \(face.italic ? "italic" : "normal");\(usesLigatures ? "" : " font-feature-settings: \"liga\" 0;") }"
+        }.joined(separator: "\n")
     }
 }
 
