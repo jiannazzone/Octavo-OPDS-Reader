@@ -20,4 +20,6 @@ a20d82c2a1a0a6ab74796529aca31bfbae93e3e58f5a7360cba854dd98a15214  OpenDyslexic-B
 caafcccfb70fc72458fcbda812ec8f0a06cb300cbabb87eabbb30b946124394b  OpenDyslexic-OFL.txt
 ```
 
-To update one, download it from the same place, check its licence is still SIL OFL 1.1, replace the files and the lines above, and look at a page in it, with italics and bold, folded and unfolded.
+The footnote card draws the same files, registered with Core Text (`docs/notes/footnotes.md`), and asks for them by the family name inside them (`ReaderFont.bundledFamily`).
+
+To update one, download it from the same place, check its licence is still SIL OFL 1.1, replace the files and the lines above, and look at a page in it, with italics and bold, folded and unfolded, and at a footnote card in it.

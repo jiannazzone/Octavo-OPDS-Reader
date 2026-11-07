@@ -1,5 +1,7 @@
+import CoreText
 import Foundation
 import Testing
+import UIKit
 import WebKit
 @testable import Octavo
 
@@ -126,6 +128,121 @@ struct ReaderNoteTypefaceTests {
         #expect(ReaderNoteTypeface(cssFamily: "Times", installed: installed) == .standard)
         #expect(ReaderNoteTypeface(cssFamily: nil, installed: installed) == .standard)
     }
+
+    // What Text and Theme's fonts come out as on the card, where the page's
+    // family is the one the reader set (`.book`: a book that sets none).
+    @Test(arguments: ReaderFont.allCases)
+    func everyReaderFontHasItsTypeface(font: ReaderFont) {
+        let installed = installed.union(["Helvetica", "Atkinson Hyperlegible Next", "OpenDyslexic"])
+        let expected: ReaderNoteTypeface = switch font {
+        case .book: .standard
+        case .newYork: .serif
+        case .georgia: .named("Georgia")
+        case .iowan: .named("Iowan Old Style")
+        case .palatino: .named("Palatino")
+        case .charter: .named("Charter")
+        case .sanSerif: .sansSerif
+        case .atkinson: .bundled(.atkinson)
+        case .openDyslexic: .bundled(.openDyslexic)
+        }
+        #expect(ReaderNoteTypeface(cssFamily: font.cssFamily, installed: installed) == expected)
+    }
+
+    // Every font in Text and Theme, as this iOS has it, comes out as itself
+    // on the card. Iowan Old Style isn't in `UIFont.familyNames`.
+    @Test(arguments: ReaderFont.allCases)
+    @MainActor func everyReaderFontIsDrawnInItself(font: ReaderFont) {
+        let typeface = ReaderNoteTypeface(cssFamily: font.cssFamily, family: ReaderFont.cardFamily(named:))
+        let family: String? = switch font {
+        case .book: "Times New Roman"
+        case .newYork, .sanSerif: nil
+        case .georgia: "Georgia"
+        case .iowan: "Iowan Old Style"
+        case .palatino: "Palatino"
+        case .charter: "Charter"
+        case .atkinson: "Atkinson Hyperlegible Next"
+        case .openDyslexic: "OpenDyslexic"
+        }
+        switch font {
+        case .newYork: #expect(typeface == .serif)
+        case .sanSerif: #expect(typeface == .sansSerif)
+        default: #expect(typeface.uiFont(size: 16).familyName == family)
+        }
+    }
+
+    // Core Text's names, in any case, as a book's CSS may write them.
+    @Test @MainActor func aFamilyIsFoundInAnyCase() {
+        #expect(ReaderFont.cardFamily(named: "palatino") == "Palatino")
+        #expect(ReaderFont.cardFamily(named: "IOWAN OLD STYLE") == "Iowan Old Style")
+        #expect(ReaderFont.cardFamily(named: "Crimson Text") == nil)
+    }
+
+    // If registering them failed, the card does what the page would without
+    // them.
+    @Test func aBundledFontThatIsntThereFallsBack() {
+        #expect(ReaderNoteTypeface(cssFamily: ReaderFont.atkinson.cssFamily, installed: installed) == .named("Helvetica"))
+        #expect(ReaderNoteTypeface(cssFamily: ReaderFont.openDyslexic.cssFamily, installed: installed) == .named("Helvetica"))
+    }
+
+    // The card asks Core Text for a bundled font by the family its files name.
+    @Test(arguments: [ReaderFont.atkinson, .openDyslexic])
+    func theBundledFilesAreTheFamilyTheCardAsksFor(font: ReaderFont) throws {
+        let fonts = try #require(Bundle.main.url(forResource: "ReaderWeb", withExtension: nil)).appending(path: "fonts")
+        for face in font.bundledFaces {
+            let descriptors = CTFontManagerCreateFontDescriptorsFromURL(fonts.appending(path: face.file) as CFURL) as? [CTFontDescriptor] ?? []
+            #expect(!descriptors.isEmpty, "\(face.file)")
+            for descriptor in descriptors {
+                #expect(CTFontDescriptorCopyAttribute(descriptor, kCTFontFamilyNameAttribute) as? String == font.bundledFamily)
+            }
+        }
+    }
+
+    // Registered from the page's own WOFF2 files, each face the card asks for
+    // is a real one of that family, not a fallback: Atkinson's bold is its 700
+    // instance, as on the page.
+    @Test(arguments: [
+        (ReaderFont.atkinson, ["AtkinsonHyperlegibleNext-Regular", "AtkinsonHyperlegibleNext-Italic", "AtkinsonHyperlegibleNext-Regular_Bold", "AtkinsonHyperlegibleNext-Italic_Bold-Italic"]),
+        (.openDyslexic, ["OpenDyslexic-Regular", "OpenDyslexic-Italic", "OpenDyslexic-Bold", "OpenDyslexic-Bold-Italic"]),
+    ])
+    @MainActor func bundledFontsDrawFromTheirOwnFaces(font: ReaderFont, faces: [String]) throws {
+        let family = try #require(font.bundledFamily)
+        #expect(ReaderFont.cardFamily(named: family) == family)
+        let typeface = ReaderNoteTypeface(cssFamily: font.cssFamily, family: ReaderFont.cardFamily(named:))
+        #expect(typeface == .bundled(font))
+        #expect(typeface.uiFont(size: 21).familyName == family)
+        #expect(typeface.uiFont(size: 21).pointSize == 21)
+        let styles = [(false, false), (true, false), (false, true), (true, true)]
+        for ((italic, bold), name) in zip(styles, faces) {
+            let face = font.cardFont(size: 17, italic: italic, bold: bold)
+            #expect(face.fontName == name)
+            #expect(face.familyName == family)
+            #expect(face.pointSize == 17)
+            #expect(face.fontDescriptor.symbolicTraits.contains(.traitItalic) == italic, "\(name)")
+            #expect(face.fontDescriptor.symbolicTraits.contains(.traitBold) == bold, "\(name)")
+        }
+        if font == .atkinson {
+            let weight = CTFontCopyVariation(font.cardFont(size: 17, bold: true) as CTFont) as? [NSNumber: NSNumber]
+            #expect(weight?[NSNumber(value: 0x7767_6874)] == 700) // 'wght'
+        }
+    }
+
+    // OpenDyslexic's "fi" and "ffi" leave a gap, so the card, like the page,
+    // keeps every letter its own glyph. Atkinson keeps its own.
+    @Test @MainActor func openDyslexicHasNoLigaturesOnTheCard() throws {
+        _ = ReaderFont.cardFamily(named: "OpenDyslexic")
+        let text = "fi ffi office"
+        func glyphs(_ font: UIFont) -> Int {
+            CTLineGetGlyphCount(CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font])))
+        }
+        let withLigatures = UIFont(descriptor: UIFontDescriptor(fontAttributes: [.family: "OpenDyslexic"]), size: 17)
+        #expect(glyphs(withLigatures) < text.count)
+        for italic in [false, true] {
+            for bold in [false, true] {
+                #expect(glyphs(ReaderFont.openDyslexic.cardFont(size: 17, italic: italic, bold: bold)) == text.count)
+            }
+        }
+        #expect(ReaderFont.atkinson.cardFont(size: 17).fontDescriptor.object(forKey: .featureSettings) == nil)
+    }
 }
 
 /// Which links are notes and what the card gets, through the real bridge and
@@ -150,6 +267,7 @@ struct ReaderNotesBridgeTests {
     <?xml version="1.0" encoding="UTF-8"?>
     <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>One</title></head><body>
     <h2 id="start">Chapter One</h2>
+    <p id="tall">A mark past the first line. \#(filler)<sup><a href="notes.xhtml#n3" id="r3b">3</a></sup> And more.</p>
     <p>Standard Ebooks marks its notes.<a href="notes.xhtml#note-1" id="noteref-1" role="doc-noteref" epub:type="noteref">1</a> And one in verse.<a href="notes.xhtml#note-2" id="noteref-2" role="doc-noteref" epub:type="noteref">2</a> And quoted.<a href="notes.xhtml#note-9" id="noteref-9" role="doc-noteref" epub:type="noteref">9</a></p>
     <p>Project Gutenberg doesn't.<a class="fnanchor" href="#Footnote_A_1" id="FNanchor_A_1">[A]</a> \#(filler)</p>
     <div class="footnotes"><h3>FOOTNOTES:</h3>
@@ -302,6 +420,28 @@ struct ReaderNotesBridgeTests {
         // Nothing in a note runs.
         let ran = try await model.page.callJavaScript("return document.documentElement.getAttribute('data-ran')")
         #expect(ran is NSNull || ran == nil)
+    }
+
+    // A raised mark's box has a top of its own, and in OpenDyslexic, whose
+    // boxes are tall, it's taller than the font size. The card still gets the
+    // page's line pitch.
+    @Test func aRaisedMarkIsntALineInATallFont() async throws {
+        let model = try await opened()
+        model.appearance = ReaderAppearance(font: .openDyslexic).script(darkMode: false)
+        let paragraph = "const doc = document.querySelector('foliate-view').renderer.getContents()[0].doc; const p = doc.getElementById('tall');"
+        let styled = await eventuallyAwaiting(timeout: .seconds(10)) {
+            (try? await model.page.callJavaScript("\(paragraph) return doc.defaultView.getComputedStyle(p).fontFamily.startsWith('octavo-opendyslexic')") as? Bool) == true
+        }
+        #expect(styled)
+        let loaded = try await model.page.callJavaScript("\(paragraph) await doc.fonts.load('16px octavo-opendyslexic'); await doc.fonts.ready; return doc.fonts.check('16px octavo-opendyslexic')") as? Bool
+        #expect(loaded == true)
+        // With `line-height: normal`, a line is as tall as its text's box.
+        let text = try #require(try await model.page.callJavaScript("\(paragraph) const range = doc.createRange(); range.selectNodeContents(p.firstChild); const rects = [...range.getClientRects()]; return [rects[0].height, rects.length]") as? [Double])
+        #expect(text[1] > 1, "The mark is past the first line")
+        _ = try await model.page.callJavaScript("\(paragraph) doc.getElementById('r3b').click()")
+        #expect(await eventually(timeout: .seconds(5)) { model.note != nil })
+        let lineHeight = try #require(model.note?.font.lineHeight)
+        #expect(abs(lineHeight - text[0]) < 0.5, "\(lineHeight) on lines \(text[0]) apart")
     }
 
     @Test func aNoteMessageDecodes() throws {
