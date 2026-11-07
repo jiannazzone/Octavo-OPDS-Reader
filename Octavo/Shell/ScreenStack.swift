@@ -260,38 +260,3 @@ struct ScreenTitle: View {
             .accessibilityAddTraits(.isHeader)
     }
 }
-
-/// A list row that opens a screen in the current tab: pushed, folded or
-/// unfolded.
-struct ShellLink<Label: View>: View {
-    let route: ShellRoute
-    /// Off for the Library's lists: unfolded, a row's chevron would sit
-    /// mid-screen at the left page's edge.
-    var showsChevron = true
-    @ViewBuilder let label: () -> Label
-    @Environment(ShellModel.self) private var shell
-
-    init(_ route: ShellRoute, showsChevron: Bool = true, @ViewBuilder label: @escaping () -> Label) {
-        self.route = route
-        self.showsChevron = showsChevron
-        self.label = label
-    }
-
-    var body: some View {
-        Button {
-            shell.push(route)
-        } label: {
-            HStack {
-                label()
-                Spacer(minLength: 8)
-                if showsChevron {
-                    Image(systemName: "chevron.forward")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .contentShape(.rect)
-        }
-        .foregroundStyle(.primary)
-    }
-}

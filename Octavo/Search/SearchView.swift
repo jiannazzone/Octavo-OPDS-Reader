@@ -554,7 +554,7 @@ private struct AllBooksLink: View {
     let source: LibrarySourceID
 
     var body: some View {
-        ShellLink(.feed(entry, from: source), showsChevron: false) {
+        OpenButton(route: .feed(entry, from: source), fillsRow: true) {
             Text(entry.count.map { "All \($0) books" } ?? "All books")
                 .foregroundStyle(.tint)
                 .padding(.vertical, 10)

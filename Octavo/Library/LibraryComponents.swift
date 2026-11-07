@@ -5,10 +5,14 @@ import UIKit
 // The pieces Home and the Library are built from: covers that open a book,
 // grid cells and list rows.
 
-/// Opens `route` like `ShellLink`, for things that aren't list rows: a cover
-/// in a grid, a Home row.
+/// Opens `route` on top of the current tab: a cover in a grid, a Home row,
+/// a row in a list. The one way to, so every one draws its words the same
+/// way: as they are, wrapped lines to the leading edge (the system's button
+/// centred them at large text sizes).
 struct OpenButton<Label: View>: View {
     let route: ShellRoute
+    /// A row in a list, which takes a tap anywhere across its width.
+    var fillsRow = false
     @ViewBuilder let label: () -> Label
     @Environment(ShellModel.self) private var shell
 
@@ -17,6 +21,7 @@ struct OpenButton<Label: View>: View {
             shell.push(route)
         } label: {
             label()
+                .frame(maxWidth: fillsRow ? .infinity : nil, alignment: .leading)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -178,7 +183,7 @@ struct EntryRow: View {
     @Environment(LibraryModel.self) private var library
 
     var body: some View {
-        ShellLink(.feed(entry, from: source), showsChevron: false) {
+        OpenButton(route: .feed(entry, from: source), fillsRow: true) {
             HStack(spacing: 12) {
                 if showsCovers {
                     covers

@@ -1091,7 +1091,8 @@ final class ShellModel {
     /// lists), `-shellTab library`,
     /// `-shellConnection unreachable|signedOut`,
     /// `-shellCoverStrip failed|offline|downloading|protected`,
-    /// `-shellOpen collection|deep|cover` (sample books),
+    /// `-shellOpen collection|deep|cover|collections|authors` (sample books,
+    /// and the lists of collections and authors),
     /// `-shellOpen settings|server|storage|licences` (Settings, or one of
     /// its pages),
     /// `-shellReading 1` (the first book in Continue reading, once connected)
@@ -1149,6 +1150,10 @@ final class ShellModel {
             )
             switch opens {
             case "collection": self[path: .library].replace([classics])
+            case "collections", "authors":
+                let title = opens == "authors" ? "Authors" : "Collections"
+                let list = LibraryEntry(kind: .feed, title: title, link: LibraryLink(rawValue: opens ?? ""))
+                self[path: .library].replace([.feed(list, from: SampleLibrarySource.id)])
             case "deep": self[path: .library].replace([classics, .cover(book)])
             case "cover": self[path: .library].replace([.cover(book)])
             case "settings": self[path: tab].replace([.settings])
