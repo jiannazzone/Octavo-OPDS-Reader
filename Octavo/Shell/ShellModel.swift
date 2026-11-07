@@ -1086,8 +1086,9 @@ final class ShellModel {
     /// Launch arguments that set up a state to look at:
     /// `-connectBookOrbit 1` (the local server),
     /// `-connectOPDS calibreWeb|cops|komga|komga2|kavita` (`dev/opds/`),
-    /// `-sampleLibrary 1|empty`
-    /// (made-up books; `empty` has nothing in progress), `-shellTab library`,
+    /// `-sampleLibrary 1|empty|failing`
+    /// (made-up books; `empty` has nothing in progress, `failing` sends no
+    /// lists), `-shellTab library`,
     /// `-shellConnection unreachable|signedOut`,
     /// `-shellCoverStrip failed|offline|downloading|protected`,
     /// `-shellOpen collection|deep|cover` (sample books),
@@ -1137,7 +1138,7 @@ final class ShellModel {
                 if connectsBookOrbit { library.choose(LibraryModel.localBookOrbitID) }
             }
             if !connectsBookOrbit, opds == nil, let sample, sample != "0" {
-                await library.connectSampleLibrary(nothingInProgress: sample == "empty")
+                await library.connectSampleLibrary(nothingInProgress: sample == "empty", listsFail: sample == "failing")
             }
             // After connecting, which closes the screens opened before it.
             if let problem { library.connectionProblem = problem }

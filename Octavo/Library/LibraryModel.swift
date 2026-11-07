@@ -669,10 +669,10 @@ final class LibraryModel {
     }
 
     /// Made-up books, no network: for screenshots and previews.
-    func connectSampleLibrary(nothingInProgress: Bool = false) async {
+    func connectSampleLibrary(nothingInProgress: Bool = false, listsFail: Bool = false) async {
         await connect(LibraryServer(
             id: SampleLibrarySource.id, name: "BookOrbit", address: "Sample library",
-            source: SampleLibrarySource(nothingInProgress: nothingInProgress)
+            source: SampleLibrarySource(nothingInProgress: nothingInProgress, listsFail: listsFail)
         ))
     }
     #endif

@@ -11,6 +11,9 @@ nonisolated struct SampleLibrarySource: LibrarySource {
 
     /// Home's empty state (frame 25): nothing in progress.
     var nothingInProgress = false
+    /// The Library's own failure (`-sampleLibrary failing`): its lists don't
+    /// come.
+    var listsFail = false
 
     static let books: [LibraryBook] = {
         func book(_ id: String, _ title: String, _ author: String, series: (String, Double)? = nil, progress: Double? = nil, hoursAgo: Double? = nil) -> LibraryBook {
@@ -51,7 +54,8 @@ nonisolated struct SampleLibrarySource: LibrarySource {
     ]
 
     func root() async throws -> LibraryRoot {
-        LibraryRoot(
+        if listsFail { throw LibraryError.invalidLink }
+        return LibraryRoot(
             title: "Sample",
             chips: [
                 LibraryEntry(kind: .feed, title: "All", link: Self.link("all")),

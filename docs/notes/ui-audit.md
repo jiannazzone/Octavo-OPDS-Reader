@@ -209,6 +209,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 ## Screens
 
 ### 8. No building block for "left page | hinge | right page"
+
+**Fixed:** `SpreadPages` (left and right at their widths, nothing on the hinge; folded the screen's own layout, or one of the two pages kept in place across a fold) and `.onLeftPage()`, both in `SpreadLayout.swift`. The six screens, the 17 frames and `SpreadRow` (so every shelf, grid and list) use them; a page shown folded is given no width until the spread is measured. Hosted tests check the split, that a page shown folded isn't made again unfolded, the width, and `.onLeftPage()`. The tour's first step still keeps its own spread (item 14).
 **Structural risk · M**
 
 **Where:**
@@ -220,6 +222,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 **Sturdier:** a `SpreadPages(left:right:)` container and an `.onLeftPage()` modifier, next to `SpreadRow` and `SpreadGrid`, used by all six.
 
 ### 9. The Library's own failure screen runs across the hinge
+
+**Fixed**, and reproduced first: with `-sampleLibrary failing` (new, DEBUG) `main` centred the invitation across the hinge unfolded. Its banners and invitation are on the left page now, and so are `LibraryNotConnected`'s and `NoLibraryInvitation`'s.
 **Structural risk, likely bug · S**
 
 **Where:** `LibraryView.swift:19-39`, the `library.root == nil` branch.
@@ -466,7 +470,7 @@ These need no UX decision; they keep today's look and behaviour.
 
 1. **Close the reader one way** (item 17), and **clear the cover motion on any fold change, with a time limit** (items 15, 16). S. **Done.**
 2. **Settings' chosen page as state** (item 1). This removes Settings from the shell. M. **Done** (as a declared left page).
-3. **`SpreadPages` and `.onLeftPage()`** (item 8). Fix the Library failure branch with it (item 9). M.
+3. **`SpreadPages` and `.onLeftPage()`** (item 8). Fix the Library failure branch with it (item 9). M. **Done.**
 4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S.
 5. **Home's state in one place, or Home draws its own title** (item 2). S.
 6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M.

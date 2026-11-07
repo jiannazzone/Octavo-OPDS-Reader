@@ -19,7 +19,6 @@ struct BookCoverPage: View {
     let sourceID: LibrarySourceID
     let source: any LibrarySource
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -29,17 +28,12 @@ struct BookCoverPage: View {
         // slides in with a cover on it, not an empty frame.
         let thumbnail = shell.library.covers.cachedImage(for: sourced, size: .thumbnail)
         Group {
-            if let pages = spread.pages {
-                HStack(spacing: 0) {
-                    BookCoverArt(page: page, thumbnail: thumbnail)
-                        .frame(width: pages.leftWidth)
-                        .ignoresSafeArea(edges: .vertical)
-                    Color.clear
-                        .frame(width: pages.hingeWidth)
-                    BookInfoPage(page: page, source: source, sourceID: sourceID)
-                        .frame(width: pages.rightWidth)
-                }
-            } else {
+            SpreadPages { _ in
+                BookCoverArt(page: page, thumbnail: thumbnail)
+                    .ignoresSafeArea(edges: .vertical)
+            } right: { _ in
+                BookInfoPage(page: page, source: source, sourceID: sourceID)
+            } folded: {
                 ZStack(alignment: .bottom) {
                     BookCoverArt(page: page, thumbnail: thumbnail)
                         .ignoresSafeArea()

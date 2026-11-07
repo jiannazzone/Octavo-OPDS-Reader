@@ -75,20 +75,14 @@ struct EmptyPages<Invitation: View>: View {
     var excluding: LibraryLink?
     @ViewBuilder let invitation: () -> Invitation
     @Environment(LibraryModel.self) private var library
-    @Environment(\.spread) private var spread
 
     var body: some View {
-        if let pages = spread.pages {
-            HStack(alignment: .top, spacing: 0) {
-                invitation()
-                    .frame(width: pages.leftWidth)
-                Color.clear
-                    .frame(width: pages.hingeWidth)
-                NewestBooksPage(newest: newest, source: server, width: pages.rightWidth)
-                    .frame(width: pages.rightWidth)
-            }
-        } else {
+        SpreadPages(alignment: .top, folded: .left) { _ in
             invitation()
+        } right: { width in
+            if let width {
+                NewestBooksPage(newest: newest, source: server, width: width)
+            }
         }
     }
 

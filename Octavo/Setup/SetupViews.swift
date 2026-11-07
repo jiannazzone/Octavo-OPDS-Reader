@@ -9,25 +9,21 @@ struct SetupPage<Explanation: View, Form: View, Help: View>: View {
     @ViewBuilder let explanation: () -> Explanation
     @ViewBuilder let form: () -> Form
     @ViewBuilder var help: () -> Help
-    @Environment(\.spread) private var spread
 
     var body: some View {
         ScrollView {
-            if let pages = spread.pages {
-                HStack(alignment: .top, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 20) {
-                        explanation()
-                        help()
-                    }
-                    .padding(.horizontal, SpreadMetrics.margin)
-                    .frame(width: pages.leftWidth, alignment: .leading)
-                    Color.clear
-                        .frame(width: pages.hingeWidth, height: 1)
-                    form()
-                        .padding(.horizontal, SpreadMetrics.margin)
-                        .frame(width: pages.rightWidth, alignment: .leading)
+            SpreadPages(alignment: .top) { _ in
+                VStack(alignment: .leading, spacing: 20) {
+                    explanation()
+                    help()
                 }
-            } else {
+                .padding(.horizontal, SpreadMetrics.margin)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } right: { _ in
+                form()
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } folded: {
                 VStack(alignment: .leading, spacing: 24) {
                     explanation()
                     form()

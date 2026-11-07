@@ -73,11 +73,122 @@ struct SpreadTests {
         #expect(readings.widths.last == 300)
         #expect(!readings.widths.contains(500))
     }
+
+    /// Each page at its width either side of the hinge, and a page shown
+    /// folded is the same view unfolded: it isn't made again (a half-typed
+    /// name would go).
+    @MainActor @Test func spreadPagesSplitAtTheHingeAndKeepTheFoldedPage() async throws {
+        let pages = PageFrames()
+        let posture = Posture(spread: Spread(width: 867, pages: nil))
+        let window = try host(HostedSpreadPages(frames: pages, posture: posture))
+        defer { window.isHidden = true }
+        #expect(await eventually { pages.right.last?.width == 867 })
+        #expect(pages.left.isEmpty)
+        #expect(pages.rightAppearances == 1)
+
+        posture.spread = .duoUnfolded
+        #expect(await eventually { pages.right.last?.minX == 495.5 })
+        #expect(pages.right.last?.width == 371.5)
+        #expect(pages.left.last?.minX == 0)
+        #expect(pages.left.last?.width == 455.5)
+        #expect(pages.rightAppearances == 1)
+    }
+
+    /// A page shown folded is given the screen's width, and none before the
+    /// spread has been measured (0 pt, `Spread.onePage`).
+    @MainActor @Test func aFoldedPageIsGivenAWidthOnlyOnceMeasured() async throws {
+        let pages = PageFrames()
+        let posture = Posture(spread: .onePage)
+        let window = try host(HostedSpreadPages(frames: pages, posture: posture))
+        defer { window.isHidden = true }
+        #expect(await eventually { pages.rightWidths.contains(nil) })
+        posture.spread = .duoFolded
+        #expect(await eventually { pages.rightWidths.last == 382 })
+        #expect(!pages.rightWidths.contains(0))
+    }
+
+    /// Unfolded, a title or banner keeps to the left page; folded, the page.
+    @MainActor @Test func onLeftPageKeepsToTheLeftPage() async throws {
+        let frames = PageFrames()
+        let posture = Posture(spread: .duoUnfolded)
+        let window = try host(HostedLeftPage(frames: frames, posture: posture))
+        defer { window.isHidden = true }
+        #expect(await eventually { frames.left.last?.width == 455.5 })
+        #expect(frames.left.last?.minX == 0)
+        posture.spread = Spread(width: 867, pages: nil)
+        #expect(await eventually { frames.left.last?.width == 867 })
+    }
+
+    /// `view` in a window of the Duo's tab width, with no safe areas.
+    @MainActor private func host(_ view: some View) throws -> UIWindow {
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 867, height: 669)
+        let host = UIHostingController(rootView: view)
+        host.safeAreaRegions = []
+        window.rootViewController = host
+        window.isHidden = false
+        return window
+    }
 }
 
 @MainActor
 private final class SpreadReadings {
     var widths: [CGFloat] = []
+}
+
+@MainActor
+private final class PageFrames {
+    var left: [CGRect] = []
+    var right: [CGRect] = []
+    var rightAppearances = 0
+    /// What the right page's closure was given.
+    var rightWidths: [CGFloat?] = []
+}
+
+private struct HostedLeftPage: View {
+    let frames: PageFrames
+    let posture: Posture
+
+    var body: some View {
+        Color.red
+            .frame(height: 10)
+            .onLeftPage()
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.left.append($0) }
+            .environment(\.spread, posture.spread)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+@MainActor @Observable
+private final class Posture {
+    var spread: Spread
+
+    init(spread: Spread) {
+        self.spread = spread
+    }
+}
+
+private struct HostedSpreadPages: View {
+    let frames: PageFrames
+    let posture: Posture
+
+    var body: some View {
+        SpreadPages(alignment: .top, folded: .right) { _ in
+            Color.red
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.left.append($0) }
+        } right: { width in
+            Color.blue
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.right.append($0) }
+                .onAppear {
+                    frames.rightAppearances += 1
+                    frames.rightWidths.append(width)
+                }
+                .onChange(of: width) { _, width in frames.rightWidths.append(width) }
+        }
+        .environment(\.spread, posture.spread)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
 }
 
 private struct PagesAsWideAsTheirReading: View {

@@ -10,7 +10,6 @@ import SwiftUI
 struct SearchView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
 
     var body: some View {
         // With no server yet, the imported books alone.
@@ -21,7 +20,7 @@ struct SearchView: View {
                 SearchField(search: search)
                     .padding(.horizontal, SpreadMetrics.margin)
                     .padding(.bottom, 12)
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         // With several, each server says so in its own section.
@@ -35,7 +34,7 @@ struct SearchView: View {
                                 }
                             }
                             .padding(.horizontal, SpreadMetrics.margin)
-                            .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                            .onLeftPage()
                         }
                         if search.searchText == nil {
                             SearchStart(search: search, source: server?.id ?? .files)
@@ -130,7 +129,7 @@ private struct SearchStart: View {
                 browse
             }
             .padding(.horizontal, SpreadMetrics.margin)
-            .frame(width: spread.pages?.leftWidth, alignment: .leading)
+            .onLeftPage()
         }
     }
 
@@ -232,7 +231,7 @@ private struct SearchResultsContent: View {
             if results.books.isEmpty, results.series.isEmpty, results.authors.isEmpty {
                 if search.state == .loaded {
                     ContentUnavailableView.search(text: results.query)
-                        .frame(width: spread.pages?.leftWidth)
+                        .onLeftPage(alignment: .center)
                         .padding(.top, 40)
                 }
             } else {
@@ -264,7 +263,7 @@ private struct SearchResultsContent: View {
             VStack(alignment: .leading, spacing: 4) {
                 SearchHeading("Books")
                     .padding(.horizontal, SpreadMetrics.margin)
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
                 SpreadList(items: Self.flowing(books, all: results.allBooks)) { item in
                     switch item {
                     case .book(let book): SearchBookRow(book: book)
@@ -325,7 +324,7 @@ private struct SearchResultsContent: View {
         }
         .font(.subheadline)
         .padding(.horizontal, SpreadMetrics.margin)
-        .frame(width: spread.pages?.leftWidth, alignment: .leading)
+        .onLeftPage()
     }
 
     private var placeholders: some View {
@@ -343,7 +342,7 @@ private struct SearchResultsContent: View {
             }
         }
         .padding(.horizontal, SpreadMetrics.margin)
-        .frame(width: spread.pages?.leftWidth, alignment: .leading)
+        .onLeftPage()
         .accessibilityHidden(true)
     }
 
