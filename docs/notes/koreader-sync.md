@@ -8,8 +8,7 @@ This note keeps what was measured, so nobody has to measure it again.
 
 One KOReader account in Settings (address, username, password), for OPDS and Files books. No per-server settings. BookOrbit keeps its own sync, and Kavita and Komga stay plain OPDS catalogs.
 
-1. **Test first.** Run KOReader's release build headless in a throwaway Linux container (`koreader-linux-arm64` from its releases, driven by `luajit` from its install folder), or use a real device. Check what it does with `/body/DocFragment[n]/...` strings Octavo would send, and with an empty or bad one. The session's safety check blocked running the build on 2026-11-06, so this needs the owner's OK. If KOReader can't open Octavo's places, the feature changes.
-2. **Then the opening rule, then the UI** (the risks below).
+The steps are in `docs/notes/koreader-sync-plan.md`. The first is a test: run KOReader's release build headless in a throwaway Linux container (`koreader-linux-arm64` from its releases, driven by `luajit` from its install folder), or use a real device. The session's safety check blocked running the build on 2026-11-06, so this needs the owner's OK. If KOReader can't open Octavo's places, the feature changes.
 
 The account form would also fit Kavita's and Komga's built-in sync, since it's how KOReader itself connects to them. That's untested from Octavo, and Kavita's address carries a key.
 

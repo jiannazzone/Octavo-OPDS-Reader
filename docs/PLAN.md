@@ -53,7 +53,7 @@ One area at a time, in this order. Each step goes to the simulator when it's bui
 - [x] More than one server (Adam, 2026-11-05), before the first release: "Someone might have bookorbit and OPDS, for example." Decided and built the same day (decision 36 in `docs/design/direction.md`, `docs/notes/more-than-one-server.md`): a menu in the Library's title, Home and Search across every server, a name you set. Adam tried it on his Duo the same day.
 - [x] Home felt empty unfolded (Adam, 2026-11-06). Decided and built the same day (`docs/design/direction.md`, Home): this book on the left page with Open, rows that grow on the right, and the Library's newest books with one or two in progress.
 - [x] Empty lists: an invitation, not a blank screen (Adam, 2026-11-01; #30). Decided and built 2026-11-05 (decision 22 in `docs/design/direction.md`, `docs/notes/empty-lists.md`): "No books in this list" with Open Library, and unfolded the server's newest books on the right page. Home's and On iPhone's empty screens use the same layout.
-- iCloud sync and KOReader sync (Adam, 2026-11-05): separate tasks, for later. They'd carry the places of OPDS and imported books, which stay on the iPhone in decision 36.
+- iCloud sync and KOReader sync (Adam, 2026-11-05): separate tasks, for later. They'd carry the places of OPDS and imported books, which stay on the iPhone in decision 36. KOReader sync's steps are in `docs/notes/koreader-sync-plan.md`, not started.
 
 ## What you'll see that isn't right yet
 

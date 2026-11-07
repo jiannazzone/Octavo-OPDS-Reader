@@ -40,5 +40,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `xhtml-first-frame.md` | 2026-11-04 | Why a new WebKit process's first XHTML frame takes over a second (QuickLook's `dlopen`), book opens with and without it, warm-ups, why it doesn't matter on a real Duo (25 ms), rendering a book before the tap (tried, dropped), closed readers staying alive |
 | `koreader-sync.md` | 2026-11-06 | KOReader sync, measured and dropped from the first release: what Kavita, Komga and the standalone server do, how a book is matched, why a percentage can't work, what would go wrong, and what to test first if it comes back |
 | `ui-audit.md` | 2026-11-07 | Is the UI layer sound or a house of cards: the verdict, 23 findings by area (shell, screens, reader chrome) with severity, evidence and fix size, files that keep getting patched, and a recommended order |
+| `koreader-sync-plan.md` | 2026-11-06 | Its implementation plan, not started: a test on real KOReader first, then the protocol, positions, the opening rule, wiring, Settings and review, with the questions for Adam |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.
