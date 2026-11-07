@@ -38,13 +38,14 @@ enum SpreadMetrics {
 /// then keeps its place in the view across a fold, so the fold doesn't
 /// start it again (Settings: a name half typed).
 struct SpreadPages<Left: View, Right: View, Folded: View>: View {
-    /// What shows folded.
+    /// The page that fills the screen folded.
     enum FoldedPage {
-        case left, right, own
+        case left, right
     }
 
-    var alignment: VerticalAlignment = .center
-    private let foldedPage: FoldedPage
+    private let alignment: VerticalAlignment
+    /// `nil`: the screen's own layout.
+    private let foldedPage: FoldedPage?
     @ViewBuilder private let left: (_ width: CGFloat) -> Left
     @ViewBuilder private let right: (_ width: CGFloat) -> Right
     @ViewBuilder private let folded: () -> Folded
@@ -58,7 +59,7 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
         @ViewBuilder folded: @escaping () -> Folded
     ) {
         self.alignment = alignment
-        foldedPage = .own
+        foldedPage = nil
         self.left = left
         self.right = right
         self.folded = folded
@@ -66,7 +67,7 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
 
     var body: some View {
         let pages = spread.pages
-        if pages == nil, foldedPage == .own {
+        if pages == nil, foldedPage == nil {
             folded()
         } else {
             // One stack in both postures, so a page shown either way keeps
