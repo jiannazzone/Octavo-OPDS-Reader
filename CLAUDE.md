@@ -90,11 +90,12 @@ protocol LibrarySource { /* browse, search, metadata, download */ }
 // Implementations: OPDSSource (1.2 + 2.0), BookOrbitSource
 
 protocol ProgressSync { /* pull/push position, annotations, sessions */ }
-// Implementations: BookOrbitSync, KOSync (percentage only), ICloudSync
+// Implementations: BookOrbitSync. Later: KOSync, ICloudSync
 ```
 
 - Users can combine them freely (e.g. Calibre OPDS + kosync, or BookOrbit for both).
-- **Internal position model: CFI + percentage (+ page number for fixed layout).** Percentage-only backends such as kosync sync from the percentage.
+- **Internal position model: CFI + percentage (+ page number for fixed layout).**
+- **KOReader sync isn't in the first release** (Adam, 2026-11-06; `docs/notes/koreader-sync.md`). A percentage alone can't work: KOReader moves a book only by xpointer. Read the note before planning it.
 - Note: OPDS itself has **no** progress sync. Sync always comes from a `ProgressSync` backend.
 - **Opening rule** (OctavoKit `Sync/`, `docs/notes/sync-spike.md`): if the server has a CFI and the device has nothing unsent, the server wins. If both moved, the later timestamp wins and the server wins ties. With no server CFI, or if the pull fails, the local position is used, else the server's percentage. Opening a book never pushes. Pushes wait until the reader has been still for 2 s, and closing the reader flushes them.
 - **Any number of servers** (decision 36, `docs/notes/more-than-one-server.md`): `LibraryModel.connections`, one per server, with its own client and transport. A book's file, place and bookmarks are kept under its server's ID (`LibraryFile.storageKey(in:)`), since BookOrbit numbers files from 1 on every server. A place goes only to the book's own server.
