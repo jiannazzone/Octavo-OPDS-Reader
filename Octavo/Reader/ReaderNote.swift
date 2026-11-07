@@ -100,7 +100,7 @@ nonisolated struct ReaderNotePlacement: Equatable, Sendable {
 /// The reader's font as the card can draw it. A CSS family, reduced to one iOS
 /// has: a book's own embedded font isn't known outside the page, so that comes
 /// out as the family it falls back to. Our bundled fonts are registered for the
-/// card (`ReaderFont.cardFamilies`), and come out as themselves.
+/// card (`ReaderFont.cardFamily(named:)`), and come out as themselves.
 nonisolated enum ReaderNoteTypeface: Equatable, Sendable {
     case named(String)
     /// One of `ReaderFont`'s bundled fonts, drawn from the same files as on the
@@ -113,11 +113,17 @@ nonisolated enum ReaderNoteTypeface: Equatable, Sendable {
     /// WebKit's own font for a book that sets none.
     static let standard = ReaderNoteTypeface.named("Times New Roman")
 
+    /// `installed`: the families iOS has.
     init(cssFamily: String?, installed: Set<String>) {
+        let installed = Dictionary(installed.map { ($0.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        self.init(cssFamily: cssFamily) { installed[$0.lowercased()] }
+    }
+
+    /// `family`: the family iOS has by that name, as iOS spells it, or `nil`.
+    init(cssFamily: String?, family: (String) -> String?) {
         let names = (cssFamily ?? "").split(separator: ",").map {
             $0.trimmingCharacters(in: CharacterSet(charactersIn: "\"' ").union(.whitespacesAndNewlines))
         }
-        let installed = Dictionary(installed.map { ($0.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
         for name in names {
             switch name.lowercased() {
             case "ui-serif": self = .serif
@@ -126,13 +132,13 @@ nonisolated enum ReaderNoteTypeface: Equatable, Sendable {
             case "serif", "times", "-webkit-standard": self = .standard
             case "sans-serif": self = .named("Helvetica")
             case "monospace": self = .named("Courier")
-            case let family:
-                if let bundled = ReaderFont.allCases.first(where: { $0.bundledName == family }) {
+            case let lowered:
+                if let bundled = ReaderFont.allCases.first(where: { $0.bundledName == lowered }) {
                     // Not registered: the page's next one, as for a book's own.
-                    guard let name = bundled.bundledFamily, installed[name.lowercased()] != nil else { continue }
+                    guard let name = bundled.bundledFamily, family(name) != nil else { continue }
                     self = .bundled(bundled)
                 } else {
-                    guard let found = installed[family] else { continue }
+                    guard let found = family(name) else { continue }
                     self = .named(found)
                 }
             }

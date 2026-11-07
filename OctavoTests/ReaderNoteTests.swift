@@ -148,6 +148,35 @@ struct ReaderNoteTypefaceTests {
         #expect(ReaderNoteTypeface(cssFamily: font.cssFamily, installed: installed) == expected)
     }
 
+    // Every font in Text and Theme, as this iOS has it, comes out as itself
+    // on the card. Iowan Old Style isn't in `UIFont.familyNames`.
+    @Test(arguments: ReaderFont.allCases)
+    @MainActor func everyReaderFontIsDrawnInItself(font: ReaderFont) {
+        let typeface = ReaderNoteTypeface(cssFamily: font.cssFamily, family: ReaderFont.cardFamily(named:))
+        let family: String? = switch font {
+        case .book: "Times New Roman"
+        case .newYork, .sanSerif: nil
+        case .georgia: "Georgia"
+        case .iowan: "Iowan Old Style"
+        case .palatino: "Palatino"
+        case .charter: "Charter"
+        case .atkinson: "Atkinson Hyperlegible Next"
+        case .openDyslexic: "OpenDyslexic"
+        }
+        switch font {
+        case .newYork: #expect(typeface == .serif)
+        case .sanSerif: #expect(typeface == .sansSerif)
+        default: #expect(typeface.uiFont(size: 16).familyName == family)
+        }
+    }
+
+    // Core Text's names, in any case, as a book's CSS may write them.
+    @Test @MainActor func aFamilyIsFoundInAnyCase() {
+        #expect(ReaderFont.cardFamily(named: "palatino") == "Palatino")
+        #expect(ReaderFont.cardFamily(named: "IOWAN OLD STYLE") == "Iowan Old Style")
+        #expect(ReaderFont.cardFamily(named: "Crimson Text") == nil)
+    }
+
     // If registering them failed, the card does what the page would without
     // them.
     @Test func aBundledFontThatIsntThereFallsBack() {
@@ -177,8 +206,8 @@ struct ReaderNoteTypefaceTests {
     ])
     @MainActor func bundledFontsDrawFromTheirOwnFaces(font: ReaderFont, faces: [String]) throws {
         let family = try #require(font.bundledFamily)
-        #expect(ReaderFont.cardFamilies.contains(family))
-        let typeface = ReaderNoteTypeface(cssFamily: font.cssFamily, installed: ReaderFont.cardFamilies)
+        #expect(ReaderFont.cardFamily(named: family) == family)
+        let typeface = ReaderNoteTypeface(cssFamily: font.cssFamily, family: ReaderFont.cardFamily(named:))
         #expect(typeface == .bundled(font))
         #expect(typeface.uiFont(size: 21).familyName == family)
         #expect(typeface.uiFont(size: 21).pointSize == 21)
@@ -200,7 +229,7 @@ struct ReaderNoteTypefaceTests {
     // OpenDyslexic's "fi" and "ffi" leave a gap, so the card, like the page,
     // keeps every letter its own glyph. Atkinson keeps its own.
     @Test @MainActor func openDyslexicHasNoLigaturesOnTheCard() throws {
-        _ = ReaderFont.cardFamilies
+        _ = ReaderFont.cardFamily(named: "OpenDyslexic")
         let text = "fi ffi office"
         func glyphs(_ font: UIFont) -> Int {
             CTLineGetGlyphCount(CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [.font: font])))

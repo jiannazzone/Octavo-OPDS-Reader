@@ -117,7 +117,7 @@ private struct ReaderNoteText: View {
     let color: Color
 
     var body: some View {
-        let typeface = ReaderNoteTypeface(cssFamily: note.font.family, installed: ReaderFont.cardFamilies)
+        let typeface = ReaderNoteTypeface(cssFamily: note.font.family, family: ReaderFont.cardFamily(named:))
         let size = note.font.size
         VStack(alignment: .leading, spacing: size * 0.6) {
             ForEach(note.blocks.indices, id: \.self) { index in
@@ -181,13 +181,16 @@ extension ReaderNoteTypeface {
 }
 
 extension ReaderFont {
-    /// The families the card can draw: the ones iOS has, and the bundled ones
-    /// (#83), which SwiftUI can't see on the page. Those are registered with
-    /// Core Text, for this run of the app, the first time a card asks: the same
-    /// WOFF2 files the page loads, which Core Text reads as they are.
-    static var cardFamilies: Set<String> {
+    /// The family the card can draw by `name`, as iOS spells it, or `nil`.
+    /// Core Text is asked, as WebKit does: `UIFont.familyNames` leaves out some
+    /// that iOS has, Iowan Old Style among them. The bundled fonts (#83), which
+    /// SwiftUI can't see on the page, are registered with Core Text, for this
+    /// run of the app, the first time a card asks: the same WOFF2 files the
+    /// page loads, which Core Text reads as they are.
+    static func cardFamily(named name: String) -> String? {
         _ = registered
-        return Set(UIFont.familyNames)
+        let descriptor = UIFontDescriptor(fontAttributes: [.family: name])
+        return descriptor.matchingFontDescriptors(withMandatoryKeys: [.family]).first.map { UIFont(descriptor: $0, size: 12).familyName }
     }
 
     private static let registered: Void = {
