@@ -891,8 +891,9 @@ struct SeveralServersShellTests {
         model.push(.cover(gone))
         model.push(.cover(kept))
         model.select(.home)
+        model.lastSpread = .duoUnfolded
         model.openSettings()
-        model.openSettingsPage(.server(first.id), twoPages: true)
+        model.push(.settingsPage(.server(first.id)))
 
         await model.removeServer(first.id, removingBooks: true)
 

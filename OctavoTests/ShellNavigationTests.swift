@@ -151,6 +151,12 @@ extension UserDefaults {
     }
 }
 
+extension Spread {
+    /// The Duo's tabs, measured in the simulator (`SpreadTests`).
+    static let duoUnfolded = Spread(width: 867, divisions: [SpreadTests.hinge])
+    static let duoFolded = Spread(width: 382, divisions: [])
+}
+
 struct ShellPathTests {
     static let a = SampleRoutes.collections
     static let b = SampleRoutes.classics
@@ -173,6 +179,36 @@ struct ShellPathTests {
         path.popToRoot()
         #expect(path.routes.isEmpty)
         #expect(path.lastMove == .replace)
+    }
+
+    // Only a route with a left page pairs up; any other is pushed, folded
+    // or not, and Back takes one step.
+    @Test(arguments: [false, true])
+    func otherRoutesArePushed(twoPages: Bool) {
+        var path = ShellPath()
+        path.open(Self.a, twoPages: twoPages)
+        path.open(Self.b, twoPages: twoPages)
+        #expect(path.routes == [Self.a, Self.b])
+        #expect(path.lastMove == .push)
+        path.back(twoPages: twoPages)
+        #expect(path.routes == [Self.a])
+    }
+
+    // Unfolded, the list under its page is drawn by the page, and only then.
+    @Test func aLeftPageIsHiddenUnderItsPageUnfolded() {
+        var path = ShellPath()
+        path.push(Self.a)
+        path.push(.settings)
+        path.push(.settingsPage(.storage))
+        // Depth 2 is the list, under its page at depth 3.
+        #expect(path.isDrawnByTheOneAbove(2, twoPages: true))
+        #expect(!path.isDrawnByTheOneAbove(2, twoPages: false))
+        #expect(!path.isDrawnByTheOneAbove(1, twoPages: true))
+        #expect(!path.isDrawnByTheOneAbove(3, twoPages: true))
+        #expect(!path.isDrawnByTheOneAbove(0, twoPages: true))
+        path.push(.signInAgain(SampleLibrarySource.id))
+        #expect(path.isDrawnByTheOneAbove(2, twoPages: true), "a screen over the page leaves the pair as it was")
+        #expect(!path.isDrawnByTheOneAbove(3, twoPages: true))
     }
 
     @Test func replacingDoesntAnimate() {
