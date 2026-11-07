@@ -4,7 +4,7 @@ import Testing
 @testable import Octavo
 
 /// Home unfolded (`docs/design/direction.md`, Home).
-@MainActor struct HomeTests {
+@MainActor @Suite(.temporaryFiles) struct HomeTests {
     // About what the right page has for rows on the Duo.
     private let room: CGFloat = 560
 
