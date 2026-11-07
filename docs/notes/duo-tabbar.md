@@ -71,6 +71,15 @@ The shell first showed the reader with `fullScreenCover`. Unfolding on a cover o
 
 The shell now shows the reader as a layer over the tabs in the same view hierarchy, which resizes with the scene like everything else. For #17: keep the reader in the hierarchy (a layer or a push), or wait for the scene's new size before presenting anything modal on a fold.
 
+## 7. A stack stuck wider than its space (2026-11-07)
+
+On Adam's Duo, unfolded, Home and Settings were laid out 951 pt wide (the whole inner display) instead of the 867 pt beside the side column, and centred: about 42 pt cut off on the left and 42 pt under the side column.
+
+- **Cause:** `ScreenStack` read its spread from its own size, and its screens take fixed widths from that spread. The stack was as wide as its screens, so once one reading said 951 pt, the screens kept the stack 951 pt wide, centred in the 867 pt space, and every later reading said the same: left page 497.5 pt, right page 413.5 pt, the hinge still in its place on screen. Only a fold (a new width) got it out.
+- **Reproduced** on 'Octavo Width Duo' (FBA38A69-1855-4A69-9F35-A0261162F9ED, iOS 27.1 simulator): one forced 951 pt reading gave Adam's screenshot exactly, and laying the stack out without the side column for its first 1.5 s left it wide for good. What gives a real Duo that reading isn't known. Likely moments are an unfold where the side column arrives after the new size, and the sideways layouts iOS makes for the app switcher (`reader-background.md` §1). In the simulator, going to the background and folding both held the stack at its old width for a moment (867 pt in a 382 pt space) before it let go.
+- **Fix:** the stack takes exactly the width it's offered, `.frame(minWidth: 0, maxWidth: .infinity)` (`maxWidth` alone grows with what's inside). A reading is now always of the space, so the next layout replaces a wrong one. The tour's Close your iPhone step measured its pages the same way and has the same fix.
+- **Checked** against `main` on the same simulator, by screenshots: Home, Settings, Library, Search, a book's cover page, the reader, setup and the tour, flat, folded and half open, match apart from the clock and a book downloaded between runs. The slide's distance (the width plus the side column) is unchanged. Not checked on a real Duo.
+
 ## Reproducing
 
 The probe was `Octavo/Shell/TabBarProbe.swift` (DEBUG), shown instead of the spike library when launched with `-probe 1`. To run it again, copy it back into `Octavo/`, switch `ContentView` to `TabBarProbe()` while `UserDefaults.standard.bool(forKey: "probe")`, build, and launch with launch arguments:

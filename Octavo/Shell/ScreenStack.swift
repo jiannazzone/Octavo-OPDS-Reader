@@ -74,6 +74,11 @@ struct ScreenStack<Root: View>: View {
             // book) changes at once.
             .animation(path.lastMove == .replace ? nil : reduceMotion ? Self.fade : Self.slide, value: path)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: measured)
+            // Exactly the width the tab offers (`maxWidth` alone grows with
+            // what's inside): the screens take fixed widths from this spread,
+            // so a stack as wide as its screens kept a wrong reading (the
+            // inner display's full width, without the side column) for good.
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .topLeading)
             .onGeometryChange(for: Spread.self) { Spread($0) } action: { new in
                 spreadChanged(to: new)
             }
