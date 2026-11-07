@@ -9,10 +9,10 @@ struct CoverImage: View {
     let book: SourcedBook
     var size: LibraryCoverSize = .thumbnail
     @Environment(LibraryModel.self) private var library
-    @State private var loaded: UIImage?
+    @State private var loaded = LoadedCover()
 
     var body: some View {
-        let image = loaded ?? library.covers.cachedImage(for: book, size: size)
+        let image = loaded.image ?? library.covers.cachedImage(for: book, size: size)
             ?? (size == .full ? library.covers.cachedImage(for: book, size: .thumbnail) : nil)
         // The image is in an overlay, so this view keeps the size it's
         // given: a filled image is larger than that, which would push
@@ -29,11 +29,54 @@ struct CoverImage: View {
         // The pane beside a list keeps this view as the book changes.
         // Below the scrolling for a grid's covers, which may be gone before
         // they're ready. A full cover is the screen's point.
-        .task(id: [book.source.rawValue, book.book.id.rawValue, book.book.cover?.cacheKey], priority: size == .full ? .userInitiated : .utility) {
-            loaded = nil
-            loaded = await library.coverImage(for: book, size: size)
-        }
+        .loadingCover(of: book, size: size, priority: size == .full ? .userInitiated : .utility, into: $loaded)
         .accessibilityHidden(true)
+    }
+}
+
+/// A book's cover as a view has loaded it (`loadingCover`).
+struct LoadedCover: Equatable {
+    var image: UIImage?
+    /// Done, with an image or without one (there's none, or it couldn't load).
+    var finished = false
+
+    /// Loads with `load`, then hands it to `show` unless the task was
+    /// cancelled meanwhile: its view has moved on to another book, and an
+    /// answer coming late would replace that book's cover (the earlier current
+    /// book's under Home's strip, on every launch).
+    static func load(_ load: () async -> UIImage?, show: (LoadedCover) -> Void) async {
+        let image = await load()
+        guard !Task.isCancelled else { return }
+        show(LoadedCover(image: image, finished: true))
+    }
+}
+
+extension View {
+    /// Loads `book`'s cover into `cover`, again whenever the book or its
+    /// cover changes, emptying it first. The view keeps the cover itself (a
+    /// pane may keep the view as its book changes), so only the latest book's
+    /// cover lands.
+    func loadingCover(
+        of book: SourcedBook?, size: LibraryCoverSize, priority: TaskPriority = .userInitiated, into cover: Binding<LoadedCover>
+    ) -> some View {
+        modifier(CoverLoading(book: book, size: size, priority: priority, cover: cover))
+    }
+}
+
+private struct CoverLoading: ViewModifier {
+    let book: SourcedBook?
+    let size: LibraryCoverSize
+    let priority: TaskPriority
+    @Binding var cover: LoadedCover
+    @Environment(LibraryModel.self) private var library
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: [book?.source.rawValue, book?.book.id.rawValue, book?.book.cover?.cacheKey], priority: priority) {
+                cover = LoadedCover()
+                guard let book else { return }
+                await LoadedCover.load({ await library.coverImage(for: book, size: size) }) { cover = $0 }
+            }
     }
 }
 
@@ -78,16 +121,6 @@ struct FittedCover: View {
                 }
             }
         }
-    }
-}
-
-extension View {
-    /// A cover as the page it's on (Home's left page unfolded): blurred and
-    /// darkened as `FittedCover` does its strips. `width` is the page's.
-    func pageBlur(width: CGFloat) -> some View {
-        blur(radius: width * FittedCover.blurShare, opaque: true)
-            .overlay(.black.opacity(FittedCover.dimming))
-            .clipped()
     }
 }
 

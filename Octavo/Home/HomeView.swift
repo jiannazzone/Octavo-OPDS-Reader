@@ -2,11 +2,12 @@ import OctavoKit
 import SwiftUI
 
 /// The Home tab (`docs/design/direction.md`, Home): the book you're reading
-/// as a large cover, with your other books in progress beneath it folded,
-/// or on the right page unfolded. Only books in progress, but for the newest
-/// books filling the right page when there are one or two. A book opens its
-/// own screen, and unfolded the current book has Open; unfolding here opens
-/// nothing.
+/// as a large cover, with your other books in progress beneath it folded;
+/// unfolded its cover fills the left page as on its folded screen
+/// (decision 37), and the others are on the right page. Only books in
+/// progress, but for the newest books filling the right page when there are
+/// one or two. A book opens its own screen, and unfolded the current book has
+/// Open; unfolding here opens nothing.
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
@@ -124,8 +125,8 @@ struct HomeContent: View {
     }
 
     private var layout: some View {
-        SpreadPages(alignment: .top) { width in
-            CurrentBookPage(book: books?.first, width: width)
+        SpreadPages(alignment: .top) { _ in
+            CurrentBookPage(book: books?.first)
         } right: { width in
             AlsoReadingPage(books: others, width: width)
         } folded: {
@@ -198,20 +199,21 @@ struct CurrentBook: View {
     }
 }
 
-/// Unfolded, the book you're reading has the left page: its whole cover, then
-/// a glass strip with its title, place and Open, both on a blurred copy of the
-/// cover, so nothing covers the art. `nil` while Home loads.
+/// Unfolded, the book you're reading has the left page: its cover edge to
+/// edge on its blur, as the folded book's screen draws it (`BookCoverArt`),
+/// with a glass strip over its foot, 8 pt from the edges as the folded sheet
+/// is: the title, place and Open (decision 37). Open moves this cover
+/// onto the right page as a book's screen does (`CoverSpots`). `nil` while
+/// Home loads.
 struct CurrentBookPage: View {
     let book: SourcedBook?
-    let width: CGFloat
+    @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @State private var report = HomeCoverReport()
-    /// This page, to Home's cover spot (`CoverSpots.homeGone`).
-    @State private var reporter = UUID()
+    @State private var cover = LoadedCover()
 
     var body: some View {
         // A page that fits, in a scroll view all the same so it pulls to
-        // refresh, as the right page does.
+        // refresh, as the right page does. The cover stays put behind it.
         GeometryReader { proxy in
             ScrollView {
                 page
@@ -222,101 +224,48 @@ struct CurrentBookPage: View {
             .ignoresSafeArea(.container, edges: .bottom)
         }
         .background {
-            if let book {
-                CoverImage(book: book, size: .full)
-                    .pageBlur(width: width)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { report.page = $0 }
-            } else {
-                Color(.secondarySystemBackground)
+            Group {
+                if let book {
+                    BookCoverArt(
+                        // The shelf's copy until the full one loads, as on the
+                        // book's screen.
+                        image: cover.image ?? library.covers.cachedImage(for: book, size: .full)
+                            ?? library.covers.cachedImage(for: book, size: .thumbnail),
+                        finished: book.book.cover == nil || cover.finished,
+                        title: book.book.title, author: book.book.authors.formatted(.list(type: .and)),
+                        book: book.id, screen: .home
+                    )
+                    // The cover's button below says what it is.
+                    .accessibilityHidden(true)
+                } else {
+                    Color(.secondarySystemBackground)
+                }
             }
+            .ignoresSafeArea(edges: .vertical)
         }
+        .loadingCover(of: book, size: .full, into: $cover)
         .ignoresSafeArea(.container, edges: .bottom)
-        // Where Open moves the cover from, and Back brings it back to.
-        .onChange(of: book, initial: true) { report.book = book }
-        .onChange(of: report) { shell.reader.coverSpots.reportHome(report, from: reporter) }
-        .onAppear { shell.reader.coverSpots.reportHome(report, from: reporter) }
-        .onDisappear { shell.reader.coverSpots.homeGone(reporter) }
     }
 
     private var page: some View {
         VStack(spacing: 12) {
             if let book {
                 OpenButton(route: .cover(book)) {
-                    WholeCover(book: book, loaded: $report.image)
-                        .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: HomeCoverSpot.badgeSize) }
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { report.cover = $0 }
-                        .shadow(color: .black.opacity(HomeCoverSpot.shadowOpacity), radius: HomeCoverSpot.shadowRadius, y: HomeCoverSpot.shadowY)
+                    Color.clear.contentShape(.rect)
                 }
                 .frame(maxHeight: .infinity)
                 .accessibilityLabel(book.book.title.isEmpty ? "Cover" : "Cover of \(book.book.title)")
                 .accessibilityValue(shell.marks(of: book).accessibilityValue)
                 CurrentBookStrip(book: book)
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { report.stripTop = $0 }
             } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.quaternary)
-                    .aspectRatio(2 / 3, contentMode: .fit)
-                    .frame(maxHeight: .infinity)
-                    .accessibilityHidden(true)
+                Spacer()
                 RoundedRectangle(cornerRadius: 28)
                     .fill(.quaternary)
                     .frame(height: 88)
                     .accessibilityHidden(true)
             }
         }
-        .padding(.top, 18)
-        .padding(.horizontal, 8)
-        .padding(.bottom, 8)
-    }
-}
-
-/// Home's cover unfolded, in the window, for the cover's motion
-/// (`ReaderCoverMotion`): Open moves it from here onto the right page, and
-/// Back brings it back. The left page is its blur down to the strip.
-struct HomeCoverSpot: Equatable {
-    var book: SourcedBook?
-    /// The full cover as Home shows it, once loaded.
-    var image: UIImage?
-    var cover = CGRect.zero
-    var page = CGRect.zero
-    var stripTop: CGFloat = 0
-
-    /// What Home shows for a book without artwork.
-    var standIn: StandInCover? {
-        book.map { StandInCover(title: $0.book.title, author: $0.book.authors.first ?? "", seed: $0.book.id.rawValue) }
-    }
-
-    /// How Home draws the cover, which it loses as it moves.
-    static let cornerRadius: CGFloat = 6
-    static let shadowOpacity = 0.35
-    static let shadowRadius: CGFloat = 14
-    static let shadowY: CGFloat = 6
-    static let badgeSize: CGFloat = 26
-}
-
-/// A cover at its own shape, as large as it fits. The page behind is already
-/// the cover's blur, so a 2:3 frame would only add bands of the same blur
-/// (decision 32). Until the cover loads, the frame and stand-in every cover has.
-private struct WholeCover: View {
-    let book: SourcedBook
-    /// Kept by the page, for the cover's motion.
-    @Binding var loaded: UIImage?
-    @Environment(LibraryModel.self) private var library
-
-    var body: some View {
-        Group {
-            if let image = loaded ?? library.covers.cachedImage(for: book, size: .full) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(.rect(cornerRadius: HomeCoverSpot.cornerRadius))
-            } else {
-                BookCover(book: book, cornerRadius: HomeCoverSpot.cornerRadius, size: .full)
-            }
-        }
-        .task(id: [book.source.rawValue, book.book.id.rawValue, book.book.cover?.cacheKey]) {
-            loaded = await library.coverImage(for: book, size: .full)
-        }
+        .padding(8)
     }
 }
 

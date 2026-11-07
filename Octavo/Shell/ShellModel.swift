@@ -101,7 +101,7 @@ final class ShellModel {
         self.removedServers = removedServers
         places = BookPlaces(store: positions) { [library] in ShellModel.progressSync(for: $0, on: library.server($0.source)) }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
-        reader = ReaderPresenter(library: library, opener: opener, places: places, pages: pages, defaults: defaults)
+        reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
             return ReaderPresenter.Underneath(
