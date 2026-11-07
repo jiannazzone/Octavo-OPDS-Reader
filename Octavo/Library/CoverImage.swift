@@ -47,9 +47,9 @@ struct FittedCover: View {
     /// replaces it doesn't show.
     static let minimumStrip: CGFloat = 3
     /// The blur's radius, as a share of the frame's shorter side.
-    private static let blurShare: CGFloat = 0.06
+    static let blurShare: CGFloat = 0.06
     /// How much the blurred copy is darkened, so the cover stands out from it.
-    private static let dimming = 0.18
+    static let dimming = 0.18
 
     /// Whether `cover` fills `frame`, cropped, instead of fitting inside it.
     static func fills(cover: CGSize, frame: CGSize) -> Bool {
@@ -78,6 +78,16 @@ struct FittedCover: View {
                 }
             }
         }
+    }
+}
+
+extension View {
+    /// A cover as the page it's on (Home's left page unfolded): blurred and
+    /// darkened as `FittedCover` does its strips. `width` is the page's.
+    func pageBlur(width: CGFloat) -> some View {
+        blur(radius: width * FittedCover.blurShare, opaque: true)
+            .overlay(.black.opacity(FittedCover.dimming))
+            .clipped()
     }
 }
 

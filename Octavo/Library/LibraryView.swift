@@ -186,9 +186,22 @@ struct LibraryShelf: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
     var maxRows = 1
+    /// Books already on the screen beside the shelf (Home's).
+    var hiding: Set<SourcedBook.ID> = []
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
     @Environment(\.spread) private var spread
+
+    /// Whether a shelf of `feed` has covers to show, or may once it loads.
+    static func hasCovers(_ feed: FeedModel, from source: LibrarySourceID, hiding: Set<SourcedBook.ID> = []) -> Bool {
+        switch feed.state {
+        case .idle, .loading: true
+        case .failed: false
+        case .loaded:
+            feed.books.contains { !hiding.contains(SourcedBook(source: source, book: $0).id) }
+                || feed.entries.contains { !$0.previewCovers.isEmpty }
+        }
+    }
 
     var body: some View {
         // The section's own list, so its first page is ready when the shelf
@@ -230,7 +243,7 @@ struct LibraryShelf: View {
     @ViewBuilder
     private func shelf(_ feed: FeedModel?) -> some View {
         if let feed, !feed.books.isEmpty {
-            SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }, maxRows: maxRows, cell: { book in
+            SpreadGrid(items: feed.books.map { SourcedBook(source: source, book: $0) }.filter { !hiding.contains($0.id) }, maxRows: maxRows, cell: { book in
                 BookGridCell(book: book)
             })
         } else if let feed, !feed.entries.isEmpty, feed.entries.contains(where: { !$0.previewCovers.isEmpty }) {
