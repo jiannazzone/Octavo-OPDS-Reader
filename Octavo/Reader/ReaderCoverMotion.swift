@@ -91,7 +91,8 @@ final class ReaderCoverMotion {
     /// Called once the motion is over, to take it away.
     @ObservationIgnored var onFinished: (() -> Void)?
     @ObservationIgnored private var started = false
-    @ObservationIgnored private var slid = false
+    /// The cover has reached the right page, opening.
+    private(set) var slid = false
     @ObservationIgnored private var swinging = false
     @ObservationIgnored private let pageTurn: ReaderPageTurn
     @ObservationIgnored private let leafStyle: ReaderLeafStyle
@@ -485,8 +486,19 @@ struct ReaderCoverMotionView: View {
     /// as the cover moves, so it ends as the book's screen's does. Closing,
     /// Home itself is underneath, its cover hidden the same way.
     @ViewBuilder private func homePage(_ home: HomeCoverSpot) -> some View {
+        // Under the paper once the cover's over the right page.
+        if !motion.slid {
+            homeBackdrop(home)
+        }
+        motion.paper
+            .frame(width: max(motion.rightPage.minX - motion.coverFrame.minX, 0), height: motion.windowSize.height)
+            .offset(x: motion.coverFrame.minX)
+            .opacity(motion.slide)
+    }
+
+    private func homeBackdrop(_ home: HomeCoverSpot) -> some View {
         let page = home.page
-        Group {
+        return Group {
             if let image = motion.cover {
                 FittedCover(image: image)
             } else {
@@ -499,10 +511,6 @@ struct ReaderCoverMotionView: View {
         .frame(width: page.width, height: max(home.stripTop - page.minY, 0), alignment: .top)
         .clipped()
         .offset(x: page.minX, y: page.minY)
-        motion.paper
-            .frame(width: max(motion.rightPage.minX - motion.coverFrame.minX, 0), height: motion.windowSize.height)
-            .offset(x: motion.coverFrame.minX)
-            .opacity(motion.slide)
     }
 }
 
@@ -586,10 +594,11 @@ private struct ReaderCoverLeaf: View, Animatable {
     }
 
     /// The cover in `frame`. From Home it starts as Home draws it, rounded,
-    /// with its shadow and marks, and loses them as it moves.
+    /// with its shadow and marks, and loses them as it moves: none of them is
+    /// drawn once it's over the right page.
     @ViewBuilder private func front(_ frame: CGRect) -> some View {
         let face = cover.frame(width: frame.width, height: frame.height)
-        if let home = motion.home {
+        if let home = motion.home, slide < 1 {
             let homeLook = 1 - slide
             face
                 .clipShape(.rect(cornerRadius: HomeCoverSpot.cornerRadius * homeLook))

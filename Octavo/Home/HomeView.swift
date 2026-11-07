@@ -169,10 +169,39 @@ struct CurrentBookPage: View {
     @State private var spot = HomeCoverSpot()
 
     var body: some View {
+        // A page that fits, in a scroll view all the same so it pulls to
+        // refresh, as the right page does.
+        GeometryReader { proxy in
+            ScrollView {
+                page
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+            }
+            .scrollBounceBehavior(.always)
+            .scrollIndicators(.hidden)
+            .ignoresSafeArea(.container, edges: .bottom)
+        }
+        .background {
+            if let book {
+                CoverImage(book: book, size: .full)
+                    .pageBlur(width: width)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { spot.page = $0 }
+            } else {
+                Color(.secondarySystemBackground)
+            }
+        }
+        .ignoresSafeArea(.container, edges: .bottom)
+        // Where Open moves the cover from, and Back brings it back to.
+        .onChange(of: book, initial: true) { spot.book = book }
+        .onChange(of: spot) { shell.homeCover = spot }
+        .onAppear { shell.homeCover = spot }
+        .onDisappear { shell.homeCover = HomeCoverSpot() }
+    }
+
+    private var page: some View {
         VStack(spacing: 12) {
             if let book {
                 OpenButton(route: .cover(book)) {
-                    WholeCover(book: book)
+                    WholeCover(book: book, loaded: $spot.image)
                         .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: HomeCoverSpot.badgeSize) }
                         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { spot.cover = $0 }
                         .shadow(color: .black.opacity(HomeCoverSpot.shadowOpacity), radius: HomeCoverSpot.shadowRadius, y: HomeCoverSpot.shadowY)
@@ -197,22 +226,6 @@ struct CurrentBookPage: View {
         .padding(.top, 18)
         .padding(.horizontal, 8)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            if let book {
-                CoverImage(book: book, size: .full)
-                    .pageBlur(width: width)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { spot.page = $0 }
-            } else {
-                Color(.secondarySystemBackground)
-            }
-        }
-        .ignoresSafeArea(.container, edges: .bottom)
-        // Where Open moves the cover from, and Back brings it back to.
-        .onChange(of: book, initial: true) { spot.book = book }
-        .onChange(of: spot) { shell.homeCover = spot }
-        .onAppear { shell.homeCover = spot }
-        .onDisappear { shell.homeCover = HomeCoverSpot() }
     }
 }
 
@@ -221,6 +234,8 @@ struct CurrentBookPage: View {
 /// Back brings it back. The left page is its blur down to the strip.
 struct HomeCoverSpot: Equatable {
     var book: SourcedBook?
+    /// The full cover as Home shows it, once loaded.
+    var image: UIImage?
     var cover = CGRect.zero
     var page = CGRect.zero
     var stripTop: CGFloat = 0
@@ -243,8 +258,9 @@ struct HomeCoverSpot: Equatable {
 /// (decision 32). Until the cover loads, the frame and stand-in every cover has.
 private struct WholeCover: View {
     let book: SourcedBook
+    /// Kept by the page, for the cover's motion.
+    @Binding var loaded: UIImage?
     @Environment(LibraryModel.self) private var library
-    @State private var loaded: UIImage?
 
     var body: some View {
         Group {

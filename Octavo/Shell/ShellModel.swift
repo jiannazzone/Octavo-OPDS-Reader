@@ -710,7 +710,9 @@ final class ShellModel {
         guard tour == nil, tab == .home, self[path: .home].top == nil,
               spot.book?.id == SourcedBook.ID(source: book.source, book: book.book.id),
               let window = Self.keyWindow, window.bounds.intersects(spot.cover),
-              spot.cover.width > 0, spot.cover.height > 0, spot.page.width > 0, spot.page.height > 0
+              spot.cover.width > 0, spot.cover.height > 0, spot.page.width > 0, spot.page.height > 0,
+              // The strip's measured, or the cover's copy wouldn't be hidden.
+              spot.stripTop > spot.page.minY
         else { return nil }
         return spot
     }
@@ -725,7 +727,8 @@ final class ShellModel {
         // The book's screen's cover: the whole left page, top to bottom.
         let bookScreenCover = CGRect(x: spot.page.minX, y: 0, width: spot.page.width, height: size.height)
         return ReaderCoverMotion(
-            cover: library.covers.cachedImage(for: book, size: .full) ?? library.covers.cachedImage(for: book, size: .thumbnail),
+            // The picture Home shows, which outlives the cache.
+            cover: spot.image ?? library.covers.cachedImage(for: book, size: .full) ?? library.covers.cachedImage(for: book, size: .thumbnail),
             title: book.book.title, author: book.book.authors.formatted(.list(type: .and)),
             coverFrame: bookScreenCover, home: spot, windowSize: size,
             bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
