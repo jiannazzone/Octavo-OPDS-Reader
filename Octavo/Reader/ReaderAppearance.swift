@@ -51,6 +51,7 @@ nonisolated struct ReaderAppearance: Equatable, Sendable, Codable {
             css.append("html { font-size: \(Self.percent(textScale))% !important; }")
         }
         if let family = font.cssFamily {
+            if !font.fontFaces.isEmpty { css.append(font.fontFaces) }
             css.append("body, body *:not(pre):not(code):not(kbd):not(samp) { font-family: \(family) !important; }")
         }
         // Element rules without `!important`: a book's own classes (verse,
@@ -125,10 +126,10 @@ nonisolated enum ReaderTheme: String, CaseIterable, Sendable, Codable, Identifia
     var text: String { colors?.text ?? "#000000" }
 }
 
-/// The fonts (decision 16): the book's own, then the ones iOS ships.
-/// Atkinson Hyperlegible and OpenDyslexic are bundled later.
+/// The fonts (decision 16): the book's own, the ones iOS ships, then the two
+/// bundled in `ReaderWeb/fonts/`. The raw values are saved, so they stay.
 nonisolated enum ReaderFont: String, CaseIterable, Sendable, Codable, Identifiable {
-    case book, newYork, georgia, iowan, palatino, charter, sanSerif
+    case book, newYork, georgia, iowan, palatino, charter, sanSerif, atkinson, openDyslexic
 
     var id: Self { self }
 
@@ -141,10 +142,13 @@ nonisolated enum ReaderFont: String, CaseIterable, Sendable, Codable, Identifiab
         case .palatino: "Palatino"
         case .charter: "Charter"
         case .sanSerif: "SF Pro"
+        case .atkinson: "Atkinson Hyperlegible"
+        case .openDyslexic: "OpenDyslexic"
         }
     }
 
-    /// `nil`: the book's own.
+    /// `nil`: the book's own. A bundled font goes by a name of ours, so a
+    /// book's own `@font-face` is unlikely to share it.
     var cssFamily: String? {
         switch self {
         case .book: nil
@@ -154,7 +158,36 @@ nonisolated enum ReaderFont: String, CaseIterable, Sendable, Codable, Identifiab
         case .palatino: "Palatino, 'Palatino Linotype', serif"
         case .charter: "Charter, serif"
         case .sanSerif: "-apple-system, system-ui, sans-serif"
+        case .atkinson: "octavo-atkinson-hyperlegible-next, sans-serif"
+        case .openDyslexic: "octavo-opendyslexic, sans-serif"
         }
+    }
+
+    /// The `@font-face` rules a bundled font needs, from the reader's own
+    /// `fonts/` (the one place its CSP takes fonts from, besides the book's
+    /// own); empty for the rest. Atkinson's files are variable, every weight.
+    /// OpenDyslexic's "fi" and "ffi" ligatures leave a gap ("fi rst", "o ffice");
+    /// the project's own later work drops them, so none are used here.
+    var fontFaces: String {
+        switch self {
+        case .atkinson:
+            [
+                Self.fontFace("octavo-atkinson-hyperlegible-next", file: "AtkinsonHyperlegibleNext.woff2", weight: "200 800"),
+                Self.fontFace("octavo-atkinson-hyperlegible-next", file: "AtkinsonHyperlegibleNext-Italic.woff2", weight: "200 800", italic: true),
+            ].joined(separator: "\n")
+        case .openDyslexic:
+            [
+                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Regular.woff2", weight: "400", ligatures: false),
+                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Bold.woff2", weight: "700", ligatures: false),
+                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Italic.woff2", weight: "400", italic: true, ligatures: false),
+                Self.fontFace("octavo-opendyslexic", file: "OpenDyslexic-Bold-Italic.woff2", weight: "700", italic: true, ligatures: false),
+            ].joined(separator: "\n")
+        default: ""
+        }
+    }
+
+    private static func fontFace(_ family: String, file: String, weight: String, italic: Bool = false, ligatures: Bool = true) -> String {
+        "@font-face { font-family: \(family); src: url(\"\(ReaderSchemeHandler.fontsURL)\(file)\") format(\"woff2\"); font-weight: \(weight); font-style: \(italic ? "italic" : "normal");\(ligatures ? "" : " font-feature-settings: \"liga\" 0;") }"
     }
 }
 

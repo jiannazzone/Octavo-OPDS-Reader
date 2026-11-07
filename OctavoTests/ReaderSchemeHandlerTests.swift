@@ -35,6 +35,11 @@ struct ReaderSchemeHandlerTests {
         "octavo://other/reader.html",
         "https://app/reader.html",
         "octavo://app/",
+        // Encoded dot segments: the CSP's `fonts/` and `foliate-js/` paths
+        // would take these as inside them.
+        "octavo://app/fonts/..%2Freader.html",
+        "octavo://app/fonts/%2e%2e%2Ffoliate-js%2Fview.js",
+        "octavo://app/foliate-js/.%2Fview.js",
     ])
     func rejectsRequestsOutsideTheWebRoot(url: String) {
         #expect(handler.fileURL(for: URL(string: url)!) == nil)
@@ -45,6 +50,7 @@ struct ReaderSchemeHandlerTests {
         ("css", "text/css"), ("epub", "application/epub+zip"), ("CBZ", "application/vnd.comicbook+zip"),
         ("fb2", "application/x-fictionbook+xml"), ("fbz", "application/x-zip-compressed-fb2"),
         ("mobi", "application/x-mobipocket-ebook"), ("azw3", "application/x-mobipocket-ebook"),
+        ("woff2", "font/woff2"),
     ])
     func pinsWebMIMETypes(ext: String, mimeType: String) {
         #expect(ReaderSchemeHandler.mimeType(forPathExtension: ext) == mimeType)
@@ -72,6 +78,39 @@ struct ReaderSchemeHandlerTests {
         }
     }
 
+    // Fonts come from the bundled `fonts/` or the book's own blobs, never
+    // anywhere else on the origin (the book at `/book/`) or the network.
+    // The whole policy, so loosening any directive shows up here.
+    @Test func theReaderPolicyIsExactlyThis() {
+        #expect(ReaderSchemeHandler.contentSecurityPolicy == """
+            default-src 'self'; script-src octavo://app/bridge.js octavo://app/foliate-js/; \
+            style-src 'self' 'unsafe-inline' blob: data:; img-src 'self' blob: data:; \
+            font-src octavo://app/fonts/ blob: data:; media-src 'self' blob: data:; connect-src 'self' blob:; \
+            frame-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'
+            """)
+    }
+
+    @Test func fontsLoadOnlyFromTheBundledFonts() throws {
+        let policy = ReaderSchemeHandler.contentSecurityPolicy
+        let fontSources = try #require(policy.split(separator: ";").first { $0.contains("font-src") })
+        #expect(fontSources.trimmingCharacters(in: .whitespaces) == "font-src octavo://app/fonts/ blob: data:")
+    }
+
+    // Every face `ReaderFont` asks for is in the app's own `ReaderWeb/fonts/`
+    // and served as a font, under the reader's CSP.
+    @Test func servesEveryBundledFontAsWOFF2() async throws {
+        let bundled = ReaderSchemeHandler(bookFile: book)
+        let sources = ReaderFont.allCases.flatMap { $0.fontFaces.matches(of: #/url\("([^"]+)"\)/#).map { String($0.output.1) } }
+        #expect(sources.count == 6)
+        for source in sources {
+            let (response, data) = try await fetch(source, from: bundled)
+            #expect(response?.statusCode == 200, "\(source)")
+            #expect(response?.value(forHTTPHeaderField: "Content-Type") == "font/woff2")
+            #expect(response?.value(forHTTPHeaderField: "Content-Security-Policy") == ReaderSchemeHandler.contentSecurityPolicy)
+            #expect(data.prefix(4) == Data("wOF2".utf8))
+        }
+    }
+
     // The book is same-origin, so it must never be usable as a script or a document.
     @Test func theBookIsServedLockedDown() async throws {
         let (response, _) = try await fetch(ReaderSchemeHandler.bookURL(fileName: "book.epub").absoluteString)
@@ -92,10 +131,10 @@ struct ReaderSchemeHandlerTests {
         #expect(data.isEmpty)
     }
 
-    private func fetch(_ url: String) async throws -> (HTTPURLResponse?, Data) {
+    private func fetch(_ url: String, from handler: ReaderSchemeHandler? = nil) async throws -> (HTTPURLResponse?, Data) {
         var response: HTTPURLResponse?
         var data = Data()
-        for try await result in handler.reply(for: URLRequest(url: URL(string: url)!)) {
+        for try await result in (handler ?? self.handler).reply(for: URLRequest(url: URL(string: url)!)) {
             switch result {
             case .response(let r): response = r as? HTTPURLResponse
             case .data(let chunk): data.append(chunk)

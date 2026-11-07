@@ -155,3 +155,15 @@ Decided and built 2026-11-06: `CoverBadge` puts both in one dark capsule in the 
 Unfolded, Home feels pretty empty and will need a rework. As seen on his Duo with three books under Also reading: more than half of the right page is blank, and so is the space beside the cover on the left page.
 
 Decided and built 2026-11-06 (`docs/design/direction.md`, Home): this book on the left page with Open, rows that grow on the right, and the Library's newest books with one or two in progress. Not chosen: a 300 pt cover with the words under it; the cover filling the page with its strip on the art; the title and Open on the right page, with or without a line above the other books; a grid of covers; a message beside the newest books; a bigger cover alone with two books in progress. A lower limit than 8 books was raised and left, since seven rows fit.
+
+## The spine shadow should vary (Adam, 2026-11-07)
+
+The book-mode spine shadow should vary. Today it's one fixed gradient over the gap, peaking at 20% black (`ReaderSpineShadow`), whatever the hinge angle or theme, so it barely shows on Night. Not looked into yet: what it should vary with (the angle, the theme, or both).
+
+## A Night that isn't pure black (Adam, 2026-11-07)
+
+Night mode shouldn't be pure black. Night's page is `#121212` today (`ReaderTheme.night`), with `#d6d3ce` text. Not looked into yet: whether that's the black he saw, or the shell around it.
+
+## Aa didn't respond (Adam, 2026-11-07)
+
+Once, the reader's Aa button (Text and Theme) didn't respond. Adam can't reproduce it. Noted in case it comes back; nothing to fix yet.

@@ -330,18 +330,31 @@ struct ThirdPartyNoticeTests {
 
     @Test func readsEveryComponentWithItsLicence() throws {
         let parsed = ThirdPartyNotice.parse(try String(contentsOf: Self.notices, encoding: .utf8))
-        #expect(parsed.map(\.name) == ["foliate-js", "zip.js (bundled by foliate-js)", "fflate (bundled by foliate-js)", "EB Garamond (logo lettering)",
+        #expect(parsed.map(\.name) == ["foliate-js", "zip.js (bundled by foliate-js)", "fflate (bundled by foliate-js)",
+            "Atkinson Hyperlegible Next (reader font)", "OpenDyslexic (reader font)", "EB Garamond (logo lettering)",
             "Pride and Prejudice (the sample book), Standard Ebooks",
         ])
-        #expect(parsed.map(\.license).prefix(3) == ["MIT", "BSD-3-Clause", "MIT"])
+        #expect(parsed.map(\.license).prefix(5) == ["MIT", "BSD-3-Clause", "MIT", "SIL Open Font License 1.1", "SIL Open Font License 1.1"])
         let foliate = try #require(parsed.first)
         #expect(foliate.paragraphs.first == "MIT License")
         #expect(foliate.paragraphs.contains { $0.hasPrefix("Permission is hereby granted, free of charge, to any person obtaining a copy of this software") })
         #expect(parsed.last?.paragraphs.isEmpty == false, "a credit without a text keeps its notes")
     }
 
+    // The OFL travels with the fonts where people can read it: their
+    // copyright and the licence's own text.
+    @Test func theBundledFontsShowTheirLicence() throws {
+        let parsed = ThirdPartyNotice.parse(try String(contentsOf: Self.notices, encoding: .utf8))
+        for (name, copyright) in [("Atkinson Hyperlegible Next (reader font)", "Copyright 2020-2024 The Atkinson Hyperlegible Next Project Authors"),
+                                  ("OpenDyslexic (reader font)", "with Reserved Font Name OpenDyslexic")] {
+            let font = try #require(parsed.first { $0.name == name })
+            #expect(font.paragraphs.first?.contains(copyright) == true)
+            #expect(font.paragraphs.contains { $0.hasPrefix("PERMISSION & CONDITIONS") })
+        }
+    }
+
     @Test func theAppBundlesThem() {
-        #expect(ThirdPartyNotice.bundled().count == 5)
+        #expect(ThirdPartyNotice.bundled().count == 7)
     }
 }
 
