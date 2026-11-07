@@ -262,6 +262,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 - Or keep each child at the same place in the tree in both postures. Item 1 would do that for Settings.
 
 ### 11. Two "push a route" buttons that draw text differently
+
+**Fixed:** `OpenButton` is the one way to open a screen; a list row passes `fillsRow` to take taps across its width, as `ShellLink` did, and `ShellLink` is gone. At Accessibility XL the Collections and Authors lists now keep wrapped lines to the leading edge (`main` centred them); at the default size they match `main` but for sub-pixel text placement. The covers weren't squeezed: rows draw them 22 pt wide at every size. `-shellOpen collections|authors` (DEBUG) opens those lists.
 **Reproduced bug (Larger Text) and inconsistency · S**
 
 **Where:**
@@ -471,7 +473,7 @@ These need no UX decision; they keep today's look and behaviour.
 1. **Close the reader one way** (item 17), and **clear the cover motion on any fold change, with a time limit** (items 15, 16). S. **Done.**
 2. **Settings' chosen page as state** (item 1). This removes Settings from the shell. M. **Done** (as a declared left page).
 3. **`SpreadPages` and `.onLeftPage()`** (item 8). Fix the Library failure branch with it (item 9). M. **Done.**
-4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S.
+4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S. **Done.**
 5. **Home's state in one place, or Home draws its own title** (item 2). S.
 6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M.
 7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each.
