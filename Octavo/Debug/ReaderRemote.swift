@@ -142,7 +142,7 @@ enum ReaderRemote {
             let failure = await handle(command, shell: shell)
             if let closeAfter = command.closeAfter {
                 try? await Task.sleep(for: .milliseconds(closeAfter))
-                shell.reading = nil
+                shell.closeReader()
             }
             let ack = Ack(id: command.id, ok: failure == nil, message: failure)
             try? JSONEncoder().encode(ack).write(to: ackURL, options: .atomic)
@@ -173,10 +173,10 @@ enum ReaderRemote {
         case "detail":
             return await openBookOrbit(command.fileID, shell: shell, cover: true)
         case "close":
-            shell.reading = nil
+            shell.closeReader()
             return nil
         case "home":
-            shell.reading = nil
+            shell.closeReader()
             for tab in ShellTab.allCases { shell[path: tab].replace([]) }
             return nil
         case "shape":

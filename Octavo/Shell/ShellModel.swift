@@ -332,7 +332,7 @@ final class ShellModel {
         finishTour()
         importFailures += failures
         setupImportFailures = []
-        reading = nil
+        closeReader()
         tab = .library
         self[path: .library].replace(imported.isEmpty || library.server == nil ? [] : [.onIPhone])
     }
@@ -625,7 +625,12 @@ final class ShellModel {
     // MARK: A book opening like a cover (decision 28)
 
     /// The cover opening the book, drawn over the reader while it opens.
-    var coverMotion: ReaderCoverMotion?
+    /// One taken away before it's over stops for good.
+    var coverMotion: ReaderCoverMotion? {
+        didSet {
+            if oldValue !== coverMotion { oldValue?.cancel() }
+        }
+    }
     /// The book is opening because the Duo unfolded on its screen: the fold
     /// is the cover's motion then (decision 10).
     @ObservationIgnored private var opensByUnfold = false
@@ -633,6 +638,24 @@ final class ShellModel {
     @ObservationIgnored private var pendingCoverMotion: ReaderCoverMotion?
     /// Home's cover unfolded, as `CurrentBookPage` lays it out.
     @ObservationIgnored var homeCover = HomeCoverSpot()
+
+    /// Every way out of the reader: Back, a fold, an import, the tour, and
+    /// `change` with it. It goes at once, with no animation: anything still
+    /// animating in a leaving reader (the tour card's fade, the ring's pulse)
+    /// keeps it and its web page on screen a moment longer, and a fold
+    /// meanwhile has SwiftUI rebuild that web view, which WebKit traps on
+    /// (`AppShell`). A cover still opening the book goes with it; Back's
+    /// cover, closing it (`readerClosing`), plays on.
+    func closeReader(_ change: () -> Void = {}) {
+        if coverMotion?.closing == false { coverMotion = nil }
+        pendingCoverMotion = nil
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            reading = nil
+            change()
+        }
+    }
 
     /// Back from the reader (not a fold, whose motion is the fold): onto the
     /// book's own screen, or Home with the book's cover on its left page,
@@ -807,7 +830,11 @@ final class ShellModel {
     ///
     /// The hinge reports an unfold before the scene moves to the inner
     /// display, so the folded screen is still the top one.
+    ///
+    /// Either way, a cover opening or closing a book goes: it's drawn for the
+    /// display it started on, and the fold is the motion now.
     func hingeChanged(_ transition: HingeTransition) {
+        if transition != .none { coverMotion = nil }
         if tour != nil { return tourHingeChanged(transition) }
         switch transition {
         case .unfold:
@@ -818,9 +845,6 @@ final class ShellModel {
             openBook(book)
         case .fold:
             guard let book = reading else { return }
-            // A cover still opening the book would wait for it for good, or,
-            // with the book staying open, be drawn for the wrong display.
-            coverMotion = nil
             if ReaderSettings.closesBookWhenFolded(in: defaults) { closeToItsScreen(book) }
         case .none:
             break
@@ -831,7 +855,7 @@ final class ShellModel {
     /// book was opened from somewhere else (Home's debug launch argument).
     /// A book with no screen to go to goes back to setup.
     private func closeToItsScreen(_ book: OpenedBook) {
-        reading = nil
+        closeReader()
         guard !needsSetup, let source = readingSource else { return }
         if case .cover(let shown)? = self[path: tab].top, shown.id == SourcedBook.ID(source: source, book: book.book.id) { return }
         self[path: tab].replace(self[path: tab].routes + [.cover(SourcedBook(source: source, book: book.book))])
@@ -960,11 +984,7 @@ final class ShellModel {
         switch transition {
         case .fold:
             coverMotion = nil
-            pendingCoverMotion = nil
-            closingReaderAtOnce {
-                reading = nil
-                tour?.handle(.folded)
-            }
+            closeReader { tour?.handle(.folded) }
         case .unfold:
             guard tour?.step == .cover else { return }
             tour?.handle(.unfolded)
@@ -1027,24 +1047,10 @@ final class ShellModel {
         self[path: .setup].replace([])
     }
 
-    /// The reader goes with no animation at all. Anything animating in it (the
-    /// card's fade, the ring's pulse) can keep a leaving reader, and its web
-    /// page, on screen a moment longer, and a fold meanwhile has SwiftUI
-    /// rebuild that web view, which WebKit traps on (`AppShell`).
-    private func closingReaderAtOnce(_ change: () -> Void) {
-        var instant = Transaction()
-        instant.disablesAnimations = true
-        withTransaction(instant, change)
-    }
-
     private func finishTour() {
         guard let finished = tour else { return }
         coverMotion = nil
-        pendingCoverMotion = nil
-        closingReaderAtOnce {
-            tour = nil
-            reading = nil
-        }
+        closeReader { tour = nil }
         tourReplayPlace?.clear()
         tourReplayPlace = nil
         guard !finished.isReplay else { return }
@@ -1073,11 +1079,7 @@ final class ShellModel {
         tourWaitsForHinge = false
         tourRecord.set(.played)
         coverMotion = nil
-        pendingCoverMotion = nil
-        closingReaderAtOnce {
-            tour = nil
-            reading = nil
-        }
+        closeReader { tour = nil }
         tourReplayPlace?.clear()
         tourReplayPlace = nil
     }

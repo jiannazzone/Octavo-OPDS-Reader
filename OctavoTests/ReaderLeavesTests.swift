@@ -193,6 +193,52 @@ struct ReaderLeavesMotionTests {
         #expect(finished)
     }
 
+    // MARK: Waiting for the reader
+
+    // Folded the cover has no slide to finish first, so a reader that opened
+    // before the motion started still has it swing.
+    @Test func foldedItSwingsWhenTheReaderWasFirst() {
+        let motion = opening(spread: false)
+        motion.readerOpened(pages(fraction: 0, spread: false))
+        motion.start()
+        #expect(motion.swing == motion.swungOver)
+        #expect(!motion.showsBookScreen)
+    }
+
+    @Test func withReduceMotionItFadesWhenTheReaderWasFirst() {
+        let motion = opening(reduceMotion: true)
+        motion.readerOpened(pages(fraction: 0))
+        motion.start()
+        #expect(motion.fade == 1)
+    }
+
+    // It takes every touch, so it can't wait for good.
+    @Test func itFadesIfTheReaderNeverOpens() async {
+        let motion = opening()
+        motion.longestWait = .milliseconds(20)
+        motion.start()
+        #expect(await eventually { motion.fade == 1 })
+    }
+
+    @Test func aReaderThatOpenedIsntCutShort() async throws {
+        let motion = opening()
+        motion.longestWait = .milliseconds(20)
+        motion.readerOpened(pages(fraction: 0.5))
+        motion.start()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(motion.fade == 0)
+    }
+
+    @Test func takenAwayItIgnoresTheReader() {
+        let motion = opening()
+        motion.cancel()
+        motion.readerOpened(pages(fraction: 0.5))
+        motion.start()
+        #expect(motion.leaves == nil)
+        #expect(motion.slide == 0)
+        #expect(motion.fade == 0)
+    }
+
     // MARK: Unfolding on a cover
 
     private func unfolding(progress: Double = 0.5) -> ReaderCoverMotion {

@@ -308,6 +308,9 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 ## The reader's chrome
 
 ### 15. The cover motion survives an unfold, and a closing motion survives a fold
+
+**Fixed** (`page-turns.md` §5).
+
 **Simulator only, needs a real Duo · S**
 
 **Where:**
@@ -324,6 +327,9 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 **Sturdier:** drop or fade the motion on any change of fold, both ways, as the tour's fold already does (`ShellModel.swift:961-963`).
 
 ### 16. The opening cover blocks every touch and has no time limit
+
+**Fixed** (`closeReader`, the motion dropped on any fold, an 8 s limit; `page-turns.md` §5). The page load that throws still only logs.
+
 **Structural risk · S**
 
 **Where:**
@@ -344,6 +350,9 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 - Set `.failed` when the page load throws.
 
 ### 17. Closing the reader takes different paths
+
+**Fixed** (`page-turns.md` §5).
+
 **Structural risk · S**
 
 **Where:**
@@ -451,7 +460,7 @@ From `git log --since=2026-10-31` on the UI folders:
 
 These need no UX decision; they keep today's look and behaviour.
 
-1. **Close the reader one way** (item 17), and **clear the cover motion on any fold change, with a time limit** (items 15, 16). S.
+1. **Close the reader one way** (item 17), and **clear the cover motion on any fold change, with a time limit** (items 15, 16). S. **Done.**
 2. **Settings' chosen page as state** (item 1). This removes Settings from the shell. M.
 3. **`SpreadPages` and `.onLeftPage()`** (item 8). Fix the Library failure branch with it (item 9). M.
 4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S.
