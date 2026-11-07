@@ -10,13 +10,29 @@ import SwiftUI
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
+    @Environment(\.spread) private var spread
 
     var body: some View {
-        if library.server == nil, !library.hasBooks {
+        let state = HomeState(library)
+        TitledScreen {
+            // Unfolded, the book you're reading has the left page to itself.
+            if !(spread.isTwoPages && state.showsBooks) {
+                ScreenTitle("Home")
+                    .onLeftPage()
+            }
+        } content: {
+            content(state)
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ state: HomeState) -> some View {
+        switch state {
+        case .noLibrary:
             NoLibraryInvitation()
-        } else if library.server != nil, !library.homeLoaded {
+        case .loading:
             HomeContent(books: nil)
-        } else if library.continueReading.isEmpty {
+        case .nothingInProgress:
             // The Library's newest books beside the invitation, not beside a
             // problem.
             EmptyPages(server: library.continueReadingFailed ? nil : library.server?.id) {
@@ -42,8 +58,39 @@ struct HomeView: View {
                     }
                 }
             }
+        case .reading(let books):
+            HomeContent(books: books)
+        }
+    }
+}
+
+/// What Home shows, decided in one place: its content and its title go by it.
+enum HomeState {
+    /// No server and no books.
+    case noLibrary
+    /// The shapes of books, until a server's Continue reading has loaded.
+    case loading
+    /// The invitation (or why the books didn't come).
+    case nothingInProgress
+    case reading([SourcedBook])
+
+    init(_ library: LibraryModel) {
+        if library.server == nil, !library.hasBooks {
+            self = .noLibrary
+        } else if library.server != nil, !library.homeLoaded {
+            self = .loading
+        } else if library.continueReading.isEmpty {
+            self = .nothingInProgress
         } else {
-            HomeContent(books: library.continueReading)
+            self = .reading(library.continueReading)
+        }
+    }
+
+    /// Books in progress, or their shapes: not an invitation.
+    var showsBooks: Bool {
+        switch self {
+        case .loading, .reading: true
+        case .noLibrary, .nothingInProgress: false
         }
     }
 }

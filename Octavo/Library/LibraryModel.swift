@@ -94,13 +94,6 @@ final class LibraryModel {
         connections.contains(where: \.homeLoaded)
     }
 
-    /// Home shows books in progress, or their shapes while it loads, not an
-    /// invitation.
-    var homeShowsBooks: Bool {
-        if server == nil, !hasBooks { return false }
-        return (server != nil && !homeLoaded) || !continueReading.isEmpty
-    }
-
     /// No server's Continue reading loaded, so an empty list doesn't mean
     /// nothing is in progress.
     var continueReadingFailed: Bool {

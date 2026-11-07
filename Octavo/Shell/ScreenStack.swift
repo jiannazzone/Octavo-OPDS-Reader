@@ -15,7 +15,8 @@ import SwiftUI
 ///   those buttons there, as it does the reader's.
 struct ScreenStack<Root: View>: View {
     let tab: ShellTab
-    let title: String
+    /// The root's title. `nil`: the root draws its own (`TitledScreen`).
+    let title: String?
     /// Setup has no Settings to open.
     var showsSettings = true
     /// The Library's top screen has a + for Import from Files, above
@@ -136,7 +137,7 @@ struct ScreenStack<Root: View>: View {
     }
 
     private func screen(at id: ScreenID, in path: ShellPath) -> some View {
-        ScreenFrame(title: id.route.map(\.title) ?? title, isLibraryRoot: id.route == nil && tab == .library, isHomeRoot: id.route == nil && tab == .home) {
+        ScreenFrame(title: id.route.map(\.title) ?? title) {
             if let route = id.route {
                 ShellScreen(route: route)
             } else {
@@ -206,36 +207,43 @@ private struct ScreenID: Hashable {
 }
 
 /// A screen's title and content on an opaque page, so a pushed screen covers
-/// the one beneath. The title sits on the left page.
+/// the one beneath. The title sits on the left page. `nil`: the screen draws
+/// its own (Settings on each page; Home and the Library, which decide theirs).
 struct ScreenFrame<Content: View>: View {
     let title: String?
-    /// With several servers, its title is the menu of them (decision 36).
-    var isLibraryRoot = false
-    /// Unfolded, the book you're reading has the left page to itself, so
-    /// Home has no title there.
-    var isHomeRoot = false
     @ViewBuilder let content: () -> Content
-    @Environment(\.spread) private var spread
-    @Environment(LibraryModel.self) private var library
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if isLibraryRoot, library.hasSeveralServers {
-                LibraryServerMenu()
-                    .onLeftPage()
-            } else if let title, !(isHomeRoot && spread.isTwoPages && library.homeShowsBooks) {
+        TitledScreen {
+            if let title {
                 ScreenTitle(title)
                     .onLeftPage()
             }
+        } content: {
             content()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // The bar's height changes as Back comes and goes, which would move
         // the title; the Duo keeps the bar's buttons in the side column, so
         // the screen ignores it and places its title itself.
         .ignoresSafeArea(.container, edges: .top)
         .background(Color(.systemBackground))
+    }
+}
+
+/// A title over a screen's content, where every screen has its title: for a
+/// screen that decides its own (Home has none unfolded beside your book; the
+/// Library's is the servers' menu when there are several).
+struct TitledScreen<Title: View, Content: View>: View {
+    @ViewBuilder let title: () -> Title
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            title()
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
