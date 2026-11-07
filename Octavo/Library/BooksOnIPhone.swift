@@ -24,6 +24,15 @@ nonisolated struct BooksOnIPhone: Sendable {
         try write(books)
     }
 
+    /// Brings the records in `marks` up to date, so a cover shows them after
+    /// the next launch too.
+    func update(finished marks: [SourcedBook.ID: Bool]) throws {
+        let books = books()
+        let updated = books.map { $0.withFinished(from: marks) }
+        guard updated != books else { return }
+        try write(updated)
+    }
+
     /// Gives `library`'s records to `other` (`RemovedServer`).
     func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) throws {
         let books = books()

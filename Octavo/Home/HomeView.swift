@@ -133,7 +133,7 @@ struct CurrentBook: View {
         OpenButton(route: .cover(book)) {
             VStack(alignment: .leading, spacing: 14) {
                 BookCover(book: book, cornerRadius: 6, size: .full)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 26) }
+                    .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: 26) }
                     .frame(width: coverWidth)
                     .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 4) {
@@ -155,6 +155,7 @@ struct CurrentBook: View {
             }
             .accessibilityElement(children: .combine)
         }
+        .accessibilityValue(shell.marks(of: book).accessibilityValue)
     }
 }
 
@@ -164,17 +165,19 @@ struct CurrentBook: View {
 struct CurrentBookPage: View {
     let book: SourcedBook?
     let width: CGFloat
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
         VStack(spacing: 12) {
             if let book {
                 OpenButton(route: .cover(book)) {
                     WholeCover(book: book)
-                        .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 26) }
+                        .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: 26) }
                         .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
                 }
                 .frame(maxHeight: .infinity)
                 .accessibilityLabel(book.book.title.isEmpty ? "Cover" : "Cover of \(book.book.title)")
+                .accessibilityValue(shell.marks(of: book).accessibilityValue)
                 CurrentBookStrip(book: book)
             } else {
                 RoundedRectangle(cornerRadius: 6)
@@ -457,6 +460,7 @@ struct ContinueReadingRow: View {
     var coverHeight = ContinueReadingRow.standardCoverHeight
     var verticalPadding: CGFloat = 6
     @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
 
     /// Past the size of a shelf's cover, and with room for more words.
     private var isTall: Bool { coverHeight > 100 }
@@ -465,7 +469,7 @@ struct ContinueReadingRow: View {
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: isTall ? 4 : 2, size: isTall ? .full : .thumbnail)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: isTall ? 20 : 14) }
+                    .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: isTall ? 20 : 14) }
                     .frame(width: coverHeight * 2 / 3)
                     .shadow(color: .black.opacity(isTall ? 0.14 : 0), radius: 6, y: 3)
                 VStack(alignment: .leading, spacing: 4) {
@@ -488,8 +492,8 @@ struct ContinueReadingRow: View {
             }
             .padding(.horizontal, 6)
             .padding(.vertical, verticalPadding)
-            .accessibilityElement(children: .combine)
         }
+        .accessibilityValue(shell.marks(of: book).accessibilityValue)
     }
 }
 

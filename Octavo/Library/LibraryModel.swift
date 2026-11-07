@@ -136,6 +136,11 @@ final class LibraryModel {
     let covers: CoverCache
     @ObservationIgnored let recents: RecentBooks
     @ObservationIgnored let finished: FinishedBooks
+    /// What `finished` holds, so a cover doesn't read the file.
+    private(set) var finishedOnIPhone: Set<SourcedBook.ID> = []
+    /// The latest word on a server's mark where a list's copy of the book may
+    /// be older: marked here, or its details disagreed.
+    private(set) var finishedMarks: [SourcedBook.ID: Bool] = [:]
     @ObservationIgnored let onIPhone: BooksOnIPhone
     /// Books imported from Files, and the sample book once read.
     @ObservationIgnored let imported: ImportedBooks
@@ -155,6 +160,7 @@ final class LibraryModel {
         self.covers = covers
         self.recents = recents
         self.finished = finished
+        finishedOnIPhone = finished.books()
         self.onIPhone = onIPhone
         self.imported = imported
         importedSource = ImportedBooksSource(store: imported)
@@ -284,6 +290,8 @@ final class LibraryModel {
     func forgetBooks(of server: LibrarySourceID) {
         try? recents.remove(source: server)
         try? finished.remove(source: server)
+        finishedOnIPhone = finished.books()
+        finishedMarks = finishedMarks.filter { $0.key.source != server }
     }
 
     // MARK: Lists
@@ -294,7 +302,9 @@ final class LibraryModel {
         let key = FeedKey(source: source, link: link)
         if let feed = feeds[key] { return feed }
         guard let library = self.source(for: source) else { return nil }
-        let feed = FeedModel(link: link, source: source, library: library, report: reporter(for: source))
+        let feed = FeedModel(link: link, source: source, library: library, report: reporter(for: source)) { [weak self] books in
+            self?.listed(books, from: source)
+        }
         feeds[key] = feed
         return feed
     }
@@ -388,26 +398,66 @@ final class LibraryModel {
         connection.homeLoaded = true
     }
 
+    /// Whether a cover shows `book` as finished. Lists and the iPhone's
+    /// records each hold a copy of the book, so a mark set since then wins.
+    func isFinished(_ book: SourcedBook) -> Bool {
+        finishedMarks[book.id] ?? book.book.isFinished ?? finishedOnIPhone.contains(book.id)
+    }
+
     /// A book marked finished leaves Home: BookOrbit drops it from its own
     /// list, and this takes it off the iPhone's. Marked unfinished, it comes
     /// back once it's read again.
     func markedFinished(_ book: SourcedBook.ID, _ finished: Bool) {
+        if source(for: book.source)?.tracksFinished == true {
+            keepFinished([book: finished])
+        } else {
+            finishedOnIPhone = self.finished.books()
+        }
         guard finished else { return }
         try? recents.remove(book)
         connection(book.source)?.continueReading.removeAll { $0.id == book }
         mergeContinueReading()
     }
 
+    /// A book's screen loaded its details, which may be newer than the copy
+    /// its cover came from.
+    func detailsLoaded(_ book: SourcedBook) {
+        guard let finished = book.book.isFinished, finished != finishedMarks[book.id] else { return }
+        keepFinished([book.id: finished])
+    }
+
+    private func keepFinished(_ marks: [SourcedBook.ID: Bool]) {
+        finishedMarks.merge(marks) { $1 }
+        try? onIPhone.update(finished: marks)
+        try? recents.update(finished: marks)
+    }
+
+    /// A list from a server that keeps the mark: the latest word on its
+    /// books. Lists don't add to `finishedMarks`, so that loading one doesn't
+    /// redraw every cover on screen.
+    private func listed(_ books: [LibraryBook], from source: LibrarySourceID) {
+        var marks: [SourcedBook.ID: Bool] = [:]
+        for book in books {
+            marks[SourcedBook.ID(source: source, book: book.id)] = book.isFinished
+        }
+        guard !marks.isEmpty else { return }
+        for (id, finished) in marks where finishedMarks[id].map({ $0 != finished }) == true {
+            finishedMarks[id] = finished
+        }
+        try? onIPhone.update(finished: marks)
+        try? recents.update(finished: marks)
+    }
+
     /// Opening a book puts it first in Continue reading.
     func bookOpened(_ book: SourcedBook) {
-        try? recents.record(book)
+        try? recents.record(book.withFinished(from: finishedMarks))
         mergeContinueReading()
     }
 
     /// A download (or an Open that downloads) is starting, so Search can
     /// find the book once it's on the iPhone.
     func bookDownloading(_ book: SourcedBook) {
-        try? onIPhone.record(book)
+        try? onIPhone.record(book.withFinished(from: finishedMarks))
     }
 
     /// The connected servers' books this iPhone has asked for, and the

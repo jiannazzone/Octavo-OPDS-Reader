@@ -117,7 +117,7 @@ Folding while reading closes the book back to its screen, the cover (`ShellModel
 
 ## KOReader sync for OPDS servers (Adam, 2026-11-04)
 
-OPDS servers sometimes run a KOReader sync server alongside them for reading progress. Adam: look into it. It's already on the "Later" list (`docs/design/direction.md`, v1 scope) and has a slot in the design (`KOSync`, percentage only, in `CLAUDE.md`; the server setup's sync step comes back once it exists). Not looked into yet. To find out: how the protocol works, how it matches a book to a file, and how close a percentage lands compared with a CFI.
+OPDS servers sometimes run a KOReader sync server alongside them for reading progress. Adam: look into it. Measured 2026-11-06 and dropped from the first release (`docs/notes/koreader-sync.md`). If it comes back after launch: one KOReader account in Settings, for OPDS and Files books, with no per-server settings. Test it on real KOReader first.
 
 ## Back always there in the reader (Adam, 2026-11-04)
 
@@ -144,9 +144,11 @@ Should Margins in Customize be a slider with detents instead of a picker? Today 
 
 ## A mark for finished books on covers (Adam, 2026-11-06)
 
-Finished books should have an indicator on the cover. Downloaded covers already have a check (`DownloadBadge`, `docs/design/direction.md`), so the two would conflict. Adam's proposal: finished takes the check, and downloaded becomes `arrow.down.to.line` or `arrow.down.to.line.compact`.
+Finished books should have an indicator on the cover. Downloaded covers had a check, so the two would conflict. Adam's proposal: finished takes the check, and downloaded becomes `arrow.down.to.line` or `arrow.down.to.line.compact`.
 
-Measured at a 12 pt bold font: the check is 14 × 13, the compact arrow 13 × 13 and the other 13 × 15, so the compact one is the likelier fit in the 22 pt disc. To work out: a book can be both, so a cover may need room for two marks, and an arrow could read as "tap to download". Not designed or tried on a cover yet.
+Measured at a 12 pt bold font: the check is 14 × 13, the compact arrow 13 × 13 and the other 13 × 15, so the compact one is the likelier fit in the 22 pt disc. A book can be both, so a cover needs room for two marks.
+
+Decided and built 2026-11-06: `CoverBadge` puts both in one dark capsule in the same corner, check first, with the compact arrow. Adam chose it from simulator screenshots over two discs; he'd also seen mocks of opposite corners and of finished alone. `docs/design/direction.md`, Getting books onto the iPhone.
 
 ## Home feels empty unfolded (Adam, 2026-11-06)
 

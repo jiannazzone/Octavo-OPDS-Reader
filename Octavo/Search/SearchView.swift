@@ -500,18 +500,19 @@ private struct SearchServerSection: View {
     }
 }
 
-/// A book in the results: its cover (with the download mark), title,
-/// author and your place in it.
+/// A book in the results: its cover (with its marks), title, author and your
+/// place in it.
 private struct SearchBookRow: View {
     let book: SourcedBook
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
         let progress = shell.places.progress(of: book)
+        let finished = shell.library.isFinished(book)
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 14) }
+                    .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: 14) }
                     .frame(width: 40)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
@@ -522,10 +523,12 @@ private struct SearchBookRow: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(untilLargerText: 1)
                     }
-                    if let place = Self.place(book.book, progress: progress) {
+                    if let place = Self.place(finished: finished, progress: progress) {
                         Text(place)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                            // The row's value says Finished.
+                            .accessibilityHidden(finished)
                     }
                 }
                 Spacer(minLength: 0)
@@ -533,13 +536,14 @@ private struct SearchBookRow: View {
             .padding(.vertical, 6)
             .accessibilityElement(children: .combine)
         }
+        .accessibilityValue(shell.marks(of: book).accessibilityValue)
         // Where the book opens, as the server has it (`BookPlaces`).
         .onAppear { shell.places.refreshRow(book) }
     }
 
     /// "Finished", "42%", or nothing for a book not started.
-    static func place(_ book: LibraryBook, progress: Double?) -> String? {
-        if book.isFinished == true { return "Finished" }
+    static func place(finished: Bool, progress: Double?) -> String? {
+        if finished { return "Finished" }
         guard let progress, progress > 0 else { return nil }
         return BookPage.placeLine(progress: progress)
     }

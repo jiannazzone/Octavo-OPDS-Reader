@@ -27,4 +27,12 @@ nonisolated struct SourcedBook: Hashable, Codable, Sendable, Identifiable {
     }
 
     var id: ID { ID(source: source, book: book.id) }
+
+    /// This book with the mark in `marks`, if there's one for it.
+    func withFinished(from marks: [ID: Bool]) -> SourcedBook {
+        guard let finished = marks[id] else { return self }
+        var marked = self
+        marked.book.isFinished = finished
+        return marked
+    }
 }

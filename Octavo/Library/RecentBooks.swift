@@ -37,6 +37,15 @@ nonisolated struct RecentBooks: Sendable {
         try JSONEncoder().encode(kept).write(to: fileURL, options: .atomic)
     }
 
+    /// Brings the records in `marks` up to date, so a cover shows them after
+    /// the next launch too.
+    func update(finished marks: [SourcedBook.ID: Bool]) throws {
+        let records = records()
+        let updated = records.map { Record(book: $0.book.withFinished(from: marks), openedAt: $0.openedAt) }
+        guard updated != records else { return }
+        try JSONEncoder().encode(updated).write(to: fileURL, options: .atomic)
+    }
+
     /// Puts `book` first, replacing an older record of it.
     func record(_ book: SourcedBook, at date: Date = .now) throws {
         let kept = records().filter { $0.book.id != book.id }
