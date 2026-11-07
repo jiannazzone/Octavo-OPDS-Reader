@@ -151,7 +151,7 @@ enum ReaderRemote {
 
     /// Returns an error message, or `nil` on success.
     private static func handle(_ command: Command, shell: ShellModel) async -> String? {
-        if ["signin", "open", "openLocal", "detail", "home"].contains(command.cmd) { shell.debugEndTour() }
+        if ["signin", "open", "openLocal", "detail", "home"].contains(command.cmd) { shell.tour.debugEnd() }
         switch command.cmd {
         case "liveReaders":
             return liveReaders
@@ -159,8 +159,8 @@ enum ReaderRemote {
             NotificationCenter.default.post(name: backNotification, object: nil)
             return nil
         case "tour":
-            if command.name == "show" { shell.showTour() }
-            return shell.debugTourState
+            if command.name == "show" { shell.tour.show() }
+            return shell.tour.debugState
         case "signin":
             await shell.library.connectLocalBookOrbit()
             if case .failed(let message) = shell.library.debugConnection { return message }

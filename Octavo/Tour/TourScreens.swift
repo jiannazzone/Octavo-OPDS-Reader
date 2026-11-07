@@ -9,11 +9,11 @@ struct TourScreen: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        switch shell.tour?.step {
+        switch shell.tour.playing?.step {
         case .closeYourIPhone?:
             TourColumn { TourCloseScreen() }
         case .cover?:
-            TourColumn { TourCoverScreen(line: shell.tour?.coverLine ?? "") }
+            TourColumn { TourCoverScreen(line: shell.tour.playing?.coverLine ?? "") }
         default:
             Color(.systemBackground)
                 .ignoresSafeArea()
@@ -32,7 +32,7 @@ private struct TourColumn<Content: View>: View {
             content()
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        TourSkipButton { shell.skipTour() }
+                        TourSkipButton { shell.tour.skip() }
                     }
                 }
                 .toolbarTitleDisplayMode(.inline)
@@ -106,7 +106,7 @@ private struct TourCloseScreen: View {
             showsCover = true
         } completion: {
             // No left page (turned sideways): the reader just fades in.
-            shell.tourContinueWithoutClosing(coverFrame: spread.isTwoPages ? leftPage : nil)
+            shell.tour.continueWithoutClosing(coverFrame: spread.isTwoPages ? leftPage : nil)
         }
     }
 }

@@ -45,7 +45,7 @@ Choices made while building, for Adam to overrule if he dislikes them on the Duo
 - **Unfinished** (`playing`) it starts again. A sample book that couldn't be copied (no room) goes back to `new` and setup shows for now.
 - **An install with no data and no marker** plays it, as there's nothing to tell it from a new one. Adam's Duo has places and a server, so it only plays from Settings.
 
-**The launch steps didn't run when this was built.** A probe found them skipped in `App.init` and the marker never written. The tour didn't depend on them: `shouldPlay` settles from `ShellModel`, once the app is up. They now run from `didFinishLaunching` (`LaunchSteps`), with `settle()` still just before the marker; the reason and the fix are in `network-trust.md`, "The launch steps never ran".
+**The launch steps didn't run when this was built.** A probe found them skipped in `App.init` and the marker never written. The tour didn't depend on them: `shouldPlay` settles from `TourController.prepare`, once the app is up. They now run from `didFinishLaunching` (`LaunchSteps`), with `settle()` still just before the marker; the reason and the fix are in `network-trust.md`, "The launch steps never ran".
 
 ### A replay touches nothing
 
@@ -74,7 +74,7 @@ A separate read-only review of the whole branch. Fixed:
 | The cover stayed if the iPhone was opened while the app was away | The tour follows every report |
 | A file opened on first launch could cut the tour off, or leave no sample book, depending on timing | The tour waits while a file comes in; the sample book is there either way |
 | No room for the sample book ended the tour for good | It tries again next launch |
-| The debug remote left a replay's folder in use, and the reader under an animation | `debugEndTour` cleans up |
+| The debug remote left a replay's folder in use, and the reader under an animation | `TourController.debugEnd` cleans up |
 | The test host played the tour on a clean simulator, its animation running through the tests | It doesn't, confirmed on a clean install |
 
 Left as they are:

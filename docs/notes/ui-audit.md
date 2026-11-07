@@ -175,6 +175,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 
 **Step 1 done:** `ReaderPresenter` (`Octavo/Shell/ReaderPresenter.swift`) holds the open book, every way in (`open`, with how it opens: tapped, unfolded or a motion already made) and out (`close`, `closing`), the cover's motion and `coverSpots`, and the open book's sync. The shell tells it what's under the reader (`Underneath`) and still decides what a fold does. The tour and the server actions are steps 2 and 3.
 
+**Step 2 done:** `TourController` (`Octavo/Tour/TourController.swift`) holds the tour: when it starts (the hinge, an import opening the app), its replay, what a fold or an unfold does to its steps, and how it ends. Setup and imports ask it one thing, `isActive`, instead of reading its flags, and an import ends it with `endForImport`. The shell lends it the sample book and is told when a new install's tour has played. The tour's Add books stays in the shell, since it's setup's first screen. The server actions are step 3.
+
 ### 5. A timer stands in for "this iPhone has no hinge"
 **Structural risk · S**
 
@@ -485,7 +487,7 @@ These need no UX decision; they keep today's look and behaviour.
 5. **Home's state in one place, or Home draws its own title** (item 2). S. **Done** (both).
 6. **Cover position by anchor preference, posture passed in** (item 3). Do it before the next cover-motion change. M. **Done** (one store the screens report to, rather than an anchor preference).
 7. **`ReaderChromeLayout`** (item 18), then the tour context (item 21). M each. **`ReaderChromeLayout` done**; the tour context is still open.
-8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps. **ReaderPresenter done**; the tour and the server actions are still in `ShellModel`.
+8. **Split `ShellModel`** (item 4), starting with ReaderPresenter, which item 1 above begins. M–L, in steps. **ReaderPresenter and TourController done**; the server actions are still in `ShellModel`.
 
 The small fixes go in whenever their area is next touched: items 6, 10, 12, 13, 19, 20 and the smaller items.
 

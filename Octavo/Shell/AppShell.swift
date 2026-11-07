@@ -35,7 +35,7 @@ struct AppShell: View {
                 }
             }
             .accessibilityHidden(isCovered)
-            if model.tour != nil || model.tourWaitsForHinge {
+            if model.tour.isActive {
                 TourScreen()
                     .accessibilityHidden(model.reader.reading != nil)
                     .transition(.identity)
@@ -79,13 +79,13 @@ struct AppShell: View {
             Task { await model.openSharedFile(url) }
         }
         .onHingeChange { old, new in
-            model.hingeReported(HingeTransition.Fold(new.hinge?.status))
+            model.tour.hingeReported(HingeTransition.Fold(new.hinge?.status))
             model.hingeChanged(HingeTransition(from: old, to: new))
         }
         // Nothing from the hinge by now: no fold on this iPhone (decision 29).
         .task {
             try? await Task.sleep(for: .seconds(0.75))
-            model.hingeStayedSilent()
+            model.tour.hingeStayedSilent()
         }
         .animation(.default, value: model.reader.reading)
         .onChange(of: scenePhase) { _, phase in
@@ -100,7 +100,7 @@ struct AppShell: View {
     }
 
     private var isCovered: Bool {
-        model.reader.reading != nil || model.tour != nil || model.tourWaitsForHinge
+        model.reader.reading != nil || model.tour.isActive
     }
 
     private var tabs: some View {
