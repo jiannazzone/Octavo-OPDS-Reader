@@ -143,22 +143,17 @@ struct ScreenStack<Root: View>: View {
                 root()
             }
         }
-        // Unfolded, Settings' page shows its list too, so the list's own
-        // screen beneath stays out of sight: a swipe back uncovers the tab.
-        // With Reduce Motion it waits for a swipe, or the tab would show
-        // through as the page fades in.
-        .opacity(isListUnderItsPage(id, in: path) && (!reduceMotion || swipe != nil) ? 0 : 1)
-    }
-
-    private func isListUnderItsPage(_ id: ScreenID, in path: ShellPath) -> Bool {
-        guard (measured ?? shell.lastSpread)?.isTwoPages == true, id.route == .settings, id.depth < path.routes.count,
-              case .settingsPage = path.routes[id.depth]
-        else { return false }
-        return true
+        // Unfolded, the screen above draws this one on its left page
+        // (`ShellRoute.leftPage`), so this one's own screen stays out of
+        // sight: a swipe back uncovers the one beneath both. It goes by the
+        // posture Back does, so it's hidden exactly when Back leaves both.
+        // With Reduce Motion it waits for a swipe, or the one beneath would
+        // show through as the screen above fades in.
+        .opacity(path.isDrawnByTheOneAbove(id.depth, twoPages: shell.isTwoPages) && (!reduceMotion || swipe != nil) ? 0 : 1)
     }
 
     private func back() {
-        shell.back(tab, twoPages: (measured ?? shell.lastSpread)?.isTwoPages == true)
+        shell.back(tab)
     }
 
     /// The strip along the leading edge that a swipe back starts in.

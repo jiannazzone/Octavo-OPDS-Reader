@@ -10,6 +10,9 @@ import SwiftUI
 /// list is on the left page and the chosen page on the right (the server's,
 /// to start with); a tap on the left changes the right page without a slide
 /// (Adam, 2026-11-02). A fold keeps the page that was chosen on top.
+///
+/// The list and the page each keep their place in the view across a fold,
+/// so a fold doesn't start them again (a name half typed, a confirmation).
 struct SettingsScreen: View {
     /// `nil`: the list itself.
     let page: SettingsPage?
@@ -19,20 +22,19 @@ struct SettingsScreen: View {
     var body: some View {
         // With no server yet (books imported), Storage's page to start with.
         let first: SettingsPage = library.server.map { .server($0.id) } ?? .storage
-        Group {
+        let shown = page ?? (spread.isTwoPages ? first : nil)
+        HStack(spacing: 0) {
+            if spread.isTwoPages || shown == nil {
+                SettingsList(chosen: spread.isTwoPages ? shown : nil)
+                    .frame(width: spread.pages?.leftWidth)
+            }
             if let pages = spread.pages {
-                HStack(spacing: 0) {
-                    SettingsList(chosen: page ?? first)
-                        .frame(width: pages.leftWidth)
-                    Color.clear
-                        .frame(width: pages.hingeWidth)
-                    SettingsPageView(page: page ?? first)
-                        .frame(width: pages.rightWidth)
-                }
-            } else if let page {
-                SettingsPageView(page: page)
-            } else {
-                SettingsList(chosen: nil)
+                Color.clear
+                    .frame(width: pages.hingeWidth)
+            }
+            if let shown {
+                SettingsPageView(page: shown)
+                    .frame(width: spread.pages?.rightWidth)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -85,7 +87,6 @@ struct SettingsList: View {
     let chosen: SettingsPage?
     @Environment(ShellModel.self) private var shell
     @Environment(LibraryModel.self) private var library
-    @Environment(\.spread) private var spread
     @AppStorage(LibrarySettings.titlesUnderCoversKey) private var titlesUnderCovers = false
     @AppStorage(ReaderScreenOn.key) private var screenOn = ReaderScreenOn.standard
     @AppStorage(ReaderSettings.closeBookWhenFoldedKey) private var closesBookWhenFolded = ReaderSettings.closeBookWhenFoldedDefault
@@ -199,7 +200,9 @@ struct SettingsList: View {
 
     private func row(_ page: SettingsPage, @ViewBuilder label: () -> some View) -> some View {
         Button {
-            shell.openSettingsPage(page, twoPages: spread.isTwoPages)
+            // Folded, the page slides in over the list; unfolded, it shows
+            // beside the list at once (`ShellRoute.leftPage`).
+            shell.push(.settingsPage(page))
         } label: {
             HStack {
                 label()

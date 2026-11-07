@@ -8,53 +8,75 @@ import Testing
 @MainActor
 @Suite(.temporaryFiles)
 struct SettingsNavigationTests {
+    private func shell(_ spread: Spread) -> ShellModel {
+        let model = makeShell()
+        model.lastSpread = spread
+        return model
+    }
+
     // Folded, a row's page slides in over the list, and Back returns to it.
     @Test func foldedAPageGoesOverTheList() {
-        let model = makeShell()
+        let model = shell(.duoFolded)
         model.openSettings()
-        model.openSettingsPage(.storage, twoPages: false)
+        model.push(.settingsPage(.storage))
         #expect(model[path: .home].routes == [.settings, .settingsPage(.storage)])
         #expect(model[path: .home].lastMove == .push)
-        model.back(.home, twoPages: false)
+        model.back(.home)
         #expect(model[path: .home].routes == [.settings])
     }
 
     // Unfolded, the list stays and the right page changes without a slide.
     @Test func unfoldedAPageReplacesTheOneBesideTheList() {
-        let model = makeShell()
+        let model = shell(.duoUnfolded)
         model.openSettings()
-        model.openSettingsPage(.storage, twoPages: true)
+        model.push(.settingsPage(.storage))
         #expect(model[path: .home].routes == [.settings, .settingsPage(.storage)])
         #expect(model[path: .home].lastMove == .replace)
-        model.openSettingsPage(.licences, twoPages: true)
+        model.push(.settingsPage(.licences))
         #expect(model[path: .home].routes == [.settings, .settingsPage(.licences)])
         #expect(model[path: .home].lastMove == .replace)
     }
 
     // Unfolded, the list and its page are one screen: Back leaves both.
     @Test func unfoldedBackLeavesSettings() {
-        let model = makeShell()
+        let model = shell(.duoUnfolded)
         model.openSettings()
-        model.openSettingsPage(.server(SampleLibrarySource.id), twoPages: true)
-        model.back(.home, twoPages: true)
+        model.push(.settingsPage(.server(SampleLibrarySource.id)))
+        model.back(.home)
         #expect(model[path: .home].routes.isEmpty)
         #expect(model[path: .home].lastMove == .pop)
     }
 
+    // Folded on a page, then unfolded: Back leaves the list too, as the two
+    // are one screen now.
+    @Test func backAfterUnfoldingOnAPageLeavesSettings() {
+        let model = shell(.duoFolded)
+        model.openSettings()
+        model.push(.settingsPage(.storage))
+        model.lastSpread = .duoUnfolded
+        model.back(.home)
+        #expect(model[path: .home].routes.isEmpty)
+    }
+
     // A screen opened from a page (Sign in again) goes back to the page.
     @Test func backFromAScreenOverAPageIsOneStep() {
-        let model = makeShell()
+        let model = shell(.duoUnfolded)
         model.openSettings()
-        model.openSettingsPage(.server(SampleLibrarySource.id), twoPages: true)
+        model.push(.settingsPage(.server(SampleLibrarySource.id)))
         model.push(.signInAgain(SampleLibrarySource.id))
-        model.back(.home, twoPages: true)
+        #expect(model[path: .home].lastMove == .push)
+        model.back(.home)
         #expect(model[path: .home].routes == [.settings, .settingsPage(.server(SampleLibrarySource.id))])
     }
 
-    // Only Settings' list takes a page beside it.
-    @Test func aPageNeedsTheList() {
-        let model = makeShell()
-        model.openSettingsPage(.storage, twoPages: true)
+    // Without the list beneath, a page opens over what's there like any
+    // screen.
+    @Test func aPageWithoutItsListIsPushed() {
+        let model = shell(.duoUnfolded)
+        model.push(.settingsPage(.storage))
+        #expect(model[path: .home].routes == [.settingsPage(.storage)])
+        #expect(model[path: .home].lastMove == .push)
+        model.back(.home)
         #expect(model[path: .home].routes.isEmpty)
     }
 }
