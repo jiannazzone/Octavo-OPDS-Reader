@@ -33,6 +33,18 @@ Merged after #14 (PR #24). `ShellScreen` maps `.cover(SourcedBook)` to `CoverScr
 - **Sideways scroll views reach under the side column**; the new-books row is clipped to the content's edge.
 - **Pane titles:** the folded large title's ink starts at 37.3 pt and the unfolded panes' at 35.3 pt with #6's 28 pt offset, so `PaneStack.titleTop` is now 30 (measured from screenshots; both 37.3 pt after the change).
 
+## Home unfolded (2026-11-06)
+
+What was decided is in `docs/design/direction.md`, Home. Built on 'Octavo Home Duo' (864E238F-5796-44DE-9085-58CB5142BEC3, iOS 27.1). Before it, Home's right page was only full at the limit of 8 books, and the left page's 250 pt cover left about 165 pt blank beside it.
+
+- **The title:** `ScreenFrame` drops Home's title when unfolded and `LibraryModel.homeShowsBooks`, so it stays over an invitation.
+- **The cover:** `WholeCover` shows the image at its own shape, not `BookCover`'s 2:3 frame: on the page's blur, a frame's own blur showed as bands above and below a cover that isn't 2:3. Until it loads, it's `BookCover` with its stand-in.
+- **The strip:** `BookOpenButton` and `BookPlace` from a book's sheet, on `shell.pages.page(for:)` without `load(from:)`, so Home doesn't fetch details. It has `fixedSize` vertically, or at the largest text sizes the cover's flexible height cut the title to a line.
+- **The rows:** `AlsoReadingPage.coverHeight` shares the page's height out, less the banners and heading (measured). Rows are 16 pt apart up to four, 10 pt beyond, or seven don't fit. A cover over 100 pt loads `.full`.
+- **The shelf:** `LibraryShelf(hiding:)` leaves out books in progress, and `LibraryShelf.hasCovers` says whether anything's left, so an empty shelf falls back to the invitation.
+
+Checked on the simulator, with the sample library and real covers kept out of the repo, the local BookOrbit (8 in progress; Download, Open, Back, a cover that isn't 2:3), COPS with one book in progress, no server after the tour's Skip, two servers, half open, folded (unchanged), a fold while reading from Open (closes to the book's screen, and an unfold reopens it), dark mode, the largest text size, square, wide and missing covers, a signed-out banner and the shapes while loading. **Not run:** VoiceOver and a BookOrbit server with only one or two books in progress (the local one has 8, and the shelf's the same code as on COPS).
+
 ## Not done here
 
 - **On iPhone** chip, and switching to it when the server is unreachable: needs downloads (#10).

@@ -135,7 +135,7 @@ struct ScreenStack<Root: View>: View {
     }
 
     private func screen(at id: ScreenID, in path: ShellPath) -> some View {
-        ScreenFrame(title: id.route.map(\.title) ?? title, isLibraryRoot: id.route == nil && tab == .library) {
+        ScreenFrame(title: id.route.map(\.title) ?? title, isLibraryRoot: id.route == nil && tab == .library, isHomeRoot: id.route == nil && tab == .home) {
             if let route = id.route {
                 ShellScreen(route: route)
             } else {
@@ -215,6 +215,9 @@ struct ScreenFrame<Content: View>: View {
     let title: String?
     /// With several servers, its title is the menu of them (decision 36).
     var isLibraryRoot = false
+    /// Unfolded, the book you're reading has the left page to itself, so
+    /// Home has no title there.
+    var isHomeRoot = false
     @ViewBuilder let content: () -> Content
     @Environment(\.spread) private var spread
     @Environment(LibraryModel.self) private var library
@@ -224,7 +227,7 @@ struct ScreenFrame<Content: View>: View {
             if isLibraryRoot, library.hasSeveralServers {
                 LibraryServerMenu()
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
-            } else if let title {
+            } else if let title, !(isHomeRoot && spread.isTwoPages && library.homeShowsBooks) {
                 ScreenTitle(title)
                     .frame(width: spread.pages?.leftWidth, alignment: .leading)
             }

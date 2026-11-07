@@ -110,19 +110,11 @@ private struct NewestBooksPage: View {
 
     var body: some View {
         ScrollView {
-            if let newest, let source, let feed = library.feed(newest.link, from: source), shows(feed) {
+            if let newest, let source, let feed = library.feed(newest.link, from: source), LibraryShelf.hasCovers(feed, from: source) {
                 LibraryShelf(entry: newest, source: source, maxRows: 3)
                     .environment(\.spread, Spread(width: width, pages: nil))
                     .padding(.top, 8)
             }
-        }
-    }
-
-    private func shows(_ feed: FeedModel) -> Bool {
-        switch feed.state {
-        case .idle, .loading: true
-        case .failed: false
-        case .loaded: !feed.books.isEmpty || feed.entries.contains { !$0.previewCovers.isEmpty }
         }
     }
 }

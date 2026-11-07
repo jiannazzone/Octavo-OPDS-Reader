@@ -47,9 +47,9 @@ struct FittedCover: View {
     /// replaces it doesn't show.
     static let minimumStrip: CGFloat = 3
     /// The blur's radius, as a share of the frame's shorter side.
-    private static let blurShare: CGFloat = 0.06
+    static let blurShare: CGFloat = 0.06
     /// How much the blurred copy is darkened, so the cover stands out from it.
-    private static let dimming = 0.18
+    static let dimming = 0.18
 
     /// Whether `cover` fills `frame`, cropped, instead of fitting inside it.
     static func fills(cover: CGSize, frame: CGSize) -> Bool {
