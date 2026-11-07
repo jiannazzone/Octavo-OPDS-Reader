@@ -112,7 +112,7 @@ struct HomeContent: View {
             .onAppear { refreshPlaces() }
             .onChange(of: books?.map(\.id)) { refreshPlaces() }
             .onChange(of: scenePhase) { _, phase in
-                guard phase == .active, shell.reading == nil else { return }
+                guard phase == .active, shell.reader.reading == nil else { return }
                 refreshPlaces(again: true)
             }
     }
@@ -233,9 +233,9 @@ struct CurrentBookPage: View {
         .ignoresSafeArea(.container, edges: .bottom)
         // Where Open moves the cover from, and Back brings it back to.
         .onChange(of: book, initial: true) { report.book = book }
-        .onChange(of: report) { shell.coverSpots.reportHome(report, from: reporter) }
-        .onAppear { shell.coverSpots.reportHome(report, from: reporter) }
-        .onDisappear { shell.coverSpots.homeGone(reporter) }
+        .onChange(of: report) { shell.reader.coverSpots.reportHome(report, from: reporter) }
+        .onAppear { shell.reader.coverSpots.reportHome(report, from: reporter) }
+        .onDisappear { shell.reader.coverSpots.homeGone(reporter) }
     }
 
     private var page: some View {
@@ -362,7 +362,7 @@ private struct CurrentBookStrip: View {
         .padding(16)
         .glassEffect(in: .rect(cornerRadius: 28))
         .environment(\.openBook) { opened in
-            shell.openBook(SourcedBook(source: book.source, book: opened))
+            shell.reader.open(SourcedBook(source: book.source, book: opened))
         }
         .environment(\.downloadBook) { downloading in
             shell.downloadBook(SourcedBook(source: book.source, book: downloading))

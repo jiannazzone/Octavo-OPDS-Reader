@@ -142,7 +142,7 @@ enum ReaderRemote {
             let failure = await handle(command, shell: shell)
             if let closeAfter = command.closeAfter {
                 try? await Task.sleep(for: .milliseconds(closeAfter))
-                shell.closeReader()
+                shell.reader.close()
             }
             let ack = Ack(id: command.id, ok: failure == nil, message: failure)
             try? JSONEncoder().encode(ack).write(to: ackURL, options: .atomic)
@@ -173,10 +173,10 @@ enum ReaderRemote {
         case "detail":
             return await openBookOrbit(command.fileID, shell: shell, cover: true)
         case "close":
-            shell.closeReader()
+            shell.reader.close()
             return nil
         case "home":
-            shell.closeReader()
+            shell.reader.close()
             for tab in ShellTab.allCases { shell[path: tab].replace([]) }
             return nil
         case "shape":
@@ -193,13 +193,13 @@ enum ReaderRemote {
             shell.connection.connectionReturned()
             return nil
         case "coverMotion":
-            guard let motion = shell.coverMotion else { return "no cover motion" }
+            guard let motion = shell.reader.coverMotion else { return "no cover motion" }
             return motion.debugState
         case "spread":
             return "lastSpread \(shell.lastSpread.map { "\($0.width) pages \($0.pages.map { "\($0)" } ?? "nil")" } ?? "nil") twoPages \(shell.isTwoPages(in: shell.tab)) tabs \(shell.spreads.map { "\($0.key) \($0.value.isTwoPages)" }.sorted())"
         case "coverSpots":
-            let home = shell.coverSpots.home
-            return "home book \(home.book?.book.title ?? "nil") cover \(home.cover.map { "\($0)" } ?? "nil") page \(home.page.map { "\($0)" } ?? "nil") strip \(home.stripTop.map { "\($0)" } ?? "nil") spot \(home.spot != nil) books \(shell.coverSpots.bookScreens.map { "\($0.key.book.rawValue) \($0.value)" }.sorted())"
+            let home = shell.reader.coverSpots.home
+            return "home book \(home.book?.book.title ?? "nil") cover \(home.cover.map { "\($0)" } ?? "nil") page \(home.page.map { "\($0)" } ?? "nil") strip \(home.stripTop.map { "\($0)" } ?? "nil") spot \(home.spot != nil) books \(shell.reader.coverSpots.bookScreens.map { "\($0.key.book.rawValue) \($0.value)" }.sorted())"
         case "turnProbe":
             guard let reader else { return "no open reader" }
             return await TurnProbe.run(reader)
@@ -223,8 +223,8 @@ enum ReaderRemote {
         guard FileManager.default.fileExists(atPath: url.path) else { return "no local book named \(name)" }
         let file = LibraryFile(id: LibraryFileID(rawValue: name), format: url.pathExtension.lowercased(), filename: name, isPrimary: true)
         let book = LibraryBook(id: LibraryBookID(rawValue: name), title: name, files: [file])
-        shell.reading = nil
-        shell.reading = OpenedBook(book: book, source: .files, file: file, url: url)
+        shell.reader.reading = nil
+        shell.reader.reading = OpenedBook(book: book, source: .files, file: file, url: url)
         return nil
     }
 
@@ -242,12 +242,12 @@ enum ReaderRemote {
         // The reader opens the book's readable file; keep only this one.
         book.files = [file]
         let sourced = SourcedBook(source: server.id, book: book)
-        shell.reading = nil
+        shell.reader.reading = nil
         if cover {
             shell.select(.library)
             shell[path: .library].replace([.cover(sourced)])
         } else {
-            shell.openBook(sourced)
+            shell.reader.open(sourced)
         }
         return nil
     }

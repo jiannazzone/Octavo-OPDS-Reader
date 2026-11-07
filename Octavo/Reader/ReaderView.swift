@@ -174,7 +174,7 @@ private struct ReaderScreen: View {
                                 searchBar
                             case .serverPlace(let place):
                                 ReaderServerPlaceBar(
-                                    place: place, server: shell.reading.flatMap { shell.library.server($0.source)?.name } ?? "BookOrbit",
+                                    place: place, server: shell.reader.reading.flatMap { shell.library.server($0.source)?.name } ?? "BookOrbit",
                                     go: model.goToServerPlace, stay: model.keepThisPlace
                                 )
                             }
@@ -220,7 +220,7 @@ private struct ReaderScreen: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: model.note)
                 .overlay(alignment: .topLeading) {
-                    if let step = shell.tour?.step, model.phase == .open, shell.coverMotion == nil, let geometry = model.geometry {
+                    if let step = shell.tour?.step, model.phase == .open, shell.reader.coverMotion == nil, let geometry = model.geometry {
                         let onOnePage = panel != nil && !(model.layout.columns == 2 && model.layout.fold != nil)
                         TourCardSlot(step: step, geometry: geometry, layout: model.layout, sheetHeight: onOnePage ? sheetHeight : nil)
                             .id(step)
@@ -366,7 +366,7 @@ private struct ReaderScreen: View {
     }
 
     private var hintsPageTurn: Bool {
-        shell.tour?.step == .turnThePage && model.phase == .open && shell.coverMotion == nil && !controls.coversPage && panel == nil
+        shell.tour?.step == .turnThePage && model.phase == .open && shell.reader.coverMotion == nil && !controls.coversPage && panel == nil
     }
 
     /// What the tour's steps in the book look at.

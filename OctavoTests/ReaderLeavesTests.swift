@@ -334,30 +334,30 @@ struct ReaderLeavesShellTests {
         model.select(.library)
         model[path: .library].replace([.cover(Self.book)])
         model.hingeChanged(.unfold)
-        #expect(await eventually { model.reading != nil })
+        #expect(await eventually { model.reader.reading != nil })
         return model
     }
 
     @Test func unfoldingPastPageOnePlaysTheLeaves() async throws {
         let model = try await unfoldedShell(place: ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.5))
-        #expect(model.coverMotion?.leavesOnly == true)
-        #expect(model.coverMotion?.leaves?.count == 4)
+        #expect(model.reader.coverMotion?.leavesOnly == true)
+        #expect(model.reader.coverMotion?.leaves?.count == 4)
     }
 
     @Test func unfoldingOnANewBookHasNone() async throws {
         let model = try await unfoldedShell(place: nil)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.coverMotion == nil)
     }
 
     @Test func unfoldingOnPageOneHasNone() async throws {
         let model = try await unfoldedShell(place: ReadingPosition(cfi: "epubcfi(/6/2!/4/2)", fraction: 0))
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.coverMotion == nil)
     }
 
     @Test(arguments: [ReaderPageTurn.fade, .none])
     func unfoldingWithThesePageTurnsHasNone(pageTurn: ReaderPageTurn) async throws {
         let model = try await unfoldedShell(place: ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.5), pageTurn: pageTurn)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.coverMotion == nil)
     }
 
     // The book never closed, so there's nothing to leaf through to.
@@ -368,13 +368,29 @@ struct ReaderLeavesShellTests {
         try model.places.store.save(ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.5), forBook: Self.key)
         model.select(.library)
         model[path: .library].replace([.cover(Self.book)])
-        model.openBook(Self.book)
-        #expect(await eventually { model.reading != nil })
-        model.coverMotion = nil
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
+        model.reader.coverMotion = nil
         model.hingeChanged(.fold)
         model.hingeChanged(.unfold)
-        #expect(model.reading != nil)
-        #expect(model.coverMotion == nil)
+        #expect(model.reader.reading != nil)
+        #expect(model.reader.coverMotion == nil)
+    }
+
+    // An unfold on a book whose server has gone opens nothing; the next
+    // Open, from a list, fades in as any does, with no leaves.
+    @Test func anUnfoldThatOpensNothingLeavesTheNextOpenAlone() async throws {
+        let files = try TemporaryBookFiles()
+        let model = makeShell(opener: BookOpener(files: files.store), defaults: .closingBookWhenFolded(true))
+        await model.library.connect(LibraryServer(id: SampleLibrarySource.id, name: "Stub", source: StubLibrarySource()))
+        model.opener.download(Self.book, from: StubLibrarySource())
+        #expect(await eventually { model.opener.status(of: Self.book) == .downloaded })
+        try model.places.store.save(ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.5), forBook: Self.key)
+        model.select(.library)
+        model.reader.open(SourcedBook(source: LibrarySourceID(rawValue: "gone"), book: Self.book.book), .unfolded)
+        model.reader.open(Self.book)
+        #expect(await eventually { model.reader.reading != nil })
+        #expect(model.reader.coverMotion == nil)
     }
 }
 

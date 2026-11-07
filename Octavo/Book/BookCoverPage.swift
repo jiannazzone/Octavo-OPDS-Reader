@@ -62,7 +62,7 @@ struct BookCoverPage: View {
         }
         .onChange(of: scenePhase) { _, phase in
             // Not under the reader: its own pushes keep the place current.
-            guard phase == .active, shell.reading == nil else { return }
+            guard phase == .active, shell.reader.reading == nil else { return }
             shell.places.refresh(sourced)
         }
     }
@@ -94,7 +94,7 @@ struct BookCoverArt: View {
     let page: BookPage
     var thumbnail: UIImage?
     /// The book whose screen this is, for where its cover is
-    /// (`ShellModel.coverSpots`).
+    /// (`ReaderPresenter.coverSpots`).
     let book: SourcedBook.ID
     @Environment(ShellModel.self) private var shell
     /// Where it was last laid out, to report again on appearing.
@@ -115,12 +115,12 @@ struct BookCoverArt: View {
             .animation(.easeOut(duration: 0.2), value: page.cover)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
                 self.frame = frame
-                shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter)
+                shell.reader.coverSpots.reportBookScreen(book, cover: frame, from: reporter)
             }
             .onAppear {
-                if let frame { shell.coverSpots.reportBookScreen(book, cover: frame, from: reporter) }
+                if let frame { shell.reader.coverSpots.reportBookScreen(book, cover: frame, from: reporter) }
             }
-            .onDisappear { shell.coverSpots.bookScreenGone(book, reporter: reporter) }
+            .onDisappear { shell.reader.coverSpots.bookScreenGone(book, reporter: reporter) }
             .accessibilityElement()
             .accessibilityLabel(page.current.title.isEmpty ? "Cover" : "Cover of \(page.current.title)")
     }
