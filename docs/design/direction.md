@@ -350,7 +350,7 @@ Decided with screenshots of the real app running a throwaway prototype (no Figma
     - **The tour's Add books,** on a replay with a server connected, opens the server choices instead of the Files picker, since a new server no longer replaces the old one. This changes decision 30's note.
 37. **Home's left page is the cover, as on the folded book's screen** (Adam, 2026-11-07: "the idea is to match what already exists on the folded Duo"; "No, strip over cover."). Unfolded, the current book's cover fills the left page edge to edge on its blur, drawn by the same piece as a book's screen (`BookCoverArt`), and Home's glass strip sits over its foot, 8 pt from the edges, as the folded sheet does. It replaces the whole cover at its own shape above the strip (2026-11-06), which framed the cover in a second blur.
     - **Chosen from simulator screenshots** of a prototype with Alice and The Count of Monte Cristo, beside the page as it was.
-    - **No marks on the cover,** as on a book's screen: the strip's Open or Download says whether it's on the iPhone, and a finished book leaves Home. Folded Home keeps them on its smaller cover.
+    - **No marks on the cover,** as on a book's screen (Adam, from screenshots, over the arrow above the strip): the strip's Open or Download says whether it's on the iPhone, and a finished book leaves Home. Folded Home keeps them on its smaller cover.
     - **While Home loads,** the page is plain, with the strip's shape at its foot; once the book is there, the cover fades in as on a book's screen, a book without artwork showing its title.
     - **Open and Back** are the book's screen's motion (decision 28).
 
