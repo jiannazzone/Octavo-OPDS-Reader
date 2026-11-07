@@ -157,7 +157,7 @@ private struct TourCoverImage: View {
     }
 }
 
-/// A Duo seen from the front, its right half swinging shut over the left and
+/// A Duo seen from the front, its left half swinging shut over the right and
 /// open again. With Reduce Motion it holds part way, already closing.
 private struct TourDuoClosing: View {
     /// Seconds for one close and open.
@@ -194,9 +194,11 @@ private struct TourDuoClosing: View {
         return HStack(spacing: 0) {
             panel(corners: .init(topLeading: 14, bottomLeading: 14))
                 .frame(width: half.width, height: half.height)
+                .rotation3DEffect(.degrees(angle), axis: (x: 0, y: 1, z: 0), anchor: .trailing, perspective: 0.25)
+                // Over the right half as it shuts.
+                .zIndex(1)
             panel(corners: .init(bottomTrailing: 14, topTrailing: 14))
                 .frame(width: half.width, height: half.height)
-                .rotation3DEffect(.degrees(-angle), axis: (x: 0, y: 1, z: 0), anchor: .leading, perspective: 0.25)
         }
     }
 

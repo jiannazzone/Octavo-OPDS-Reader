@@ -4,7 +4,7 @@ Decisions 29 and 30 in `docs/design/direction.md`. Built 2026-11-03 on `iPhone D
 
 ## What it does
 
-- **Close your iPhone** shows only if a new install first opens unfolded. Closing goes to the cover. **Continue without closing** puts the cover on the left page, which opens as a book's screen does (decision 28), and goes to Turn the page.
+- **Close your iPhone** shows only if a new install first opens unfolded. Its Duo drawing's left half swings shut over the right and opens again (`TourDuoClosing`; Adam, 2026-11-07, mirrored from the right half closing). Closing goes to the cover. **Continue without closing** puts the cover on the left page, which opens as a book's screen does (decision 28), and goes to Turn the page.
 - **The cover**, folded: Pride and Prejudice's cover with "Open your iPhone to begin", in a glass capsule centred on the cover, just above its own title. Unfolding opens the book on Chapter I, past page 1, so two leaves go over first (decision 28).
 - **The cards**, Liquid Glass at the bottom of the left page (of the one page without a spread), lined up with the text and clear of where the progress bar comes up: Turn the page, Bring up the controls, Make it yours, The page changes as you go · Done, Add your own books · Not now · Add books. Four dots; Make it yours is one step.
 - **What to tap shows itself.** On Turn the page the right page lifts a little and settles, every 3.4 s or so until it's turned; with Reduce Motion it stays still. ··· and Aa are blue, in the column at full size and where the card's words name them.
