@@ -71,8 +71,11 @@ final class ShellModel {
     /// setup, while it does.
     private var connectingAtLaunch = false
     /// The spread a tab measured last, which a tab opening for the first
-    /// time lays out for until it has measured its own (`ScreenStack`).
+    /// time lays out for until it has measured its own (`ScreenStack`), and
+    /// navigation goes by (`ShellPath.open`, `ShellPath.back`).
     @ObservationIgnored var lastSpread: Spread?
+
+    private var isTwoPages: Bool { lastSpread?.isTwoPages == true }
 
     /// A debug override for the cover's strip, to look at its states without
     /// a failing download.
@@ -530,9 +533,9 @@ final class ShellModel {
     /// setup.
     func push(_ route: ShellRoute) {
         if case .setup = route {
-            self[path: setupTab].push(route)
+            self[path: setupTab].open(route, twoPages: isTwoPages)
         } else {
-            self[path: tab].push(route)
+            self[path: tab].open(route, twoPages: isTwoPages)
         }
     }
 
@@ -541,15 +544,9 @@ final class ShellModel {
         self[path: tab].pop()
     }
 
-    /// Back, or a swipe from the edge. Unfolded, Settings' list and the page
-    /// beside it are one screen, so they go together.
-    func back(_ tab: ShellTab, twoPages: Bool) {
-        let routes = self[path: tab].routes
-        if twoPages, case .settingsPage? = routes.last, routes.dropLast().last == .settings {
-            self[path: tab].pop(2)
-        } else {
-            self[path: tab].pop()
-        }
+    /// Back, or a swipe from the edge.
+    func back(_ tab: ShellTab) {
+        self[path: tab].back(twoPages: isTwoPages)
     }
 
     func popToRoot(_ tab: ShellTab) {
@@ -567,20 +564,6 @@ final class ShellModel {
     /// The Settings button at the top of the side column.
     func openSettings() {
         push(.settings)
-    }
-
-    /// A row in Settings' list. Folded, its page slides in over the list.
-    /// Unfolded, the list stays on the left page and the page shows on the
-    /// right at once, in place of the one there (decision 24).
-    func openSettingsPage(_ page: SettingsPage, twoPages: Bool) {
-        guard twoPages else {
-            push(.settingsPage(page))
-            return
-        }
-        var routes = self[path: tab].routes
-        if case .settingsPage? = routes.last { routes.removeLast() }
-        guard routes.last == .settings else { return }
-        self[path: tab].replace(routes + [.settingsPage(page)])
     }
 
     // MARK: Books

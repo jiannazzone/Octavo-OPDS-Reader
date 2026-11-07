@@ -76,6 +76,8 @@ These all worked, and are worth knowing before reading the problems.
 ## The shell (`Octavo/Shell/`)
 
 ### 1. Settings is two routes drawn as one screen when unfolded
+
+**Fixed** a little differently: the routes stay, and a page declares the list as its `ShellRoute.leftPage`. The stack and `ShellPath` treat any such pair the same way, going by the spread the tabs measured, so no view passes its posture and nothing in the shell names Settings (`settings.md`). `SettingsScreen` keeps the list and the page in place across a fold, which also fixes item 10 for Settings.
 **Structural risk · M**
 
 **Where:**
@@ -233,6 +235,8 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 **Sturdier:** wrap it in `EmptyPages(server: nil)`, put the banners on the left page, or fix it with item 8.
 
 ### 10. Folding swaps the view tree, and small `@State` goes with it
+
+**Fixed for Settings** (item 1). Remove download's confirmation and setup's keyboard are still open.
 **Simulator only, needs a real Duo · S each**
 
 **Where:**
@@ -461,7 +465,7 @@ From `git log --since=2026-10-31` on the UI folders:
 These need no UX decision; they keep today's look and behaviour.
 
 1. **Close the reader one way** (item 17), and **clear the cover motion on any fold change, with a time limit** (items 15, 16). S. **Done.**
-2. **Settings' chosen page as state** (item 1). This removes Settings from the shell. M.
+2. **Settings' chosen page as state** (item 1). This removes Settings from the shell. M. **Done** (as a declared left page).
 3. **`SpreadPages` and `.onLeftPage()`** (item 8). Fix the Library failure branch with it (item 9). M.
 4. **One push-a-route button** (item 11). It fixes the Larger Text rows. S.
 5. **Home's state in one place, or Home draws its own title** (item 2). S.

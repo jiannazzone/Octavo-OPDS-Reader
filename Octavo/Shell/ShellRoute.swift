@@ -24,7 +24,7 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     /// Settings' list. Unfolded it's beside a page (`SettingsScreen`).
     case settings
     /// Folded, a page over the list; unfolded, the list with this page
-    /// chosen.
+    /// chosen (its `leftPage`).
     case settingsPage(SettingsPage)
     /// A book's screen. Unfolding on it opens the book if it's on the iPhone.
     case cover(SourcedBook)
@@ -50,6 +50,15 @@ nonisolated enum ShellRoute: Hashable, Sendable {
         case .setup(.sync): "Reading progress"
         case .signInAgain: "Sign in again"
         }
+    }
+
+    /// Unfolded, the screen beside this one on the left page, which this
+    /// one draws: Settings' list beside its page (decision 24). The two are
+    /// one screen there, so the one beneath stays out of sight, Back leaves
+    /// both, and opening another page beside it changes the right page in
+    /// place (`ShellPath.open`, `ShellPath.back`).
+    var leftPage: ShellRoute? {
+        if case .settingsPage = self { .settings } else { nil }
     }
 
     /// The screen shows `library`'s books or details, so goes when it does.

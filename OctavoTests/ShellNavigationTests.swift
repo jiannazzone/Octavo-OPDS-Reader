@@ -151,6 +151,12 @@ extension UserDefaults {
     }
 }
 
+extension Spread {
+    /// The Duo's tabs, measured in the simulator (`SpreadTests`).
+    static let duoUnfolded = Spread(width: 867, divisions: [SpreadTests.hinge])
+    static let duoFolded = Spread(width: 382, divisions: [])
+}
+
 struct ShellPathTests {
     static let a = SampleRoutes.collections
     static let b = SampleRoutes.classics
@@ -173,6 +179,19 @@ struct ShellPathTests {
         path.popToRoot()
         #expect(path.routes.isEmpty)
         #expect(path.lastMove == .replace)
+    }
+
+    // Only a route with a left page pairs up; any other is pushed, folded
+    // or not, and Back takes one step.
+    @Test(arguments: [false, true])
+    func otherRoutesArePushed(twoPages: Bool) {
+        var path = ShellPath()
+        path.open(Self.a, twoPages: twoPages)
+        path.open(Self.b, twoPages: twoPages)
+        #expect(path.routes == [Self.a, Self.b])
+        #expect(path.lastMove == .push)
+        path.back(twoPages: twoPages)
+        #expect(path.routes == [Self.a])
     }
 
     @Test func replacingDoesntAnimate() {

@@ -27,10 +27,21 @@ nonisolated struct ShellPath: Hashable, Sendable {
         lastMove = .pop
     }
 
-    /// Back from Settings unfolded: its page and its list go together.
-    mutating func pop(_ count: Int) {
-        guard count > 0, !routes.isEmpty else { return }
-        routes.removeLast(min(count, routes.count))
+    /// Opens `route` on top. On two pages, a route with a `leftPage` that's
+    /// already showing goes beside it at once, in place of any page there.
+    mutating func open(_ route: ShellRoute, twoPages: Bool) {
+        guard twoPages, let left = route.leftPage else { return push(route) }
+        var beneath = routes
+        if beneath.last?.leftPage == left { beneath.removeLast() }
+        guard beneath.last == left else { return push(route) }
+        replace(beneath + [route])
+    }
+
+    /// Back, or a swipe from the edge. On two pages a route and its
+    /// `leftPage` are one screen, so they go together.
+    mutating func back(twoPages: Bool) {
+        guard twoPages, let left = top?.leftPage, routes.dropLast().last == left else { return pop() }
+        routes.removeLast(2)
         lastMove = .pop
     }
 
