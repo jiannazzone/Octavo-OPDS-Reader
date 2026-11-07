@@ -210,7 +210,7 @@ A new Home state needs both edits, or the title lands on the cover page or disap
 
 ### 8. No building block for "left page | hinge | right page"
 
-**Fixed:** `SpreadPages` (left and right at their widths, nothing on the hinge; folded the screen's own layout, or one of the two pages kept in place across a fold) and `.onLeftPage()`, both in `SpreadLayout.swift`. The six screens and the 17 frames use them; a hosted test checks the split and that a page shown folded isn't made again unfolded.
+**Fixed:** `SpreadPages` (left and right at their widths, nothing on the hinge; folded the screen's own layout, or one of the two pages kept in place across a fold) and `.onLeftPage()`, both in `SpreadLayout.swift`. The six screens, the 17 frames and `SpreadRow` (so every shelf, grid and list) use them; a page shown folded is given no width until the spread is measured. Hosted tests check the split, that a page shown folded isn't made again unfolded, the width, and `.onLeftPage()`. The tour's first step still keeps its own spread (item 14).
 **Structural risk · M**
 
 **Where:**

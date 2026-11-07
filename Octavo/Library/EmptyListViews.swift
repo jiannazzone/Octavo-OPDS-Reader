@@ -80,7 +80,9 @@ struct EmptyPages<Invitation: View>: View {
         SpreadPages(alignment: .top, folded: .left) { _ in
             invitation()
         } right: { width in
-            NewestBooksPage(newest: newest, source: server, width: width)
+            if let width {
+                NewestBooksPage(newest: newest, source: server, width: width)
+            }
         }
     }
 

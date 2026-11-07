@@ -36,7 +36,8 @@ enum SpreadMetrics {
 /// the right, each given its page's width, and nothing on the hinge. Folded,
 /// either the screen's own layout (`folded`) or one of the two pages, which
 /// then keeps its place in the view across a fold, so the fold doesn't
-/// start it again (Settings: a name half typed).
+/// start it again (Settings: a name half typed). That page is given the
+/// screen's width folded, and `nil` until the spread has been measured.
 struct SpreadPages<Left: View, Right: View, Folded: View>: View {
     /// The page that fills the screen folded.
     enum FoldedPage {
@@ -46,8 +47,8 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
     private let alignment: VerticalAlignment
     /// `nil`: the screen's own layout.
     private let foldedPage: FoldedPage?
-    @ViewBuilder private let left: (_ width: CGFloat) -> Left
-    @ViewBuilder private let right: (_ width: CGFloat) -> Right
+    @ViewBuilder private let left: (_ width: CGFloat?) -> Left
+    @ViewBuilder private let right: (_ width: CGFloat?) -> Right
     @ViewBuilder private let folded: () -> Folded
     @Environment(\.spread) private var spread
 
@@ -60,8 +61,9 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
     ) {
         self.alignment = alignment
         foldedPage = nil
-        self.left = left
-        self.right = right
+        // Only drawn unfolded, so always with a page's width.
+        self.left = { left($0 ?? 0) }
+        self.right = { right($0 ?? 0) }
         self.folded = folded
     }
 
@@ -74,7 +76,7 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
             // its place in it.
             HStack(alignment: alignment, spacing: 0) {
                 if pages != nil || foldedPage == .left {
-                    left(pages?.leftWidth ?? spread.width)
+                    left(pages?.leftWidth ?? measuredWidth)
                         .frame(width: pages?.leftWidth)
                 }
                 if let pages {
@@ -82,20 +84,28 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
                         .frame(width: pages.hingeWidth, height: 1)
                 }
                 if pages != nil || foldedPage == .right {
-                    right(pages?.rightWidth ?? spread.width)
+                    right(pages?.rightWidth ?? measuredWidth)
                         .frame(width: pages?.rightWidth)
                 }
             }
         }
     }
+
+    /// Folded, the screen's width, once the spread has been measured (it's
+    /// 0 before the stack's first layout).
+    private var measuredWidth: CGFloat? {
+        spread.width > 0 ? spread.width : nil
+    }
 }
 
 extension SpreadPages where Folded == EmptyView {
-    /// Folded, one of the two pages fills the screen.
+    /// Folded, one of the two pages fills the screen. Each page is given its
+    /// width: unfolded its page's, folded the screen's, and `nil` until the
+    /// spread has been measured.
     init(
         alignment: VerticalAlignment = .center, folded page: FoldedPage,
-        @ViewBuilder left: @escaping (_ width: CGFloat) -> Left,
-        @ViewBuilder right: @escaping (_ width: CGFloat) -> Right
+        @ViewBuilder left: @escaping (_ width: CGFloat?) -> Left,
+        @ViewBuilder right: @escaping (_ width: CGFloat?) -> Right
     ) {
         self.alignment = alignment
         foldedPage = page
@@ -122,26 +132,28 @@ private struct OnLeftPage: ViewModifier {
     }
 }
 
-/// One row across the spread: a part on each page, the hinge left empty.
+/// One row across the spread: a part on each page, the hinge left empty;
+/// folded, the first part. Nothing until the spread has been measured, as a
+/// part needs its page's width.
 struct SpreadRow<Page: View>: View {
     @ViewBuilder let page: (_ index: Int, _ width: CGFloat) -> Page
-    @Environment(\.spread) private var spread
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            ForEach(Array(spread.pageWidths.enumerated()), id: \.offset) { index, width in
-                if index > 0 {
-                    Color.clear.frame(width: spread.hingeWidth)
-                }
-                // Holds the page's width even when it has nothing on it.
-                ZStack(alignment: .topLeading) {
-                    Color.clear
-                        .frame(width: width, height: 0)
-                    page(index, width)
-                }
-                .frame(width: width, alignment: .topLeading)
-            }
+        SpreadPages(alignment: .top, folded: .left) { width in
+            if let width { part(0, width) }
+        } right: { width in
+            if let width { part(1, width) }
         }
+    }
+
+    /// Holds the page's width even when it has nothing on it.
+    private func part(_ index: Int, _ width: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+                .frame(width: width, height: 0)
+            page(index, width)
+        }
+        .frame(width: width, alignment: .topLeading)
     }
 }
 
