@@ -37,6 +37,14 @@ nonisolated struct ShellPath: Hashable, Sendable {
         replace(beneath + [route])
     }
 
+    /// On two pages, whether the screen at `depth` (the tab's root is 0) is
+    /// drawn by the one above it, as its `leftPage`: its own screen stays out
+    /// of sight, as Back leaves both.
+    func isDrawnByTheOneAbove(_ depth: Int, twoPages: Bool) -> Bool {
+        guard twoPages, depth > 0, depth < routes.count else { return false }
+        return routes[depth].leftPage == routes[depth - 1]
+    }
+
     /// Back, or a swipe from the edge. On two pages a route and its
     /// `leftPage` are one screen, so they go together.
     mutating func back(twoPages: Bool) {

@@ -75,7 +75,11 @@ final class ShellModel {
     /// navigation goes by (`ShellPath.open`, `ShellPath.back`).
     @ObservationIgnored var lastSpread: Spread?
 
-    private var isTwoPages: Bool { lastSpread?.isTwoPages == true }
+    /// Two pages, for navigation: what `ShellPath` pairs up, and what the
+    /// stack hides for it. The spread on screen, which a tap landed on (an
+    /// unfold reports before the scene moves), not the hinge, which says open
+    /// on a Duo turned sideways too.
+    var isTwoPages: Bool { lastSpread?.isTwoPages == true }
 
     /// A debug override for the cover's strip, to look at its states without
     /// a failing download.

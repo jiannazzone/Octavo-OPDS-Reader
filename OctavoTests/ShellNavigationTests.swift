@@ -194,6 +194,23 @@ struct ShellPathTests {
         #expect(path.routes == [Self.a])
     }
 
+    // Unfolded, the list under its page is drawn by the page, and only then.
+    @Test func aLeftPageIsHiddenUnderItsPageUnfolded() {
+        var path = ShellPath()
+        path.push(Self.a)
+        path.push(.settings)
+        path.push(.settingsPage(.storage))
+        // Depth 2 is the list, under its page at depth 3.
+        #expect(path.isDrawnByTheOneAbove(2, twoPages: true))
+        #expect(!path.isDrawnByTheOneAbove(2, twoPages: false))
+        #expect(!path.isDrawnByTheOneAbove(1, twoPages: true))
+        #expect(!path.isDrawnByTheOneAbove(3, twoPages: true))
+        #expect(!path.isDrawnByTheOneAbove(0, twoPages: true))
+        path.push(.signInAgain(SampleLibrarySource.id))
+        #expect(path.isDrawnByTheOneAbove(2, twoPages: true), "a screen over the page leaves the pair as it was")
+        #expect(!path.isDrawnByTheOneAbove(3, twoPages: true))
+    }
+
     @Test func replacingDoesntAnimate() {
         var path = ShellPath()
         path.push(Self.a)

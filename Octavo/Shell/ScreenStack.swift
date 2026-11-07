@@ -145,15 +145,11 @@ struct ScreenStack<Root: View>: View {
         }
         // Unfolded, the screen above draws this one on its left page
         // (`ShellRoute.leftPage`), so this one's own screen stays out of
-        // sight: a swipe back uncovers the one beneath both. With Reduce
-        // Motion it waits for a swipe, or that one would show through as the
-        // screen above fades in.
-        .opacity(isDrawnByTheOneAbove(id, in: path) && (!reduceMotion || swipe != nil) ? 0 : 1)
-    }
-
-    private func isDrawnByTheOneAbove(_ id: ScreenID, in path: ShellPath) -> Bool {
-        guard (measured ?? shell.lastSpread)?.isTwoPages == true, let route = id.route, id.depth < path.routes.count else { return false }
-        return path.routes[id.depth].leftPage == route
+        // sight: a swipe back uncovers the one beneath both. It goes by the
+        // posture Back does, so it's hidden exactly when Back leaves both.
+        // With Reduce Motion it waits for a swipe, or the one beneath would
+        // show through as the screen above fades in.
+        .opacity(path.isDrawnByTheOneAbove(id.depth, twoPages: shell.isTwoPages) && (!reduceMotion || swipe != nil) ? 0 : 1)
     }
 
     private func back() {
