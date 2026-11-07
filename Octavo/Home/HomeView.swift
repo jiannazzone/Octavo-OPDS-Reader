@@ -142,7 +142,7 @@ struct CurrentBook: View {
         OpenButton(route: .cover(book)) {
             VStack(alignment: .leading, spacing: 14) {
                 BookCover(book: book, cornerRadius: 6, size: .full)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 26) }
+                    .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: 26) }
                     .frame(width: coverWidth)
                     .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
                 VStack(alignment: .leading, spacing: 4) {
@@ -164,6 +164,7 @@ struct CurrentBook: View {
             }
             .accessibilityElement(children: .combine)
         }
+        .accessibilityValue(shell.marks(of: book).accessibilityValue)
     }
 }
 
@@ -229,12 +230,13 @@ struct ContinueReadingRow: View {
     let book: SourcedBook
     let progress: Double?
     @Environment(LibraryModel.self) private var library
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {
                 BookCover(book: book, cornerRadius: 2)
-                    .overlay(alignment: .bottomTrailing) { DownloadBadge(book: book, size: 14) }
+                    .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: 14) }
                     .frame(width: 48)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(book.book.title.isEmpty ? "Untitled" : book.book.title)
@@ -248,6 +250,7 @@ struct ContinueReadingRow: View {
             }
             .padding(6)
         }
+        .accessibilityValue(shell.marks(of: book).accessibilityValue)
     }
 }
 

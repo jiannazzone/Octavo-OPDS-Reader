@@ -60,6 +60,11 @@ struct BookCoverPage: View {
             shell.opener.clearFailure(sourced)
             shell.places.refresh(sourced)
         }
+        .onChange(of: page.details?.book) { _, book in
+            // A mark set before they arrived is newer than they are.
+            guard let book, page.markedFinished == nil else { return }
+            shell.library.detailsLoaded(SourcedBook(source: sourceID, book: book))
+        }
         .onChange(of: scenePhase) { _, phase in
             // Not under the reader: its own pushes keep the place current.
             guard phase == .active, shell.reading == nil else { return }

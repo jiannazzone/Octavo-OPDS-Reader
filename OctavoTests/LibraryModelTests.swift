@@ -21,6 +21,7 @@ private nonisolated struct PagedSource: LibrarySource {
     var pages: [String: LibraryFeed] = [:]
     var faults = Faults()
     var rootChips = [LibraryEntry(kind: .feed, title: "All", link: LibraryLink(rawValue: "all"))]
+    var tracksFinished = false
 
     func root() async throws -> LibraryRoot {
         LibraryRoot(chips: rootChips, search: .unavailable, recentlyAdded: LibraryLink(rawValue: "recent"),
@@ -316,6 +317,205 @@ struct LibraryModelTests {
         #expect(library.server == nil)
         #expect(library.source(for: server) == nil)
         #expect(library.feed(link("a"), from: server) == nil)
+    }
+}
+
+/// What a cover shows, and where it comes from: lists and the iPhone's records
+/// each hold their own copy of a book.
+@MainActor
+@Suite(.temporaryFiles)
+struct FinishedCoverTests {
+    private static func finished(_ id: String, _ value: Bool?) -> LibraryBook {
+        var marked = book(id)
+        marked.isFinished = value
+        return marked
+    }
+
+    /// The same files, as the next launch reads them.
+    private func relaunched(_ library: LibraryModel) -> LibraryModel {
+        LibraryModel(recents: library.recents, finished: library.finished, onIPhone: library.onIPhone, imported: .temporary())
+    }
+
+    @Test func showsTheServersMark() {
+        let library = temporaryLibrary()
+        #expect(library.isFinished(sourced(Self.finished("1", true))))
+        #expect(!library.isFinished(sourced(Self.finished("1", false))))
+        #expect(!library.isFinished(sourced(Self.finished("1", nil))))
+    }
+
+    @Test func aServerThatKeepsNoMarkUsesTheIPhones() async throws {
+        let library = await connected(PagedSource())
+        let book = sourced(book("1"))
+        try library.finished.set(true, for: book.id)
+        library.markedFinished(book.id, true)
+        #expect(library.isFinished(book))
+        #expect(relaunched(library).isFinished(book))
+
+        try library.finished.set(false, for: book.id)
+        library.markedFinished(book.id, false)
+        #expect(!library.isFinished(book))
+    }
+
+    @Test func aMarkOverridesTheCopyInAList() async throws {
+        let source = PagedSource(pages: ["a": LibraryFeed(books: [Self.finished("1", false)])], tracksFinished: true)
+        let library = await connected(source)
+        let feed = try #require(library.feed(link("a"), from: server))
+        await feed.load()
+        let copy = sourced(feed.books[0])
+        #expect(!library.isFinished(copy))
+
+        library.markedFinished(copy.id, true)
+        #expect(library.isFinished(copy))
+        library.markedFinished(copy.id, false)
+        #expect(!library.isFinished(copy))
+        #expect(!library.isFinished(sourced(Self.finished("1", true))))
+    }
+
+    // One list loading mustn't undo a mark that another list's older copy
+    // only knows through `finishedMarks`.
+    @Test func aListAfterTheMarkKeepsItForOlderLists() async throws {
+        let source = PagedSource(
+            pages: ["old": LibraryFeed(books: [Self.finished("1", false)]), "new": LibraryFeed(books: [Self.finished("1", true)])],
+            tracksFinished: true
+        )
+        let library = await connected(source)
+        let old = try #require(library.feed(link("old"), from: server))
+        await old.load()
+        let copy = sourced(old.books[0])
+
+        library.markedFinished(copy.id, true)
+        await library.feed(link("new"), from: server)?.load()
+        #expect(library.isFinished(copy))
+    }
+
+    @Test func aNewerListChangesAMark() async throws {
+        let source = PagedSource(pages: ["new": LibraryFeed(books: [Self.finished("1", false)])], tracksFinished: true)
+        let library = await connected(source)
+        let copy = sourced(Self.finished("1", false))
+        library.markedFinished(copy.id, true)
+
+        await library.feed(link("new"), from: server)?.load()
+        #expect(!library.isFinished(copy))
+    }
+
+    @Test func aMarkReachesTheIPhonesRecords() async throws {
+        let library = await connected(PagedSource(tracksFinished: true))
+        let book = sourced(Self.finished("1", false))
+        try library.onIPhone.record(book)
+
+        library.markedFinished(book.id, true)
+        #expect(library.onIPhone.books().map(\.book.isFinished) == [true])
+        #expect(relaunched(library).isFinished(library.onIPhone.books()[0]))
+    }
+
+    @Test func takingAMarkOffReachesTheIPhonesRecords() async throws {
+        let library = await connected(PagedSource(tracksFinished: true))
+        let book = sourced(Self.finished("1", true))
+        try library.onIPhone.record(book)
+        try library.recents.record(book)
+
+        library.markedFinished(book.id, false)
+        #expect(library.onIPhone.books().map(\.book.isFinished) == [false])
+        #expect(library.recents.records().map(\.book.book.isFinished) == [false])
+    }
+
+    @Test func aListUpdatesTheIPhonesRecords() async throws {
+        let source = PagedSource(pages: ["a": LibraryFeed(books: [Self.finished("1", true), Self.finished("2", nil)])], tracksFinished: true)
+        let library = await connected(source)
+        try library.onIPhone.record(sourced(Self.finished("1", false)))
+        try library.onIPhone.record(sourced(Self.finished("2", true)))
+
+        await library.feed(link("a"), from: server)?.load()
+        let records = library.onIPhone.books()
+        // A list that says nothing about a book changes nothing.
+        #expect(records.first { $0.book.id.rawValue == "1" }?.book.isFinished == true)
+        #expect(records.first { $0.book.id.rawValue == "2" }?.book.isFinished == true)
+    }
+
+    @Test func aBooksDetailsCorrectAnOlderCopy() async throws {
+        let library = await connected(PagedSource(tracksFinished: true))
+        let copy = sourced(Self.finished("1", false))
+        try library.onIPhone.record(copy)
+
+        library.detailsLoaded(sourced(Self.finished("1", true)))
+        #expect(library.isFinished(copy))
+        #expect(library.onIPhone.books().map(\.book.isFinished) == [true])
+
+        // A server that keeps no mark has nothing to say.
+        library.detailsLoaded(sourced(Self.finished("1", nil)))
+        #expect(library.isFinished(copy))
+    }
+
+    @Test func aRecordMadeLaterKeepsTheLatestMark() async throws {
+        let library = await connected(PagedSource(tracksFinished: true))
+        let stale = sourced(Self.finished("1", true))
+        library.markedFinished(stale.id, false)
+
+        library.bookOpened(stale)
+        library.bookDownloading(stale)
+        #expect(library.recents.records().map(\.book.book.isFinished) == [false])
+        #expect(library.onIPhone.books().map(\.book.isFinished) == [false])
+    }
+
+    @Test func removingAServerForgetsItsMarks() async throws {
+        let library = await connected(PagedSource())
+        let kept = sourced(book("1"))
+        try library.finished.set(true, for: kept.id)
+        library.markedFinished(kept.id, true)
+        let tracked = sourced(Self.finished("2", false))
+        library.detailsLoaded(sourced(Self.finished("2", true)))
+
+        library.forgetBooks(of: server)
+        #expect(!library.isFinished(kept))
+        #expect(!library.isFinished(tracked))
+    }
+}
+
+@MainActor
+struct CoverMarksTests {
+    private static let downloading = BookOpener.Status.downloading(fraction: 0.4, opensWhenDone: false)
+
+    @Test func aBookNeitherFinishedNorDownloadedHasNoMark() {
+        let statuses: [BookOpener.Status] = [.notDownloaded, .failed(offline: true, opensWhenDone: false), .protected]
+        for status in statuses {
+            let marks = CoverMarks(finished: false, status: status)
+            #expect(marks.isEmpty)
+            #expect(marks.download == nil)
+            #expect(marks.accessibilityValue == "")
+        }
+    }
+
+    @Test func aDownloadThatFailedLeavesTheCheck() {
+        let marks = CoverMarks(finished: true, status: .failed(offline: false, opensWhenDone: false))
+        #expect(!marks.isEmpty)
+        #expect(marks.finished)
+        #expect(marks.download == nil)
+        #expect(marks.accessibilityValue == "Finished")
+    }
+
+    @Test func downloadedAlone() {
+        let marks = CoverMarks(finished: false, status: .downloaded)
+        #expect(!marks.finished)
+        #expect(marks.download == .downloaded)
+        #expect(marks.accessibilityValue == "Downloaded")
+    }
+
+    @Test func finishedAndDownloaded() {
+        let marks = CoverMarks(finished: true, status: .downloaded)
+        #expect(marks.finished)
+        #expect(marks.download == .downloaded)
+        #expect(marks.accessibilityValue == "Finished, downloaded")
+    }
+
+    @Test func theRingTakesTheArrowsPlace() {
+        let marks = CoverMarks(finished: false, status: Self.downloading)
+        #expect(marks.download == .downloading(0.4))
+        #expect(marks.accessibilityValue == "Downloading, 40%")
+
+        let finished = CoverMarks(finished: true, status: Self.downloading)
+        #expect(finished.finished)
+        #expect(finished.download == .downloading(0.4))
+        #expect(finished.accessibilityValue == "Finished, downloading, 40%")
     }
 }
 
