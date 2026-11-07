@@ -55,7 +55,6 @@ struct HomeContent: View {
     let books: [SourcedBook]?
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -77,19 +76,12 @@ struct HomeContent: View {
         }
     }
 
-    @ViewBuilder
     private var layout: some View {
-        if let pages = spread.pages {
-            HStack(alignment: .top, spacing: 0) {
-                CurrentBookPage(book: books?.first, width: pages.leftWidth)
-                    .frame(width: pages.leftWidth)
-                Color.clear
-                    .frame(width: pages.hingeWidth)
-                AlsoReadingPage(books: others, width: pages.rightWidth)
-                    .frame(width: pages.rightWidth)
-            }
-            .refreshable { await library.loadHome() }
-        } else {
+        SpreadPages(alignment: .top) { width in
+            CurrentBookPage(book: books?.first, width: width)
+        } right: { width in
+            AlsoReadingPage(books: others, width: width)
+        } folded: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 16) {
@@ -101,8 +93,8 @@ struct HomeContent: View {
                 }
                 .padding(.bottom, 20)
             }
-            .refreshable { await library.loadHome() }
         }
+        .refreshable { await library.loadHome() }
     }
 
     @ViewBuilder

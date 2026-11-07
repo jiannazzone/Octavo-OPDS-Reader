@@ -17,22 +17,29 @@ struct LibraryView: View {
                     .id(server.id)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
+                    // On the left page, as over the shelves (`LibraryContents`).
                     ConnectionBannerSlot()
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, SpreadMetrics.margin)
+                        .onLeftPage()
                     ImportFailureBanner()
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, SpreadMetrics.margin)
+                        .onLeftPage()
                     if library.connectionProblem != nil {
                         // The banner says why, and retries; what's on the
                         // iPhone still reads (decision 22).
                         ScrollView {
                             OnIPhoneShelf()
-                                .padding(.top, 20)
+                                .padding(.top, SpreadMetrics.margin)
                         }
                     } else if library.rootFailed {
-                        EmptyInvitation(
-                            symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
-                            message: "The server didn’t send its lists.", actionTitle: "Try again"
-                        ) { Task { await library.retry() } }
+                        // On the left page, the right one empty: no lists
+                        // came to show beside it.
+                        EmptyPages(server: nil) {
+                            EmptyInvitation(
+                                symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
+                                message: "The server didn’t send its lists.", actionTitle: "Try again"
+                            ) { Task { await library.retry() } }
+                        }
                     } else {
                         LibraryContentsPlaceholder()
                     }
@@ -151,19 +158,18 @@ struct LibraryServerMenu: View {
 struct LibraryContents: View {
     let source: LibrarySourceID
     let sections: [LibraryEntry]
-    @Environment(\.spread) private var spread
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 ConnectionBannerSlot()
                     .padding(.horizontal, SpreadMetrics.margin)
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
                 // Files an import couldn't take, when none came in (with
                 // one that did, On iPhone shows it).
                 ImportFailureBanner()
                     .padding(.horizontal, SpreadMetrics.margin)
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
                 ForEach(sections) { section in
                     LibraryShelf(entry: section, source: source)
                 }
@@ -190,7 +196,6 @@ struct LibraryShelf: View {
     var hiding: Set<SourcedBook.ID> = []
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
 
     /// Whether a shelf of `feed` has covers to show, or may once it loads.
     static func hasCovers(_ feed: FeedModel, from source: LibrarySourceID, hiding: Set<SourcedBook.ID> = []) -> Bool {
@@ -210,7 +215,7 @@ struct LibraryShelf: View {
         VStack(alignment: .leading, spacing: 10) {
             heading(feed)
                 .padding(.horizontal, SpreadMetrics.margin)
-                .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                .onLeftPage()
             shelf(feed)
         }
         .task(id: entry.link) { await feed?.load() }
@@ -344,7 +349,6 @@ struct FeedContent<Header: View>: View {
     var numbered = false
     @ViewBuilder let header: () -> Header
     @Environment(LibraryModel.self) private var library
-    @Environment(\.spread) private var spread
 
     var body: some View {
         ScrollViewReader { scroller in
@@ -377,7 +381,7 @@ struct FeedContent<Header: View>: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 header()
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
                 if isEmpty, feed.state == .idle || feed.state == .loading {
                     SpreadGrid(items: (0..<9).map { Placeholder(id: $0) }, cell: { _ in
                         RoundedRectangle(cornerRadius: 4)
@@ -403,7 +407,7 @@ struct FeedContent<Header: View>: View {
                     }
                 }
                 status
-                    .frame(width: spread.pages?.leftWidth)
+                    .onLeftPage(alignment: .center)
             }
             // With only the left page's width in it, a scroll view would
             // centre this across the hinge.
@@ -532,7 +536,9 @@ struct LibraryNotConnected: View {
         if library.server == nil {
             NoLibraryInvitation()
         } else {
-            ContentUnavailableView("Not connected", systemImage: "books.vertical", description: Text("This comes from a library that isn’t connected."))
+            EmptyPages(server: nil) {
+                ContentUnavailableView("Not connected", systemImage: "books.vertical", description: Text("This comes from a library that isn’t connected."))
+            }
         }
     }
 }
@@ -543,9 +549,12 @@ struct NoLibraryInvitation: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        EmptyInvitation(
-            symbol: "books.vertical", title: "No library connected",
-            message: "Connect a server in Settings to see your books.", actionTitle: "Open Settings"
-        ) { shell.openSettings() }
+        // On the left page, as every empty screen's invitation is.
+        EmptyPages(server: nil) {
+            EmptyInvitation(
+                symbol: "books.vertical", title: "No library connected",
+                message: "Connect a server in Settings to see your books.", actionTitle: "Open Settings"
+            ) { shell.openSettings() }
+        }
     }
 }

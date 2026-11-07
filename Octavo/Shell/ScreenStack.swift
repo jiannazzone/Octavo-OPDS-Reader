@@ -222,10 +222,10 @@ struct ScreenFrame<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             if isLibraryRoot, library.hasSeveralServers {
                 LibraryServerMenu()
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
             } else if let title, !(isHomeRoot && spread.isTwoPages && library.homeShowsBooks) {
                 ScreenTitle(title)
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
             }
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

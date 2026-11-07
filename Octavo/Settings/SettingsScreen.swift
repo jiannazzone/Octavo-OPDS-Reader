@@ -22,20 +22,11 @@ struct SettingsScreen: View {
     var body: some View {
         // With no server yet (books imported), Storage's page to start with.
         let first: SettingsPage = library.server.map { .server($0.id) } ?? .storage
-        let shown = page ?? (spread.isTwoPages ? first : nil)
-        HStack(spacing: 0) {
-            if spread.isTwoPages || shown == nil {
-                SettingsList(chosen: spread.isTwoPages ? shown : nil)
-                    .frame(width: spread.pages?.leftWidth)
-            }
-            if let pages = spread.pages {
-                Color.clear
-                    .frame(width: pages.hingeWidth)
-            }
-            if let shown {
-                SettingsPageView(page: shown)
-                    .frame(width: spread.pages?.rightWidth)
-            }
+        // Folded, the list or the page.
+        SpreadPages(folded: page == nil ? .left : .right) { _ in
+            SettingsList(chosen: spread.isTwoPages ? page ?? first : nil)
+        } right: { _ in
+            SettingsPageView(page: page ?? first)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.systemGroupedBackground))

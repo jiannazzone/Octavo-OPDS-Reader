@@ -20,7 +20,6 @@ struct OnIPhoneContent: View {
     var offersServer = false
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
 
     var body: some View {
         let books = shell.onIPhoneBooks()
@@ -50,14 +49,14 @@ struct OnIPhoneContent: View {
                         ImportFailureBanner()
                     }
                     .padding(.horizontal, SpreadMetrics.margin)
-                    .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                    .onLeftPage()
                     SpreadGrid(items: books) { book in
                         BookGridCell(book: book)
                     }
                     if offersServer {
                         HaveAServerCard()
                             .padding(.horizontal, SpreadMetrics.margin)
-                            .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                            .onLeftPage()
                             .padding(.top, 10)
                     }
                 }
@@ -71,7 +70,6 @@ struct OnIPhoneContent: View {
 /// Nothing while the iPhone has no books.
 struct OnIPhoneShelf: View {
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
 
     var body: some View {
         let books = shell.onIPhoneBooks()
@@ -96,7 +94,7 @@ struct OnIPhoneShelf: View {
                 .accessibilityLabel("On iPhone, \(books.count) books")
                 .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, SpreadMetrics.margin)
-                .frame(width: spread.pages?.leftWidth, alignment: .leading)
+                .onLeftPage()
                 SpreadGrid(items: books, maxRows: 1) { book in
                     BookGridCell(book: book)
                 }

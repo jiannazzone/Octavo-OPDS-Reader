@@ -32,6 +32,95 @@ enum SpreadMetrics {
     }
 }
 
+/// A screen as a spread: unfolded, `left` on the left page and `right` on
+/// the right, each given its page's width, and nothing on the hinge. Folded,
+/// either the screen's own layout (`folded`) or one of the two pages, which
+/// then keeps its place in the view across a fold, so the fold doesn't
+/// start it again (Settings: a name half typed).
+struct SpreadPages<Left: View, Right: View, Folded: View>: View {
+    /// What shows folded.
+    enum FoldedPage {
+        case left, right, own
+    }
+
+    var alignment: VerticalAlignment = .center
+    private let foldedPage: FoldedPage
+    @ViewBuilder private let left: (_ width: CGFloat) -> Left
+    @ViewBuilder private let right: (_ width: CGFloat) -> Right
+    @ViewBuilder private let folded: () -> Folded
+    @Environment(\.spread) private var spread
+
+    /// Folded, the screen lays itself out its own way (`folded`).
+    init(
+        alignment: VerticalAlignment = .center,
+        @ViewBuilder left: @escaping (_ width: CGFloat) -> Left,
+        @ViewBuilder right: @escaping (_ width: CGFloat) -> Right,
+        @ViewBuilder folded: @escaping () -> Folded
+    ) {
+        self.alignment = alignment
+        foldedPage = .own
+        self.left = left
+        self.right = right
+        self.folded = folded
+    }
+
+    var body: some View {
+        let pages = spread.pages
+        if pages == nil, foldedPage == .own {
+            folded()
+        } else {
+            // One stack in both postures, so a page shown either way keeps
+            // its place in it.
+            HStack(alignment: alignment, spacing: 0) {
+                if pages != nil || foldedPage == .left {
+                    left(pages?.leftWidth ?? spread.width)
+                        .frame(width: pages?.leftWidth)
+                }
+                if let pages {
+                    Color.clear
+                        .frame(width: pages.hingeWidth, height: 1)
+                }
+                if pages != nil || foldedPage == .right {
+                    right(pages?.rightWidth ?? spread.width)
+                        .frame(width: pages?.rightWidth)
+                }
+            }
+        }
+    }
+}
+
+extension SpreadPages where Folded == EmptyView {
+    /// Folded, one of the two pages fills the screen.
+    init(
+        alignment: VerticalAlignment = .center, folded page: FoldedPage,
+        @ViewBuilder left: @escaping (_ width: CGFloat) -> Left,
+        @ViewBuilder right: @escaping (_ width: CGFloat) -> Right
+    ) {
+        self.alignment = alignment
+        foldedPage = page
+        self.left = left
+        self.right = right
+        folded = { EmptyView() }
+    }
+}
+
+extension View {
+    /// Unfolded, keeps the view to the left page's width (a screen's title,
+    /// a banner, a heading); folded, the whole page.
+    func onLeftPage(alignment: Alignment = .leading) -> some View {
+        modifier(OnLeftPage(alignment: alignment))
+    }
+}
+
+private struct OnLeftPage: ViewModifier {
+    let alignment: Alignment
+    @Environment(\.spread) private var spread
+
+    func body(content: Content) -> some View {
+        content.frame(width: spread.pages?.leftWidth, alignment: alignment)
+    }
+}
+
 /// One row across the spread: a part on each page, the hinge left empty.
 struct SpreadRow<Page: View>: View {
     @ViewBuilder let page: (_ index: Int, _ width: CGFloat) -> Page

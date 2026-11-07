@@ -52,17 +52,13 @@ private struct TourCloseScreen: View {
 
     var body: some View {
         Group {
-            if let pages = spread.pages {
-                HStack(spacing: 0) {
-                    leftSide
-                        .frame(width: pages.leftWidth)
-                    Color.clear
-                        .frame(width: pages.hingeWidth)
-                    words
-                        .padding(.horizontal, SpreadMetrics.margin)
-                        .frame(width: pages.rightWidth, alignment: .leading)
-                }
-            } else {
+            SpreadPages { _ in
+                leftSide
+            } right: { _ in
+                words
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } folded: {
                 VStack(spacing: 32) {
                     TourDuoClosing()
                     words
@@ -70,6 +66,7 @@ private struct TourCloseScreen: View {
                 .padding(.horizontal, SpreadMetrics.margin)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .environment(\.spread, spread)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea(.container, edges: .vertical)
