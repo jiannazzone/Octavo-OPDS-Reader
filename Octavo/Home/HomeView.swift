@@ -166,19 +166,22 @@ struct CurrentBookPage: View {
     let book: SourcedBook?
     let width: CGFloat
     @Environment(ShellModel.self) private var shell
+    @State private var spot = HomeCoverSpot()
 
     var body: some View {
         VStack(spacing: 12) {
             if let book {
                 OpenButton(route: .cover(book)) {
                     WholeCover(book: book)
-                        .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: 26) }
-                        .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
+                        .overlay(alignment: .bottomTrailing) { CoverBadge(book: book, size: HomeCoverSpot.badgeSize) }
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { spot.cover = $0 }
+                        .shadow(color: .black.opacity(HomeCoverSpot.shadowOpacity), radius: HomeCoverSpot.shadowRadius, y: HomeCoverSpot.shadowY)
                 }
                 .frame(maxHeight: .infinity)
                 .accessibilityLabel(book.book.title.isEmpty ? "Cover" : "Cover of \(book.book.title)")
                 .accessibilityValue(shell.marks(of: book).accessibilityValue)
                 CurrentBookStrip(book: book)
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { spot.stripTop = $0 }
             } else {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(.quaternary)
@@ -198,15 +201,41 @@ struct CurrentBookPage: View {
         .background {
             if let book {
                 CoverImage(book: book, size: .full)
-                    .blur(radius: width * FittedCover.blurShare, opaque: true)
-                    .overlay(.black.opacity(FittedCover.dimming))
-                    .clipped()
+                    .pageBlur(width: width)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { spot.page = $0 }
             } else {
                 Color(.secondarySystemBackground)
             }
         }
         .ignoresSafeArea(.container, edges: .bottom)
+        // Where Open moves the cover from, and Back brings it back to.
+        .onChange(of: book, initial: true) { spot.book = book }
+        .onChange(of: spot) { shell.homeCover = spot }
+        .onAppear { shell.homeCover = spot }
+        .onDisappear { shell.homeCover = HomeCoverSpot() }
     }
+}
+
+/// Home's cover unfolded, in the window, for the cover's motion
+/// (`ReaderCoverMotion`): Open moves it from here onto the right page, and
+/// Back brings it back. The left page is its blur down to the strip.
+struct HomeCoverSpot: Equatable {
+    var book: SourcedBook?
+    var cover = CGRect.zero
+    var page = CGRect.zero
+    var stripTop: CGFloat = 0
+
+    /// What Home shows for a book without artwork.
+    var standIn: StandInCover? {
+        book.map { StandInCover(title: $0.book.title, author: $0.book.authors.first ?? "", seed: $0.book.id.rawValue) }
+    }
+
+    /// How Home draws the cover, which it loses as it moves.
+    static let cornerRadius: CGFloat = 6
+    static let shadowOpacity = 0.35
+    static let shadowRadius: CGFloat = 14
+    static let shadowY: CGFloat = 6
+    static let badgeSize: CGFloat = 26
 }
 
 /// A cover at its own shape, as large as it fits. The page behind is already
@@ -223,9 +252,9 @@ private struct WholeCover: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .clipShape(.rect(cornerRadius: 6))
+                    .clipShape(.rect(cornerRadius: HomeCoverSpot.cornerRadius))
             } else {
-                BookCover(book: book, cornerRadius: 6, size: .full)
+                BookCover(book: book, cornerRadius: HomeCoverSpot.cornerRadius, size: .full)
             }
         }
         .task(id: [book.source.rawValue, book.book.id.rawValue, book.book.cover?.cacheKey]) {

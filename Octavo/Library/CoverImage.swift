@@ -81,6 +81,16 @@ struct FittedCover: View {
     }
 }
 
+extension View {
+    /// A cover as the page it's on (Home's left page unfolded): blurred and
+    /// darkened as `FittedCover` does its strips. `width` is the page's.
+    func pageBlur(width: CGFloat) -> some View {
+        blur(radius: width * FittedCover.blurShare, opaque: true)
+            .overlay(.black.opacity(FittedCover.dimming))
+            .clipped()
+    }
+}
+
 /// Decoded covers in memory, keyed by library, image version and size, and
 /// one fetch per cover at a time. What's fetched is also kept on the iPhone
 /// (`CoverFiles`).
