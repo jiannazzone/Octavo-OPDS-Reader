@@ -51,6 +51,7 @@ extension ReaderModel {
         // A tap that beat the page to hearing a note had opened: it only closes it.
         guard note == nil else { return closeNote("a tap elsewhere, early") }
         guard phase == .open, !isFolding else { return }
+        if pageTurn.curls(reduceMotion: reduceMotion) { return curlRequested(side) }
         guard let run = turnRun else { return startTurn(side, interactive: false) }
         if queuedTurns.count < 3 { queuedTurns.append(side) }
         if run.canEndEarly { endTurn() }
@@ -61,7 +62,8 @@ extension ReaderModel {
         switch swipe.phase {
         case .began:
             closeNote("a swipe on the page")
-            guard phase == .open, !isFolding, let side = swipe.side else { return }
+            // A finger curls with UIKit's own pan (`ReaderCurl`).
+            guard phase == .open, !isFolding, !pageTurn.curls(reduceMotion: reduceMotion), let side = swipe.side else { return }
             queuedTurns.removeAll()
             if let run = turnRun {
                 // A turn still being drawn or falling back: this finger waits.
@@ -90,6 +92,7 @@ extension ReaderModel {
     /// Returns the bridge call that ends a held turn, to run before `hold`.
     func finishTurnForFold() -> String? {
         queuedTurns.removeAll()
+        if isCurling { return finishCurlForFold() }
         guard let run = turnRun else {
             // A hint, if anything: it has nothing to end.
             turn = nil
@@ -105,6 +108,8 @@ extension ReaderModel {
 
     private func startTurn(_ side: ReaderTurnSide, interactive: Bool) {
         let motion = pageTurn.motion(spread: layout.columns == 2, reduceMotion: reduceMotion)
+        // A curl is `ReaderCurl`'s (`curlRequested`).
+        guard motion != .curl else { return }
         guard motion != .none, let geometry else { return turnWithoutPictures(side) }
         let size = geometry.size
         let spine = motion == .flip && layout.columns == 2 ? spine(in: geometry) : nil
@@ -138,7 +143,7 @@ extension ReaderModel {
     static let longestWaitForPage = Duration.milliseconds(100)
 
     /// No pictures to draw (no web view to snapshot): foliate turns at once.
-    private func turnWithoutPictures(_ side: ReaderTurnSide) {
+    func turnWithoutPictures(_ side: ReaderTurnSide) {
         guard phase == .open else { return }
         Task {
             let answer = try? await page.callJavaScript("return await window.octavo.turn(side, false)", arguments: ["side": side.rawValue]) as? [String: Any]
@@ -160,10 +165,7 @@ extension ReaderModel {
         let moved = answer?["moved"] as? Bool ?? false
         run.moved = moved
         if moved {
-            let relocation = (answer?["relocation"] as? String).flatMap {
-                try? JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data($0.utf8))
-            }
-            let place = relocation.map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.shownFraction) }
+            let place = Self.place(turnedTo: answer)
             let new = pictures(regions, size: size, spine: spine, afterScreenUpdates: true) ?? ReaderTurn.Pictures()
             // Fades in only over the page's colour, if the turn is moving.
             let fadesIn = run.target != nil || (run.interactive && turn?.progress ?? 0 > 0)
@@ -187,6 +189,13 @@ extension ReaderModel {
         try? await Task.sleep(for: .milliseconds(100))
         guard turnRun === run, let fresh = pictures(regions, size: size, spine: spine, afterScreenUpdates: false) else { return }
         turn?.new = fresh
+    }
+
+    /// Where the bridge's `turn` answer says the page went.
+    static func place(turnedTo answer: [String: Any]?) -> ReaderPlace? {
+        (answer?["relocation"] as? String)
+            .flatMap { try? JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data($0.utf8)) }
+            .map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.shownFraction) }
     }
 
     /// Plays the rest of `run` to `target`: a whole turn at its own pace, or
@@ -262,7 +271,7 @@ extension ReaderModel {
     /// tour's Turn the page). Pictures only: foliate doesn't move, so nothing
     /// is saved, and a real turn asked for meanwhile simply takes over.
     func playTurnHint() async {
-        guard phase == .open, !isFolding, turnRun == nil, turn == nil, queuedTurns.isEmpty, let geometry,
+        guard phase == .open, !isFolding, turnRun == nil, turn == nil, !isCurling, queuedTurns.isEmpty, let geometry,
               let motion = pageTurn.hintMotion(spread: layout.columns == 2, reduceMotion: reduceMotion)
         else { return }
         let size = geometry.size
@@ -318,7 +327,9 @@ extension ReaderModel {
         return (gap.lowerBound + gap.upperBound) / 2
     }
 
-    private func pictures(_ regions: ReaderTurn.Regions, size: CGSize, spine: Double?, afterScreenUpdates: Bool) -> ReaderTurn.Pictures? {
+    /// Snapshots of `regions` of the page; the first commits what the web
+    /// view has drawn if `afterScreenUpdates`.
+    func pictures(_ regions: ReaderTurn.Regions, size: CGSize, spine: Double?, afterScreenUpdates: Bool) -> ReaderTurn.Pictures? {
         var pictures = ReaderTurn.Pictures()
         var updates = afterScreenUpdates
         func take(_ rect: CGRect?) -> ReaderSnapshot? {

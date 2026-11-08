@@ -4,6 +4,8 @@ Decisions 27 and 28 in `docs/design/direction.md`. Written 2026-11-03 on 'Octavo
 
 ## Summary
 
+**Since 2026-11-07, Automatic curls** (UIKit's page curl, `curl.md`). The slide and the flip below are the Slide and Flip choices, and the snapshots, the bridge's `turn` and the hold are shared with the curl.
+
 - **Folded, a page slides; open, it flips over the spine** (flat and half open alike; in book mode each half turns its own way). Fade and None are the other choices, in **Page Turn** in Customize (below Margins, a menu like Font's), saved as `reader.pageTurn`. Automatic fades with Reduce Motion; a style picked by hand is kept. None is foliate's own instant turn and drag, as before.
 - **Swift draws every turn from snapshots of the page**, and foliate turns at once underneath. A snapshot takes 2–5 ms; foliate's next page is on screen 20–70 ms after the turn starts (section 1), so the turn moves the moment a finger does.
 - **A swipe drives the turn under the finger**, both ways; let go before halfway without a flick and the page falls back, and nothing is saved or synced for it. Taps, the keyboard and the trackpad play the whole turn: 0.3 s slide, 0.5 s flip, 0.15 s fade.
@@ -147,7 +149,7 @@ The bridge first tracked swipes with touch events and posted their progress. It 
 - **A layout change during a held swipe** (a text-size change can't happen mid-swipe, but a late `setLayout` could) would post the held relocation early. Not seen; worth a guard if it ever is.
 - **Opening and closing pictures leave out the page's footer**, and the controls vanish as the book closes. The last leaf's page has no footer either, until it lands.
 - Once, after many quick open/close cycles driven by the remote, Open did nothing until a relaunch. Not reproduced.
-- Curl stays parked (`docs/UI-IDEAS.md`); it would draw from the same snapshots.
+- Curl was built on 2026-11-07 from the same snapshots (`curl.md`).
 
 ## Tools
 

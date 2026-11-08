@@ -102,11 +102,18 @@ final class ReaderModel {
     var pageTurn = ReaderPageTurn.standard {
         didSet { if pageTurn != oldValue { sendTurnMode() } }
     }
-    var reduceMotion = false
+    var reduceMotion = false {
+        didSet { if reduceMotion != oldValue { sendTurnMode() } }
+    }
     /// The turn on screen, if any (`ReaderModel+Turns`).
     var turn: ReaderTurn? {
         didSet { if (turn == nil) != (oldValue == nil) { followTurnFrames(turn != nil) } }
     }
+    /// A page is curling (`ReaderModel+Curl`): the curl's pages carry the
+    /// footer and the spine shadow meanwhile.
+    var isCurling = false
+    /// UIKit's page curl, over the page while pages curl.
+    @ObservationIgnored let curl = ReaderCurl()
     /// Ticks while a turn is on screen.
     @ObservationIgnored var turnFrames: UIUpdateLink?
     @ObservationIgnored let snapshots = ReaderPageSnapshots()
@@ -243,6 +250,7 @@ final class ReaderModel {
 
         relay.onMessage = { [weak self] body in self?.receive(body) }
         swipes.onSwipe = { [weak self] swipe in self?.swiped(swipe) }
+        curl.model = self
         if let sync {
             pusher = DebouncedProgressPusher(delay: pushDelay) { [weak self] position in
                 do {
@@ -356,8 +364,9 @@ final class ReaderModel {
     private func sendTurnMode() {
         let animated = pageTurn.isAnimated
         // Off with None, when foliate's paginator takes swipes itself. Its
-        // fixed-layout renderer has none, so those stay here.
-        swipes.isEnabled = animated || isFixedLayout
+        // fixed-layout renderer has none, so those stay here. A curl follows
+        // the finger with UIKit's own pan (`ReaderCurl`).
+        swipes.isEnabled = (animated || isFixedLayout) && !pageTurn.curls(reduceMotion: reduceMotion)
         guard phase == .open, animated != sentTurnMode else { return }
         sentTurnMode = animated
         call("return await window.octavo.setTurnMode(mode)", arguments: ["mode": ["animated": animated]])

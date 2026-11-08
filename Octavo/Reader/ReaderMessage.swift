@@ -121,6 +121,16 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var sectionIndex: Int?
         var sectionCount: Int?
         var location: Location?
+        /// Whether foliate can turn to the left and to the right page from
+        /// here: `false` at the book's start or end. `nil` from an older
+        /// bridge.
+        var turnsLeft: Bool?
+        var turnsRight: Bool?
+
+        /// Whether there's a page to `side`; unknown counts as yes.
+        func turns(_ side: ReaderTurnSide) -> Bool {
+            (side == .left ? turnsLeft : turnsRight) != false
+        }
 
         /// A page turn, by a tap or a swipe, rather than a jump or a new layout.
         var isPageTurn: Bool { reason == "page" || reason == "snap" }

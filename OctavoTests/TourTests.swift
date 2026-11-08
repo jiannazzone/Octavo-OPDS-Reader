@@ -196,9 +196,12 @@ struct TourFlowTests {
         #expect(TourCardWords.emphasized(plain).runs.count == 1)
     }
 
-    // The page lifts as it would turn; with Reduce Motion, or a style with
+    // The page lifts as it would turn (a curl, which UIKit can't play in
+    // part, as a flip or a slide); with Reduce Motion, or a style with
     // nothing to lift, it holds still.
     @Test func thePageLiftsAsItTurnsOrHoldsStill() {
+        #expect(ReaderPageTurn.curl.hintMotion(spread: true, reduceMotion: false) == .flip)
+        #expect(ReaderPageTurn.curl.hintMotion(spread: false, reduceMotion: false) == .slide)
         #expect(ReaderPageTurn.automatic.hintMotion(spread: true, reduceMotion: false) == .flip)
         #expect(ReaderPageTurn.automatic.hintMotion(spread: false, reduceMotion: false) == .slide)
         #expect(ReaderPageTurn.slide.hintMotion(spread: true, reduceMotion: false) == .slide)

@@ -15,7 +15,8 @@ import WebKit
 /// On top of the page: each page's footer, in book mode the spine shadow (a
 /// setting, on by default), and the snapshot that covers a fold while it
 /// settles. While a page turns (decision 27), its pictures: what lies still
-/// under the spine shadow, what moves over it.
+/// under the spine shadow, what moves over it. Under them all, while pages
+/// curl, UIKit's curl (`ReaderCurl`), clear until a page curls.
 struct ReaderWebView: View {
     let model: ReaderModel
     /// The theme on the page, for the spine shadow's colour.
@@ -49,17 +50,26 @@ struct ReaderWebView: View {
                 }
             }
             .overlay(alignment: .topLeading) {
+                // Clear over the page until a page curls.
+                if model.phase == .open, model.pageTurn.curls(reduceMotion: model.reduceMotion), let page = model.geometry?.size {
+                    ReaderCurlView(curl: model.curl, spread: model.layout.columns == 2, theme: theme, showsSpineShadow: showsSpineShadow)
+                        .frame(width: page.width, height: page.height)
+                        .id(model.layout.columns)
+                }
+            }
+            .overlay(alignment: .topLeading) {
                 if let turn = model.turn {
                     ReaderTurnBase(turn: turn)
                 }
             }
             .overlay(alignment: .topLeading) {
-                if showsFooter, model.turn == nil {
+                if showsFooter, model.turn == nil, !model.isCurling {
                     ReaderFooter(model: model, hidesChapter: hidesFooterChapter)
                 }
             }
             .overlay(alignment: .topLeading) {
-                if showsSpineShadow {
+                // A curl's pages carry it, so it turns with them.
+                if showsSpineShadow, !model.isCurling {
                     ReaderSpineShadow(model: model, theme: theme)
                 }
             }

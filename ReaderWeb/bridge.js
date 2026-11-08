@@ -175,6 +175,26 @@ const relocationWatchers = new Set()
 // own relocate event leaves out.
 let lastRelocateReason = null
 
+// Whether there's a page to each side, for a curl under a finger, which
+// UIKit asks about as the finger lands (`ReaderCurl`): the paginator's own
+// ends, or on fixed layout whether the book's first or last page is shown.
+const turnsFrom = r => {
+    let atStart = r?.atStart
+    let atEnd = r?.atEnd
+    if (view.isFixedLayout) {
+        const shown = fixedPagesShown()
+        if (!shown.length) return {}
+        atStart = shown[0] === 0
+        atEnd = shown.at(-1) === view.book.sections.length - 1
+    }
+    if (typeof atStart !== 'boolean' || typeof atEnd !== 'boolean') return {}
+    const forward = forwardSide()
+    return {
+        turnsLeft: forward === 'left' ? !atEnd : !atStart,
+        turnsRight: forward === 'right' ? !atEnd : !atStart,
+    }
+}
+
 const onRelocate = ({ detail }) => {
     relocations++
     const message = {
@@ -194,6 +214,7 @@ const onRelocate = ({ detail }) => {
             }
             : null,
         ...(view.isFixedLayout ? fixedPlace(detail) : {}),
+        ...turnsFrom(view.renderer),
     }
     message.startCFI = startOf(message.cfi)
     for (const watch of relocationWatchers) watch(detail, message)
@@ -740,7 +761,8 @@ const endTurn = async keep => {
         held = null
         if (pending) post('relocate', pending)
     }
-    return true
+    // Whether the held turn moved (`ReaderModel.curlEnded`).
+    return moved
 }
 
 // Text boxes of the visible page in the top window's coordinates. Text only:

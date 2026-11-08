@@ -9,9 +9,10 @@ import Testing
 struct ReaderPageTurnTests {
     // MARK: Page Turn
 
-    @Test func automaticSlidesOnePageAndFlipsASpread() {
-        #expect(ReaderPageTurn.automatic.motion(spread: false, reduceMotion: false) == .slide)
-        #expect(ReaderPageTurn.automatic.motion(spread: true, reduceMotion: false) == .flip)
+    /// Adam, 2026-11-07: one page and a spread alike.
+    @Test func automaticCurls() {
+        #expect(ReaderPageTurn.automatic.motion(spread: false, reduceMotion: false) == .curl)
+        #expect(ReaderPageTurn.automatic.motion(spread: true, reduceMotion: false) == .curl)
     }
 
     @Test(arguments: [false, true])
@@ -23,6 +24,7 @@ struct ReaderPageTurnTests {
     @Test(arguments: [
         (ReaderPageTurn.slide, ReaderTurnMotion.slide),
         (.flip, .flip),
+        (.curl, .curl),
         (.fade, .fade),
         (.none, .none),
     ])
@@ -41,12 +43,23 @@ struct ReaderPageTurnTests {
     @Test func isSavedByName() {
         #expect(ReaderPageTurn.key == "reader.pageTurn")
         #expect(ReaderPageTurn.standard == .automatic)
-        #expect(ReaderPageTurn.allCases.map(\.rawValue) == ["automatic", "slide", "flip", "fade", "none"])
-        #expect(ReaderPageTurn(rawValue: "curl") == nil)
+        #expect(ReaderPageTurn.allCases.map(\.rawValue) == ["automatic", "slide", "flip", "curl", "fade", "none"])
     }
 
     @Test func menuNames() {
-        #expect(ReaderPageTurn.allCases.map(\.name) == ["Automatic", "Slide", "Flip", "Fade", "None"])
+        #expect(ReaderPageTurn.allCases.map(\.name) == ["Automatic", "Slide", "Flip", "Curl", "Fade", "None"])
+    }
+
+    /// Where pages curl, UIKit's pan follows the finger instead of
+    /// `ReaderSwipeRecognizer`. Curl picked by hand keeps curling with Reduce
+    /// Motion; Automatic fades.
+    @Test func whereUIKitTakesTheFinger() {
+        #expect(ReaderPageTurn.automatic.curls(reduceMotion: false))
+        #expect(!ReaderPageTurn.automatic.curls(reduceMotion: true))
+        #expect(ReaderPageTurn.curl.curls(reduceMotion: true))
+        for style in [ReaderPageTurn.slide, .flip, .fade, .none] {
+            #expect(!style.curls(reduceMotion: false))
+        }
     }
 
     @Test func speeds() {
@@ -167,6 +180,17 @@ struct ReaderPageTurnTests {
         #expect(back.new == .whole)
     }
 
+    /// A curl takes what a flip takes: the page it uncovers is the web view,
+    /// clear under UIKit's curl.
+    @Test(arguments: [ReaderTurnSide.left, .right], [CGSize(width: 466, height: 678), Self.spread])
+    func aCurlTakesWhatAFlipTakes(side: ReaderTurnSide, size: CGSize) {
+        let spine: Double? = size == Self.spread ? 475.5 : nil
+        let curl = ReaderTurn.regions(motion: .curl, side: side, size: size, spine: spine)
+        let flip = ReaderTurn.regions(motion: .flip, side: side, size: size, spine: spine)
+        #expect(curl.old == flip.old)
+        #expect(curl.new == flip.new)
+    }
+
     @Test func halvesMeetAtTheSpine() {
         let left = ReaderTurn.half(.left, of: Self.spread, spine: 475.5)
         let right = ReaderTurn.half(.right, of: Self.spread, spine: 475.5)
@@ -193,6 +217,33 @@ struct ReaderPageTurnTests {
     }
 
     /// The relocation `turn` returns, as JSON, for the new page's footer.
+    // MARK: A curl at the book's ends
+
+    /// The bridge says whether there's a page each way (foliate's `atStart`
+    /// and `atEnd`, or on fixed layout the first and last page shown); an
+    /// older bridge doesn't, and that counts as yes.
+    @Test func aRelocationSaysWhichWaysTurn() throws {
+        let first = #"{"fraction":0,"turnsLeft":false,"turnsRight":true}"#
+        let relocation = try JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data(first.utf8))
+        #expect(!relocation.turns(.left))
+        #expect(relocation.turns(.right))
+        let fixed = try JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data(#"{"fraction":0.5}"#.utf8))
+        #expect(fixed.turns(.left))
+        #expect(fixed.turns(.right))
+    }
+
+    /// A finger may ask UIKit for the side it moves towards and, on a spread,
+    /// the side it touches; both need a page, or UIKit's pan crashes on a
+    /// spread (the book's first page on the Duo: the left page dragged right).
+    @Test func aFingerAsksForTheWayItMovesAndThePageItTouches() {
+        let start = CGPoint(x: 290, y: 395)
+        typealias Pan = ReaderCurlPanDelegate
+        #expect(Pan.sides(from: start, to: CGPoint(x: 306, y: 395), spreadWidth: 951) == [.left])
+        #expect(Pan.sides(from: start, to: CGPoint(x: 270, y: 395), spreadWidth: 951) == [.left, .right])
+        #expect(Pan.sides(from: CGPoint(x: 700, y: 395), to: CGPoint(x: 720, y: 395), spreadWidth: 951) == [.left, .right])
+        #expect(Pan.sides(from: start, to: CGPoint(x: 270, y: 395), spreadWidth: nil) == [.right])
+    }
+
     @Test func decodesTheTurnsRelocation() throws {
         let json = #"{"cfi":"epubcfi(/6/50!/4/2,/2/1:0,/4/1:12)","fraction":0.36,"tocLabel":"XXV","sectionIndex":24,"location":{"current":198,"next":200,"total":547}}"#
         let relocation = try JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data(json.utf8))
