@@ -215,6 +215,12 @@ enum ReaderRemote {
             guard let style = command.name.flatMap(ReaderPageTurn.init(rawValue:)) else { return "pageTurn needs name: automatic, slide, flip, fade or none" }
             UserDefaults.standard.set(style.rawValue, forKey: ReaderPageTurn.key)
             return nil
+        case "theme":
+            guard let theme = command.name.flatMap(ReaderTheme.init(rawValue:)) else { return "theme needs name: original, paper, sepia or night" }
+            var appearance = UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance()
+            appearance.theme = theme
+            UserDefaults.standard.set(appearance.rawValue, forKey: ReaderAppearance.key)
+            return nil
         case "margins":
             guard let margins = command.name.flatMap(ReaderMargins.init(rawValue:)) else {
                 return "margins needs name: \(ReaderMargins.allCases.map(\.rawValue).joined(separator: ", "))"

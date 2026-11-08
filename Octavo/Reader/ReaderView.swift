@@ -138,7 +138,7 @@ private struct ReaderScreen: View {
         NavigationStack {
             // The bars take the footer's place: the progress bar, the step
             // bar while stepping through search matches, or the server's place.
-            ReaderWebView(model: model, showsFooter: chrome.showsFooter, hidesFooterChapter: chrome.hidesFooterChapter)
+            ReaderWebView(model: model, theme: appearance.theme(darkMode: darkMode), showsFooter: chrome.showsFooter, hidesFooterChapter: chrome.hidesFooterChapter)
                 .overlay { status }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
