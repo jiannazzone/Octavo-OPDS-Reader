@@ -1,10 +1,10 @@
-# KOReader sync: measured, not built
+# KOReader sync
 
-**Dropped from the first release (Adam, 2026-11-06).** It helps only people with a KOReader device and identical book files, a wrong place is the worst thing an e-reader can do, and real KOReader hadn't yet been tested against what Octavo would send (it has since: "On real KOReader", below). OPDS and Files books keep their place on the iPhone. No app code was written.
+**Built 2026-11-08** (`docs/notes/koreader-sync-plan.md`, chunks 0–6), after being dropped from the first release on 2026-11-06: it helps only people with a KOReader device and identical book files, and a wrong place is the worst thing an e-reader can do. Real KOReader was tested first ("On real KOReader", below).
 
 This note keeps what was measured, so nobody has to measure it again.
 
-## After launch, if it comes back
+## What was built
 
 One KOReader account in Settings (address, username, password), for Files books and each catalog switched on for it (Adam, 2026-11-08). BookOrbit keeps its own sync, and Kavita and Komga stay plain OPDS catalogs.
 
@@ -86,7 +86,7 @@ Not covered: Adam's modern EPUBs (calibre conversions, Kobo's `koboSpan`s, books
 
 ## What would go wrong as first designed
 
-From an adversarial review of the design, against the code. `OpeningPosition.choose` trusts the server to be at least as new as the iPhone, which holds for BookOrbit and not here.
+From an adversarial review of the design, against the code. `OpeningPosition.choose` trusts the server to be at least as new as the iPhone, which holds for BookOrbit and not here. Each is handled in the build (the plan's chunks 3–5, and its questions for the last two).
 
 - **First sync after opting in:** a months-old server place opens and saves over a further-along local one. The first pull should only record what the server says.
 - **Backward moves:** Octavo follows them silently. KOReader ignores them by default. A place behind yours shouldn't move you on open; the capsule can offer it.

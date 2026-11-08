@@ -1,8 +1,8 @@
 # KOReader sync: implementation plan
 
-Not started. Written 2026-11-06 for after launch, from the measurements in `docs/notes/koreader-sync.md`. Read that first.
+Written 2026-11-06 for after launch, from the measurements in `docs/notes/koreader-sync.md`; built 2026-11-08, chunk by chunk below. Read that note first.
 
-**Scope:** one KOReader account in Settings, for EPUBs from OPDS catalogs and Files. BookOrbit keeps its own sync. Kavita and Komga are plain OPDS: nothing is built for them, and they aren't promised or tested. MOBI, AZW3 and FB2 stay on the iPhone.
+**Scope:** one KOReader account in Settings, for EPUBs from Files and from each OPDS catalog switched on for it (question 2). BookOrbit keeps its own sync. Kavita and Komga are plain OPDS: nothing is built for them, and they aren't promised or tested. MOBI, AZW3 and FB2 stay on the iPhone.
 
 **Rules:** no KOReader or BookOrbit code gets copied (AGPL). Every request goes through `ServerTransport`. Secrets go in the Keychain. UI wording and UX go to Adam first. Don't push without his OK. Network-trust code needs a security review he signs off before merge.
 
