@@ -8,7 +8,9 @@ Not started. Written 2026-11-06 for after launch, from the measurements in `docs
 
 ## Chunk 0: test on real KOReader (the gate)
 
-Needs Adam's OK: the session's safety check blocked running KOReader's build. A real device of his works too.
+**Done 2026-11-08 on the sample books: go.** Results and the counting rules are in `docs/notes/koreader-sync.md` ("On real KOReader"); `docs/notes/koreader-sync/tools/run.sh` re-runs it. Decided from it (technical): Octavo **writes paragraph-level places** (`…/p[9].0`, 150/150), not word level (149/150). A word-level place that doesn't resolve sends the other device to page 1, and a paragraph costs at most part of a page. It **reads word level**, falling back to the paragraph when the words don't resolve. Revisit writing word level after the modern books.
+
+**Still open before chunk 2:** the same run on two or three of Adam's modern EPUBs, kept off the repo. The plan was:
 
 Against KOReader's release build, or a device, on the five sample books and a couple of his modern EPUBs (never committed):
 
@@ -32,8 +34,8 @@ Against KOReader's release build, or a device, on the five sample books and a co
 
 - `ReadingPosition.xpointer: String?`. Optional, so saved files still read.
 - `ReaderWeb/bridge.js`, inside the file so the CSP doesn't change:
-  - `xpointerOf(index, range)`, in the format chunk 0 settled on. `onRelocate` adds it to its message for reflowing books only, when the open options ask for it.
-  - `resolveXPointer(string)`: `{cfi, fraction, chapter}` or `null`. Parse with a strict regex and walk the DOM by hand; never give the string to `document.evaluate`. Load an unopened section the way `describePlace` does. A missing step gives `null`, never a guess. Fall back to the deepest element only if chunk 0 shows it's needed.
+  - `xpointerOf(index, range)`: the paragraph (the range's nearest block element) as `…/p[9].0`, with the element rule from the note. `onRelocate` adds it to its message for reflowing books only, when the open options ask for it.
+  - `resolveXPointer(string)`: `{cfi, fraction, chapter}` or `null`. Parse with a strict regex (offset optional, `[1]` optional) and walk the DOM by hand; never give the string to `document.evaluate`. Count text nodes and offsets by the note's rules, and convert offsets to UTF-16. Load an unopened section the way `describePlace` does. Words that don't resolve fall back to their element; a missing element gives `null`, never a guess.
 - `open` takes `xpointer`. If it doesn't resolve, it's the fraction, then the local place.
 - No foliate patch.
 - Tests: round trip in the real web view, in `OctavoTests`, as the reader's other bridge tests do. A check script in `docs/notes/koreader-sync/tools/` over the sample books through `ReaderRemote`.

@@ -1,6 +1,6 @@
 # KOReader sync: measured, not built
 
-**Dropped from the first release (Adam, 2026-11-06).** It helps only people with a KOReader device and identical book files, a wrong place is the worst thing an e-reader can do, and real KOReader was never tested against what Octavo would send. OPDS and Files books keep their place on the iPhone. No app code was written.
+**Dropped from the first release (Adam, 2026-11-06).** It helps only people with a KOReader device and identical book files, a wrong place is the worst thing an e-reader can do, and real KOReader hadn't yet been tested against what Octavo would send (it has since: "On real KOReader", below). OPDS and Files books keep their place on the iPhone. No app code was written.
 
 This note keeps what was measured, so nobody has to measure it again.
 
@@ -8,7 +8,7 @@ This note keeps what was measured, so nobody has to measure it again.
 
 One KOReader account in Settings (address, username, password), for OPDS and Files books. No per-server settings. BookOrbit keeps its own sync, and Kavita and Komga stay plain OPDS catalogs.
 
-The steps are in `docs/notes/koreader-sync-plan.md`. The first is a test: run KOReader's release build headless in a throwaway Linux container (`koreader-linux-arm64` from its releases, driven by `luajit` from its install folder), or use a real device. The session's safety check blocked running the build on 2026-11-06, so this needs the owner's OK. If KOReader can't open Octavo's places, the feature changes.
+The steps are in `docs/notes/koreader-sync-plan.md`. The first, a test on real KOReader, passed on 2026-11-08 ("On real KOReader", below).
 
 The account form would also fit Kavita's and Komga's built-in sync, since it's how KOReader itself connects to them. That's untested from Octavo, and Kavita's address carries a key.
 
@@ -43,11 +43,36 @@ Komga, Kavita, Calibre-Web and COPS all download Alice with the hash of the file
 `CLAUDE.md` first planned percentage-only sync. It can't work:
 
 - KOReader moves a reflowable book only by `progress`, as an xpointer. Its sync code has no percentage fallback.
-- crengine sends a null bookmark to the start of the book (`checkPos`, read in the source). Whether a bad string produces one wasn't confirmed.
+- A bad place sends KOReader to page 1 (measured below).
 - Kavita's percentage is up to 20 points from foliate's at a section start: Pride and Prejudice 19.9, Frankenstein 14.2, Sherlock 12.5, Alice 11.9, Moby-Dick 10.3.
 - The largest file section in the sample books is 9–19% of the book, so a Komga place can land far behind. Moby-Dick has 13 sections, not one per chapter.
 
 So Octavo would have to write and read `/body/DocFragment[n]/...` in `bridge.js`. Since DOM version 20240114, crengine makes a `DocFragment` for every spine item. BookOrbit's server converts between the two formats, so it's doable. Don't copy theirs or KOReader's (AGPL).
+
+## On real KOReader (2026-11-08)
+
+KOReader v2026.07.1's release build (`koreader-linux-arm64`), headless in a throwaway Linux container, on the five sample books at its emulator's 600 × 800 with default settings. `koreader-sync/tools/run.sh` re-runs all of it: `xpointer_check.py` builds places from each book's XHTML as a browser's XML parser sees it, and `places.lua` asks KOReader where they land (it calls KOReader's Lua API; nothing of KOReader is copied).
+
+- **Its document hash is ours:** `util.partialMD5` gave `59feb863…` for Alice, as computed here and as Kavita stores it.
+- **A bad place goes to page 1.** An empty string, a garbage string, a CFI, Kavita's junk (`/body/DocFragment[1]/body/epubcfi(...).0`) and a section past the end all land on page 1. So never send a place that might not resolve.
+- **Octavo's places land on the same words** (30 per book, at word starts, spread over the book):
+
+| | Alice | Frankenstein | Moby-Dick | Pride and Prejudice | Sherlock |
+|---|---|---|---|---|---|
+| Word level (`…/p[9]/text()[2].212`) | 30/30 | 30/30 | 30/30 | 29/30 | 30/30 |
+| Paragraph level (`…/p[9].0`) | 30/30 | 30/30 | 30/30 | 30/30 | 30/30 |
+| KOReader's own places, read in the DOM (every third page) | 53/55 | 129/130 | 366/376 | 229/230 | 226/230 |
+
+  The one word-level miss is only a space where a chapter heading meets its text, not a different place. KOReader resolved all 300 places. The misses reading KOReader's places are the cover (an `svg`, which has no words to compare), whitespace inside `<pre>` (poems keep their spacing, and the rule below doesn't cover it), and three page tops in Sherlock where KOReader's offset lands on a different sentence of the same paragraph.
+- **How crengine counts**, as measured:
+  - **Elements:** the name, with `[n]` only where siblings share it: `div/p[9]`, not `div[1]/p[9]`. `[1]` is accepted too, and DOM version 20260812 (after this release) always writes it, so read both.
+  - **Text nodes:** `text()`, with `[n]` when there's more than one. A blank text node counts only inside a paragraph's own text, never between blocks.
+  - **Offsets:** characters after collapsing whitespace. Each run of spaces, tabs and line breaks counts as one, at the start of the node too. A no-break space (U+00A0) is a character, not whitespace. Moby-Dick's XHTML has line breaks and indentation inside paragraphs, which is what showed this.
+  - **No offset at all:** KOReader writes some element places without one (`…/div[6]/span`). Read an offset as optional.
+  - **The browser's offsets** are UTF-16 code units, crengine's are characters. Convert where a book has characters outside the BMP.
+- **KOReader's percentage is close to foliate's:** at the same words, a median gap of 0.2–0.9 points per book, 2.0 at the 90th percentile. It's farther only where pictures take whole pages: 16 points in Pride and Prejudice's illustrated front matter. Good enough for a place line, never for landing.
+
+Not covered: Adam's modern EPUBs (calibre conversions, Kobo's `koboSpan`s, books from stores), a KOReader newer than v2026.07.1, other screen sizes and fonts, and KOReader's own sync menu (only the engine was driven).
 
 ## What would go wrong as first designed
 
