@@ -37,7 +37,12 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     private(set) var turning: Turning?
     /// UIKit is curling (a tap's curl, or one under a finger). Its pages
     /// can't be set meanwhile; the curl's end sets them.
-    private var transitioning = false
+    private var transitioning = false {
+        didSet { if transitioning { transitionStarted = CACurrentMediaTime() } }
+    }
+    private var transitionStarted = 0.0
+    /// Whether foliate turned for the tap's curl under way.
+    var tapMoved = false
 
     enum Turning: Equatable {
         case tap(id: Int)
@@ -53,7 +58,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     func makeController(spread: Bool) -> UIPageViewController {
         // Remade mid-curl (the spine moved without a fold, say): that curl
         // goes with the old controller.
-        model?.curlGone()
+        endCurlGone()
         let controller = UIPageViewController(
             transitionStyle: .pageCurl,
             navigationOrientation: .horizontal,
@@ -71,6 +76,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         self.spread = spread
         turning = nil
         transitioning = false
+        tapMoved = false
         pages.turn = nil
         waiting = views(new: false)
         // Forward, the back of the page that turns is the next left page;
@@ -103,11 +109,41 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         curlTrace("pan state \(pan.state.rawValue) at \(Int(point.x)),\(Int(point.y)), velocity \(Int(pan.velocity(in: pan.view).x))")
     }
 
-    /// Ends UIKit's pan, so the page it's curling falls back.
+    /// Ends UIKit's pan, so the page it's curling falls back: just after
+    /// UIKit's own pan handler, which is asking.
     private func cancelPan() {
-        guard let pan else { return }
-        pan.isEnabled = false
-        pan.isEnabled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let pan = self?.pan else { return }
+            pan.isEnabled = false
+            pan.isEnabled = true
+        }
+    }
+
+    /// A curl under way when its controller goes (remade, or gone): the
+    /// model ends it once SwiftUI's update, which this is in, is over.
+    func endCurlGone() {
+        guard model?.isCurling == true else { return }
+        let ended = turning
+        let moved = tapMoved
+        DispatchQueue.main.async { [weak model] in
+            model?.curlGone(ended, tapMoved: moved)
+        }
+    }
+
+    /// Whether UIKit is curling. One it hasn't reported the end of in 2 s (a
+    /// curl cancelled as it began, say) is taken as over.
+    private var isTransitioning: Bool {
+        transitioning && CACurrentMediaTime() - transitionStarted < 2
+    }
+
+    /// The waiting pages back on the controller, if a curl's end didn't put
+    /// them back.
+    func showWaiting() {
+        guard turning == nil, !isTransitioning, let controller,
+              controller.viewControllers?.first !== waiting.first
+        else { return }
+        transitioning = false
+        controller.setViewControllers(waiting, direction: .forward, animated: false)
     }
 
     /// UIKit's pan is turning a page: from now on it must be given pages.
@@ -132,6 +168,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     /// Curls to the next pages; `ReaderModel.curlEnded` once it has landed.
     func play(_ turn: ReaderTurn) {
         guard let controller, pages.turn?.id == turn.id else { return }
+        showWaiting()
         turning = .tap(id: turn.id)
         curlTrace("tap \(turn.id): plays \(turn.side.rawValue), new page \(self.pages.turn?.new == nil ? "not drawn" : "drawn")")
         // In the spread's order, left then right.
@@ -146,8 +183,9 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         }
         pages.isCurling = true
         transitioning = true
-        controller.setViewControllers(next, direction: turn.side == .right ? .forward : .reverse, animated: true) { [weak self] _ in
-            guard let self else { return }
+        controller.setViewControllers(next, direction: turn.side == .right ? .forward : .reverse, animated: true) { [weak self, weak controller] _ in
+            // A controller since replaced (a fold) has nothing to say.
+            guard let self, controller === self.controller else { return }
             transitioning = false
             // A fold or a close cleared the turn meanwhile: back to waiting.
             guard turning == .tap(id: id) else { return reset() }
@@ -171,10 +209,11 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     func reset() {
         curlTrace("reset, was \(self.turning.map { "\($0)" } ?? "idle")\(self.transitioning ? ", mid-curl" : "")")
         turning = nil
+        tapMoved = false
         pages.turn = nil
         pages.isCurling = false
         // Mid-curl, UIKit's pages can't be set; the curl's end resets them.
-        guard !transitioning else { return }
+        guard !isTransitioning else { return }
         controller?.setViewControllers(waiting, direction: .forward, animated: false)
     }
 
@@ -192,11 +231,11 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     // MARK: Data source
 
     func pageViewController(_ controller: UIPageViewController, viewControllerAfter page: UIViewController) -> UIViewController? {
-        next(after: page, side: .right)
+        controller === self.controller ? next(after: page, side: .right) : nil
     }
 
     func pageViewController(_ controller: UIPageViewController, viewControllerBefore page: UIViewController) -> UIViewController? {
-        next(after: page, side: .left)
+        controller === self.controller ? next(after: page, side: .left) : nil
     }
 
     /// Asking commits nothing: UIKit asks as a finger lands.
@@ -221,6 +260,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     // MARK: Delegate
 
     func pageViewController(_ controller: UIPageViewController, willTransitionTo pending: [UIViewController]) {
+        guard controller === self.controller else { return }
         transitioning = true
         let side = coming.first(where: { $0.value.contains { $0 === pending.first } })?.key
         curlTrace("will turn \(side?.rawValue ?? "an unknown way") to \(pending.count) pages, turning \(self.turning.map { "\($0)" } ?? "nil")")
@@ -237,6 +277,8 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     }
 
     func pageViewController(_ controller: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
+        // A controller since replaced (a fold) has nothing to say.
+        guard controller === self.controller else { return }
         curlTrace("finished, \(completed ? "landed" : "fell back"), turning \(self.turning.map { "\($0)" } ?? "nil")")
         transitioning = false
         guard case .finger(let id) = turning else { return reset() }
@@ -293,7 +335,7 @@ struct ReaderCurlView: UIViewControllerRepresentable {
     static func dismantleUIViewController(_ controller: UIPageViewController, coordinator curl: ReaderCurl) {
         guard curl.controller === controller || curl.controller == nil else { return }
         curl.removePan()
-        curl.model?.curlGone()
+        curl.endCurlGone()
     }
 }
 
@@ -396,6 +438,7 @@ final class ReaderCurlPanDelegate: NSObject, UIGestureRecognizerDelegate {
         // first page on the Duo). So there has to be a page the way the
         // finger moves and, on a spread, on the side it's touching.
         guard let curl, let model = curl.model else { return false }
+        curl.showWaiting()
         let sides = Self.sides(from: touchStart, to: location, spreadWidth: curl.spread ? curl.controller?.view.bounds.width : nil)
         guard sides.allSatisfy({ model.canTurn($0) }) else {
             curlTrace("pan: no page \(sides.map(\.rawValue).sorted().joined(separator: " and "))")

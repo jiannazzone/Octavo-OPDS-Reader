@@ -176,14 +176,22 @@ const relocationWatchers = new Set()
 let lastRelocateReason = null
 
 // Whether there's a page to each side, for a curl under a finger, which
-// UIKit asks about as the finger lands (`ReaderCurl`). The fixed-layout
-// renderer doesn't say, so those are left out.
+// UIKit asks about as the finger lands (`ReaderCurl`): the paginator's own
+// ends, or on fixed layout whether the book's first or last page is shown.
 const turnsFrom = r => {
-    if (typeof r?.atStart !== 'boolean' || typeof r?.atEnd !== 'boolean') return {}
+    let atStart = r?.atStart
+    let atEnd = r?.atEnd
+    if (view.isFixedLayout) {
+        const shown = fixedPagesShown()
+        if (!shown.length) return {}
+        atStart = shown[0] === 0
+        atEnd = shown.at(-1) === view.book.sections.length - 1
+    }
+    if (typeof atStart !== 'boolean' || typeof atEnd !== 'boolean') return {}
     const forward = forwardSide()
     return {
-        turnsLeft: forward === 'left' ? !r.atEnd : !r.atStart,
-        turnsRight: forward === 'right' ? !r.atEnd : !r.atStart,
+        turnsLeft: forward === 'left' ? !atEnd : !atStart,
+        turnsRight: forward === 'right' ? !atEnd : !atStart,
     }
 }
 

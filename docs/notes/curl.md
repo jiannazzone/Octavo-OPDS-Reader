@@ -22,9 +22,10 @@ Pages curl as in Apple Books, by a tap or under a finger, with UIKit's own page 
 
 UIKit's pan asks for the next page only once it has begun, and on a spread it crashes if it gets none: `'The number of view controllers provided (0) doesn't match the number required (2) for the requested transition'`. On Adam's Duo that was a book's first page, unfolded, the left page dragged right. The simulator never began the pan there.
 
-- The bridge's relocations say whether there's a page each way (`turnsLeft`, `turnsRight`, from foliate's `atStart` and `atEnd`; fixed layout doesn't say, which counts as yes).
+- The bridge's relocations say whether there's a page each way (`turnsLeft`, `turnsRight`, from foliate's `atStart` and `atEnd`; on fixed layout, whether the book's first or last page is shown).
 - The pan begins only if there's a page the way the finger moves and, on a spread, on the side it touches (`ReaderCurlPanDelegate.sides`).
-- Once the pan has begun, UIKit is always given pages; if there's nothing to turn to (a finger turning back past where it started), `willTransitionTo` cancels the pan and the page falls back.
+- Once the pan has begun, UIKit is always given pages; if there's nothing to turn to (a finger turning back past where it started), `willTransitionTo` cancels the pan, just after UIKit's own handler returns, and the page falls back.
+- Callbacks from a controller since replaced (a fold) are ignored. A curl whose end UIKit hasn't reported in 2 s counts as over, and the next touch or tap puts the waiting pages back.
 - Fade didn't crash on the Duo; the fix was checked there.
 
 ### Tracing on a device

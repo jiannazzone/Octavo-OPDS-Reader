@@ -79,7 +79,7 @@ extension ReaderModel {
         guard curl.pages.turn?.id == turn.id else { return }
         let moved = answer?["moved"] as? Bool == true
         curlTrace("\(held ? "finger" : "tap") \(turn.id): foliate \(moved ? "turned" : "didn't turn") after \(FoldReport.milliseconds(since: started)) ms")
-        if !held { curlTapMoved = moved }
+        if !held { curl.tapMoved = moved }
         guard moved else {
             // The book's first or last page: a tap's curl doesn't play.
             if !held, curl.turning == nil { curlEnded(id: turn.id, completed: false, finger: false) }
@@ -116,13 +116,12 @@ extension ReaderModel {
         guard curl.pages.turn?.id == id else { return }
         Task {
             // Whether foliate turned: a tap's answer, or the held turn's end.
-            var moved = curlTapMoved
+            var moved = curl.tapMoved
             if finger {
                 let ended = try? await page.callJavaScript("return await window.octavo.endTurn(keep)", arguments: ["keep": completed])
                 moved = ended as? Bool == true
             }
             guard curl.pages.turn?.id == id else { return }
-            curlTapMoved = false
             if completed, moved { pageTurned() }
             isCurling = false
             curl.reset()
@@ -132,22 +131,31 @@ extension ReaderModel {
 
     /// The hinge moved mid-curl: the curl goes with the controller, which is
     /// remade for the new spine. A finger's turn ends where it was going,
-    /// forward, as a finger's other turns do. Returns the bridge call that
-    /// ends a held turn, to run before `hold`.
+    /// forward, as a finger's other turns do; a tap's had already turned.
+    /// Returns the bridge call that ends a held turn, to run before `hold`.
     func finishCurlForFold() -> String? {
         let finger = if case .finger = curl.turning { true } else { false }
+        if !finger, curl.tapMoved { pageTurned() }
         isCurling = false
         curl.reset()
         return finger ? "window.octavo.endTurn(true); " : nil
     }
 
-    /// The curl's controller left the page (Page Turn changed, or the reader
-    /// closed) with a curl under way.
-    func curlGone() {
+    /// The curl's controller left the page (remade, Page Turn changed, or
+    /// the reader closed) with a curl under way, `ended`: a finger's held
+    /// turn is kept, and a tap's that turned counts as one.
+    func curlGone(_ ended: ReaderCurl.Turning?, tapMoved: Bool) {
         guard isCurling else { return }
-        let finger = if case .finger = curl.turning { true } else { false }
         isCurling = false
+        queuedTurns.removeAll()
         curl.reset()
-        if finger { call("return await window.octavo.endTurn(true)") }
+        if case .finger = ended {
+            Task {
+                let moved = try? await page.callJavaScript("return await window.octavo.endTurn(true)")
+                if moved as? Bool == true { pageTurned() }
+            }
+        } else if tapMoved {
+            pageTurned()
+        }
     }
 }

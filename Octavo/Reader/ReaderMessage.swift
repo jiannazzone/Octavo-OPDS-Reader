@@ -122,7 +122,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var sectionCount: Int?
         var location: Location?
         /// Whether foliate can turn to the left and to the right page from
-        /// here: `false` at the book's start or end. `nil` on fixed layout.
+        /// here: `false` at the book's start or end. `nil` from an older
+        /// bridge.
         var turnsLeft: Bool?
         var turnsRight: Bool?
 

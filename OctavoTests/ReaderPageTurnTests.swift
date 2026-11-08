@@ -220,7 +220,8 @@ struct ReaderPageTurnTests {
     // MARK: A curl at the book's ends
 
     /// The bridge says whether there's a page each way (foliate's `atStart`
-    /// and `atEnd`); a fixed-layout book doesn't, and that counts as yes.
+    /// and `atEnd`, or on fixed layout the first and last page shown); an
+    /// older bridge doesn't, and that counts as yes.
     @Test func aRelocationSaysWhichWaysTurn() throws {
         let first = #"{"fraction":0,"turnsLeft":false,"turnsRight":true}"#
         let relocation = try JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data(first.utf8))

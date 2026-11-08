@@ -326,6 +326,7 @@ enum ReaderRemote {
             reader.handle(.turn(side: side))
         case "swipe":
             guard let phase = command.phase.flatMap(ReaderTurnSwipe.Phase.init(rawValue:)) else { return "swipe needs phase" }
+            if reader.pageTurn.curls(reduceMotion: reader.reduceMotion) { return "pages curl: a finger's curl is UIKit's pan; set pageTurn to slide or flip to swipe" }
             let side = command.side.flatMap(ReaderTurnSide.init(rawValue:))
             reader.swiped(.init(phase: phase, side: side, dx: command.dx ?? 0, velocity: command.velocity ?? 0))
         case "turnState":

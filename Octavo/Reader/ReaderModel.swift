@@ -114,8 +114,6 @@ final class ReaderModel {
     var isCurling = false
     /// UIKit's page curl, over the page while pages curl.
     @ObservationIgnored let curl = ReaderCurl()
-    /// Whether foliate turned for the tap's curl under way.
-    @ObservationIgnored var curlTapMoved = false
     /// Ticks while a turn is on screen.
     @ObservationIgnored var turnFrames: UIUpdateLink?
     @ObservationIgnored let snapshots = ReaderPageSnapshots()
