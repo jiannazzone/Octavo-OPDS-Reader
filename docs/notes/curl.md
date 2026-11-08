@@ -40,9 +40,15 @@ An uncaught exception's reason reaches the same console; the crash report (`devi
 ## Checked
 
 - Simulator: taps forward and back, folded, flat and half open; a finger forward, and let go early; a chapter break; rapid taps (three keys 120 ms apart: three curls, one after another); unfolding and closing mid-curl (nothing left curling or held; the closed reader goes away); the book's first page.
-- Adam's Duo: the curl by tap and finger; the first-page crash and its fix.
+- Adam's Duo: the curl by tap and finger, folded, flat and half open; the book's first and last page, and a drag reversing there; rapid taps; folding mid-curl; a chapter break; the place after curls that fell back; the first-page crash and its fix.
+- **A tap's curl back, folded** (Adam, on the Duo): the back of the curling page came up blank. UIKit copies the back of a page that curls on one page as the curl starts, and going back that page is the new one, whose picture had just come and was fading in. The pages coming in are drawn before a tap's curl starts, and a new page fades in only if it comes mid-curl.
 - Tests: `ReaderPageTurnTests` (Automatic curls, Curl kept with Reduce Motion, where UIKit takes the finger, a curl's pictures, which ways a relocation turns, which sides a finger asks for), `TourFlowTests` (the hint).
 
-## Not known yet
+## Frame rate
 
-- **Frame rate on the Duo.** UIKit animates the curl itself, so the turn's 120 Hz `UIUpdateLink` (`page-turns.md`, Frame rate) can't drive it; UIView animations stopped at 60 Hz there. To measure with Instruments while Adam turns pages.
+Measured 2026-11-07 on Adam's iPhone Duo, a 45-second Instruments recording (Animation Hitches) of a Debug build while Adam turned pages by tap and by finger, folded and unfolded.
+
+- **The curl runs at 60 Hz, not 120.** Every curl, a tap's (0.4–0.5 s) or a finger's (0.8–1.4 s), had 16.7 ms between swaps; one stretch of 15 s ran at 48 Hz (20.8 ms). Only the book opening reached 120 Hz, on the cover motion's own link. UIKit animates the curl, so the turn's 120 Hz `UIUpdateLink` (`page-turns.md`, Frame rate) can't drive it.
+- **Hitches:** about one frame of 16.7 ms at a curl's start, and one 20.8 ms render with 33 offscreen passes.
+- The one lever left: a `UIUpdateLink` asking for 120 Hz while a page curls. Beside a SwiftUI animation it lifted about a third of slides to 120 (`page-turns.md`); not tried on the curl.
+- **Recording:** attaching to a running Octavo failed (`Cannot find process`), and `--all-processes` kept about a second of display data, so xctrace launched it: `xcrun xctrace record --no-prompt --template 'Animation Hitches' --device <UDID> --time-limit 45s --output <trace> --launch -- com.ianazzone.ereader`. Ending the recording ends Octavo. It left a 2.8 GB `instruments*.ktrace` in `$TMPDIR`; delete it after exporting.

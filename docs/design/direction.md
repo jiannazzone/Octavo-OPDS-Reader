@@ -216,12 +216,12 @@ Answers all six questions in `docs/notes/duo-spreads.md` §7 (question 5's first
 
 Decided with animated mockups in the planning session (no Figma frames); replaces the idea in `docs/UI-IDEAS.md`.
 
-27. **Folded, a page slides; open, it flips over the spine.** Flat and half open alike, the page swings over the hinge like paper: going forward, the right page lifts and lands as the next spread's left page; going back, the left page swings over to the right. Each half of a book-mode spread turns its own way (decision 9). Folded, the page slides sideways, as in Kindle and Kobo.
+27. **Pages curl, as in Apple Books** (amended 2026-11-07, Adam; `docs/notes/curl.md`). UIKit's own page curl, by a tap or under a finger: folded, the page curls off its left edge; flat and half open, it curls over the spine with the next page on its back. Each half of a book-mode spread turns its own way (decision 9). Before, folded a page slid sideways (as in Kindle and Kobo) and open it flipped over the hinge like paper; those are now the Slide and Flip choices. UIKit's lighting on the curl is a little glossy for paper, and Adam kept it rather than draw our own curl.
     - **A swipe drives the turn under your finger**; let go before halfway, without a flick, and the page falls back. Taps, the keyboard and the trackpad play the whole turn. A turn looks the same across a chapter break.
-    - **Page Turn in Customize** (decision 13): a menu below Margins with **Automatic** (the default: slide folded, flip open), **Slide**, **Flip**, **Fade** and **None**. Any choice but Automatic applies in every posture; None is the instant turn Octavo had before.
-    - **Reduce Motion:** Automatic fades. A style picked by hand is kept.
-    - **Speed:** about 0.3 s for a slide, 0.5 s for a flip and 0.15 s for a fade, set on a real Duo.
-    - **Curl** (the corner peels over, as in Apple Books) was weighed for open and left out for now (`docs/UI-IDEAS.md`).
+    - **Page Turn in Customize** (decision 13): a menu below Margins with **Automatic** (the default: curl), **Slide**, **Flip**, **Curl**, **Fade** and **None**. Any choice but Automatic applies in every posture; None is the instant turn Octavo had before.
+    - **Reduce Motion:** Automatic fades. A style picked by hand is kept, Curl included.
+    - **Speed:** about 0.3 s for a slide, 0.5 s for a flip and 0.15 s for a fade, set on a real Duo. A curl takes UIKit's own, about 0.43 s.
+    - **The tour's Turn the page hint** lifts the page as a flip open and a slide folded, since UIKit can't play part of a curl.
     - **Built (2026-11-03, `docs/notes/page-turns.md`).** Swift draws each turn from snapshots of the page while foliate turns at once underneath; a swipe is recognised in UIKit. Across a chapter break the new page takes 70–250 ms on the simulator: a tap's turn waits up to 100 ms for it, then starts over the page's colour and the page fades in. A swipe that falls back is never saved or synced.
 28. **A book opens like a cover** (Adam kept it after trying it on his Duo, 2026-11-06). Opening from a book's screen, the cover moves onto the right page and swings over the spine, landing as the left page of your place: the same motion as a flip. Folded, the cover fills the screen and swings away to the left, uncovering your page. Closing plays it backwards: the page swings back over as the cover, which shrinks back into its place on the book's screen. With no cover on screen, the reader fades in as before.
     - **Reduce Motion** cross-fades instead.
