@@ -3,7 +3,11 @@ import Foundation
 
 public enum KOSyncError: Error, Equatable, Sendable {
     /// 401: the username or password is wrong, or the account is gone.
+    /// Signing in to Komga, also its 403 for a wrong or missing API key.
     case unauthorized
+    /// Signing in found nothing at the address (400 or 404 on `users/auth`):
+    /// not a sync server, or the wrong path.
+    case notASyncServer
     /// The server doesn't have this file (Kavita answers 400, Komga 404). A
     /// standalone server has every file, and answers `{}` for one it hasn't
     /// seen.
@@ -15,13 +19,15 @@ public enum KOSyncError: Error, Equatable, Sendable {
     /// A place this client won't send: empty, too long, or not a finite
     /// percentage. KOReader opens a book at page 1 for a place it can't read.
     case invalidPlace
+    /// An answer that isn't the protocol's, such as a proxy's sign-in page
+    /// with a 200.
     case invalidResponse
 
     /// Whether sending it again later can't work.
     public var isPermanent: Bool {
         switch self {
-        case .unavailable, .invalidResponse: false
-        case .unauthorized, .unknownDocument, .rejected, .invalidPlace: true
+        case .unavailable: false
+        case .unauthorized, .notASyncServer, .unknownDocument, .rejected, .invalidPlace, .invalidResponse: true
         }
     }
 }
@@ -104,7 +110,14 @@ public struct KOSyncClient: Sendable {
 
     /// `GET users/auth`: returns if the account signs in, else throws.
     public func authorize() async throws {
-        _ = try await send(request("users/auth"))
+        do {
+            _ = try await send(request("users/auth"))
+        } catch KOSyncError.unknownDocument {
+            throw KOSyncError.notASyncServer
+        } catch KOSyncError.rejected(status: 403) {
+            // Komga's answer to a wrong or missing API key (measured).
+            throw KOSyncError.unauthorized
+        }
     }
 
     /// `GET syncs/progress/{document}`: the server's place for the book, or
@@ -165,7 +178,8 @@ public struct KOSyncClient: Sendable {
 
     /// A GET's answer, as any of the servers send it: `{}` or a message for
     /// no place, a percentage as a number or a string, and a timestamp in
-    /// seconds, as a string, or as a date.
+    /// seconds, as a string, or as a date. A percentage outside 0...1 drops
+    /// the place: it may be out of 100, and clamping would read as finished.
     private struct ProgressBody: Decodable {
         var progress: KOSyncProgress?
 
@@ -177,11 +191,11 @@ public struct KOSyncClient: Sendable {
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             guard let place = Self.text(container, .progress, limit: KOSyncClient.maximumPlaceLength),
-                  let percentage = Self.number(container, .percentage), percentage.isFinite
+                  let percentage = Self.number(container, .percentage), (0...1).contains(percentage)
             else { return }
             progress = KOSyncProgress(
                 progress: place,
-                percentage: min(max(percentage, 0), 1),
+                percentage: percentage,
                 device: Self.text(container, .device, limit: KOSyncClient.maximumNameLength),
                 deviceID: Self.text(container, .deviceID, limit: KOSyncClient.maximumNameLength),
                 timestamp: Self.date(container, .timestamp)

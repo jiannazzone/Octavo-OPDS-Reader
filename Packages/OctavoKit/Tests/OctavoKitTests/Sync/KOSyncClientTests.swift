@@ -41,6 +41,21 @@ struct KOSyncClientTests {
         await #expect(throws: KOSyncError.unauthorized) { try await client(server).authorize() }
     }
 
+    /// Komga's answer to a wrong or missing API key.
+    @Test func komgasForbiddenIsUnauthorizedToo() async {
+        let server = StubServer { _ in .json(403, #"{"status":403,"error":"Forbidden","message":"Forbidden","path":"/koreader/users/auth"}"#) }
+
+        await #expect(throws: KOSyncError.unauthorized) { try await client(server).authorize() }
+    }
+
+    /// The wrong address, or an OPDS catalog's: not a book the server lacks.
+    @Test(arguments: [404, 400])
+    func nothingAtTheAddressIsNotASyncServer(status: Int) async {
+        let server = StubServer { _ in .json(status, #"{"message":"Not Found"}"#) }
+
+        await #expect(throws: KOSyncError.notASyncServer) { try await client(server).authorize() }
+    }
+
     @Test(arguments: [
         // The standalone server, for a book it hasn't seen.
         #"{}"#,
@@ -100,16 +115,32 @@ struct KOSyncClientTests {
         #expect(timestamp.map { $0.timeIntervalSince1970.rounded(.down) } == expected)
     }
 
-    @Test func clampsAPercentageAndDropsBadNames() async throws {
+    @Test func readsAPercentageStringAndDropsBadNames() async throws {
         let server = StubServer { _ in
-            .json(#"{"progress":"/body/DocFragment[2].0","percentage":"1.7","device":"Kin\u0007dle","device_id":"\#(String(repeating: "a", count: 200))"}"#)
+            .json(#"{"progress":"/body/DocFragment[2].0","percentage":"0.7","device":"Kin\u0007dle","device_id":"\#(String(repeating: "a", count: 200))"}"#)
         }
 
         let place = try #require(try await client(server).progress(of: alice))
 
-        #expect(place.percentage == 1)
+        #expect(place.percentage == 0.7)
         #expect(place.device == nil)
         #expect(place.deviceID == nil)
+    }
+
+    /// Out of 100, say: clamped, it would read as finished.
+    @Test(arguments: ["1.7", "45", "-0.1", "NaN"])
+    func dropsAPercentageOutsideZeroToOne(percentage: String) async throws {
+        let server = StubServer { _ in .json(#"{"progress":"/body/DocFragment[2].0","percentage":"\#(percentage)"}"#) }
+
+        #expect(try await client(server).progress(of: alice) == nil)
+    }
+
+    /// A proxy's sign-in page, say: sending again won't help.
+    @Test func anAnswerThatIsntJSONIsPermanent() async {
+        let server = StubServer { _ in StubServer.Response(status: 200, headers: ["Content-Type": "text/html"], body: Data("<html>Sign in</html>".utf8)) }
+
+        await #expect(throws: KOSyncError.invalidResponse) { try await client(server).progress(of: alice) }
+        #expect(KOSyncError.invalidResponse.isPermanent)
     }
 
     @Test func dropsAPlaceTooLongToBeOne() async throws {

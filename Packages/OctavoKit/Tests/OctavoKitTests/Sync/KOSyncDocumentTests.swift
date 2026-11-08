@@ -36,6 +36,8 @@ struct KOSyncDocumentTests {
         #expect(KOSyncDocument(id: "59feb863c3a0652fe66a99c0978404f") == nil)
         #expect(KOSyncDocument(id: "59feb863c3a0652fe66a99c0978404fg") == nil)
         #expect(KOSyncDocument(id: "../../users/auth/0000000000000000") == nil)
+        // Fullwidth "Ａ" is a hex digit to `isHexDigit`: 31 ASCII digits and it.
+        #expect(KOSyncDocument(id: "59feb863c3a0652fe66a99c0978404f\u{FF21}") == nil)
     }
 
     @Test func aMissingFileThrows() {

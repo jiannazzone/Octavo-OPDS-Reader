@@ -12,9 +12,10 @@ public struct KOSyncDocument: Hashable, Sendable, CustomStringConvertible {
     /// 32 lowercase hex digits, as KOReader sends it.
     public let id: String
 
-    /// `nil` unless `id` is 32 hex digits. Kavita stores them uppercase.
+    /// `nil` unless `id` is 32 ASCII hex digits. Kavita stores them
+    /// uppercase. (`isHexDigit` alone also takes fullwidth digits.)
     public init?(id: String) {
-        guard id.utf8.count == 32, id.allSatisfy(\.isHexDigit) else { return nil }
+        guard id.count == 32, id.allSatisfy({ $0.isASCII && $0.isHexDigit }) else { return nil }
         self.id = id.lowercased()
     }
 
