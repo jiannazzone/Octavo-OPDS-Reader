@@ -29,6 +29,8 @@ import WebKit
 ///   it, to hold a turn part way and look at it.
 /// - `turnState`: what the turn under way is doing, in the ack's message.
 /// - `pageTurn` (`name`): sets Page Turn, as Customize does.
+/// - `margins` (`name`: narrow, mediumNarrow, medium, mediumWide or wide):
+///   sets Margins, as Customize's slider does.
 /// - `tour` (`name`: `state`, in the ack's message, or `show`, as Settings'
 ///   Show the tour does). `signin`, `open`, `openLocal`, `detail` and `home`
 ///   end a tour under way, for scripts that check something else.
@@ -218,6 +220,12 @@ enum ReaderRemote {
             var appearance = UserDefaults.standard.string(forKey: ReaderAppearance.key).flatMap(ReaderAppearance.init(rawValue:)) ?? ReaderAppearance()
             appearance.theme = theme
             UserDefaults.standard.set(appearance.rawValue, forKey: ReaderAppearance.key)
+            return nil
+        case "margins":
+            guard let margins = command.name.flatMap(ReaderMargins.init(rawValue:)) else {
+                return "margins needs name: \(ReaderMargins.allCases.map(\.rawValue).joined(separator: ", "))"
+            }
+            UserDefaults.standard.set(margins.rawValue, forKey: ReaderMargins.key)
             return nil
         case "keyboard":
             guard reader != nil else { return "no open reader" }

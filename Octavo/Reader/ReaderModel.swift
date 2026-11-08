@@ -87,8 +87,8 @@ final class ReaderModel {
     }
     /// Pre-paginated: pages drawn by the book, with no text to give margins.
     private(set) var isFixedLayout = false
-    /// Narrow margins reach the page under the side column, which only suits
-    /// margins that aren't drawn.
+    /// The narrower margins reach the page under the side column, which only
+    /// suits margins that aren't drawn.
     private var layoutMargins: ReaderMargins { isFixedLayout ? .standard : margins }
     /// The controls cover the page, so a tap anywhere hides them.
     var coversPage = false {

@@ -163,23 +163,28 @@ struct ReaderLayoutTests {
         #expect(columns[1].lowerBound >= 495.5)
     }
 
-    // 4.6%, 7% and 10% of the content area, to the point.
-    @Test(arguments: [(ReaderMargins.narrow, 18.0), (.medium, 27), (.wide, 38)])
-    func foldedMargins(margins: ReaderMargins, margin: Double) throws {
+    // The five steps folded: the left margin, and how far the text ends
+    // short of the column at 382. Narrow's margin lies under the column, and
+    // two fifths of the next step's.
+    @Test(arguments: [
+        (ReaderMargins.narrow, 18.0, 0.0), (.mediumNarrow, 23.203125, 13.796875),
+        (.medium, 27, 27), (.mediumWide, 32, 32), (.wide, 38, 38),
+    ])
+    func foldedMargins(margins: ReaderMargins, left: Double, right: Double) throws {
         let layout = ReaderLayout(posture: .closed, geometry: Self.foldedScreen, margins: margins)
         let text = try #require(layout.textColumns(inReaderWidth: 466)?.first)
-        #expect(Self.near(text.lowerBound, margin, within: 0.01))
-        if margins == .narrow {
-            // The text reaches the column's edge; the margin lies under it.
-            #expect(Self.near(text.upperBound, 382, within: 0.01))
-        } else {
-            #expect(Self.near(text.upperBound, 382 - margin, within: 0.01))
-        }
+        #expect(Self.near(text.lowerBound, left, within: 0.01))
+        #expect(Self.near(382 - text.upperBound, right, within: 0.01))
     }
 
-    // Narrow's gutter is a point wider than the 40 pt hinge.
-    @Test(arguments: [(ReaderMargins.narrow, 41.0), (.medium, 55), (.wide, 78)])
-    func unfoldedMarginsAndGutter(margins: ReaderMargins, gutter: Double) throws {
+    // The five steps unfolded: the outer margins from the column's edge (and
+    // its mirror on the left), and the gutter. Narrow's gutter is a point
+    // wider than the 40 pt hinge.
+    @Test(arguments: [
+        (ReaderMargins.narrow, 0.0, 41.0), (.mediumNarrow, 29, 48),
+        (.medium, 55, 55), (.mediumWide, 67, 67), (.wide, 78, 78),
+    ])
+    func unfoldedMarginsAndGutter(margins: ReaderMargins, outer: Double, gutter: Double) throws {
         let layout = ReaderLayout(posture: .open, geometry: Self.unfoldedScreen(), margins: margins)
         let columns = try #require(layout.textColumns(inReaderWidth: 951))
         #expect(Self.near(columns[1].lowerBound - columns[0].upperBound, gutter, within: 0.01))
@@ -188,9 +193,46 @@ struct ReaderLayoutTests {
         #expect(columns[1].lowerBound >= 496)
         // Still centred on the hinge.
         #expect(Self.near((columns[0].upperBound + columns[1].lowerBound) / 2, 475.5, within: 0.01))
-        if margins == .narrow {
-            #expect(Self.near(columns[0].lowerBound, 84))
-            #expect(Self.near(columns[1].upperBound, 867))
+        #expect(Self.near(columns[0].lowerBound, 84 + outer, within: 0.01))
+        #expect(Self.near(columns[1].upperBound, 867 - outer, within: 0.01))
+    }
+
+    // Right to left the column is on the left: each step mirrors its folded
+    // layout, and the view's rounding never puts text under the column.
+    // Unfolded, the spread is the same both ways.
+    @Test(arguments: ReaderMargins.allCases)
+    func rightToLeftMirrorsTheSteps(margins: ReaderMargins) throws {
+        let folded = ReaderGeometry(size: CGSize(width: 466, height: 678), safeArea: ReaderInsets(top: 0, left: 84, bottom: 34, right: 0))
+        let layout = ReaderLayout(posture: .closed, geometry: folded, margins: margins)
+        let mirrored = ReaderLayout(posture: .closed, geometry: Self.foldedScreen, margins: margins)
+        let text = try #require(layout.textColumns(inReaderWidth: 466)?.first)
+        let mirror = try #require(mirrored.textColumns(inReaderWidth: 466)?.first)
+        #expect(text.lowerBound >= 84)
+        #expect(Self.near(text.lowerBound - 84, 382 - mirror.upperBound, within: 0.25))
+        #expect(Self.near(466 - text.upperBound, mirror.lowerBound, within: 0.25))
+        let (view, page) = Self.foliatePage(layout, readerWidth: 466)
+        #expect(view == view.rounded())
+        #expect(page == page.rounded())
+
+        var unfolded = Self.unfoldedScreen()
+        unfolded.safeArea = ReaderInsets(top: 0, left: 84, bottom: 34, right: 0)
+        let spread = try #require(ReaderLayout(posture: .open, geometry: unfolded, margins: margins).textColumns(inReaderWidth: 951))
+        let spreadMirror = try #require(ReaderLayout(posture: .open, geometry: Self.unfoldedScreen(), margins: margins).textColumns(inReaderWidth: 951))
+        #expect(spread == spreadMirror)
+    }
+
+    // Each step between two of the first three sits halfway between them on
+    // the page, folded and unfolded, to within 2 pt a side.
+    @Test(arguments: [(ReaderMargins.mediumNarrow, ReaderMargins.narrow, ReaderMargins.medium), (.mediumWide, .medium, .wide)])
+    func newStepsAreHalfway(step: ReaderMargins, below: ReaderMargins, above: ReaderMargins) throws {
+        for (geometry, posture, width) in [(Self.foldedScreen, ReaderPosture.closed, 466.0), (Self.unfoldedScreen(), .open, 951)] {
+            func text(_ margins: ReaderMargins) throws -> ClosedRange<Double> {
+                let columns = try #require(ReaderLayout(posture: posture, geometry: geometry, margins: margins).textColumns(inReaderWidth: width))
+                return columns[0].lowerBound...columns[columns.count - 1].upperBound
+            }
+            let (middle, low, high) = (try text(step), try text(below), try text(above))
+            #expect(Self.near(middle.lowerBound, (low.lowerBound + high.lowerBound) / 2, within: 2))
+            #expect(Self.near(middle.upperBound, (low.upperBound + high.upperBound) / 2, within: 2))
         }
     }
 

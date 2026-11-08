@@ -152,7 +152,8 @@ Apple asks for 200%, or the system's maximum, without overlapping or severe trun
 **Left alone:**
 
 - The side column's buttons and the tour's Skip stay about the same size, as Apple says a tab bar may. They don't offer the Large Content Viewer yet.
-- The Contents and Bookmarks switch and the margins switch are the system's segmented controls, which don't grow.
+- The Contents and Bookmarks switch is the system's segmented control, which doesn't grow.
+- Margins is the system's slider. VoiceOver reads its step by name (Narrow, Fairly Narrow, Medium, Fairly Wide, Wide), and at the accessibility sizes the Narrow and Wide at its ends move under it, so the slider keeps the panel's width.
 - At AX5, "Languages" in the Library breaks as "Lan-guages", and an address such as localhost:3320 breaks where it must.
 
 ## How to check

@@ -46,9 +46,9 @@ struct ReaderSettingsSection: View {
         Section {
             Toggle("Always show controls", isOn: $alwaysShowControls)
             Picker("Margins", selection: $margins) {
-                Text("Narrow").tag(ReaderMargins.narrow)
-                Text("Medium").tag(ReaderMargins.medium)
-                Text("Wide").tag(ReaderMargins.wide)
+                ForEach(ReaderMargins.allCases, id: \.self) { margins in
+                    Text(margins.name).tag(margins)
+                }
             }
             Toggle("Book-mode shadow", isOn: $bookModeShadow)
         } header: {

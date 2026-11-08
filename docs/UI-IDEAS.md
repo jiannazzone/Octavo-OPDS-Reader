@@ -25,11 +25,15 @@ v1 is built around one library server (`docs/design/direction.md`). Explored in 
 - If both servers hold the same book, show both covers labelled with their server rather than merging: positions (CFIs) belong to a file, and OPDS gives no way to tell editions or translations apart.
 - Public catalogs (Project Gutenberg, Standard Ebooks) as browse-only feeds, separate from your library server.
 
-## Shifting panes one at a time (parked 2026-11-01)
+## ~~Shifting panes one at a time~~ (parked 2026-11-01)
+
+**Dropped (Adam, 2026-11-07).**
 
 Unfolded, opening a screen from the right pane shifts both panes one level along (decision 23). The shell (#6) uses the system's push slide for that: the whole pair slides in. A closer match to "shift" would slide only one pane: the right pane moves over to the left and the new screen slides in on the right, and Back does the reverse. Adam judges the system slide on screen first; this needs a custom transition if it's wanted.
 
-## Tab bar over the cover (parked 2026-11-01)
+## ~~Tab bar over the cover~~ (parked 2026-11-01)
+
+**Dropped (Adam, 2026-11-07).**
 
 On the cover page (#14) the side column has no backing of its own: the system's glass capsules (clock, Back, the tabs) read on light, dark and busy covers, so Adam chose system glass only over a material strip or a dark scrim. He asked whether the tab bar could also collapse while it isn't in use, to show more of the cover.
 
@@ -140,7 +144,9 @@ The screen dims while reading, because nothing in the app holds off Auto-Lock (`
 
 ## Margins as a slider? (Adam, 2026-11-06)
 
-Should Margins in Customize be a slider with detents instead of a picker? Today it's a segmented picker with Narrow, Medium and Wide (`ReaderMargins`). Not looked into yet.
+Should Margins in Customize be a slider with detents instead of a picker? It was a segmented picker with Narrow, Medium and Wide (`ReaderMargins`).
+
+**Decided 2026-11-07:** the system's slider with five steps, over the segmented picker and over a slider of three (decision 8 in `docs/design/direction.md`). Built the same day. Adam's first idea was a continuous slider with detents; he kept the five steps once he saw what that would take.
 
 ## A mark for finished books on covers (Adam, 2026-11-06)
 
