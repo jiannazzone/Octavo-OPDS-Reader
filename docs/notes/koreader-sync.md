@@ -6,7 +6,7 @@ This note keeps what was measured, so nobody has to measure it again.
 
 ## After launch, if it comes back
 
-One KOReader account in Settings (address, username, password), for OPDS and Files books. No per-server settings. BookOrbit keeps its own sync, and Kavita and Komga stay plain OPDS catalogs.
+One KOReader account in Settings (address, username, password), for Files books and each catalog switched on for it (Adam, 2026-11-08). BookOrbit keeps its own sync, and Kavita and Komga stay plain OPDS catalogs.
 
 The steps are in `docs/notes/koreader-sync-plan.md`. The first, a test on real KOReader, passed on 2026-11-08 ("On real KOReader", below).
 
@@ -71,6 +71,7 @@ KOReader v2026.07.1's release build (`koreader-linux-arm64`), headless in a thro
   - **No offset at all:** KOReader writes some element places without one (`…/div[6]/span`). Read an offset as optional.
   - **The browser's offsets** are UTF-16 code units, crengine's are characters. Convert where a book has characters outside the BMP.
 - **A book KOReader first opened before 2024 numbers its sections the old way.** KOReader keeps the DOM version a book was first opened with (`cre_dom_version` in its settings, oldest 20171225) until the reader updates it from KOReader's menu. Measured 2026-11-08 by asking for each version: the five sample books get the same `DocFragment` numbers in all of them. Alice with a picture as its own spine item doesn't: from 20240114 that item gets a `DocFragment` of its own, before then it's skipped, so every section after it is one lower. Octavo reads and writes the new numbering, so for such a book, in both directions, a place after the picture lands a section early or isn't found (and isn't offered), and `OpeningPosition.isAhead` compares the wrong sections. The oldest version also writes `autoBoxing` elements, which the bridge doesn't find. Not handled: it needs both a picture spine item and a book first opened in KOReader before 2024.
+- **Its Progress sync menu** (v2026.07.1) has "Document matching method", Binary by default or Filename. A device set to Filename never meets Octavo's places. "Device hostname" sets the `device` it sends, else its model code (`Kobo_daylight`, `kindlepw2`). "Automatically keep documents in sync" is off by default.
 - **KOReader's percentage is close to foliate's:** at the same words, a median gap of 0.2–0.9 points per book, 2.0 at the 90th percentile. It's farther only where pictures take whole pages: 16 points in Pride and Prejudice's illustrated front matter. Good enough for a place line, never for landing.
 
 Not covered: Adam's modern EPUBs (calibre conversions, Kobo's `koboSpan`s, books from stores), a KOReader newer than v2026.07.1, other screen sizes and fonts, and KOReader's own sync menu (only the engine was driven).

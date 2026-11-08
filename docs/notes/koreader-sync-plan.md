@@ -102,7 +102,7 @@ As planned:
 - `BookPlaces.status`: "Synced" only after a push landed or a real place came back, not after an empty pull (`remotes[key].position != nil`). Check this doesn't change BookOrbit's line.
 - `BookPlaces`: keep unsent places and last-said by account. Clear both on sign-out or a new account. A permanent failure stops retrying.
 - `ReaderModel`: `checkServerPlace` and the capsule take an xpointer, resolve it through the bridge, and use the bridge's fraction, not the server's (Kavita's differs by up to 20 points).
-- The capsule's name comes from where the place came from (`device`, length-limited, plain text; else "KOReader"), replacing the book's server name and the `"BookOrbit"` fallback in `ReaderView`.
+- The capsule says "KOReader" (question 6), replacing the book's server name and the `"BookOrbit"` fallback in `ReaderView`.
 - DEBUG: `-connectKOSync 1`, like `-connectOPDS`. Debug remote: read and move the server's place, like `sync-spike/tools/bo.sh`.
 - **Checked on:** a simulator named for this work, against `dev/kosync`, with the sequence from `docs/notes/sync-in-app.md`: another reader moves it, offline, relaunch, first sync, moving backward. Name it and its UDID.
 
@@ -111,7 +111,9 @@ As planned:
 - `SavedServers.koreaderAccount: SavedKOSyncAccount?` (ID, address, username), optional so saved files still read. Secrets under its ID: a new `koSyncKeyService` in `ServerCredentials.allServices`, and the pin under `pinService`.
 - `KeychainSweep`: keep the account's ID, or it's deleted at the next launch. Test it.
 - A page in `SettingsScreen` (`SettingsPage`): address through `ServerAddress.parse`, username, password, Sign in, Sign out, and the "Trust this server" step. That step lives inside `SetupModel`, so factor it out rather than copy it.
-- Signing in tests `users/auth` and stores nothing on failure. Signing in is the opt-in; there are no per-server settings.
+- Signing in tests `users/auth` and stores nothing on failure.
+- A per-catalog switch (question 2), saved on the `SavedServer` and optional so saved files still read: in `CatalogSetup` with the account fields inline while there's no account, and on the catalog's server page. `ShellModel.koreaderSync` checks it. Files books need only the account.
+- From the answers below: an EPUB on a synced catalog that isn't downloaded has no place row, bar or Search place, and a download pulls at once (4). The toggle's footer and the account page state the limits (5). The capsule says "KOReader" (6).
 
 ## Chunk 6: review and docs
 
@@ -129,13 +131,21 @@ As planned:
 One at a time, each with a picture. My recommendation is first.
 
 1. **Where's the account?** A "KOReader sync" row in a new Reading progress section in Settings. Hidden for someone with only BookOrbit?
+   **Adam, 2026-11-08: always shown.** "KOReader sync", value Off or the account, in a section of its own under the servers, footer "Syncs your place with KOReader for books from catalogs and Files."
 2. **Setup:** skip it and opt in from Settings, or bring back the sync step for catalogs (decision 6)? Skipping keeps setup short, but people may not find it.
+   **Adam, 2026-11-08: a toggle on each catalog,** on its setup screen under the address and name, not a step of its own. Switched on with no account, the KOReader fields (sync server, username, password) appear below it, and Connect checks both servers, with each error under its own fields. With an account, no fields, only "As adam on sync.example.com." One account for the whole app, kept in Settings: every catalog switched on, and Files books, use it, and changing it there changes it everywhere. The same toggle is on each catalog's server page. Signing out stops sync for all of them and leaves each toggle as it was.
 3. **The place line** for a place from another device: the server's percentage until the book opens, or the chapter? It depends on chunk 0's gap.
+   **Adam, 2026-11-08: the percentage,** "62% · Calibre", as every other line. KOReader's own server is within a point or two of foliate's, farther only where pictures fill pages; Octavo's own replaces it once the book opens.
 4. **Not downloaded:** no place shown until it's downloaded, since sync needs the file.
+   **Adam, 2026-11-08: hide it.** On a catalog that syncs with KOReader, an EPUB that isn't downloaded has no place row or bar on its screen and no place on its Search row, not even an iPhone place from before the file was removed. They appear once it's downloaded and pulled, so a download pulls straight away. Catalogs without sync, BookOrbit, and books that can't sync (not EPUB) are as today.
 5. **A book that won't sync** (MOBI, or a file nobody else has): say so on its screen, or say nothing? Nothing can detect a different copy of the file, so the footer has to state that.
+   **Adam, 2026-11-08: once, in the toggle's footer.** Shown: "EPUB books only. Your other devices need the same file, such as one downloaded from this catalog." The account page in Settings says the same for Files books. A book's screen says nothing about sync, as for any book that doesn't sync.
 6. **The capsule's name:** "Kindle: 62%" from the device field, or always "KOReader: 62%"?
+   **Adam, 2026-11-08: always "KOReader".** KOReader sends its model code by default ("Kobo_daylight", "kindlepw2"; `kosync_hostname` overrides it), which means little to most people. Its Progress sync menu also has "Device hostname" for a name of one's own.
 7. **Decision 36:** the same file on two catalogs shares one place on the account. Accept it and amend the decision.
+   **Adam, 2026-11-08: accepted,** one place for one file is the point. Decision 36 kept servers apart because BookOrbit numbers files from 1 on each; a KOReader match is the same file. Bookmarks stay per catalog, and switching a catalog's sync off keeps its copy apart. Amend decision 36 in chunk 6.
 8. **KOReader's own settings:** auto sync is off by default. A line in the account page's footer?
+   **Adam, 2026-11-08: leave it out.** Anyone already syncing KOReader devices has turned it on or pulls by hand.
 
 ## Later, not in this plan
 
