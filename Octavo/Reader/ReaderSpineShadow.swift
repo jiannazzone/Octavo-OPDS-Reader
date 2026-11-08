@@ -77,12 +77,18 @@ nonisolated extension ReaderTheme {
     /// is closed as far as book mode goes. Warm on Paper and Sepia, as a
     /// shadow on cream paper is; deeper on Night, where black over the dark
     /// page shows less.
-    var spineShadow: (color: String, deepest: Double) {
+    var spineShadow: SpineShadow {
         switch self {
-        case .original: ("#000000", 0.32)
-        case .paper: ("#3d2e17", 0.38)
-        case .sepia: ("#4a3112", 0.4)
-        case .night: ("#000000", 0.7)
+        case .original: SpineShadow(color: "#000000", deepest: 0.32)
+        case .paper: SpineShadow(color: "#3d2e17", deepest: 0.38)
+        case .sepia: SpineShadow(color: "#4a3112", deepest: 0.4)
+        case .night: SpineShadow(color: "#000000", deepest: 0.7)
         }
+    }
+
+    struct SpineShadow: Equatable, Sendable {
+        /// `#rrggbb`.
+        var color: String
+        var deepest: Double
     }
 }

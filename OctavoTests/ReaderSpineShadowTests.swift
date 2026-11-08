@@ -33,7 +33,8 @@ struct ReaderSpineShadowTests {
     @Test func widensAsTheBookCloses() {
         func share(at angle: Double) -> Double {
             let shade = ReaderSpineShade(angle: angle, theme: .original)
-            return shade.stops[4].opacity / shade.peak
+            let quarter = shade.stops.first { $0.location == 0.25 }
+            return (quarter?.opacity ?? 0) / shade.peak
         }
         #expect(share(at: 60) > share(at: 90))
         #expect(share(at: 90) > share(at: 150))
