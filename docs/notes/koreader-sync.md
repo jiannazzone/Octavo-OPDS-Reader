@@ -66,13 +66,21 @@ KOReader v2026.07.1's release build (`koreader-linux-arm64`), headless in a thro
   The one word-level miss is only a space where a chapter heading meets its text, not a different place. KOReader resolved all 300 places. The misses reading KOReader's places are the cover (an `svg`, which has no words to compare), whitespace inside `<pre>` (poems keep their spacing, and the rule below doesn't cover it), and three page tops in Sherlock where KOReader's offset lands on a different sentence of the same paragraph.
 - **How crengine counts**, as measured:
   - **Elements:** the name, with `[n]` only where siblings share it: `div/p[9]`, not `div[1]/p[9]`. `[1]` is accepted too, and DOM version 20260812 (after this release) always writes it, so read both.
-  - **Text nodes:** `text()`, with `[n]` when there's more than one. A blank text node counts only inside a paragraph's own text, never between blocks.
+  - **Text nodes:** `text()`, with `[n]` when there's more than one. A blank text node counts only inside a paragraph's own text, after something in it, never between blocks. The line break before a drop cap (`<p>\n<span>W</span>hen…`, Sherlock Holmes) or leading italics (Moby-Dick) doesn't count (found 2026-11-08 through the bridge, below).
   - **Offsets:** characters after collapsing whitespace. Each run of spaces, tabs and line breaks counts as one, at the start of the node too. A no-break space (U+00A0) is a character, not whitespace. Moby-Dick's XHTML has line breaks and indentation inside paragraphs, which is what showed this.
   - **No offset at all:** KOReader writes some element places without one (`…/div[6]/span`). Read an offset as optional.
   - **The browser's offsets** are UTF-16 code units, crengine's are characters. Convert where a book has characters outside the BMP.
 - **KOReader's percentage is close to foliate's:** at the same words, a median gap of 0.2–0.9 points per book, 2.0 at the 90th percentile. It's farther only where pictures take whole pages: 16 points in Pride and Prejudice's illustrated front matter. Good enough for a place line, never for landing.
 
 Not covered: Adam's modern EPUBs (calibre conversions, Kobo's `koboSpan`s, books from stores), a KOReader newer than v2026.07.1, other screen sizes and fonts, and KOReader's own sync menu (only the engine was driven).
+
+### Octavo's bridge against it (2026-11-08)
+
+`bridge.js` builds and reads these places (`xpointerOf`, `resolveXPointer`, `xpointerAt`; chunk 2 of the plan). `koreader-sync/tools/bridge-check.sh` opens each sample book in Octavo's reader on a simulator through the debug remote. KOReader then reads 30 places the bridge would send, and the bridge reads every third page of KOReader's own.
+
+- **Octavo → KOReader:** 149/150 land on the words the bridge names, and none was refused. The one is a table whose cells KOReader joins with a space.
+- **KOReader → Octavo:** 1,016/1,021 resolve to the same words (Alice 54/55, Frankenstein 129/130, Moby-Dick 375/376, Pride and Prejudice 229/230, Sherlock 229/230), after the drop-cap rule above (it was 1,012). The five left are each book's cover (`…/div/svg.0`), which resolves to the cover and only shows as a miss because a picture has no words to compare. The bridge also handles `<pre>`, which the Python model doesn't.
+- **Where KOReader's DOM may differ** (a table, an SVG, MathML), Octavo sends the whole element. A table without `<tbody>` is one: the browser's XML parser adds none.
 
 ## What would go wrong as first designed
 

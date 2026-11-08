@@ -217,6 +217,7 @@ const onRelocate = ({ detail }) => {
         ...turnsFrom(view.renderer),
     }
     message.startCFI = startOf(message.cfi)
+    message.xpointer = writesXPointers && !view.isFixedLayout ? xpointerOf(detail.section?.current, startNodeOf(detail.range)) : null
     for (const watch of relocationWatchers) watch(detail, message)
     if (held) held.relocation = message
     else post('relocate', message)
@@ -1070,6 +1071,133 @@ const placeOnScreen = cfis => (Array.isArray(cfis) ? cfis : []).map(cfi => {
     }
 })
 
+// KOReader's places (`docs/notes/koreader-sync.md`, "On real KOReader"): an
+// xpointer such as `/body/DocFragment[6]/body/div/p[9]/text()[2].212`. The
+// fragment is the spine item, from 1; each step counts the element's
+// same-named siblings; the offset counts characters as crengine does.
+// Measured against KOReader v2026.07.1, which opens a book at page 1 for a
+// place it can't read.
+
+// Whether relocations carry KOReader's place (`open`'s `koreaderPlaces`).
+let writesXPointers = false
+
+// Where KOReader's DOM may not be the browser's: a place inside one is the
+// whole table, picture or formula.
+const XPOINTER_STOPS = new Set(['table', 'svg', 'math'])
+
+// The node a range starts at: a text node, or the child an element offset
+// points to.
+const startNodeOf = range => {
+    const node = range?.startContainer
+    if (!node) return null
+    if (node.nodeType === 3) return node
+    return node.childNodes?.[range.startOffset] ?? node
+}
+
+// What Octavo sends: the element `node` is in, as `…/p[9].0`. KOReader
+// opened all 150 such places on the sample books; word level was 149, and a
+// place it can't read is page 1, so this costs at most part of a page.
+// `null` outside the section's body.
+const xpointerOf = (index, node) => {
+    let el = node?.nodeType === 1 ? node : node?.parentElement
+    const body = el?.ownerDocument?.body
+    if (!Number.isInteger(index) || !el || !body || !(el === body || body.contains(el))) return null
+    for (let up = el; up && up !== body; up = up.parentElement) {
+        if (XPOINTER_STOPS.has(up.localName.toLowerCase())) el = up
+    }
+    const steps = []
+    for (let step = el; step !== body; step = step.parentElement) {
+        const name = step.localName.toLowerCase()
+        if (!/^[a-z][\w-]*$/.test(name)) return null
+        const same = [...step.parentElement.children].filter(child => child.localName.toLowerCase() === name)
+        steps.unshift(same.length > 1 ? `${name}[${same.indexOf(step) + 1}]` : name)
+    }
+    return `/body/DocFragment[${index + 1}]${steps.length ? `/body/${steps.join('/')}` : ''}.0`
+}
+
+// The fragment, the steps from <body>, the text node and the offset. Each
+// part is optional after the fragment, as KOReader writes them.
+const XPOINTER = /^\/body\/DocFragment\[(\d{1,5})\](?:\/body((?:\/[A-Za-z][\w-]{0,63}(?:\[\d{1,6}\])?){0,64}?)(?:\/text\(\)(?:\[(\d{1,6})\])?)?)?(?:\.(\d{1,9}))?$/
+const XPOINTER_STEP = /^([A-Za-z][\w-]*)(?:\[(\d+)\])?$/
+const CSS_SPACE = /[ \t\n\r\f]/
+const HAS_TEXT = /\S/
+
+// Text nodes as `text()[n]` counts them: a blank one only among a
+// paragraph's own words, after something in it (not the line break before a
+// drop cap, as in Sherlock Holmes), never between blocks.
+const creTexts = el => {
+    const nodes = [...el.childNodes]
+    const keepsBlanks = nodes.some(node => node.nodeType === 3 && HAS_TEXT.test(node.data))
+    let started = false
+    return nodes.filter(node => {
+        const hasText = node.nodeType === 3 && HAS_TEXT.test(node.data)
+        const counts = node.nodeType === 3 && (hasText || (keepsBlanks && started))
+        if (node.nodeType === 1 || hasText) started = true
+        return counts
+    })
+}
+
+// crengine's offset into `text` as a UTF-16 index: a run of CSS whitespace
+// counts as one character (not inside <pre>), and so does a character
+// outside the BMP.
+const creToDOM = (text, offset, keepsSpaces) => {
+    let index = 0
+    for (let count = 0; index < text.length && count < offset; count++) {
+        if (!keepsSpaces && CSS_SPACE.test(text[index])) {
+            while (index < text.length && CSS_SPACE.test(text[index])) index++
+        } else {
+            index += text.codePointAt(index) > 0xffff ? 2 : 1
+        }
+    }
+    return index
+}
+
+// Where KOReader's place falls in the book: its CFI, fraction and chapter.
+// Words that don't resolve fall back to their element; an element that
+// doesn't exist is `null`, never a guess. The string is only matched and
+// walked, never evaluated.
+const resolveXPointer = async xpointer => {
+    const v = requireView()
+    const match = typeof xpointer === 'string' && xpointer.length <= 2048 ? XPOINTER.exec(xpointer) : null
+    if (!match || v.isFixedLayout) return null
+    const [, fragment, steps = '', textIndex, offset] = match
+    const index = Number(fragment) - 1
+    const section = v.book.sections[index]
+    if (!section) return null
+    const loaded = loadedDoc(index)
+    const doc = loaded ?? await section.createDocument()
+    let el = doc.body
+    for (const step of steps.split('/').filter(Boolean)) {
+        const [, name, position = '1'] = XPOINTER_STEP.exec(step)
+        const same = [...el.children].filter(child => child.localName.toLowerCase() === name.toLowerCase())
+        el = same[Number(position) - 1]
+        if (!el) return null
+    }
+    const range = doc.createRange()
+    const words = xpointer.includes('/text()') ? creTexts(el)[Number(textIndex ?? 1) - 1] : null
+    if (words) {
+        const at = creToDOM(words.data, Number(offset ?? 0), Boolean(words.parentElement?.closest('pre')))
+        range.setStart(words, at)
+        range.setEnd(words, Math.min(at + 1, words.data.length))
+    } else {
+        range.selectNodeContents(el)
+    }
+    const within = (loaded ? layoutFraction(range) : null) ?? characterFraction(doc, range)
+    range.collapse(true)
+    const cfi = v.getCFI(index, range)
+    const tocItem = await v.getTOCItemOf(cfi)
+    return { cfi, fraction: bookFraction(index, within), chapter: plainText(tocItem?.label)?.trim() || null }
+}
+
+// KOReader's place for where `cfi` starts, for a place saved before.
+const xpointerAt = async cfi => {
+    const v = requireView()
+    if (v.isFixedLayout) return null
+    const { index, anchor } = v.resolveCFI(String(cfi))
+    const doc = loadedDoc(index) ?? await v.book.sections[index].createDocument()
+    return xpointerOf(index, startNodeOf(toRange(doc, anchor(doc))))
+}
+
 // A second layer against book scripts, for every format (formats check,
 // step 15; `docs/notes/formats-check.md`). The reader's CSP is the first: it
 // blocks them on its own, and the section documents inherit it. This one
@@ -1641,7 +1769,10 @@ const restore = async (cfi, fraction) => {
     return 'start'
 }
 
-const open = async ({ url, name, cfi = null, fraction = null, layout: initialLayout = undefined, appearance: initialAppearance = undefined, harden = true }) => {
+// `xpointer`: a KOReader place to open at when there's no `cfi`, else the
+// fraction. `koreaderPlaces`: relocations carry KOReader's place (an EPUB
+// that syncs with KOReader).
+const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, koreaderPlaces = false, layout: initialLayout = undefined, appearance: initialAppearance = undefined, harden = true }) => {
     if (view) {
         view.close()
         view.remove()
@@ -1682,10 +1813,12 @@ const open = async ({ url, name, cfi = null, fraction = null, layout: initialLay
     applyAppearance()
     if (initialLayout !== undefined) layout = initialLayout
     held = null
+    writesXPointers = Boolean(koreaderPlaces)
     // Nothing is rendered yet, so the attributes are all it takes.
     applyAttributes()
 
-    const restoredFrom = await restore(cfi, finiteOrNull(fraction))
+    const opening = cfi ?? (xpointer ? (await resolveXPointer(xpointer).catch(() => null))?.cfi ?? null : null)
+    const restoredFrom = await restore(opening, finiteOrNull(fraction))
     const result = {
         restoredFrom,
         title: plainText(view.book.metadata?.title),
@@ -2003,6 +2136,14 @@ window.octavo = Object.freeze({
     }),
     describe: reported(async function describe_(cfi) {
         return describePlace(cfi)
+    }),
+    // A KOReader place's `{ cfi, fraction, chapter }`, or `null`.
+    resolveXPointer: reported(async function resolveXPointer_(xpointer) {
+        return resolveXPointer(xpointer)
+    }),
+    // KOReader's place for where `cfi` starts, or `null`.
+    xpointerAt: reported(async function xpointerAt_(cfi) {
+        return xpointerAt(cfi)
     }),
     // The contents and bookmarks placed again in the current layout, for the
     // Contents panel's page numbers.

@@ -272,6 +272,8 @@ nonisolated struct SharedProgressSync: ProgressSync {
         try await places.pull(key, from: backend, reusingWithin: 0)
     }
 
+    var wantsXPointers: Bool { backend.wantsXPointers }
+
     func push(_ position: ReadingPosition) async throws {
         try await backend.push(position)
         await places.pushed(position, key: key)

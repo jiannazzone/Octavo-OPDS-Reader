@@ -25,12 +25,17 @@ public protocol ProgressSync: Sendable {
     /// reuse: an open reader asking whether another reader moved on.
     func pullLatest() async throws -> SyncedPosition?
     func push(_ position: ReadingPosition) async throws
+    /// The backend needs KOReader's place in every position it's sent
+    /// (`ReadingPosition.xpointer`), so the reader asks the bridge for it.
+    var wantsXPointers: Bool { get }
 }
 
 extension ProgressSync {
     public func pullLatest() async throws -> SyncedPosition? {
         try await pull()
     }
+
+    public var wantsXPointers: Bool { false }
 }
 
 /// The reader's own record of a book's position, kept on the device.

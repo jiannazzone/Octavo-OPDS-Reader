@@ -647,5 +647,7 @@ nonisolated struct DebugProgressSync: ProgressSync {
         if failsPushes || Self.offline { throw URLError(.notConnectedToInternet) }
         try await wrapping.push(position)
     }
+
+    var wantsXPointers: Bool { wrapping.wantsXPointers }
 }
 #endif

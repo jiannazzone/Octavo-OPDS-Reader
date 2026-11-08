@@ -682,6 +682,12 @@ final class ReaderModel {
         }
     }
 
+    /// Whether relocations carry KOReader's place: an EPUB whose place goes
+    /// to KOReader sync. Other formats have no KOReader place to give.
+    var writesXPointers: Bool {
+        sync?.wantsXPointers == true && book.fileURL.pathExtension.lowercased() == "epub"
+    }
+
     private func openBook() {
         isRestoring = true
         phase = .loading
@@ -700,6 +706,9 @@ final class ReaderModel {
                 "name": book.fileName,
                 "cfi": saved?.cfi ?? NSNull(),
                 "fraction": saved?.fraction ?? NSNull(),
+                // A place from KOReader has no CFI until the bridge finds it.
+                "xpointer": saved?.cfi == nil ? saved?.xpointer ?? NSNull() : NSNull(),
+                "koreaderPlaces": writesXPointers,
                 "layout": layout.scriptArguments,
                 "appearance": appearance.scriptArguments,
             ]

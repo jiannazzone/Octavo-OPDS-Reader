@@ -92,9 +92,17 @@ def same_words(a, b, n=24):
 
 def cre_texts(parent):
     """Text nodes as `text()[n]` counts them: blank ones only inside a
-    paragraph's own text, never between blocks."""
+    paragraph's own text, after something in it (not the line break before a
+    drop cap), never between blocks."""
     keep_blank = any(c.nodeType == Node.TEXT_NODE and c.data.strip() for c in parent.childNodes)
-    return [c for c in parent.childNodes if c.nodeType == Node.TEXT_NODE and (c.data.strip() or keep_blank)]
+    out, started = [], False
+    for c in parent.childNodes:
+        has_text = c.nodeType == Node.TEXT_NODE and bool(c.data.strip())
+        if c.nodeType == Node.TEXT_NODE and (has_text or (keep_blank and started)):
+            out.append(c)
+        if c.nodeType == Node.ELEMENT_NODE or has_text:
+            started = True
+    return out
 
 
 def cre_offset(node, offset):
@@ -244,5 +252,30 @@ def compare(places, landed):
                 print(f'   miss {rid} valid={valid} | KOReader: {got} | DOM: {want}')
 
 
+
+
+def bridge(result, landed):
+    """bridge-check.sh's two directions, from the bridge's answer (`bridge.js`)
+    and where KOReader landed the bridge's places."""
+    out = json.loads(json.load(open(result))['result'])
+    got = {}
+    for line in list(open(landed, errors='replace'))[1:]:
+        rid, valid, page, pages, text = line.rstrip('\n').split('\t')[:5]
+        got[rid] = (valid == 'true', text)
+    sent = [p for p in out['places'] if p['xpointer']]
+    good = [p for p in sent if got.get(p['id'], (False, ''))[0] and same_words(got[p['id']][1], p['words'] or '')]
+    print(f'Octavo → KOReader: {len(good)}/{len(out["places"])} land on the words the bridge names'
+          f' ({len(out["places"]) - len(sent)} not sent)')
+    for p in sent:
+        if p not in good:
+            valid, text = got.get(p['id'], (False, ''))
+            print(f'   miss {p["xpointer"]} valid={valid} | KOReader: {text[:40]} | bridge: {(p["words"] or "")[:40]}')
+    read = [k for k in out['ko'] if k['words'] is not None and (same_words(k['words'], k['text']) or not collapse(k['text']))]
+    print(f'KOReader → Octavo: {len(read)}/{len(out["ko"])} resolve to the same words')
+    for k in out['ko']:
+        if k not in read:
+            print(f'   miss {k["xpointer"]} | KOReader: {k["text"][:36]} | bridge: {(k["words"] or "None")[:36]}')
+
+
 if __name__ == '__main__':
-    {'make': make, 'check': check, 'compare': compare}[sys.argv[1]](*sys.argv[2:])
+    {'make': make, 'check': check, 'compare': compare, 'bridge': bridge}[sys.argv[1]](*sys.argv[2:])

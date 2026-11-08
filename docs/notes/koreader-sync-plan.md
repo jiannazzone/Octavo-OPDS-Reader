@@ -34,6 +34,8 @@ Against KOReader's release build, or a device, on the five sample books and a co
 
 ## Chunk 2: positions (bridge and model)
 
+**Done 2026-11-08, on the sample books.** `bridge.js` `xpointerOf`, `resolveXPointer` and `xpointerAt`. `open` takes `xpointer` and `koreaderPlaces`. Relocations carry `xpointer`, and so does `ReadingPosition`. `ProgressSync.wantsXPointers` (off by default, forwarded by `SharedProgressSync` and `DebugProgressSync`) switches it on for an EPUB. Tests: `ReaderXPointerTests` (26 cases in a real web view). Against real KOReader through the bridge itself (`tools/bridge-check.sh`): Octavo → KOReader 149/150, KOReader → Octavo 1,016/1,021, where every miss is a cover or a table's spacing (`docs/notes/koreader-sync.md`). The modern EPUBs are still to run through `run.sh` and `bridge-check.sh`. As planned:
+
 - `ReadingPosition.xpointer: String?`. Optional, so saved files still read.
 - `ReaderWeb/bridge.js`, inside the file so the CSP doesn't change:
   - `xpointerOf(index, range)`: the paragraph (the range's nearest block element) as `…/p[9].0`, with the element rule from the note. `onRelocate` adds it to its message for reflowing books only, when the open options ask for it.
