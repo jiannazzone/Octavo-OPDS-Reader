@@ -133,6 +133,18 @@ As planned:
 - Docs: `CLAUDE.md`, `docs/PRIVACY.md` (the place and a file's hash), `README.md` "Not yet", decisions 6 and 36 in `docs/design/direction.md`, `docs/app-store/listing.json` with the limits stated, this note.
 - `Scripts/local-tests.sh "<your simulator>"`. New sims need the 27.1 runtime. Then ask Adam before pushing.
 
+**Security review (2026-11-08),** an independent read of the whole branch against `main`. No critical or high findings: the key doesn't reach another host, no pin applies to another server, and nothing a server sends can run in the page. Fixed:
+- **Sign out during a push or pull** (medium-low): one already under way could send the key once more and write the places file back. `KOSyncPlaces.close()` now stops both before they send (`KOSyncError.signedOut`), and nothing it says is written after.
+- **Sign-in took any 200** (low): a sign-in page, a site's catch-all, or another host a redirect led to (which never had the key) counted. Now only the protocol's answer from the server itself does (`{"authorized":"OK"}`, or Kavita's `{"username":…}`, both measured).
+- **An unreadable server list** (low): signing in replaced it with one holding only the account, leaving the launch sweep to delete every server's sign-in. It now fails and leaves the list.
+- **Unsent places on sign-out** went to the next account; they now stay the iPhone's own (`BookPlaces.stopSending`), as Sign in again does for BookOrbit. Sign-in keeps the old account until the new one is saved. The account and client print without their path or username.
+
+Left, by choice: Komga's API key would show as the username on screen (Komga's sync isn't offered or tested), and a switch turned off while one of its books is mid-push lets that one push finish.
+
+Checked and sound: every request goes through the account's own `ServerTransport` and pin (64 KiB cap); a cross-origin redirect drops `x-auth-user`/`x-auth-key`, and https→http or a cross-origin PUT is refused; the secrets are one Keychain item, the list holds only the ID, crash orderings leave the sweep to tidy up; setup's and KOReader's trust steps keep separate IDs; server data is bounded (place ≤ 2048 characters, percentage 0–1, timestamps 2000–2100) and reaches the page only as a `callJavaScript` argument; only Files books and switched-on catalogs' EPUBs go, never BookOrbit's or the sample book.
+
+**Signed off by Adam, 2026-11-08,** with the README, privacy policy and listing wording.
+
 ## Questions for Adam, before chunk 5
 
 One at a time, each with a picture. My recommendation is first.
