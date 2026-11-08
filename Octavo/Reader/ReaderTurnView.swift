@@ -70,6 +70,9 @@ struct ReaderTurn: Equatable {
             return (.whole, .whole)
         case .fade, .none:
             return (.whole, [])
+        case .curl:
+            // UIKit curls view controllers: every page it shows is a picture.
+            return spine == nil ? (.whole, .whole) : ([.left, .right], [.left, .right])
         case .flip:
             guard spine != nil else { return (.whole, side == .left ? .whole : []) }
             return ([.left, .right], side == .right ? .left : .right)
@@ -137,7 +140,8 @@ struct ReaderTurnLeaf: View, Animatable {
             case .slide: slide
             case .fade: fade
             case .flip: flip
-            case .none: EmptyView()
+            // UIKit's (`ReaderCurl`).
+            case .curl, .none: EmptyView()
             }
         }
         .frame(width: turn.size.width, height: turn.size.height, alignment: .topLeading)

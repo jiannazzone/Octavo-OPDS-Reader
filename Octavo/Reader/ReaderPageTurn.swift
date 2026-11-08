@@ -3,10 +3,12 @@ import SwiftUI
 /// Page Turn in Customize (decision 27): how a page turns. Kept in
 /// `UserDefaults` with the other reading settings (decision 14).
 nonisolated enum ReaderPageTurn: String, CaseIterable, Identifiable, Sendable, Codable {
-    /// Slide on one page, flip on a spread; fade with Reduce Motion.
+    /// Curl in every posture; fade with Reduce Motion.
     case automatic
     case slide
     case flip
+    /// UIKit's page curl (`ReaderCurl`), as in Apple Books.
+    case curl
     case fade
     /// The instant turn Octavo had before, swipes dragging the page as
     /// foliate's paginator does.
@@ -22,32 +24,45 @@ nonisolated enum ReaderPageTurn: String, CaseIterable, Identifiable, Sendable, C
         case .automatic: "Automatic"
         case .slide: "Slide"
         case .flip: "Flip"
+        case .curl: "Curl"
         case .fade: "Fade"
         case .none: "None"
         }
     }
 
-    /// The motion for a turn. Automatic slides one page (folded, or one
-    /// column across the fold turned sideways) and flips a spread over its
-    /// spine; with Reduce Motion it fades. A style picked by hand applies in
-    /// every posture, Reduce Motion or not.
+    /// The motion for a turn. Automatic curls, one page or a spread over its
+    /// spine (Adam, 2026-11-07); with Reduce Motion it fades. A style picked
+    /// by hand applies in every posture, Reduce Motion or not.
     func motion(spread: Bool, reduceMotion: Bool) -> ReaderTurnMotion {
         switch self {
-        case .automatic: reduceMotion ? .fade : spread ? .flip : .slide
+        case .automatic: reduceMotion ? .fade : .curl
         case .slide: .slide
         case .flip: .flip
+        case .curl: .curl
         case .fade: .fade
         case .none: .none
         }
     }
 
     /// How a page shows that it turns without turning (the tour's Turn the
-    /// page), if it can: a flip or a slide, started and let fall back. Reduce
+    /// page), if it can: a flip or a slide, started and let fall back. UIKit
+    /// can't play part of a curl, so a curl's page lifts as Automatic's did
+    /// before it curled: a flip on a spread, a slide on one page. Reduce
     /// Motion holds it still, whatever style was picked.
     func hintMotion(spread: Bool, reduceMotion: Bool) -> ReaderTurnMotion? {
         guard !reduceMotion else { return nil }
-        let motion = motion(spread: spread, reduceMotion: false)
-        return motion == .flip || motion == .slide ? motion : nil
+        switch motion(spread: spread, reduceMotion: false) {
+        case .flip: return .flip
+        case .slide: return .slide
+        case .curl: return spread ? .flip : .slide
+        case .fade, .none: return nil
+        }
+    }
+
+    /// Whether a page curls in every posture, so UIKit's own pan follows
+    /// the finger (`ReaderCurl`) and `ReaderSwipeRecognizer` stands aside.
+    func curls(reduceMotion: Bool) -> Bool {
+        motion(spread: false, reduceMotion: reduceMotion) == .curl
     }
 
     /// Whether Swift draws the turns. With None the page turns itself
@@ -58,14 +73,18 @@ nonisolated enum ReaderPageTurn: String, CaseIterable, Identifiable, Sendable, C
 nonisolated enum ReaderTurnMotion: String, Equatable, Sendable {
     case slide
     case flip
+    /// UIKit draws it (`ReaderCurl`), not `ReaderTurnLeaf`.
+    case curl
     case fade
     case none
 
-    /// Seconds for a whole turn (decision 27; set on a real Duo).
+    /// Seconds for a whole turn (decision 27; set on a real Duo). A curl's
+    /// is UIKit's own, measured on the simulator; nothing here sets it.
     var duration: Double {
         switch self {
         case .slide: 0.3
         case .flip: 0.5
+        case .curl: 0.43
         case .fade: 0.15
         case .none: 0
         }
@@ -124,7 +143,7 @@ nonisolated enum ReaderTurnDrag {
         case .flip:
             let cosine = 1 - min(travel / pageWidth, 2)
             return acos(cosine) / .pi
-        case .slide, .fade, .none:
+        case .slide, .curl, .fade, .none:
             return min(travel / pageWidth, 1)
         }
     }

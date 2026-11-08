@@ -9,9 +9,10 @@ import Testing
 struct ReaderPageTurnTests {
     // MARK: Page Turn
 
-    @Test func automaticSlidesOnePageAndFlipsASpread() {
-        #expect(ReaderPageTurn.automatic.motion(spread: false, reduceMotion: false) == .slide)
-        #expect(ReaderPageTurn.automatic.motion(spread: true, reduceMotion: false) == .flip)
+    /// Adam, 2026-11-07: one page and a spread alike.
+    @Test func automaticCurls() {
+        #expect(ReaderPageTurn.automatic.motion(spread: false, reduceMotion: false) == .curl)
+        #expect(ReaderPageTurn.automatic.motion(spread: true, reduceMotion: false) == .curl)
     }
 
     @Test(arguments: [false, true])
@@ -23,6 +24,7 @@ struct ReaderPageTurnTests {
     @Test(arguments: [
         (ReaderPageTurn.slide, ReaderTurnMotion.slide),
         (.flip, .flip),
+        (.curl, .curl),
         (.fade, .fade),
         (.none, .none),
     ])
@@ -41,12 +43,23 @@ struct ReaderPageTurnTests {
     @Test func isSavedByName() {
         #expect(ReaderPageTurn.key == "reader.pageTurn")
         #expect(ReaderPageTurn.standard == .automatic)
-        #expect(ReaderPageTurn.allCases.map(\.rawValue) == ["automatic", "slide", "flip", "fade", "none"])
-        #expect(ReaderPageTurn(rawValue: "curl") == nil)
+        #expect(ReaderPageTurn.allCases.map(\.rawValue) == ["automatic", "slide", "flip", "curl", "fade", "none"])
     }
 
     @Test func menuNames() {
-        #expect(ReaderPageTurn.allCases.map(\.name) == ["Automatic", "Slide", "Flip", "Fade", "None"])
+        #expect(ReaderPageTurn.allCases.map(\.name) == ["Automatic", "Slide", "Flip", "Curl", "Fade", "None"])
+    }
+
+    /// Where pages curl, UIKit's pan follows the finger instead of
+    /// `ReaderSwipeRecognizer`. Curl picked by hand keeps curling with Reduce
+    /// Motion; Automatic fades.
+    @Test func whereUIKitTakesTheFinger() {
+        #expect(ReaderPageTurn.automatic.curls(reduceMotion: false))
+        #expect(!ReaderPageTurn.automatic.curls(reduceMotion: true))
+        #expect(ReaderPageTurn.curl.curls(reduceMotion: true))
+        for style in [ReaderPageTurn.slide, .flip, .fade, .none] {
+            #expect(!style.curls(reduceMotion: false))
+        }
     }
 
     @Test func speeds() {
@@ -165,6 +178,17 @@ struct ReaderPageTurnTests {
         #expect(forward.new.isEmpty)
         let back = ReaderTurn.regions(motion: .flip, side: .left, size: page, spine: nil)
         #expect(back.new == .whole)
+    }
+
+    /// UIKit curls view controllers, so every page it shows is a picture:
+    /// both halves of a spread, before and after.
+    @Test func aCurlTakesEveryPage() {
+        let spread = ReaderTurn.regions(motion: .curl, side: .right, size: Self.spread, spine: 475.5)
+        #expect(spread.old == [.left, .right])
+        #expect(spread.new == [.left, .right])
+        let page = ReaderTurn.regions(motion: .curl, side: .left, size: CGSize(width: 466, height: 678), spine: nil)
+        #expect(page.old == .whole)
+        #expect(page.new == .whole)
     }
 
     @Test func halvesMeetAtTheSpine() {

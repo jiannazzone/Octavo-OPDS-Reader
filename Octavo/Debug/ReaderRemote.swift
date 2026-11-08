@@ -212,7 +212,7 @@ enum ReaderRemote {
             guard let reader else { return "no open reader" }
             return await TurnProbe.run(reader)
         case "pageTurn":
-            guard let style = command.name.flatMap(ReaderPageTurn.init(rawValue:)) else { return "pageTurn needs name: automatic, slide, flip, fade or none" }
+            guard let style = command.name.flatMap(ReaderPageTurn.init(rawValue:)) else { return "pageTurn needs name: automatic, slide, flip, curl, fade or none" }
             UserDefaults.standard.set(style.rawValue, forKey: ReaderPageTurn.key)
             return nil
         case "theme":
@@ -331,6 +331,7 @@ enum ReaderRemote {
         case "turnState":
             let motion = reader.pageTurn.motion(spread: reader.layout.columns == 2, reduceMotion: reader.reduceMotion)
             let setting = "page turn \(reader.pageTurn.rawValue), reduce motion \(reader.reduceMotion) → \(motion.rawValue)"
+            if reader.pageTurn.curls(reduceMotion: reader.reduceMotion) { return "\(setting); \(reader.curl.debugState), curling \(reader.isCurling), last drawn after \(reader.lastTurnDrawnAfter ?? -1) ms, queued \(reader.queuedTurns.count)" }
             guard let run = reader.turnRun else { return "\(setting); idle, last drawn after \(reader.lastTurnDrawnAfter ?? -1) ms, queued \(reader.queuedTurns.count), overlay \(reader.turn != nil); \(reader.swipes.debugState)" }
             return "run \(run.id) \(run.side) \(run.motion) interactive \(run.interactive) moved \(String(describing: run.moved)) drawn \(run.drawn) target \(String(describing: run.target)) done \(run.animationDone) progress \(reader.turn?.progress ?? -1)"
         case "noteState":
