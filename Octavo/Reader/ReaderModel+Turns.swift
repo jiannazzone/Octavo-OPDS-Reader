@@ -165,10 +165,7 @@ extension ReaderModel {
         let moved = answer?["moved"] as? Bool ?? false
         run.moved = moved
         if moved {
-            let relocation = (answer?["relocation"] as? String).flatMap {
-                try? JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data($0.utf8))
-            }
-            let place = relocation.map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.shownFraction) }
+            let place = Self.place(turnedTo: answer)
             let new = pictures(regions, size: size, spine: spine, afterScreenUpdates: true) ?? ReaderTurn.Pictures()
             // Fades in only over the page's colour, if the turn is moving.
             let fadesIn = run.target != nil || (run.interactive && turn?.progress ?? 0 > 0)
@@ -192,6 +189,13 @@ extension ReaderModel {
         try? await Task.sleep(for: .milliseconds(100))
         guard turnRun === run, let fresh = pictures(regions, size: size, spine: spine, afterScreenUpdates: false) else { return }
         turn?.new = fresh
+    }
+
+    /// Where the bridge's `turn` answer says the page went.
+    static func place(turnedTo answer: [String: Any]?) -> ReaderPlace? {
+        (answer?["relocation"] as? String)
+            .flatMap { try? JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data($0.utf8)) }
+            .map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.shownFraction) }
     }
 
     /// Plays the rest of `run` to `target`: a whole turn at its own pace, or

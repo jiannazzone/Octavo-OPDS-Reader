@@ -1,22 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// The curl's steps, for chasing what only the Duo does: printed in DEBUG
-/// when Octavo is launched with `OCTAVO_CURL_TRACE` set, which a device's
-/// console shows (`docs/notes/curl.md`).
-func curlTrace(_ message: @autoclosure () -> String) {
-    #if DEBUG
-    guard tracesCurl else { return }
-    print("[curl \(String(format: "%.3f", CACurrentMediaTime()))] \(message())")
-    // A pipe buffers, and a crash would lose the last lines.
-    fflush(stdout)
-    #endif
-}
-
-#if DEBUG
-private let tracesCurl = ProcessInfo.processInfo.environment["OCTAVO_CURL_TRACE"] != nil
-#endif
-
 /// The curl (decision 27, Adam, 2026-11-07): UIKit's own page curl, a
 /// `UIPageViewController` with `.pageCurl`, as Apple Books has, over the same
 /// snapshot pictures the other turns draw (`docs/notes/curl.md`).
@@ -44,10 +28,16 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     private(set) var spread = false
     private weak var pan: UIPanGestureRecognizer?
     private let panDelegate = ReaderCurlPanDelegate()
-    /// The pages UIKit was given each way, in the order it asks for them.
+    /// The pages between turns (clear, or the page as it is once a turn
+    /// starts), and the pages coming in each way, in the order UIKit asks
+    /// for them. Made once per controller and reused turn after turn.
+    private var waiting: [UIViewController] = []
     private var coming: [ReaderTurnSide: [UIViewController]] = [:]
     /// The turn under way: a tap's, or a finger's once the curl has started.
     private(set) var turning: Turning?
+    /// UIKit is curling (a tap's curl, or one under a finger). Its pages
+    /// can't be set meanwhile; the curl's end sets them.
+    private var transitioning = false
 
     enum Turning: Equatable {
         case tap(id: Int)
@@ -61,6 +51,9 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
 
     /// A new controller for one page or a spread (the spine can't change).
     func makeController(spread: Bool) -> UIPageViewController {
+        // Remade mid-curl (the spine moved without a fold, say): that curl
+        // goes with the old controller.
+        model?.curlGone()
         let controller = UIPageViewController(
             transitionStyle: .pageCurl,
             navigationOrientation: .horizontal,
@@ -76,10 +69,14 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         controller.gestureRecognizers.filter { !($0 is UIPanGestureRecognizer) }.forEach { $0.isEnabled = false }
         self.controller = controller
         self.spread = spread
-        coming = [:]
         turning = nil
+        transitioning = false
         pages.turn = nil
-        controller.setViewControllers(views(new: false), direction: .forward, animated: false)
+        waiting = views(new: false)
+        // Forward, the back of the page that turns is the next left page;
+        // back, it's the right page before.
+        coming = [.right: views(new: true), .left: views(new: true).reversed()]
+        controller.setViewControllers(waiting, direction: .forward, animated: false)
         curlTrace("made a controller, \(spread ? "spread" : "one page")")
         return controller
     }
@@ -106,6 +103,18 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         curlTrace("pan state \(pan.state.rawValue) at \(Int(point.x)),\(Int(point.y)), velocity \(Int(pan.velocity(in: pan.view).x))")
     }
 
+    /// Ends UIKit's pan, so the page it's curling falls back.
+    private func cancelPan() {
+        guard let pan else { return }
+        pan.isEnabled = false
+        pan.isEnabled = true
+    }
+
+    /// UIKit's pan is turning a page: from now on it must be given pages.
+    private var panIsTurning: Bool {
+        pan?.state == .began || pan?.state == .changed
+    }
+
     func removePan() {
         guard let pan else { return }
         pan.view?.removeGestureRecognizer(pan)
@@ -125,10 +134,16 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         guard let controller, pages.turn?.id == turn.id else { return }
         turning = .tap(id: turn.id)
         curlTrace("tap \(turn.id): plays \(turn.side.rawValue), new page \(turn.new == nil ? "not drawn" : "drawn")")
-        let next = views(new: true)
+        // In the spread's order, left then right.
+        let next = turn.side == .right ? coming[.right] ?? [] : (coming[.left] ?? []).reversed()
         let id = turn.id
+        transitioning = true
         controller.setViewControllers(next, direction: turn.side == .right ? .forward : .reverse, animated: true) { [weak self] _ in
-            self?.landed(id: id, completed: true)
+            guard let self else { return }
+            transitioning = false
+            // A fold or a close cleared the turn meanwhile: back to waiting.
+            guard turning == .tap(id: id) else { return reset() }
+            landed(id: id, completed: true)
         }
     }
 
@@ -146,11 +161,12 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
 
     /// Clear pages over the live page, ready for the next turn.
     func reset() {
-        curlTrace("reset, was \(self.turning.map { "\($0)" } ?? "idle")")
-        coming = [:]
+        curlTrace("reset, was \(self.turning.map { "\($0)" } ?? "idle")\(self.transitioning ? ", mid-curl" : "")")
         turning = nil
         pages.turn = nil
-        controller?.setViewControllers(views(new: false), direction: .forward, animated: false)
+        // Mid-curl, UIKit's pages can't be set; the curl's end resets them.
+        guard !transitioning else { return }
+        controller?.setViewControllers(waiting, direction: .forward, animated: false)
     }
 
     /// One page, or a spread's two halves.
@@ -185,30 +201,34 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         }
         let relocation = model?.relocation
         curlTrace("asked \(side == .right ? "after" : "before") \(isCurrent ? "a current page" : "an unknown page"): can start \(self.canStartWithFinger), turning \(self.turning.map { "\($0)" } ?? "nil"), curling \(self.model?.isCurling == true), turns left \(relocation?.turnsLeft.map { "\($0)" } ?? "nil") right \(relocation?.turnsRight.map { "\($0)" } ?? "nil"), blank \(relocation?.blankPage == true), location \(relocation?.location?.current ?? -1)")
-        guard canStartWithFinger, model?.canTurn(side) == true else { return nil }
-        if coming[side] == nil {
-            // Forward, the back of the page that turns is the next left page;
-            // back, it's the right page before.
-            let next = views(new: true)
-            coming[side] = side == .right ? next : next.reversed()
-        }
+        // Before the pan begins, no page stops it. Once it has begun, UIKit
+        // crashes on a spread without one ("The number of view controllers
+        // provided (0)…", a finger reversing on a book's first page), so it
+        // gets the pages, and `willTransitionTo` lets them fall back.
+        guard (canStartWithFinger && model?.canTurn(side) == true) || panIsTurning else { return nil }
         return coming[side]?.first
     }
 
     // MARK: Delegate
 
     func pageViewController(_ controller: UIPageViewController, willTransitionTo pending: [UIViewController]) {
+        transitioning = true
         let side = coming.first(where: { $0.value.contains { $0 === pending.first } })?.key
         curlTrace("will turn \(side?.rawValue ?? "an unknown way") to \(pending.count) pages, turning \(self.turning.map { "\($0)" } ?? "nil")")
-        guard turning == nil, let model,
-              let side = coming.first(where: { $0.value.contains { $0 === pending.first } })?.key,
+        guard turning == nil, let model, let side, model.canTurn(side),
               let turn = model.startCurl(side, finger: true)
-        else { return }
+        else {
+            // Nothing to turn to, a turn that can't start now, or a finger
+            // turning back the other way mid-curl: the page falls back.
+            cancelPan()
+            return
+        }
         turning = .finger(id: turn.id)
     }
 
     func pageViewController(_ controller: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
         curlTrace("finished, \(completed ? "landed" : "fell back"), turning \(self.turning.map { "\($0)" } ?? "nil")")
+        transitioning = false
         guard case .finger(let id) = turning else { return reset() }
         landed(id: id, completed: completed)
     }
@@ -358,10 +378,7 @@ final class ReaderCurlPanDelegate: NSObject, UIGestureRecognizerDelegate {
         // first page on the Duo). So there has to be a page the way the
         // finger moves and, on a spread, on the side it's touching.
         guard let curl, let model = curl.model else { return false }
-        var sides: Set<ReaderTurnSide> = [location.x > touchStart.x ? .left : .right]
-        if curl.spread, let width = curl.controller?.view.bounds.width {
-            sides.insert(touchStart.x < width / 2 ? .left : .right)
-        }
+        let sides = Self.sides(from: touchStart, to: location, spreadWidth: curl.spread ? curl.controller?.view.bounds.width : nil)
         guard sides.allSatisfy({ model.canTurn($0) }) else {
             curlTrace("pan: no page \(sides.map(\.rawValue).sorted().joined(separator: " and "))")
             return false
@@ -371,6 +388,13 @@ final class ReaderCurlPanDelegate: NSObject, UIGestureRecognizerDelegate {
         return begins
     }
 
+    /// The sides a finger from `start` to `point` may ask UIKit for: the way
+    /// it moves and, on a spread `spreadWidth` wide, the side it's touching.
+    nonisolated static func sides(from start: CGPoint, to point: CGPoint, spreadWidth: CGFloat?) -> Set<ReaderTurnSide> {
+        var sides: Set<ReaderTurnSide> = [point.x > start.x ? .left : .right]
+        if let spreadWidth { sides.insert(start.x < spreadWidth / 2 ? .left : .right) }
+        return sides
+    }
 
     func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         true

@@ -753,7 +753,8 @@ const endTurn = async keep => {
         held = null
         if (pending) post('relocate', pending)
     }
-    return true
+    // Whether the held turn moved (`ReaderModel.curlEnded`).
+    return moved
 }
 
 // Text boxes of the visible page in the top window's coordinates. Text only:

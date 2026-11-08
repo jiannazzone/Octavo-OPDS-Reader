@@ -16,7 +16,7 @@ extension ReaderModel {
     /// Whether there's a page to `side`: not at the book's start or end.
     /// Unknown counts as yes, and foliate finds out (`bridge.js` `turn`).
     func canTurn(_ side: ReaderTurnSide) -> Bool {
-        (side == .left ? relocation?.turnsLeft : relocation?.turnsRight) != false
+        relocation?.turns(side) ?? true
     }
 
     /// A tap, a key or the trackpad asked for a turn. One asked for while a
@@ -77,16 +77,15 @@ extension ReaderModel {
             "return await window.octavo.turn(side, hold)", arguments: ["side": turn.side.rawValue, "hold": held]
         ) as? [String: Any]
         guard curl.pages.turn?.id == turn.id else { return }
-        curlTrace("\(held ? "finger" : "tap") \(turn.id): foliate \(answer?["moved"] as? Bool == true ? "turned" : "didn't turn") after \(FoldReport.milliseconds(since: started)) ms")
-        guard answer?["moved"] as? Bool == true else {
+        let moved = answer?["moved"] as? Bool == true
+        curlTrace("\(held ? "finger" : "tap") \(turn.id): foliate \(moved ? "turned" : "didn't turn") after \(FoldReport.milliseconds(since: started)) ms")
+        if !held { curlTapMoved = moved }
+        guard moved else {
             // The book's first or last page: a tap's curl doesn't play.
             if !held, curl.turning == nil { curlEnded(id: turn.id, completed: false, finger: false) }
             return
         }
-        let relocation = (answer?["relocation"] as? String).flatMap {
-            try? JSONDecoder().decode(ReaderMessage.Relocation.self, from: Data($0.utf8))
-        }
-        let place = relocation.map { ReaderPlace(chapter: $0.tocLabel, location: $0.location, fraction: $0.shownFraction) }
+        let place = Self.place(turnedTo: answer)
         // Taken before the pages change: taking them updates the screen,
         // which reads the pages.
         let new = pictures(regions, size: turn.size, spine: turn.spine, afterScreenUpdates: true) ?? ReaderTurn.Pictures()
@@ -116,11 +115,15 @@ extension ReaderModel {
         curlTrace("\(finger ? "finger" : "tap") \(id): \(completed ? "landed" : "fell back")")
         guard curl.pages.turn?.id == id else { return }
         Task {
+            // Whether foliate turned: a tap's answer, or the held turn's end.
+            var moved = curlTapMoved
             if finger {
-                _ = try? await page.callJavaScript("return await window.octavo.endTurn(keep)", arguments: ["keep": completed])
+                let ended = try? await page.callJavaScript("return await window.octavo.endTurn(keep)", arguments: ["keep": completed])
+                moved = ended as? Bool == true
             }
             guard curl.pages.turn?.id == id else { return }
-            if completed { pageTurned() }
+            curlTapMoved = false
+            if completed, moved { pageTurned() }
             isCurling = false
             curl.reset()
             if !queuedTurns.isEmpty { curlRequested(queuedTurns.removeFirst()) }

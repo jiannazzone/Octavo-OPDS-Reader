@@ -126,6 +126,11 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var turnsLeft: Bool?
         var turnsRight: Bool?
 
+        /// Whether there's a page to `side`; unknown counts as yes.
+        func turns(_ side: ReaderTurnSide) -> Bool {
+            (side == .left ? turnsLeft : turnsRight) != false
+        }
+
         /// A page turn, by a tap or a swipe, rather than a jump or a new layout.
         var isPageTurn: Bool { reason == "page" || reason == "snap" }
 
