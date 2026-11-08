@@ -81,6 +81,22 @@ As planned:
 
 ## Chunk 4: wiring (no Settings yet)
 
+**Done 2026-11-08.** As built:
+
+- **The account:** `Octavo/Shell/KOReaderConnection.swift`. `KOReaderConnection` (`ShellModel.koreader`) holds one `KOReaderAccount`: client, `KOSyncPlaces` beside the reading positions, and a device ID made once per install. For now only DEBUG's `-connectKOSync 1` sets it, to `dev/kosync`.
+- **Which books:** `ShellModel.koreaderSync(for:on:account:file:)`. EPUBs on the iPhone from an OPDS catalog or Files, with an account, not the sample book. BookOrbit's books never; `progressSync` decides those first.
+- **The reader:** `didOpen` pushes an unsent place only if `mayPush` allows it, and calls `adopted` when it opens at the server's place. A KOReader place the book didn't open at (`.first`, or `.moved` and not ahead) is offered (`offer`, shared with `checkServerPlace`). The bridge finds it (`resolveXPointer`) and places it, since the server's percentage is another engine's. **Go** adopts it. A position KOReader can't take (a fixed-layout page, with no xpointer) isn't sent, and isn't left as unsent (`sends`).
+- **The capsule:** `ReaderServerPlace.source`, "KOReader" for now, so "KOReader: 75% · CHAPTER X…" (`koreader-sync/app/`). The device's name instead is question 6 below.
+- **The sync line:** "Synced" only from a push that landed or a pull that agrees: not an empty pull, and not beside a KOReader place this iPhone hasn't seen. Unchanged for BookOrbit.
+- **Permanent failures** (`KOSyncError.isPermanent`, other than a place with no xpointer) stop `retryUnsent` for that book. It goes again when the book opens. What the line says then is question 5.
+- **Debug:** `-connectKOSync 1`. Remote `importLocal` imports a book from Documents as Files does, and `serverPlace` reads the capsule and presses Go or ✕. `tools/ko.sh` reads or moves a book's place on `dev/kosync`, as another device.
+- **Tests:** `BookPlacesTests` (which books, the sync line), and `ReaderKOReaderPlaceTests` (offered, followed, taken by Go, an unsent place waits, a seen place isn't offered).
+- **Checked end to end** with `tools/app-check.sh` on Octavo KOReader Duo (DB637399-E7C7-4899-9F8B-47DB476C17F4): your place reaches the server as `…/p[59].0`; another device's move ahead is offered, not jumped to; Go takes it without sending anything back; a move back doesn't move you and is offered; ✕ sends yours; offline nothing goes, and back online it does.
+- **Seen there, by design:** reopening straight into the reader reuses a pull up to 5 minutes old (`BookPlaces.reuseAge`, so unfolding opens at once). From the book's screen, which pulls when it appears, the reader has the fresh place. Coming back to the app asks again too.
+- **Still to do:** keep unsent places by account, and clear them and `KOSyncPlaces` on sign-out (chunk 5, with the account).
+
+As planned:
+
 - `ShellModel.progressSync(for:on:)`: BookOrbit as today. Otherwise, with an account and the book's EPUB on the iPhone (`BookOpener.localFile(for:)`), a `KOSync`. Not the sample book (`BookImporter`). A book not downloaded has no backend.
 - `BookPlaces.status`: "Synced" only after a push landed or a real place came back, not after an empty pull (`remotes[key].position != nil`). Check this doesn't change BookOrbit's line.
 - `BookPlaces`: keep unsent places and last-said by account. Clear both on sign-out or a new account. A permanent failure stops retrying.

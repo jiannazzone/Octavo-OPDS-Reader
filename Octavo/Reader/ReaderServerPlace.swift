@@ -15,6 +15,13 @@ nonisolated struct ReaderServerPlace: Equatable, Sendable {
     /// The visible page's start when it was offered. Leaving that page is
     /// reading on, which keeps this iPhone's place.
     var offeredOn: String
+    /// Where Go goes, when the server's place has no CFI of its own:
+    /// KOReader's place, found in the book by the bridge.
+    var cfi: String?
+    /// What the capsule calls where it came from, if not the book's server.
+    var source: String?
+    /// As pulled, for telling the backend it's been taken (`adopted`).
+    var remote: SyncedPosition?
 
     /// "BookOrbit: 62%", with the name the server goes by.
     func label(server: String) -> String {

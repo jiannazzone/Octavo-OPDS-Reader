@@ -31,6 +31,8 @@ final class ShellModel {
     let pages = BookPages()
     /// Where each book opens, and whether its place has synced (step 13).
     let places: BookPlaces
+    /// The KOReader sync account, for books from catalogs and Files.
+    let koreader = KOReaderConnection()
     /// The Search tab's query and results.
     let search: SearchModel
     /// When the connection comes back, for places that didn't go.
@@ -100,7 +102,11 @@ final class ShellModel {
         self.servers = servers
         self.bookmarks = bookmarks
         self.removedServers = removedServers
-        places = BookPlaces(store: positions) { [library] in ShellModel.progressSync(for: $0, on: library.server($0.source)) }
+        places = BookPlaces(store: positions) { [library, opener, koreader] book in
+            let server = library.server(book.source)
+            return ShellModel.progressSync(for: book, on: server)
+                ?? ShellModel.koreaderSync(for: book, on: server, account: koreader.account, file: opener.localFile(for: book))
+        }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
         tour = TourController(record: tourRecord, reader: reader)
@@ -468,6 +474,21 @@ final class ShellModel {
         #endif
     }
 
+    /// Where a book from an OPDS catalog or Files syncs its place: the
+    /// KOReader account, for an EPUB on the iPhone (the place needs the
+    /// file's bytes and KOReader's form of it). Not the sample book, and not
+    /// a BookOrbit book, which syncs with BookOrbit or not at all.
+    static func koreaderSync(for book: SourcedBook, on server: LibraryServer?, account: KOReaderAccount?, file: URL?) -> (any ProgressSync)? {
+        let fromCatalogOrFiles = book.source == .files ? true : server.map { $0.id == book.source && $0.source is OPDSSource } ?? false
+        guard let account, fromCatalogOrFiles, book.book.id != .sample, let file, file.pathExtension.lowercased() == "epub" else { return nil }
+        let sync = account.sync(for: file)
+        #if DEBUG
+        return DebugProgressSync(wrapping: sync, pullDelay: .zero, failsPushes: UserDefaults.standard.bool(forKey: "syncFailsPushes"))
+        #else
+        return sync
+        #endif
+    }
+
     /// The Duo as the book:
     /// - Unfolding on a book's screen opens the book, if it's on the iPhone.
     ///   If it isn't, the screen stays, as Cover | Details, and nothing
@@ -555,9 +576,11 @@ final class ShellModel {
     /// `-forgetServer 1` (no server), `-setupCatalog <address>`
     /// (setup's OPDS step, filled in), and for BookOrbit's position sync
     /// `-syncPullDelay <seconds>` (a slow server) and `-syncFailsPushes 1`
-    /// (pushes fail as if offline: "Not synced yet").
+    /// (pushes fail as if offline: "Not synced yet"), and `-connectKOSync 1`
+    /// (the local KOReader sync server in `dev/kosync/`, for catalogs and Files).
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "connectKOSync") { koreader.connect(.local(positions: places.store.directory)) }
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
             self.tab = tab
         }

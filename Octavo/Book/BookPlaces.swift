@@ -100,6 +100,10 @@ final class BookPlaces {
     }
 
     /// The sync line, for a book whose place syncs and has a place.
+    /// "Synced" only when a push landed or the server's place came back and
+    /// agrees: not after a pull that found nothing (a KOReader server can't
+    /// say whether anyone else has the book), and not while another
+    /// reader's place this iPhone hasn't seen is there.
     func status(of book: SourcedBook) -> Status? {
         _ = revision
         guard backend(book) != nil, let key = book.storageKey else { return nil }
@@ -107,7 +111,12 @@ final class BookPlaces {
         guard opening != .start else { return nil }
         let local = store.progress(forBook: key)
         if let local, local.needsPush, opening == .local(local.position) { return .notSynced }
-        return [local?.syncedAt, remotes[key]?.at].compactMap(\.self).max().map(Status.synced)
+        let agreed = remotes[key].flatMap { remote -> Date? in
+            guard let position = remote.position else { return nil }
+            if case .elsewhere(let change) = position.origin, change != .unchanged, opening != .remote(position.position) { return nil }
+            return remote.at
+        }
+        return [local?.syncedAt, agreed].compactMap(\.self).max().map(Status.synced)
     }
 
     /// Settings' "N books pending.": the books on `server` whose place the
@@ -249,6 +258,13 @@ final class BookPlaces {
         do {
             try await backend.push(local.position)
         } catch {
+            // A failure sending again can't fix (a wrong password, a file the
+            // server doesn't have) stops the retries. It goes again when the
+            // book opens.
+            if let error = error as? KOSyncError, error.isPermanent, error != .invalidPlace {
+                unsent[key] = nil
+                unsentFile.save(unsent)
+            }
             return
         }
         try? store.markPushed(local.position, forBook: key, at: now())

@@ -18,7 +18,7 @@ struct ReaderXPointerTests {
     /// Two sections. The second is indented XHTML, as Moby-Dick's is, with a
     /// word in italics, whitespace runs, an emoji, a table without `<tbody>`,
     /// `<pre>`, and enough words for several pages.
-    private static func book() -> Data {
+    static func book() -> Data {
         let opf = """
         <?xml version="1.0" encoding="UTF-8"?>
         <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
@@ -189,8 +189,8 @@ struct ReaderXPointerTests {
         let model = try start(sync: KOReaderBackend(remote: SyncedPosition(position: remote)))
 
         #expect(await eventually(timeout: .seconds(30)) { model.relocation?.sectionIndex == 1 })
-        let shown = try await model.page.callJavaScript("return await window.octavo.visibleText(2000)") as? String
-        #expect(shown?.contains("foxtrot golf.") == true)
+        let shown = await shownText(model)
+        #expect(shown.contains("foxtrot golf."), "\(shown.prefix(200))")
     }
 }
 
@@ -200,9 +200,142 @@ extension ReaderXPointerTests {
         let model = try start(sync: KOReaderBackend(remote: SyncedPosition(position: ReadingPosition(fraction: 0.9))))
 
         #expect(await eventually(timeout: .seconds(30)) { model.relocation?.sectionIndex == 1 })
-        let shown = try await model.page.callJavaScript("return await window.octavo.visibleText(2000)") as? String
-        #expect(shown?.contains("foxtrot golf.") == false)
+        let shown = await shownText(model)
+        #expect(!shown.isEmpty && !shown.contains("foxtrot golf."), "\(shown.prefix(200))")
     }
+
+    /// The page's words, once it has some: a page that has only just moved
+    /// may not have been laid out yet.
+    private func shownText(_ model: ReaderModel) async -> String {
+        var shown = ""
+        _ = await eventuallyAwaiting(timeout: .seconds(10)) {
+            shown = (try? await model.page.callJavaScript("return await window.octavo.visibleText(2000)") as? String) ?? ""
+            return !shown.isEmpty
+        }
+        return shown
+    }
+}
+
+/// The reader with a KOReader place it hasn't seen: offered, not followed
+/// or overwritten, and taken when you go there.
+@MainActor
+@Suite(.temporaryFiles)
+struct ReaderKOReaderPlaceTests {
+    private let store = ReadingPositionStore(
+        directory: URL.testDirectory.appending(path: "positions-\(UUID().uuidString)", directoryHint: .isDirectory)
+    )
+    private static let theirs = ReadingPosition(fraction: 0.05, xpointer: "/body/DocFragment[2]/body/div/p[4]/text().13")
+    /// Section one's start: where your place is.
+    private static let yours = ReadingPosition(cfi: "epubcfi(/6/2!/4/2)", fraction: 0.01, xpointer: "/body/DocFragment[1]/body/h1.0")
+
+    private func open(_ backend: RecordingKOReader, needsPush: Bool = false) async throws -> ReaderModel {
+        try store.save(Self.yours, forBook: "places", needsPush: needsPush)
+        let directory = URL.testDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "places.epub")
+        try ReaderXPointerTests.book().write(to: url)
+        let model = ReaderModel(book: ReaderBook(fileURL: url, id: "places"), store: store, sync: backend, pushDelay: .milliseconds(50))
+        // Opening by a CFI waits for frames, which a page off screen never
+        // draws, so "opened" is sent here once the page has stopped moving,
+        // as the bridge sends it once its layout settles.
+        #expect(await eventually(timeout: .seconds(30)) { model.relocation != nil })
+        _ = try await model.page.callJavaScript("window.requestAnimationFrame = f => setTimeout(f, 16)")
+        await settled(model)
+        model.handle(.opened(.init(restoredFrom: "cfi", sectionCount: 2, isFixedLayout: false)))
+        return model
+    }
+
+    /// Until no relocation has come for a second and a half: on a busy Mac
+    /// the first layout goes on moving for a while.
+    private func settled(_ model: ReaderModel) async {
+        var count = model.relocationCount
+        var quiet = 0
+        for _ in 0..<60 where quiet < 3 {
+            try? await Task.sleep(for: .milliseconds(500))
+            quiet = model.relocationCount == count ? quiet + 1 : 0
+            count = model.relocationCount
+        }
+    }
+
+    @Test func itsOfferedAndTheBookStaysAtYourPlace() async throws {
+        let backend = RecordingKOReader(remote: SyncedPosition(position: Self.theirs, origin: .elsewhere(.first)))
+        let model = try await open(backend)
+
+        #expect(await eventually(timeout: .seconds(30)) { model.serverPlace != nil })
+        #expect(model.relocation?.sectionIndex == 0)
+        let place = try #require(model.serverPlace)
+        #expect(place.source == "KOReader")
+        #expect(place.chapter == "Two")
+        #expect(place.cfi?.hasPrefix("epubcfi(/6/4!") == true)
+        #expect(place.label(server: place.source ?? "") == "KOReader: \(ReaderPlace(chapter: nil, location: nil, fraction: place.fraction).percent)")
+    }
+
+    @Test func goingThereTakesIt() async throws {
+        let remote = SyncedPosition(position: Self.theirs, origin: .elsewhere(.first))
+        let backend = RecordingKOReader(remote: remote)
+        let model = try await open(backend)
+        #expect(await eventually(timeout: .seconds(30)) { model.serverPlace != nil })
+
+        model.goToServerPlace()
+
+        #expect(await eventually(timeout: .seconds(10)) { model.relocation?.sectionIndex == 1 })
+        #expect(await eventuallyAwaiting { await backend.adopted == [remote] })
+        try await Task.sleep(for: .milliseconds(300))
+        let pushes = await backend.pushes
+        #expect(pushes.isEmpty, "\(pushes) relocations: \(model.relocationCount)")
+    }
+
+    /// Another reader moved on: the book opens there, and that's your place.
+    @Test func aMoveAheadIsFollowedAndTaken() async throws {
+        let remote = SyncedPosition(position: Self.theirs, origin: .elsewhere(.moved))
+        let backend = RecordingKOReader(remote: remote)
+        try store.save(Self.yours, forBook: "places")
+        let directory = URL.testDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "places.epub")
+        try ReaderXPointerTests.book().write(to: url)
+        let model = ReaderModel(book: ReaderBook(fileURL: url, id: "places"), store: store, sync: backend, pushDelay: .milliseconds(50))
+
+        #expect(await eventually(timeout: .seconds(30)) { model.relocation?.sectionIndex == 1 })
+        model.handle(.opened(.init(restoredFrom: "cfi", sectionCount: 2, isFixedLayout: false)))
+        #expect(await eventuallyAwaiting { await backend.adopted == [remote] })
+        #expect(model.serverPlace == nil)
+    }
+
+    @Test func anUnsentPlaceWaitsForIt() async throws {
+        let backend = RecordingKOReader(remote: SyncedPosition(position: Self.theirs, origin: .elsewhere(.moved)))
+        let model = try await open(backend, needsPush: true)
+
+        #expect(await eventually(timeout: .seconds(30)) { model.serverPlace != nil })
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(await backend.pushes.isEmpty)
+        #expect(store.progress(forBook: "places")?.needsPush == true)
+    }
+
+    @Test func aPlaceItHasSeenIsntOffered() async throws {
+        let backend = RecordingKOReader(remote: SyncedPosition(position: Self.theirs, origin: .elsewhere(.unchanged)))
+        let model = try await open(backend)
+
+        try await Task.sleep(for: .seconds(1))
+        #expect(model.serverPlace == nil)
+        #expect(model.relocation?.sectionIndex == 0)
+    }
+}
+
+/// A KOReader backend that records what the reader does.
+private actor RecordingKOReader: ProgressSync {
+    let remote: SyncedPosition?
+    private(set) var pushes: [ReadingPosition] = []
+    private(set) var adopted: [SyncedPosition] = []
+
+    init(remote: SyncedPosition?) {
+        self.remote = remote
+    }
+
+    func pull() async throws -> SyncedPosition? { remote }
+    func push(_ position: ReadingPosition) async throws { pushes.append(position) }
+    func adopted(_ remote: SyncedPosition) async { adopted.append(remote) }
+    nonisolated var wantsXPointers: Bool { true }
 }
 
 /// A KOReader backend as the reader sees it: it wants KOReader's places.
