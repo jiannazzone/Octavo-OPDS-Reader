@@ -68,6 +68,24 @@ public struct KOSyncKey: Codable, Hashable, Sendable, CustomStringConvertible, C
     public var debugDescription: String { description }
 }
 
+/// A KOReader sync account: where its server is, and its key. Kept whole in
+/// the Keychain (`KeychainKOSyncAccountStore`): the address may be another
+/// server's with a key in its path (Kavita's `/api/koreader/{key}`), and the
+/// username Komga's API key, so neither is saved anywhere else.
+public struct KOSyncAccount: Codable, Hashable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+    public var address: URL
+    public var key: KOSyncKey
+
+    public init(address: URL, key: KOSyncKey) {
+        self.address = address
+        self.key = key
+    }
+
+    /// Never prints the path, the username or the key.
+    public var description: String { "KOSyncAccount(\(address.host() ?? "?"), key: •••)" }
+    public var debugDescription: String { description }
+}
+
 /// A book's place as a sync server holds it. Everything in it came from the
 /// server, so it's checked here and treated as untrusted after.
 public struct KOSyncProgress: Equatable, Sendable {

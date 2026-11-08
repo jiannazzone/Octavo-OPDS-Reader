@@ -2,7 +2,7 @@ import Foundation
 import OctavoKit
 
 /// The launch sweep (step 16, `docs/notes/network-trust.md`): the Keychain
-/// keeps only the saved servers' secrets. It deletes what a failed Keychain
+/// keeps only the saved servers' secrets, and the KOReader account's. It deletes what a failed Keychain
 /// delete left at Remove server, what a setup left before it finished, and
 /// the sign-in of a server signed out of (`SavedServer.signedOut`) if Sign
 /// out couldn't delete it.
@@ -15,8 +15,9 @@ nonisolated enum KeychainSweep {
     /// - Parameter scope: the servers it may delete from; tests narrow it
     ///   to their own.
     static func run(servers: ServerStore = ServerStore(), scope: (String) -> Bool = { _ in true }) throws {
-        let saved = try servers.read().servers
-        let keeping = Set(saved.map(\.id.rawValue))
+        let list = try servers.read()
+        let saved = list.servers
+        let keeping = Set(saved.map(\.id.rawValue) + [list.koreader?.id].compactMap(\.self))
         // All of it runs; the first failure is thrown after (an item that
         // won't delete mustn't keep a signed-out sign-in).
         var failure: (any Error)?

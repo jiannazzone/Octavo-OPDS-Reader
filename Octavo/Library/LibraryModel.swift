@@ -28,6 +28,9 @@ struct LibraryServer {
     var previewSource: (any LibrarySource)? = nil
     /// Reading progress syncs with this server (setup's choice, decision 6).
     var syncsProgress = false
+    /// A catalog's books sync their place with the KOReader account
+    /// (`SavedServer.koreaderSync`).
+    var syncsWithKOReader = false
 
     /// Where and who, for Settings: "localhost:3300 · octavo".
     var detail: String {
@@ -264,6 +267,11 @@ final class LibraryModel {
     /// Sign in again worked as `username`.
     func signedIn(_ id: LibrarySourceID, as username: String) {
         connection(id)?.server.username = username
+    }
+
+    /// A catalog's "Sync with KOReader" changed.
+    func setSyncsWithKOReader(_ id: LibrarySourceID, _ on: Bool) {
+        connection(id)?.server.syncsWithKOReader = on
     }
 
     /// The name you gave `id` (decision 36), or its own again.
@@ -655,7 +663,7 @@ final class LibraryModel {
             id: server.sourceID, name: server.name, address: catalog.host().map { host in catalog.port.map { "\(host):\($0)" } ?? host } ?? "",
             username: server.credentials?.username, signsIn: server.credentials != nil,
             origin: LibraryServer.origin(kind: .opds, address: secret?.redact(catalog.absoluteString) ?? catalog.absoluteString, secret: secret),
-            source: source
+            source: source, syncsWithKOReader: UserDefaults.standard.bool(forKey: "connectKOSync")
         ))
         debugConnection = self.server(server.sourceID).flatMap { _ in connection(server.sourceID)?.root } == nil
             ? .failed("\(server.name) didn’t send its catalog.") : .idle

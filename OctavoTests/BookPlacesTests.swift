@@ -461,15 +461,20 @@ struct BookPlacesTests {
         #expect(ShellModel.progressSync(for: book, on: opds) == nil)
     }
 
-    /// EPUBs from a catalog or Files, on the iPhone, go to the KOReader account.
+    /// EPUBs from Files, or a catalog switched on for it, on the iPhone, go
+    /// to the KOReader account.
     @Test func catalogAndFilesEPUBsSyncWithKOReader() throws {
         let url = URL(string: "https://sync.test")!
         let account = KOReaderAccount(
+            id: "koreader-test", address: url, username: "a",
             client: KOSyncClient(baseURL: url, key: KOSyncKey(username: "a", password: "b"), transport: ServerTransport(server: url)),
             places: KOSyncPlaces(file: URL.testDirectory.appending(path: "places-\(UUID().uuidString).json")), deviceID: "test"
         )
         let id = LibrarySourceID(rawValue: "catalog")
-        let catalog = LibraryServer(id: id, name: "Calibre-Web", source: OPDSSource(catalogURL: URL(string: "http://nas.lan/opds")!, transport: ServerTransport(server: url)))
+        var catalog = LibraryServer(
+            id: id, name: "Calibre-Web", source: OPDSSource(catalogURL: URL(string: "http://nas.lan/opds")!, transport: ServerTransport(server: url)),
+            syncsWithKOReader: true
+        )
         let file = URL.testDirectory.appending(path: "book.epub")
         let book = SourcedBook(source: id, book: Self.book.book)
         func wrapped(_ sync: (any ProgressSync)?) -> (any ProgressSync)? { (sync as? DebugProgressSync)?.wrapping ?? sync }
@@ -487,6 +492,9 @@ struct BookPlacesTests {
         let bookOrbit = LibraryServer(id: id, name: "BookOrbit", source: BookOrbitSource(client: BookOrbitClient(baseURL: url)), syncsProgress: false)
         #expect(ShellModel.koreaderSync(for: book, on: bookOrbit, account: account, file: { file }) == nil)
         #expect(ShellModel.koreaderSync(for: SourcedBook(source: LibrarySourceID(rawValue: "other"), book: Self.book.book), on: catalog, account: account, file: { file }) == nil)
+        // A catalog not switched on for it; Files books need only the account.
+        catalog.syncsWithKOReader = false
+        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: { file }) == nil)
     }
 
     /// A KOReader server answers the same for a book nobody else has, so a

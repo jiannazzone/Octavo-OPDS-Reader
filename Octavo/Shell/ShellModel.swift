@@ -112,7 +112,7 @@ final class ShellModel {
         tour = TourController(record: tourRecord, reader: reader)
         serverActions = ServerActions(
             library: library, servers: servers, removedServers: removedServers, bookmarks: bookmarks,
-            places: places, opener: opener, reader: reader
+            places: places, opener: opener, reader: reader, koreader: koreader
         )
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
@@ -166,6 +166,7 @@ final class ShellModel {
             library.add(server)
         }
         library.choose(saved.chosenServer?.id)
+        koreader.load(saved.koreader, servers: servers, positions: positions.directory)
         Task { await library.loadServers() }
         #if DEBUG
         applyLaunchArguments()
@@ -474,20 +475,28 @@ final class ShellModel {
         #endif
     }
 
-    /// Where a book from an OPDS catalog or Files syncs its place: the
-    /// KOReader account, for an EPUB on the iPhone (the place needs the
-    /// file's bytes and KOReader's form of it). Not the sample book, and not
-    /// a BookOrbit book, which syncs with BookOrbit or not at all. `file` is
-    /// looked for last, since every place line asks.
+    /// Where a book from Files, or from a catalog switched on for it, syncs
+    /// its place: the KOReader account, for an EPUB on the iPhone (the place
+    /// needs the file's bytes and KOReader's form of it). Not the sample
+    /// book, and not a BookOrbit book, which syncs with BookOrbit or not at
+    /// all. `file` is looked for last, since every place line asks.
     static func koreaderSync(for book: SourcedBook, on server: LibraryServer?, account: KOReaderAccount?, file: () -> URL?) -> (any ProgressSync)? {
-        let fromCatalogOrFiles = book.source == .files ? true : server.map { $0.id == book.source && $0.source is OPDSSource } ?? false
-        guard let account, fromCatalogOrFiles, book.book.id != .sample, let file = file(), file.pathExtension.lowercased() == "epub" else { return nil }
+        guard let account, syncsWithKOReader(book, on: server), book.book.id != .sample,
+              let file = file(), file.pathExtension.lowercased() == "epub" else { return nil }
         let sync = account.sync(for: file)
         #if DEBUG
         return DebugProgressSync(wrapping: sync, pullDelay: .zero, failsPushes: UserDefaults.standard.bool(forKey: "syncFailsPushes"))
         #else
         return sync
         #endif
+    }
+
+    /// Whether `book` comes from Files or a catalog switched on for KOReader
+    /// sync.
+    static func syncsWithKOReader(_ book: SourcedBook, on server: LibraryServer?) -> Bool {
+        if book.source == .files { return true }
+        guard let server else { return false }
+        return server.id == book.source && server.source is OPDSSource && server.syncsWithKOReader
     }
 
     /// The Duo as the book:

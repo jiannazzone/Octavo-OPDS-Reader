@@ -14,10 +14,11 @@ final class ServerActions {
     private let places: BookPlaces
     private let opener: BookOpener
     private let reader: ReaderPresenter
+    private let koreader: KOReaderConnection
 
     init(
         library: LibraryModel, servers: ServerStore, removedServers: RemovedServerStore, bookmarks: BookmarkStore,
-        places: BookPlaces, opener: BookOpener, reader: ReaderPresenter
+        places: BookPlaces, opener: BookOpener, reader: ReaderPresenter, koreader: KOReaderConnection
     ) {
         self.library = library
         self.servers = servers
@@ -26,6 +27,7 @@ final class ServerActions {
         self.places = places
         self.opener = opener
         self.reader = reader
+        self.koreader = koreader
     }
 
     /// Setup finished: the server, under a name of its own, saved, and once
@@ -160,6 +162,60 @@ final class ServerActions {
         }
         try? servers.remove(id)
         library.remove(id)
+    }
+
+    // MARK: KOReader sync
+
+    /// Sign in to KOReader sync, from Settings or a catalog's setup: the
+    /// account has to sign in (`users/auth`). Then its address and key go to
+    /// the Keychain under `id`, where the trust step kept any certificate,
+    /// and then the list keeps the ID, so a crash between the two leaves the
+    /// launch sweep to delete the key. Nothing is kept if any of it fails.
+    func signInToKOReader(_ account: KOSyncAccount, id: String) async throws {
+        try await KOReaderAccount.client(id: id, account: account).authorize()
+        if let old = koreader.account, old.id != id { signOutOfKOReader() }
+        let store = KeychainKOSyncAccountStore(accountID: id)
+        try store.save(account)
+        do {
+            try servers.setKOReader(SavedKOReaderAccount(id: id))
+        } catch {
+            try? store.save(nil)
+            throw error
+        }
+        koreader.connect(KOReaderAccount(id: id, account: account, positions: places.store.directory))
+    }
+
+    /// KOReader sync's Sign out: every catalog and Files stop syncing, and
+    /// each catalog's switch stays as it was. The list forgets the account
+    /// first, so if the Keychain can't delete its key now, the next launch
+    /// does (`KeychainSweep`). What its server said goes too, and the
+    /// places waiting to go to it. The places themselves stay on the iPhone.
+    func signOutOfKOReader() {
+        guard let account = koreader.account else { return }
+        try? servers.setKOReader(nil)
+        try? ServerCredentials.removeAll(serverID: account.id)
+        try? FileManager.default.removeItem(at: account.places.file)
+        koreader.connect(nil)
+        let catalogs = library.connections.map(\.server).filter(\.syncsWithKOReader).map(\.id)
+        forgetKOReaderPlaces(of: [.files] + catalogs)
+    }
+
+    /// A catalog's "Sync with KOReader", on its setup or its server page.
+    /// Off, its books keep their places on the iPhone, and the ones waiting
+    /// to go are dropped.
+    func setKOReaderSync(_ id: LibrarySourceID, _ on: Bool) {
+        try? servers.update(id) { $0.koreaderSync = on }
+        library.setSyncsWithKOReader(id, on)
+        if !on { forgetKOReaderPlaces(of: [id]) }
+    }
+
+    /// These libraries' places no longer go to the account, and what it
+    /// said no longer shows.
+    private func forgetKOReaderPlaces(of libraries: [LibrarySourceID]) {
+        for id in libraries {
+            places.forget(server: id)
+            places.reset(id)
+        }
     }
 
     /// `server` is one removed before, coming back at a new ID: its kept

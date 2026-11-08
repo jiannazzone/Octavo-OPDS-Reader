@@ -35,6 +35,10 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
     /// it if the Keychain couldn't then. Optional, so a file saved before it
     /// existed still reads.
     var signedOut: Bool?
+    /// A catalog's books sync their place with the KOReader account, while
+    /// there is one (`docs/notes/koreader-sync-plan.md`, question 2).
+    /// Optional, so a file saved before it existed still reads.
+    var koreaderSync: Bool?
 
     /// Setup doesn't offer "Don't sync" for now (Adam, 2026-11-02): it skips
     /// the Reading progress step and every BookOrbit server syncs, whatever
@@ -98,7 +102,8 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
             let source = Self.opdsSource(id: id, url: url, scheme: authScheme, secret: secret)
             return LibraryServer(
                 id: id, name: displayName, ownName: name, address: host, username: username, signsIn: authScheme != nil,
-                origin: LibraryServer.origin(kind: kind, address: address, secret: secret), source: source
+                origin: LibraryServer.origin(kind: kind, address: address, secret: secret), source: source,
+                syncsWithKOReader: koreaderSync == true
             )
         }
     }
@@ -136,6 +141,9 @@ nonisolated struct SavedServer: Codable, Hashable, Sendable {
 nonisolated struct SavedServers: Codable, Equatable, Sendable {
     var servers: [SavedServer] = []
     var chosen: LibrarySourceID?
+    /// The KOReader sync account, while one is signed in. Optional, so a
+    /// file saved before it existed still reads.
+    var koreader: SavedKOReaderAccount?
 
     /// The Library's server: the one chosen, else the first.
     var chosenServer: SavedServer? {
@@ -154,6 +162,18 @@ nonisolated struct SavedServers: Codable, Equatable, Sendable {
         var number = 2
         while taken.contains("\(name) \(number)") { number += 1 }
         return "\(name) \(number)"
+    }
+}
+
+/// The KOReader sync account, as the list keeps it: only its ID. Its
+/// address, username and key are in the Keychain under it
+/// (`KeychainKOSyncAccountStore`), and its certificate's pin too.
+nonisolated struct SavedKOReaderAccount: Codable, Hashable, Sendable {
+    var id: String
+
+    /// A new account's ID, before anything is stored under it.
+    static func newID() -> String {
+        "koreader-\(UUID().uuidString)"
     }
 }
 
@@ -228,6 +248,19 @@ nonisolated struct ServerStore: Sendable {
             saved.servers.append(server)
         }
         saved.chosen = server.id
+        try save(saved)
+    }
+
+    /// Keeps the KOReader account, or forgets it (`nil`). Like `add`, a list
+    /// that can't be decoded is replaced.
+    func setKOReader(_ account: SavedKOReaderAccount?) throws {
+        var saved: SavedServers
+        do {
+            saved = try read()
+        } catch is DecodingError {
+            saved = SavedServers()
+        }
+        saved.koreader = account
         try save(saved)
     }
 
