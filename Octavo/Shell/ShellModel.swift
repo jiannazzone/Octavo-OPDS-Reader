@@ -105,7 +105,7 @@ final class ShellModel {
         places = BookPlaces(store: positions) { [library, opener, koreader] book in
             let server = library.server(book.source)
             return ShellModel.progressSync(for: book, on: server)
-                ?? ShellModel.koreaderSync(for: book, on: server, account: koreader.account, file: opener.localFile(for: book))
+                ?? ShellModel.koreaderSync(for: book, on: server, account: koreader.account) { opener.localFile(for: book) }
         }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
@@ -477,10 +477,11 @@ final class ShellModel {
     /// Where a book from an OPDS catalog or Files syncs its place: the
     /// KOReader account, for an EPUB on the iPhone (the place needs the
     /// file's bytes and KOReader's form of it). Not the sample book, and not
-    /// a BookOrbit book, which syncs with BookOrbit or not at all.
-    static func koreaderSync(for book: SourcedBook, on server: LibraryServer?, account: KOReaderAccount?, file: URL?) -> (any ProgressSync)? {
+    /// a BookOrbit book, which syncs with BookOrbit or not at all. `file` is
+    /// looked for last, since every place line asks.
+    static func koreaderSync(for book: SourcedBook, on server: LibraryServer?, account: KOReaderAccount?, file: () -> URL?) -> (any ProgressSync)? {
         let fromCatalogOrFiles = book.source == .files ? true : server.map { $0.id == book.source && $0.source is OPDSSource } ?? false
-        guard let account, fromCatalogOrFiles, book.book.id != .sample, let file, file.pathExtension.lowercased() == "epub" else { return nil }
+        guard let account, fromCatalogOrFiles, book.book.id != .sample, let file = file(), file.pathExtension.lowercased() == "epub" else { return nil }
         let sync = account.sync(for: file)
         #if DEBUG
         return DebugProgressSync(wrapping: sync, pullDelay: .zero, failsPushes: UserDefaults.standard.bool(forKey: "syncFailsPushes"))

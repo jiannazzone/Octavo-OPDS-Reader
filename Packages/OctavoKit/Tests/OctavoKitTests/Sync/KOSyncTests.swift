@@ -14,7 +14,8 @@ private final class FakeKOSyncServer: Sendable {
     let stub: StubServer
     private let state: State
 
-    init(rewrite: @escaping @Sendable (String) -> String = { $0 }) {
+    /// `racedBy`: another device's place, stored just after each push.
+    init(rewrite: @escaping @Sendable (String) -> String = { $0 }, racedBy: String? = nil) {
         let state = State()
         self.state = state
         stub = StubServer { request in
@@ -25,6 +26,11 @@ private final class FakeKOSyncServer: Sendable {
                 kept["timestamp"] = 1_794_002_803
                 let json = String(decoding: try! JSONSerialization.data(withJSONObject: kept), as: UTF8.self)
                 state.stored.withLock { $0[document] = json }
+                if let racedBy {
+                    state.stored.withLock {
+                        $0[document] = #"{"document":"\#(document)","progress":"\#(racedBy)","percentage":0.6,"device":"Kindle","device_id":"AAAA","timestamp":1794002804}"#
+                    }
+                }
                 return .json(#"{"document":"\#(document)","timestamp":1794002803}"#)
             }
             let document = request.path.components(separatedBy: "/").last ?? ""
@@ -109,6 +115,19 @@ struct KOSyncTests {
 
         #expect(server.pushes == 1)
         #expect(try await sync.pull()?.origin == SyncedPosition.Origin.elsewhere(.unchanged))
+    }
+
+    /// Another device's place landing between the push and its read-back
+    /// isn't taken for this iPhone's.
+    @Test func aPlaceSentInBetweenIsStillAnotherReaders() async throws {
+        let server = FakeKOSyncServer(racedBy: "/body/DocFragment[9]/body/p[2].0")
+        let (file, _) = try book()
+        let sync = sync(server, file: file, places: places())
+        #expect(try await sync.pull() == nil)
+
+        try await sync.push(ours)
+
+        #expect(try await sync.pull()?.origin == SyncedPosition.Origin.elsewhere(.moved))
     }
 
     /// A reader that was offline doesn't overwrite another device's place

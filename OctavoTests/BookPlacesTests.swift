@@ -268,6 +268,22 @@ struct BookPlacesTests {
         #expect(await backend.pulls == pulls)
     }
 
+    // A wrong password keeps the places waiting for signing in again; a
+    // server without the book stops being asked until it opens.
+    @Test(arguments: [(KOSyncError.unauthorized, 1), (KOSyncError.unknownDocument, 0)])
+    func aRetryTheServerRefuses(error: KOSyncError, stillPending: Int) async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
+        await backend.set(pushError: error)
+        let places = places(backend)
+        _ = places.readerSync(for: Self.book)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+        places.readerClosed()
+
+        await places.retryUnsent()
+
+        #expect(places.pendingCount(on: Self.book.source) == stillPending)
+    }
+
     // Settings' "N books pending.", and Remove server forgetting them.
     @Test func countsAndForgetsAServersPendingPlaces() async throws {
         let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
@@ -458,19 +474,19 @@ struct BookPlacesTests {
         let book = SourcedBook(source: id, book: Self.book.book)
         func wrapped(_ sync: (any ProgressSync)?) -> (any ProgressSync)? { (sync as? DebugProgressSync)?.wrapping ?? sync }
 
-        #expect(wrapped(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: file)) is KOSync)
-        #expect(wrapped(ShellModel.koreaderSync(for: SourcedBook(source: .files, book: Self.book.book), on: nil, account: account, file: file)) is KOSync)
-        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: file)?.wantsXPointers == true)
+        #expect(wrapped(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: { file })) is KOSync)
+        #expect(wrapped(ShellModel.koreaderSync(for: SourcedBook(source: .files, book: Self.book.book), on: nil, account: account, file: { file })) is KOSync)
+        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: { file })?.wantsXPointers == true)
         // No account, not downloaded, not an EPUB.
-        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: nil, file: file) == nil)
-        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: nil) == nil)
-        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: URL.testDirectory.appending(path: "book.azw3")) == nil)
+        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: nil, file: { file }) == nil)
+        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: { nil }) == nil)
+        #expect(ShellModel.koreaderSync(for: book, on: catalog, account: account, file: { URL.testDirectory.appending(path: "book.azw3") }) == nil)
         // The sample book, a BookOrbit book, and a book of another server.
         let sample = SourcedBook(source: .files, book: LibraryBook(id: .sample, title: "Pride and Prejudice"))
-        #expect(ShellModel.koreaderSync(for: sample, on: nil, account: account, file: file) == nil)
+        #expect(ShellModel.koreaderSync(for: sample, on: nil, account: account, file: { file }) == nil)
         let bookOrbit = LibraryServer(id: id, name: "BookOrbit", source: BookOrbitSource(client: BookOrbitClient(baseURL: url)), syncsProgress: false)
-        #expect(ShellModel.koreaderSync(for: book, on: bookOrbit, account: account, file: file) == nil)
-        #expect(ShellModel.koreaderSync(for: SourcedBook(source: LibrarySourceID(rawValue: "other"), book: Self.book.book), on: catalog, account: account, file: file) == nil)
+        #expect(ShellModel.koreaderSync(for: book, on: bookOrbit, account: account, file: { file }) == nil)
+        #expect(ShellModel.koreaderSync(for: SourcedBook(source: LibrarySourceID(rawValue: "other"), book: Self.book.book), on: catalog, account: account, file: { file }) == nil)
     }
 
     /// A KOReader server answers the same for a book nobody else has, so a
@@ -501,6 +517,22 @@ struct BookPlacesTests {
         await backend.set(remote: SyncedPosition(position: theirs, origin: .elsewhere(.unchanged)))
         places.refresh(Self.book)
         #expect(await eventually { places.status(of: Self.book) == .synced(clock.now) })
+    }
+
+    /// The iPhone's place having gone earlier doesn't make it Synced.
+    @Test func norAfterAnEarlierPush() async throws {
+        let theirs = ReadingPosition(fraction: 0.2, xpointer: "/body/DocFragment[2]/body/p[3].0")
+        let backend = FakeProgressSync(remote: SyncedPosition(position: theirs, origin: .elsewhere(.moved)))
+        let places = places(backend)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+        try store.markPushed(Self.iPhonePlace, forBook: key, at: clock.now)
+
+        places.refresh(Self.book)
+
+        #expect(await eventuallyAwaiting { await backend.pulls == 1 })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(places.opening(of: Self.book) == .local(Self.iPhonePlace))
+        #expect(places.status(of: Self.book) == nil)
     }
 
     // MARK: The sync line

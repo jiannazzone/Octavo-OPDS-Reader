@@ -47,8 +47,13 @@ public actor DebouncedProgressPusher<C: Clock> where C.Duration == Duration {
 
     /// Another reader moved the backend's position, so it no longer holds
     /// `lastPushed`: the next position goes even if it's that one again.
+    /// A position still waiting (one that failed, or whose quiet period
+    /// hasn't ended) was from before the move, so it doesn't go over it.
     public func backendMoved() {
         lastPushed = nil
+        pending = nil
+        timer?.cancel()
+        timer = nil
     }
 
     /// Pushes the pending position now, and returns once it (and any push

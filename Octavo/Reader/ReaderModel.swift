@@ -912,8 +912,14 @@ final class ReaderModel {
         let cfi: String
         if case .elsewhere(let change) = remote.origin {
             guard change != .unchanged, let xpointer = remote.position.xpointer, xpointer != serverXPointer, phase == .open else { return }
-            let found = try? await page.callJavaScript("return await window.octavo.resolveXPointer(x)", arguments: ["x": xpointer]) as? [String: Any]
-            guard let resolved = found?["cfi"] as? String else {
+            let found: Any?
+            do {
+                found = try await page.callJavaScript("return await window.octavo.resolveXPointer(x)", arguments: ["x": xpointer])
+            } catch {
+                // The page couldn't answer (a re-layout, closing): next time.
+                return
+            }
+            guard let resolved = (found as? [String: Any])?["cfi"] as? String else {
                 // Not in this copy of the book, or not a place it can find.
                 serverXPointer = xpointer
                 return
@@ -984,8 +990,13 @@ final class ReaderModel {
             }
         }
         // A fold or a text change since the offer re-laid out the page and
-        // sent its place; the server's goes back.
-        if pushedSinceOffer, let pusher { Task { await pusher.submit(place.position) } }
+        // sent its place; the server's goes back, with where it is in this
+        // book if it came in KOReader's form.
+        if pushedSinceOffer, let pusher {
+            var back = place.position
+            back.cfi = back.cfi ?? place.cfi
+            Task { await pusher.submit(back) }
+        }
     }
 
     /// ✕: this page stays, and the server takes it.

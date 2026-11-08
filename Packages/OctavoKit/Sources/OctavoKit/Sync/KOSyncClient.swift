@@ -33,6 +33,17 @@ public enum KOSyncError: Error, Equatable, Sendable {
         case .unauthorized, .notASyncServer, .unknownDocument, .rejected, .invalidPlace, .invalidResponse: true
         }
     }
+
+    /// Whether it's one book's alone: the server doesn't have the file, or
+    /// won't take its place. A wrong password, or a page that isn't the
+    /// server's, is the account's or the network's, and fixing it fixes
+    /// every book.
+    public var isAboutTheBook: Bool {
+        switch self {
+        case .unknownDocument, .rejected: true
+        default: false
+        }
+    }
 }
 
 /// A KOReader sync account as the protocol sends it: the username, and the

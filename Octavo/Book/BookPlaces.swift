@@ -111,11 +111,10 @@ final class BookPlaces {
         guard opening != .start else { return nil }
         let local = store.progress(forBook: key)
         if let local, local.needsPush, opening == .local(local.position) { return .notSynced }
-        let agreed = remotes[key].flatMap { remote -> Date? in
-            guard let position = remote.position else { return nil }
-            if case .elsewhere(let change) = position.origin, change != .unchanged, opening != .remote(position.position) { return nil }
-            return remote.at
-        }
+        let remote = remotes[key]
+        if let position = remote?.position, case .elsewhere(let change) = position.origin, change != .unchanged,
+           opening != .remote(position.position) { return nil }
+        let agreed = remote.flatMap { $0.position == nil ? nil : $0.at }
         return [local?.syncedAt, agreed].compactMap(\.self).max().map(Status.synced)
     }
 
@@ -258,10 +257,10 @@ final class BookPlaces {
         do {
             try await backend.push(local.position)
         } catch {
-            // A failure sending again can't fix (a wrong password, a file the
-            // server doesn't have) stops the retries. It goes again when the
-            // book opens.
-            if let error = error as? KOSyncError, error.isPermanent, error != .invalidPlace {
+            // A server that won't take this book (it doesn't have the file)
+            // stops the retries. It goes again when the book opens. A wrong
+            // password stays for next time: signing in again fixes them all.
+            if let error = error as? KOSyncError, error.isAboutTheBook {
                 unsent[key] = nil
                 unsentFile.save(unsent)
             }

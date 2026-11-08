@@ -51,7 +51,17 @@ public struct KOSync: ProgressSync {
         }
         try await client.update(document, progress: xpointer, percentage: position.fraction, device: device, deviceID: deviceID)
         let sent = KOSyncProgress(progress: xpointer, percentage: position.fraction)
-        await places.said((try? await client.progress(of: document)) ?? sent, about: document)
+        let readBack = try? await client.progress(of: document)
+        await places.said(readBack.flatMap { isOwn($0, sent: sent) ? $0 : nil } ?? sent, about: document)
+    }
+
+    /// Whether the place read back is the one just sent, in the server's
+    /// form: this install's, or in the same file section. Another device's
+    /// that landed in between is left to be offered.
+    private func isOwn(_ readBack: KOSyncProgress, sent: KOSyncProgress) -> Bool {
+        if readBack.deviceID == deviceID { return true }
+        guard let section = ReadingPosition(fraction: 0, xpointer: readBack.progress).spineIndex else { return false }
+        return section == ReadingPosition(fraction: 0, xpointer: sent.progress).spineIndex
     }
 
     public func adopted(_ remote: SyncedPosition) async {
