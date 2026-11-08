@@ -40,6 +40,7 @@ private struct SettingsPageView: View {
     var body: some View {
         switch page {
         case .server(let id): ServerSettingsPage(id: id)
+        case .koreader: KOReaderSettingsPage()
         case .storage: BooksOnIPhonePage()
         case .licences: LicencesPage()
         }
@@ -110,6 +111,13 @@ struct SettingsList: View {
                     }
                     .contentShape(.rect)
                 }
+            }
+            Section {
+                row(.koreader) {
+                    LabeledContent("KOReader sync", value: shell.koreader.account?.username ?? "Off")
+                }
+            } footer: {
+                Text("Syncs your place with KOReader for books from catalogs and Files.")
             }
             Section {
                 Toggle("Titles under covers", isOn: $titlesUnderCovers)

@@ -56,6 +56,9 @@ struct ServerSettingsPage: View {
                     Text(note)
                 }
             }
+            if server.source is OPDSSource {
+                koreaderSection(server)
+            }
             Section {
                 if isSignedOut {
                     Button("Sign in") { shell.showSignIn(id) }
@@ -89,6 +92,24 @@ struct ServerSettingsPage: View {
         }
         .onChange(of: editsName) { _, editing in
             if !editing { keepName() }
+        }
+    }
+
+    /// A catalog's "Sync with KOReader" (question 2): with no account yet,
+    /// the sign-in fields under it.
+    @ViewBuilder private func koreaderSection(_ server: LibraryServer) -> some View {
+        let account = shell.koreader.account
+        Section {
+            Toggle("Sync with KOReader", isOn: Binding { server.syncsWithKOReader } set: { shell.serverActions.setKOReaderSync(id, $0) })
+        } footer: {
+            if server.syncsWithKOReader, let account {
+                Text("As \(account.username) on \(account.host). \(KOReaderSettingsPage.catalogLimits)")
+            } else {
+                Text(KOReaderSettingsPage.catalogLimits)
+            }
+        }
+        if server.syncsWithKOReader, account == nil {
+            KOReaderSignInSection(signIn: shell.koreaderSignIn, showsLimits: false)
         }
     }
 

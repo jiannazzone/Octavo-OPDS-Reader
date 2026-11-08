@@ -506,7 +506,7 @@ private struct SearchBookRow: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        let progress = shell.places.progress(of: book)
+        let progress = shell.waitsForDownload(book) ? nil : shell.places.progress(of: book)
         let finished = shell.library.isFinished(book)
         OpenButton(route: .cover(book)) {
             HStack(spacing: 12) {

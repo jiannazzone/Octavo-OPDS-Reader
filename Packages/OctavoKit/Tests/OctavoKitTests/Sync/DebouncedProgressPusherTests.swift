@@ -113,6 +113,23 @@ struct DebouncedProgressPusherTests {
         #expect(backend.pushes == [position(1), position(1)])
     }
 
+    // Offline, then another reader's place offered: closing doesn't send
+    // the page from before over it.
+    @Test func dropsAWaitingPositionOnceTheBackendMoved() async {
+        let backend = Backend(failures: 1)
+        let pusher = makePusher(backend)
+
+        await pusher.submit(position(1))
+        await pusher.flush()
+        await pusher.submit(position(2))
+        await pusher.backendMoved()
+        await pusher.flush()
+
+        // Only the try that failed offline.
+        #expect(backend.pushes == [position(1)])
+        #expect(await pusher.pending == nil)
+    }
+
     @Test func keepsAFailedPositionForTheNextFlush() async {
         let backend = Backend(failures: 1)
         let pusher = makePusher(backend)

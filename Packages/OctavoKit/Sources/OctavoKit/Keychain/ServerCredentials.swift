@@ -49,13 +49,15 @@ public actor InMemoryPasswordStore: PasswordStore {
 
 /// A server's secrets in the Keychain, keyed by the server's ID (its
 /// `LibrarySourceID` in the app): BookOrbit tokens, an OPDS password, the
-/// secret a catalog's address carries and the trusted certificate's pin.
+/// secret a catalog's address carries and the trusted certificate's pin. The
+/// KOReader sync account's are kept the same way, under its own ID.
 public enum ServerCredentials {
     static let tokenService = "com.ianazzone.ereader.bookorbit-tokens"
     static let passwordService = "com.ianazzone.ereader.server-password"
     static let pinService = "com.ianazzone.ereader.certificate-pin"
     static let catalogSecretService = "com.ianazzone.ereader.catalog-secret"
-    static let allServices = [tokenService, passwordService, pinService, catalogSecretService]
+    static let koreaderAccountService = "com.ianazzone.ereader.koreader-account"
+    static let allServices = [tokenService, passwordService, pinService, catalogSecretService, koreaderAccountService]
 
     /// Remove server: deletes everything kept for `serverID`. Every item is
     /// tried, so one that can't be deleted doesn't keep the others; the
@@ -233,6 +235,30 @@ public struct KeychainCatalogSecretStore: Sendable {
             } else {
                 try container.encode(values)
             }
+        }
+    }
+}
+
+/// The KOReader sync account in the Keychain, under its ID: address,
+/// username and key in one item. Its certificate's pin is a server's
+/// (`KeychainCertificatePinStore`), under the same ID.
+public struct KeychainKOSyncAccountStore: Sendable {
+    private let item: KeychainItem
+
+    public init(accountID: String) {
+        item = KeychainItem(service: ServerCredentials.koreaderAccountService, account: accountID)
+    }
+
+    public func load() throws -> KOSyncAccount? {
+        try item.decoded(KOSyncAccount.self)
+    }
+
+    /// `nil` forgets it.
+    public func save(_ account: KOSyncAccount?) throws {
+        if let account {
+            try item.write(JSONEncoder().encode(account))
+        } else {
+            try item.delete()
         }
     }
 }

@@ -118,20 +118,22 @@ struct BookSheetSummary: View {
                         // In full once pulled up, as the details' heading.
                         .lineLimit(untilLargerText: page.isExpanded ? 2 : 1)
                         .accessibilityAddTraits(.isHeader)
-                    // Redrawn each minute, so "just now" moves on.
-                    TimelineView(.everyMinute) { context in
-                        Text(place.line(now: context.date))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondaryOnGlass)
-                            // A problem says what to do, so it may wrap.
-                            .lineLimit(untilLargerText: place.problem == nil ? 1 : 2)
+                    if !place.isHidden {
+                        // Redrawn each minute, so "just now" moves on.
+                        TimelineView(.everyMinute) { context in
+                            Text(place.line(now: context.date))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondaryOnGlass)
+                                // A problem says what to do, so it may wrap.
+                                .lineLimit(untilLargerText: place.problem == nil ? 1 : 2)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 BookOpenButton(page: page, source: source, sourceID: sourceID, fillsWidth: size.isAccessibilitySize)
                     .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
             }
-            BookPlaceLine(place: place)
+            if !place.isHidden { BookPlaceLine(place: place) }
         }
     }
 }
@@ -157,7 +159,7 @@ struct BookSummary: View {
                     .accessibilityAddTraits(.isHeader)
                 BookAuthorLink(page: page)
             }
-            place
+            if !BookPlace(page: page, sourceID: sourceID, shell: shell).isHidden { place }
             LargerTextStack(spacing: 10) {
                 BookFinishedButton(page: page, source: source)
                 BookOpenButton(page: page, source: source, sourceID: sourceID)
@@ -231,6 +233,9 @@ struct BookPlace {
     /// Away from your place, the book reopens where you were looking (decision 33).
     let trip: ReaderTrip?
     private let finished: Bool
+    /// No place and no bar: KOReader's comes once the book is downloaded
+    /// (`ShellModel.waitsForDownload`). A problem or Finished still shows.
+    let isHidden: Bool
 
     init(page: BookPage, sourceID: LibrarySourceID, shell: ShellModel) {
         let book = SourcedBook(source: sourceID, book: page.current)
@@ -239,18 +244,23 @@ struct BookPlace {
             problem: Self.problem(BookOpenButton.state(of: book, in: shell), finishedFailed: page.finishedFailed),
             status: shell.places.status(of: book),
             trip: shell.places.trip(of: book),
-            finished: page.isFinished
+            finished: page.isFinished,
+            waitsForDownload: shell.waitsForDownload(book)
         )
     }
 
     /// A finished book's bar is full; finished or a problem leaves out the
     /// sync.
-    init(progress: Double?, problem: String?, status: BookPlaces.Status?, trip: ReaderTrip? = nil, finished: Bool) {
+    init(
+        progress: Double?, problem: String?, status: BookPlaces.Status?, trip: ReaderTrip? = nil, finished: Bool,
+        waitsForDownload: Bool = false
+    ) {
         self.progress = finished ? 1 : progress
         self.problem = problem
         self.status = problem == nil && !finished ? status : nil
         self.trip = problem == nil && !finished ? trip : nil
         self.finished = finished
+        isHidden = waitsForDownload && problem == nil && !finished
     }
 
     static func problem(_ state: BookOpenButton.State, finishedFailed: Bool) -> String? {

@@ -19,3 +19,6 @@ dev/bookorbit/*.local.*
 
 # Local OPDS servers' state (dev/opds/README.md)
 dev/opds/data/
+
+# Local KOReader sync server's state (dev/kosync/README.md)
+dev/kosync/data/

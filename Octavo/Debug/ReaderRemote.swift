@@ -19,6 +19,8 @@ import WebKit
 /// - `open` (`fileID`): opens that BookOrbit file in the reader through the
 ///   shell (download, Continue reading), with BookOrbit progress sync.
 /// - `openLocal` (`name` of a book in Documents, or `fileID` like `open`).
+/// - `importLocal` (`name` of a book in Documents): imported as Files does,
+///   then opened, so it's a Files book (KOReader sync, `-connectKOSync 1`).
 /// - `detail` (`fileID`): the book's cover page in the Library tab, for the
 ///   unfold handoff.
 /// - `close`, `home`: closes the reader; `home` also closes the tabs' screens.
@@ -43,6 +45,8 @@ import WebKit
 ///   function body run in the reader page; its result goes to
 ///   `spike-js.json`).
 /// - `back`: what the reader's Back button does.
+/// - `serverPlace` (`name`: `go` or `stay`, or nothing): what the capsule
+///   offers, in the ack's message, then Go or ✕.
 /// - `closeAfter` (ms, with any command): closes the reader that long after
 ///   the command, without waiting for what it started.
 /// - `liveReaders`: of the readers opened since launch, how many models, web
@@ -153,7 +157,7 @@ enum ReaderRemote {
 
     /// Returns an error message, or `nil` on success.
     private static func handle(_ command: Command, shell: ShellModel) async -> String? {
-        if ["signin", "open", "openLocal", "detail", "home"].contains(command.cmd) { shell.tour.debugEnd() }
+        if ["signin", "open", "openLocal", "importLocal", "detail", "home"].contains(command.cmd) { shell.tour.debugEnd() }
         switch command.cmd {
         case "liveReaders":
             return liveReaders
@@ -172,6 +176,8 @@ enum ReaderRemote {
         case "openLocal":
             if command.fileID != nil { return await openBookOrbit(command.fileID, shell: shell, cover: false) }
             return openLocal(command.name, shell: shell)
+        case "importLocal":
+            return await importLocal(command.name, shell: shell)
         case "detail":
             return await openBookOrbit(command.fileID, shell: shell, cover: true)
         case "close":
@@ -237,6 +243,23 @@ enum ReaderRemote {
     }
 
     /// A book in the app's Documents folder, opened straight in the reader.
+    /// A book in Documents imported as Files imports one, then opened: a
+    /// Files book, so its place syncs with KOReader (`-connectKOSync 1`).
+    private static func importLocal(_ name: String?, shell: ShellModel) async -> String? {
+        guard let name, !name.contains("/") else { return "importLocal needs the name of a book in Documents" }
+        switch await shell.importer.importFile(at: URL.documentsDirectory.appending(path: name)) {
+        case .success(let book):
+            let sourced = SourcedBook(source: .files, book: book)
+            try? shell.library.onIPhone.record(sourced)
+            shell.library.importedChanged()
+            shell.opener.filesChanged()
+            shell.reader.open(sourced)
+            return nil
+        case .failure(let failure):
+            return "couldn't import \(name): \(failure)"
+        }
+    }
+
     private static func openLocal(_ name: String?, shell: ShellModel) -> String? {
         guard let name, !name.contains("/") else { return "openLocal needs the name of a book in Documents" }
         let url = URL.documentsDirectory.appending(path: name)
@@ -339,6 +362,16 @@ enum ReaderRemote {
             return reader.note.map { "open \($0.href), mark at \($0.mark.y), size \($0.font.size), line \($0.font.lineHeight ?? -1), \($0.font.family ?? "no family"), \($0.blocks.count) blocks" } ?? "no note; last error \(reader.lastError ?? "none")"
         case "next": reader.next()
         case "prev": reader.previous()
+        case "serverPlace":
+            // The capsule: what it offers, then Go (`go`) or ✕ (`stay`).
+            guard let place = reader.serverPlace else { return "no server place offered" }
+            let shown = "\(place.label(server: place.source ?? "server")) · \(place.chapter ?? "no chapter")"
+            switch command.name {
+            case "go": reader.goToServerPlace()
+            case "stay": reader.keepThisPlace()
+            default: break
+            }
+            return shown
         default: return "unknown command \(command.cmd)"
         }
         return nil

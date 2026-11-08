@@ -12,7 +12,7 @@ nonisolated enum ShellTab: String, Hashable, Sendable, CaseIterable {
 /// A page of Settings, opened from its list.
 nonisolated enum SettingsPage: Hashable, Sendable {
     case server(LibrarySourceID)
-    case storage, licences
+    case koreader, storage, licences
 }
 
 /// A screen a tab opens. A tab's root isn't a route; everything opened from
@@ -46,7 +46,7 @@ nonisolated enum ShellRoute: Hashable, Sendable {
         case .setup(.choose): "Add a server"
         case .setup(.bookOrbit): "Sign in to BookOrbit"
         case .setup(.opds): "Add an OPDS catalog"
-        case .setup(.trust): "Trust this server?"
+        case .setup(.trust), .setup(.koreaderTrust): "Trust this server?"
         case .setup(.sync): "Reading progress"
         case .signInAgain: "Sign in again"
         }

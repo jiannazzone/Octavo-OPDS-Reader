@@ -36,12 +36,13 @@ Octavo is a free, open-source e-reader built for iPhone Duo. It reads from [Book
 | **BookOrbit** | Your library, with your place and bookmarks synced |
 | **OPDS catalogs** | Browse, search and download. Checked against Calibre-Web, COPS, Kavita and Komga |
 | **Files** | Import EPUB, MOBI, AZW3 or FB2, or open them in Octavo from another app |
+| **KOReader sync** | Your place in EPUBs from Files and catalogs, kept with KOReader on your other devices. They need the same file |
 
 Books and sign-ins stay between your iPhone and your server. Passwords go in the Keychain, plain http only goes to home and VPN addresses, and self-signed certificates work once you trust them.
 
 ## Not yet
 
-PDF and comics, highlights and notes, and iCloud and KOReader sync.
+PDF and comics, highlights and notes, and iCloud sync.
 
 ## Build it
 

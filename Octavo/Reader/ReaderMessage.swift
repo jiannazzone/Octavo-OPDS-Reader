@@ -121,6 +121,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var sectionIndex: Int?
         var sectionCount: Int?
         var location: Location?
+        /// KOReader's place for the page's start, when the open options asked
+        /// for it (`bridge.js` `xpointerOf`).
+        var xpointer: String?
         /// Whether foliate can turn to the left and to the right page from
         /// here: `false` at the book's start or end. `nil` from an older
         /// bridge.
@@ -148,7 +151,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
             case .range: cfi
             case .point: startCFI ?? cfi
             }
-            return ReadingPosition(cfi: cfi, fraction: min(max(fraction ?? 0, 0), 1))
+            return ReadingPosition(cfi: cfi, fraction: min(max(fraction ?? 0, 0), 1), xpointer: xpointer)
         }
     }
 

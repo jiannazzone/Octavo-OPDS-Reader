@@ -179,6 +179,11 @@ final class ReaderModel {
     /// The CFI the server holds as far as this reader knows: pulled to open,
     /// pushed since, or seen by the last check. Only another is offered.
     @ObservationIgnored private var serverCFI: String?
+    /// KOReader's place as this reader last knew it, as `serverCFI` is
+    /// BookOrbit's.
+    @ObservationIgnored private var serverXPointer: String?
+    /// What the pull to open found, for what opening does about it.
+    @ObservationIgnored private var openedRemote: SyncedPosition?
     /// Counts pushes that landed, so a check overtaken by one is dropped.
     @ObservationIgnored private var pushCount = 0
     /// `goToServerPlace` is under way: the page it lands on is the server's.
@@ -682,6 +687,12 @@ final class ReaderModel {
         }
     }
 
+    /// Whether relocations carry KOReader's place: an EPUB whose place goes
+    /// to KOReader sync. Other formats have no KOReader place to give.
+    var writesXPointers: Bool {
+        sync?.wantsXPointers == true && book.fileURL.pathExtension.lowercased() == "epub"
+    }
+
     private func openBook() {
         isRestoring = true
         phase = .loading
@@ -700,6 +711,9 @@ final class ReaderModel {
                 "name": book.fileName,
                 "cfi": saved?.cfi ?? NSNull(),
                 "fraction": saved?.fraction ?? NSNull(),
+                // A place from KOReader has no CFI until the bridge finds it.
+                "xpointer": saved?.cfi == nil ? saved?.xpointer ?? NSNull() : NSNull(),
+                "koreaderPlaces": writesXPointers,
                 "layout": layout.scriptArguments,
                 "appearance": appearance.scriptArguments,
             ]
@@ -730,6 +744,7 @@ final class ReaderModel {
             let remote = try await Self.withTimeout(Self.pullTimeout) { try await sync.pull() }
             let opening = OpeningPosition.choose(local: local, remote: remote)
             pulled = true
+            openedRemote = remote
             serverCFI = remote?.position.cfi
             if case .remote = opening { placeOnServer = serverCFI }
             let waited = FoldReport.milliseconds(since: started)
@@ -749,15 +764,31 @@ final class ReaderModel {
         let chapter = trip != nil ? store.chapter(forBook: book.id) : nil
         switch openingPosition {
         case .local where local?.needsPush == true:
-            // The device's unpushed position won; the backend should catch up.
-            save(position, needsPush: true, chapter: chapter)
-            Task { await pusher?.submit(position) }
+            // The device's unpushed position won; the backend should catch
+            // up, unless it holds another reader's place this iPhone hasn't
+            // seen, which is offered first.
+            save(position, needsPush: sends(position), chapter: chapter)
+            if let local, sends(position), OpeningPosition.mayPush(local, over: openedRemote) { Task { await pusher?.submit(position) } }
         case .remote:
             // The backend already has this spot.
             save(position, needsPush: false, syncedAt: pulled ? .now : nil, chapter: chapter)
+            if let openedRemote, let sync { Task { await sync.adopted(openedRemote) } }
         default:
             save(position, needsPush: local?.needsPush ?? false, chapter: chapter)
         }
+        // Another reader's place the book didn't open at is offered, as on
+        // coming back.
+        if let openedRemote, case .elsewhere(let change) = openedRemote.origin, change != .unchanged,
+           openingPosition != .remote(openedRemote.position) {
+            Task { await offer(openedRemote, pushes: pushCount) }
+        }
+    }
+
+    /// Whether `position` can go to the backend: KOReader needs its own form
+    /// of the place, which a fixed-layout page doesn't have.
+    private func sends(_ position: ReadingPosition) -> Bool {
+        guard let sync else { return false }
+        return !sync.wantsXPointers || position.xpointer != nil
     }
 
     private func moved(to relocation: ReaderMessage.Relocation) {
@@ -791,8 +822,8 @@ final class ReaderModel {
     }
 
     private func saveAndSend(_ position: ReadingPosition) {
-        save(position, needsPush: sync != nil)
-        if let pusher {
+        save(position, needsPush: sends(position))
+        if let pusher, sends(position) {
             if serverPlace != nil { pushedSinceOffer = true }
             Task { await pusher.submit(position) }
         }
@@ -842,6 +873,7 @@ final class ReaderModel {
     private func didPush(_ position: ReadingPosition) {
         lastPushedCFI = position.cfi
         serverCFI = position.cfi
+        serverXPointer = position.xpointer
         placeOnServer = position.cfi
         pushCount += 1
         syncStatus = "pushed \(Date.now.formatted(date: .omitted, time: .standard))"
@@ -868,15 +900,44 @@ final class ReaderModel {
             return
         }
         // A push that landed meanwhile may be newer than what the pull saw.
-        guard pushes == pushCount, let remote, let cfi = remote.position.cfi, cfi != serverCFI,
-              let pageStart = relocation?.startCFI ?? relocation?.cfi, phase == .open
-        else { return }
+        guard pushes == pushCount, let remote else { return }
+        await offer(remote, pushes: pushes)
+    }
+
+    /// Offers `remote` in the capsule, if another reader moved it and it
+    /// isn't on this page. KOReader's place is found in the book first, and
+    /// placed by the bridge, since its percentage is another engine's.
+    private func offer(_ remote: SyncedPosition, pushes: Int) async {
+        let isKOReaders: Bool
+        let cfi: String
+        if case .elsewhere(let change) = remote.origin {
+            guard change != .unchanged, let xpointer = remote.position.xpointer, xpointer != serverXPointer, phase == .open else { return }
+            let found: Any?
+            do {
+                found = try await page.callJavaScript("return await window.octavo.resolveXPointer(x)", arguments: ["x": xpointer])
+            } catch {
+                // The page couldn't answer (a re-layout, closing): next time.
+                return
+            }
+            guard let resolved = (found as? [String: Any])?["cfi"] as? String else {
+                // Not in this copy of the book, or not a place it can find.
+                serverXPointer = xpointer
+                return
+            }
+            isKOReaders = true
+            cfi = resolved
+        } else {
+            guard let remoteCFI = remote.position.cfi, remoteCFI != serverCFI else { return }
+            isKOReaders = false
+            cfi = remoteCFI
+        }
+        guard pushes == pushCount, let pageStart = relocation?.startCFI ?? relocation?.cfi, phase == .open else { return }
         let asked = relocationCount
         let flags = try? await page.callJavaScript("return await window.octavo.onPage(cfis)", arguments: ["cfis": [cfi]]) as? [Bool]
         guard asked == relocationCount, pushes == pushCount, let flag = flags?.first else { return }
         // Away, the page showing isn't your place, so it says nothing.
         let onPage = trip == nil && flag
-        serverCFI = cfi
+        if isKOReaders { serverXPointer = remote.position.xpointer } else { serverCFI = cfi }
         log.debug("server's place \(cfi, privacy: .public) \(onPage ? "is on this page" : "offered")")
         guard !onPage else { return }
         let place = await describe(cfi)
@@ -885,9 +946,12 @@ final class ReaderModel {
         pushedSinceOffer = false
         serverPlace = ReaderServerPlace(
             position: remote.position,
-            fraction: remote.position.fraction > 0 ? remote.position.fraction : place?.fraction ?? 0,
+            fraction: isKOReaders || remote.position.fraction <= 0 ? place?.fraction ?? remote.position.fraction : remote.position.fraction,
             chapter: place?.chapter,
-            offeredOn: trip?.place.cfi ?? pageStart
+            offeredOn: trip?.place.cfi ?? pageStart,
+            cfi: cfi,
+            source: isKOReaders ? "KOReader" : nil,
+            remote: remote
         )
     }
 
@@ -907,7 +971,7 @@ final class ReaderModel {
 
     /// Go: to the server's place, which the server keeps.
     func goToServerPlace() {
-        guard let place = serverPlace, let cfi = place.position.cfi else { return }
+        guard let place = serverPlace, let cfi = place.cfi ?? place.position.cfi else { return }
         serverPlace = nil
         // The server's place is your place now, so a trip ends with this.
         let tripSoFar = trip
@@ -920,11 +984,19 @@ final class ReaderModel {
             if went != true {
                 isJumpingToServer = false
                 trip = tripSoFar
+            } else if let remote = place.remote, let sync {
+                // It's this iPhone's place now: KOReader's isn't offered again.
+                await sync.adopted(remote)
             }
         }
         // A fold or a text change since the offer re-laid out the page and
-        // sent its place; the server's goes back.
-        if pushedSinceOffer, let pusher { Task { await pusher.submit(place.position) } }
+        // sent its place; the server's goes back, with where it is in this
+        // book if it came in KOReader's form.
+        if pushedSinceOffer, let pusher {
+            var back = place.position
+            back.cfi = back.cfi ?? place.cfi
+            Task { await pusher.submit(back) }
+        }
     }
 
     /// ✕: this page stays, and the server takes it.

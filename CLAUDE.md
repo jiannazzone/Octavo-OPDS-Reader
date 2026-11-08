@@ -78,6 +78,7 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
 - Self-signed HTTPS: an exact-certificate pin per server host and port. A changed certificate asks again, even if iOS would trust it.
 - Secrets live in the Keychain (`ServerCredentials`, `AfterFirstUnlockThisDeviceOnly`), never in saved URLs or logs: a catalog address's key or token (Kavita's and Stump's path keys, credential-named query items and path parameters) is saved as `{key}` (`OPDSURLSecret`, as written in the address so it restores exactly). Remove server calls `ServerCredentials.removeAll(serverID:)`. Sign out and Remove server (`ServerActions`) also end the BookOrbit session on the server (`BookOrbitClient.signOutEverywhere()`, `auth/logout`; `docs/notes/settings.md`).
 - At launch (`LaunchSteps`, from `didFinishLaunching`; in `App.init`, `UIApplication.shared` is nil and `isProtectedDataAvailable` reads false), `KeychainSweep` deletes every Keychain item that isn't a saved server's, and a signed-out server's sign-in; it deletes nothing if `Servers.json` (or an older install's `Server.json`) can't be read. The reinstall wipe runs just before it and skips an install with a saved server. `ServerStorageMigration` moves an install from one server to the list (`docs/notes/more-than-one-server.md`). A saved server's transport reads its pin before the first request (`ServerTransport(server:pins:)`); a pin that can't be read or decoded fails the request instead of being dropped (step 16).
+- The KOReader sync account is kept like a server: its address and key (the password's MD5, as good as the password) in one Keychain item under its ID (`KeychainKOSyncAccountStore`), its own transport and pin, kept by the sweep through `SavedServers.koreader`. A cross-origin redirect drops `x-auth-user` and `x-auth-key` too (`ServerTransport.credentialHeaders`).
 - Changes here need a security review that Adam signs off before merge.
 
 ### Parsing and OPDS
@@ -92,12 +93,12 @@ protocol LibrarySource { /* browse, search, metadata, download */ }
 // Implementations: OPDSSource (1.2 + 2.0), BookOrbitSource
 
 protocol ProgressSync { /* pull/push position, annotations, sessions */ }
-// Implementations: BookOrbitSync. Later: KOSync, ICloudSync
+// Implementations: BookOrbitSync, KOSync. Later: ICloudSync
 ```
 
 - Users can combine them freely (e.g. Calibre OPDS + kosync, or BookOrbit for both).
 - **Internal position model: CFI + percentage (+ page number for fixed layout).**
-- **KOReader sync isn't in the first release** (Adam, 2026-11-06; `docs/notes/koreader-sync.md`). A percentage alone can't work: KOReader moves a book only by xpointer. Read the note before planning it.
+- **KOReader sync** (built 2026-11-08; `docs/notes/koreader-sync.md`, `docs/notes/koreader-sync-plan.md`): one account in Settings, for Files books and each catalog switched on for it (`SavedServer.koreaderSync`, on the catalog's setup and its page). EPUBs only, matched by KOReader's partial MD5, with places as xpointers (`bridge.js`): a percentage alone can't move KOReader. Another device's place is trusted less (`SyncedPosition.Origin.elsewhere`): it opens only if it moved and is ahead, else the capsule offers it ("KOReader: 62%"). A synced catalog's EPUB shows no place until it's downloaded. The same file on two catalogs shares one place (decision 36).
 - Note: OPDS itself has **no** progress sync. Sync always comes from a `ProgressSync` backend.
 - **Opening rule** (OctavoKit `Sync/`, `docs/notes/sync-spike.md`): if the server has a CFI and the device has nothing unsent, the server wins. If both moved, the later timestamp wins and the server wins ties. With no server CFI, or if the pull fails, the local position is used, else the server's percentage. Opening a book never pushes. Pushes wait until the reader has been still for 2 s, and closing the reader flushes them.
 - **Any number of servers** (decision 36, `docs/notes/more-than-one-server.md`): `LibraryModel.connections`, one per server, with its own client and transport. A book's file, place and bookmarks are kept under its server's ID (`LibraryFile.storageKey(in:)`), since BookOrbit numbers files from 1 on every server. A place goes only to the book's own server.

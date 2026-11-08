@@ -31,12 +31,16 @@ final class ShellModel {
     let pages = BookPages()
     /// Where each book opens, and whether its place has synced (step 13).
     let places: BookPlaces
+    /// The KOReader sync account, for books from catalogs and Files.
+    let koreader = KOReaderConnection()
     /// The Search tab's query and results.
     let search: SearchModel
     /// When the connection comes back, for places that didn't go.
     let connection = ConnectionMonitor()
     /// Adding a server.
     let setup = SetupModel()
+    /// Signing in to KOReader sync, from Settings or a catalog's setup.
+    let koreaderSignIn = KOReaderSignIn()
     /// Where the servers are kept between launches.
     let servers: ServerStore
     /// The servers Remove server took away, whose kept books wait for them.
@@ -100,13 +104,17 @@ final class ShellModel {
         self.servers = servers
         self.bookmarks = bookmarks
         self.removedServers = removedServers
-        places = BookPlaces(store: positions) { [library] in ShellModel.progressSync(for: $0, on: library.server($0.source)) }
+        places = BookPlaces(store: positions) { [library, opener, koreader] book in
+            let server = library.server(book.source)
+            return ShellModel.progressSync(for: book, on: server)
+                ?? ShellModel.koreaderSync(for: book, on: server, account: koreader.account) { opener.localFile(for: book) }
+        }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
         tour = TourController(record: tourRecord, reader: reader)
         serverActions = ServerActions(
             library: library, servers: servers, removedServers: removedServers, bookmarks: bookmarks,
-            places: places, opener: opener, reader: reader
+            places: places, opener: opener, reader: reader, koreader: koreader
         )
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
@@ -152,6 +160,14 @@ final class ShellModel {
             self[path: setupTab].pop()
         }
         setup.finished = { [weak self] in self?.serverAdded($0) }
+        koreaderSignIn.push = { [weak self] in
+            guard let self else { return }
+            self[path: setupTab].push(.setup($0))
+        }
+        koreaderSignIn.pop = { [weak self] in
+            guard let self else { return }
+            self[path: setupTab].pop()
+        }
         setup.saved = { [servers] in servers.load().servers }
         // The saved servers, at once: the first frame shows the tabs, which
         // load as each answers.
@@ -160,6 +176,7 @@ final class ShellModel {
             library.add(server)
         }
         library.choose(saved.chosenServer?.id)
+        koreader.load(saved.koreader, servers: servers, positions: positions.directory)
         Task { await library.loadServers() }
         #if DEBUG
         applyLaunchArguments()
@@ -217,6 +234,18 @@ final class ShellModel {
     /// Settings) the tab it was opened in.
     private var setupTab: ShellTab {
         showsSetup ? .setup : tab
+    }
+
+    /// Connect (or Sign in) on a catalog's setup. With "Sync with KOReader"
+    /// on and no account yet, KOReader's sign-in goes first, from the fields
+    /// on the same screen, then the catalog. An account kept before the
+    /// catalog fails stays: the screen then shows it.
+    func connectCatalog() {
+        if setup.koreaderSync, koreader.account == nil {
+            koreaderSignIn.signIn(with: serverActions) { [weak self] in self?.setup.connectToCatalog() }
+        } else {
+            setup.connectToCatalog()
+        }
     }
 
     /// Setup finished: keep the server. The first opens Home; another opens
@@ -468,6 +497,43 @@ final class ShellModel {
         #endif
     }
 
+    /// Where a book from Files, or from a catalog switched on for it, syncs
+    /// its place: the KOReader account, for an EPUB on the iPhone (the place
+    /// needs the file's bytes and KOReader's form of it). Not the sample
+    /// book, and not a BookOrbit book, which syncs with BookOrbit or not at
+    /// all. `file` is looked for last, since every place line asks.
+    static func koreaderSync(for book: SourcedBook, on server: LibraryServer?, account: KOReaderAccount?, file: () -> URL?) -> (any ProgressSync)? {
+        guard let account, syncsWithKOReader(book, on: server), book.book.id != .sample,
+              let file = file(), file.pathExtension.lowercased() == "epub" else { return nil }
+        let sync = account.sync(for: file)
+        #if DEBUG
+        return DebugProgressSync(wrapping: sync, pullDelay: .zero, failsPushes: UserDefaults.standard.bool(forKey: "syncFailsPushes"))
+        #else
+        return sync
+        #endif
+    }
+
+    /// A book whose place comes from KOReader once it's downloaded
+    /// (`docs/notes/koreader-sync-plan.md`, question 4): an EPUB from a
+    /// catalog switched on for KOReader sync, with an account, not on the
+    /// iPhone yet. Until then it shows no place, not even an old one of this
+    /// iPhone's, which KOReader may have moved on from.
+    func waitsForDownload(_ book: SourcedBook) -> Bool {
+        guard koreader.account != nil, book.source != .files,
+              Self.syncsWithKOReader(book, on: library.server(book.source)),
+              book.book.primaryFile?.format?.lowercased() == "epub"
+        else { return false }
+        return opener.status(of: book) != .downloaded
+    }
+
+    /// Whether `book` comes from Files or a catalog switched on for KOReader
+    /// sync.
+    static func syncsWithKOReader(_ book: SourcedBook, on server: LibraryServer?) -> Bool {
+        if book.source == .files { return true }
+        guard let server else { return false }
+        return server.id == book.source && server.source is OPDSSource && server.syncsWithKOReader
+    }
+
     /// The Duo as the book:
     /// - Unfolding on a book's screen opens the book, if it's on the iPhone.
     ///   If it isn't, the screen stays, as Cover | Details, and nothing
@@ -548,16 +614,18 @@ final class ShellModel {
     /// `-shellCoverStrip failed|offline|downloading|protected`,
     /// `-shellOpen collection|deep|cover|collections|authors` (sample books,
     /// and the lists of collections and authors),
-    /// `-shellOpen settings|server|storage|licences` (Settings, or one of
-    /// its pages),
+    /// `-shellOpen settings|server|koreader|catalog|storage|licences` (Settings, one of
+    /// its pages, or catalog setup from it),
     /// `-shellReading 1` (the first book in Continue reading, once connected)
     /// `-searchQuery austen` (typed into Search, once connected),
     /// `-forgetServer 1` (no server), `-setupCatalog <address>`
     /// (setup's OPDS step, filled in), and for BookOrbit's position sync
     /// `-syncPullDelay <seconds>` (a slow server) and `-syncFailsPushes 1`
-    /// (pushes fail as if offline: "Not synced yet").
+    /// (pushes fail as if offline: "Not synced yet"), and `-connectKOSync 1`
+    /// (the local KOReader sync server in `dev/kosync/`, for catalogs and Files).
     private func applyLaunchArguments() {
         let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "connectKOSync") { koreader.connect(.local(positions: places.store.directory)) }
         if let tab = defaults.string(forKey: "shellTab").flatMap(ShellTab.init(rawValue:)) {
             self.tab = tab
         }
@@ -614,6 +682,8 @@ final class ShellModel {
             case "settings": self[path: tab].replace([.settings])
             case "server":
                 if let id = library.server?.id { self[path: tab].replace([.settings, .settingsPage(.server(id))]) }
+            case "koreader": self[path: tab].replace([.settings, .settingsPage(.koreader)])
+            case "catalog": self[path: tab].replace([.settings, .setup(.opds)])
             case "storage": self[path: tab].replace([.settings, .settingsPage(.storage)])
             case "licences": self[path: tab].replace([.settings, .settingsPage(.licences)])
             default: break
@@ -646,6 +716,12 @@ nonisolated struct DebugProgressSync: ProgressSync {
     func push(_ position: ReadingPosition) async throws {
         if failsPushes || Self.offline { throw URLError(.notConnectedToInternet) }
         try await wrapping.push(position)
+    }
+
+    var wantsXPointers: Bool { wrapping.wantsXPointers }
+
+    func adopted(_ remote: SyncedPosition) async {
+        await wrapping.adopted(remote)
     }
 }
 #endif

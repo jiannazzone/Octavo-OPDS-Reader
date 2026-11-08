@@ -100,6 +100,10 @@ final class BookPlaces {
     }
 
     /// The sync line, for a book whose place syncs and has a place.
+    /// "Synced" only when a push landed or the server's place came back and
+    /// agrees: not after a pull that found nothing (a KOReader server can't
+    /// say whether anyone else has the book), and not while another
+    /// reader's place this iPhone hasn't seen is there.
     func status(of book: SourcedBook) -> Status? {
         _ = revision
         guard backend(book) != nil, let key = book.storageKey else { return nil }
@@ -107,7 +111,11 @@ final class BookPlaces {
         guard opening != .start else { return nil }
         let local = store.progress(forBook: key)
         if let local, local.needsPush, opening == .local(local.position) { return .notSynced }
-        return [local?.syncedAt, remotes[key]?.at].compactMap(\.self).max().map(Status.synced)
+        let remote = remotes[key]
+        if let position = remote?.position, case .elsewhere(let change) = position.origin, change != .unchanged,
+           opening != .remote(position.position) { return nil }
+        let agreed = remote.flatMap { $0.position == nil ? nil : $0.at }
+        return [local?.syncedAt, agreed].compactMap(\.self).max().map(Status.synced)
     }
 
     /// Settings' "N books pending.": the books on `server` whose place the
@@ -230,6 +238,20 @@ final class BookPlaces {
         revision += 1
     }
 
+    /// KOReader sync stopped for `library` (Sign out, or its switch off):
+    /// the places waiting to go stay this iPhone's own, so the next account
+    /// doesn't get them, as Sign in again keeps one account's places from
+    /// another (decision 36). What the account said no longer shows.
+    func stopSending(to library: LibrarySourceID) {
+        for (key, book) in unsent where book.source == library {
+            guard var progress = store.progress(forBook: key), progress.needsPush else { continue }
+            progress.needsPush = false
+            try? store.save(progress, forBook: key)
+        }
+        forget(server: library)
+        reset(library)
+    }
+
     /// `library` went: what it said no longer applies.
     func reset(_ library: LibrarySourceID) {
         let prefix = StoredBookKeys.prefix(of: library)
@@ -241,14 +263,21 @@ final class BookPlaces {
     }
 
     /// Sends the iPhone's position if it's unsent and wins over `remote`,
-    /// as it would when the book opens. A failure leaves it for next time.
+    /// as it would when the book opens. Not over another reader's place
+    /// this iPhone hasn't seen (`OpeningPosition.mayPush`): the reader offers
+    /// that first. A failure leaves it for next time.
     private func pushUnsent(_ key: String, to backend: any ProgressSync, over remote: SyncedPosition?) async {
-        guard let local = store.progress(forBook: key), local.needsPush,
-              OpeningPosition.choose(local: local, remote: remote) == .local(local.position)
-        else { return }
+        guard let local = store.progress(forBook: key), OpeningPosition.mayPush(local, over: remote) else { return }
         do {
             try await backend.push(local.position)
         } catch {
+            // A server that won't take this book (it doesn't have the file)
+            // stops the retries. It goes again when the book opens. A wrong
+            // password stays for next time: signing in again fixes them all.
+            if let error = error as? KOSyncError, error.isAboutTheBook {
+                unsent[key] = nil
+                unsentFile.save(unsent)
+            }
             return
         }
         try? store.markPushed(local.position, forBook: key, at: now())
@@ -270,6 +299,12 @@ nonisolated struct SharedProgressSync: ProgressSync {
 
     func pullLatest() async throws -> SyncedPosition? {
         try await places.pull(key, from: backend, reusingWithin: 0)
+    }
+
+    var wantsXPointers: Bool { backend.wantsXPointers }
+
+    func adopted(_ remote: SyncedPosition) async {
+        await backend.adopted(remote)
     }
 
     func push(_ position: ReadingPosition) async throws {
