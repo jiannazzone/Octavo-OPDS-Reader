@@ -23,6 +23,8 @@ Against KOReader's release build, or a device, on the five sample books and a co
 
 ## Chunk 1: protocol (OctavoKit, no UI)
 
+**Done 2026-11-08.** `Sync/KOSyncClient.swift` (with `KOSyncKey`, `KOSyncProgress`, `KOSyncError`), `Sync/KOSyncDocument.swift`, `dev/kosync/`, and tests: `KOSyncClientTests`, `KOSyncDocumentTests`, `KOSyncLiveTests` (5/5 against `dev/kosync`). Also from chunk 6's list, since the client needs it: `ServerTransport.credentialHeaders` drops `x-auth-user` and `x-auth-key` on a redirect to another server, tested (`redirectsToAnotherHostLoseAKOReaderAccount`, which fails without it). It's network-trust code, so it's in the review Adam signs off. As planned:
+
 - `Sync/KOSyncClient.swift`: `authorize()`, `progress(document:)`, `update(...)`. `Accept: application/vnd.koreader.v1+json` on every call. Takes any `HTTPTransport`.
 - Tolerant reading: unknown document (200 `{}`, 400, 404), `timestamp` as number, string or negative, `percentage` missing or out of 0...1. Ignore PUT bodies; only 200 counts. Errors sort into temporary (offline, 5xx) and permanent (401, or a refused document), so a permanent one can stop retrying.
 - `Sync/KOSyncDocument.swift`: the partial MD5, from `docs/notes/koreader-sync.md` (`Insecure.MD5`, CryptoKit), read off the main actor. Lowercase hex.

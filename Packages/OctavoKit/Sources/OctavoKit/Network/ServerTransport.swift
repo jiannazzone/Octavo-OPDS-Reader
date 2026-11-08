@@ -27,8 +27,8 @@ public protocol HTTPTransport: Sendable {
 ///   trust fails with `.untrustedCertificate`, which the "Trust this server"
 ///   step answers. Only the server's own host and port can be pinned.
 /// - Redirects never go from https to http, never carry a request body to
-///   another server, and lose `Authorization` and `Cookie` when they change
-///   scheme, host or port.
+///   another server, and lose `credentialHeaders` when they change scheme,
+///   host or port.
 /// - HTTP Basic or Digest challenges from the server itself are answered
 ///   from `passwords`, once per request, and only in `authScheme`.
 /// - `data(for:)` answers longer than `maximumDataSize` fail with
@@ -40,6 +40,11 @@ public protocol HTTPTransport: Sendable {
 public final class ServerTransport: HTTPTransport {
     /// The server's root, e.g. `http://192.168.1.5:3300`.
     public let server: URL
+
+    /// What a redirect to another server drops: BookOrbit's token, an OPDS
+    /// password, and a KOReader sync account's username and key (its key is
+    /// the password's MD5, as good as the password).
+    static let credentialHeaders = ["Authorization", "Cookie", "x-auth-user", "x-auth-key"]
 
     private let session: URLSession
     private let rules: TrustRules
@@ -462,8 +467,7 @@ final class TaskGuard: NSObject, URLSessionDataDelegate, Sendable {
         }
         var request = request
         if crossOrigin {
-            request.setValue(nil, forHTTPHeaderField: "Authorization")
-            request.setValue(nil, forHTTPHeaderField: "Cookie")
+            for header in ServerTransport.credentialHeaders { request.setValue(nil, forHTTPHeaderField: header) }
         }
         return request
     }

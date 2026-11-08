@@ -113,6 +113,22 @@ struct ServerTransportTests {
         #expect(forwarded.headers["accept"] == "application/json")
     }
 
+    @Test func redirectsToAnotherHostLoseAKOReaderAccount() async throws {
+        let other = StubServer { _ in .json(#"{"authorized":"OK"}"#) }
+        let server = StubServer { _ in StubServer.Response(status: 302, headers: ["Location": other.baseURL.appending(path: "users/auth").absoluteString], body: Data()) }
+        let client = KOSyncClient(
+            baseURL: server.baseURL, key: KOSyncKey(username: "octavo", password: "secret"),
+            transport: transport(server)
+        )
+
+        try await client.authorize()
+
+        let forwarded = try #require(other.requests.first)
+        #expect(forwarded.headers["x-auth-user"] == nil)
+        #expect(forwarded.headers["x-auth-key"] == nil)
+        #expect(forwarded.headers["accept"] == "application/vnd.koreader.v1+json")
+    }
+
     @Test func redirectsWithinTheServerKeepCredentials() async throws {
         let server = StubServer { request in
             request.path == "/old"

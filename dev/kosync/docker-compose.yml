@@ -1,0 +1,20 @@
+# A KOReader sync server for Octavo development. Dev only: the account is a
+# throwaway, and both ports are bound to 127.0.0.1. See README.md.
+#
+# Runs KOReader's published image (AGPL-3.0); nothing of it is in the repo.
+
+name: octavo-kosync
+
+services:
+  kosync:
+    # `latest` as of 2026-11-08 (built 2026-05-16). The image has no other tag.
+    image: koreader/kosync@sha256:bb3f13615365703315a43b9059f65e71e876440f867e23a42bf27f2fa18264e1
+    ports:
+      # Plain http, for the app and the live tests.
+      - "127.0.0.1:${KOSYNC_PORT:-3350}:17200"
+      # https with the image's self-signed certificate, for "Trust this server".
+      - "127.0.0.1:${KOSYNC_TLS_PORT:-3351}:7200"
+    environment:
+      ENABLE_USER_REGISTRATION: "true"
+    volumes:
+      - ./data/redis:/var/lib/redis
