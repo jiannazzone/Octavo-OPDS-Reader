@@ -120,7 +120,7 @@ As planned:
 - Sign in and Sign out are `ServerActions` (`signInToKOReader`, `signOutOfKOReader`), with the "Trust this server" step shared with setup (`TrustStep`, out of `SetupModel`). Sign out forgets the account's places file, the places waiting to go and what it said; each catalog's switch stays.
 - Settings' row and page (`KOReaderSettingsPage`); the toggle on catalog setup, with the fields inline and Connect signing in first (`ShellModel.connectCatalog`); the toggle on a catalog's page, with the fields under it while there's no account.
 - `ShellModel.waitsForDownload`: a synced catalog's EPUB that isn't downloaded has no place row, bar or Search place; downloading it pulls (`BookCoverPage`).
-- Not checked yet: the trust step against the self-signed `dev/kosync` (port 3351), and a pulled place appearing right after a download (the server had none for that book).
+- Also checked: "Trust this server" for the self-signed `dev/kosync` (port 3351), then signed in; after a relaunch, over that pinned connection, a downloaded COPS book's screen shows the place another device left ("42% · Synced just now"). The pull right as a download finishes is the same `refresh`, not watched separately.
 
 ## Chunk 6: review and docs
 
