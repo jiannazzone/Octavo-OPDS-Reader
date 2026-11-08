@@ -267,15 +267,7 @@ struct ReaderTextPanel: View {
                     Text(spacing.formatted(.number.precision(.fractionLength(1...2)))).tag(Double?.some(spacing))
                 }
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Margins")
-                Picker("Margins", selection: $margins) {
-                    Text("Narrow").tag(ReaderMargins.narrow)
-                    Text("Medium").tag(ReaderMargins.medium)
-                    Text("Wide").tag(ReaderMargins.wide)
-                }
-                .pickerStyle(.segmented)
-            }
+            ReaderMarginsSlider(margins: $margins)
             menuRow("Page Turn", selection: $pageTurn) {
                 ForEach(ReaderPageTurn.allCases) { style in
                     Text(style.name).tag(style)
@@ -287,6 +279,59 @@ struct ReaderTextPanel: View {
             Toggle("Always Show Controls", isOn: $alwaysShowControls)
         }
         .labeledContentStyle(StackedAtLargerText())
+    }
+}
+
+/// Margins (decision 8, Adam 2026-11-07): the system's slider with a tick
+/// for each of the five steps, Narrow and Wide at its ends. At the
+/// accessibility text sizes the two words go under it, where they leave it
+/// the panel's width.
+private struct ReaderMarginsSlider: View {
+    @Binding var margins: ReaderMargins
+    @Environment(\.dynamicTypeSize) private var size
+
+    private static let steps = 0...Double(ReaderMargins.allCases.count - 1)
+
+    var body: some View {
+        let under = size.isAccessibilitySize
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Margins")
+                // The slider says it, with its step.
+                .accessibilityHidden(true)
+            Slider(value: step, in: Self.steps, step: 1) {
+                Text("Margins")
+            } minimumValueLabel: {
+                if !under { end(.narrow) }
+            } maximumValueLabel: {
+                if !under { end(.wide) }
+            }
+            .accessibilityValue(margins.name)
+            if under {
+                HStack {
+                    end(.narrow)
+                    Spacer()
+                    end(.wide)
+                }
+            }
+        }
+    }
+
+    private var step: Binding<Double> {
+        Binding {
+            Double(margins.step)
+        } set: { value in
+            // A drag reports every step it crosses; only a new one lays out.
+            let new = ReaderMargins(step: Int(value.rounded()))
+            if new != margins { margins = new }
+        }
+    }
+
+    /// The slider says its step, so VoiceOver skips the words at its ends.
+    private func end(_ margins: ReaderMargins) -> some View {
+        Text(margins.name)
+            .font(.footnote)
+            .foregroundStyle(.secondaryOnGlass)
+            .accessibilityHidden(true)
     }
 }
 

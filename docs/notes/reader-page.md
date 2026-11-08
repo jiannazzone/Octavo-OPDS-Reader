@@ -8,7 +8,7 @@ Issue #17, decisions 7, 8 and 12 in `docs/design/direction.md` (amended 2026-11-
 - **Edge to edge.** The `WebView` fills the screen, under the side column, the camera and the home indicator; the page colour runs under the clock and the glass buttons like the cover does. `ReaderLayout` insets the `foliate-view` so the text never reaches them. Text lands where the frames put it: folded 27–356 pt (frame 07: 27–355), unfolded 139.5–448.8 | 503.6–813 pt (frame 09: 139–448 | 503–812).
 - **Controls** (decision 7, approved on screen 2026-11-01): a middle tap shows the column's buttons (Back; Contents, Text and theme, Search in book and Bookmark greyed out until #18) and the glass bar; the next tap anywhere hides them. **Always show controls** keeps only the buttons. Half-open, a tap in the side column shows them (#5's hook) and the bar splits at the hinge.
 - **Progress:** each page's bottom margin shows the chapter and page (`ReaderFooter`), and the bar is a scrubber through the whole book. Numbers are foliate's locations.
-- **Margins:** Narrow 4.6%, Medium 7% (the frames), Wide 10% of foliate's gap; Narrow puts the text at the column's edge.
+- **Margins:** a slider of five steps (2026-11-07): Narrow 4.6%, 5.8%, Medium 7% (the frames), 8.5%, Wide 10% of foliate's gap; Narrow puts the text at the column's edge, and the step after it partway there.
 - **Sideways unfolded:** one column straight across the fold, clear of the top band where the system column moves.
 - **The current chapter** is `ReaderModel.chapter` and is saved with each position (`ReadingPositionStore.chapter(forBook:)`, `LocalReadingProgress.chapter`) for the cover strip and Home's place line (#11 wires them).
 - No foliate-js change; `bridge.js` gains top/bottom insets, tap zones measured within the content, a `dismiss` tap, the contents with fractions, and `location.next`.
@@ -33,8 +33,9 @@ The open question from spike 2b (`duo-spreads.md` §7 Q3): `WebView` already dre
 
 foliate keeps its outer margins and the gap between two pages equal, `gap`% of its view's width (`paginator.js`: the grid's half-gap columns plus the columns' own padding). So one number sets both, and the view's insets decide where the text can go.
 
-- **Medium (default), Wide:** the view is the content area (folded) or the widest span centred on the hinge that the content allows (unfolded: the left edge gives up the column's 84 pt). Medium is foliate's 7%: 27 pt folded, 55 pt unfolded (26.7 and 54.8 before whole points).
+- **Medium (default), Wide and the step between them:** the view is the content area (folded) or the widest span centred on the hinge that the content allows (unfolded: the left edge gives up the column's 84 pt). Medium is foliate's 7%: 27 pt folded, 55 pt unfolded (26.7 and 54.8 before whole points). The step between, 8.5%, is 32 and 67 pt; Wide, 10%, 38 and 78 pt.
 - **Narrow:** the view reaches under each edge that borders the system's area by its own margin, so the text meets that edge. Folded the margin is 18 pt and the text ends at 382; unfolded the gutter is a point wider than the hinge (41 pt) and the text runs 84–455 | 496–867.
+- **The step after Narrow** (`ReaderMargins.underColumn`): 5.8%, with two fifths of its margin under the edge, so its text sits halfway between Narrow's and Medium's. Folded the margin is 23 pt and the text ends 14 pt short of the column (23–368); unfolded the gutter is 48 pt and the text runs 113–451.5 | 499.5–838. Without the reach, the hinge's 41 pt gutter would hold its outer margins at 41 pt or more unfolded, most of the way to Medium's 55.
 - **Whole points** (2026-11-03, `layout-polish.md`, Text on the hinge): the view and the gap are rounded to whole points, so foliate's page width is whole and WebKit's whole-point scrolling lands exactly on each page. Before, Narrow's text drifted up to a point right, onto the hinge.
 - **The gutter is a point wider than the hinge at least**, half a point clear each side: the gap is the larger of the setting and the fold's 40 pt plus one, in whole points.
 - Top and bottom: the view's top and bottom insets are the safe area's; foliate's own 48 px top and bottom margins hold the running space, and the footer sits in the bottom one.
@@ -149,7 +150,7 @@ docs/notes/duo-spreads/tools/app.sh '"cmd":"openLocal","name":"moby-dick.epub"'
 docs/notes/duo-spreads/tools/fold-run.py moby-mid moby-dick.epub --fraction 0.3 > run.jsonl
 ```
 
-Launch arguments for looking at the settings: `-reader.margins narrow|medium|wide`, `-reader.alwaysShowControls 1`.
+Launch arguments for looking at the settings: `-reader.margins narrow|mediumNarrow|medium|mediumWide|wide`, `-reader.alwaysShowControls 1`. The remote's `margins` command (`name`) sets it too.
 
 ## Book styles (step 11, 2026-11-02)
 
