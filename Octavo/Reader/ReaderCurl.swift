@@ -1,6 +1,22 @@
 import SwiftUI
 import UIKit
 
+/// The curl's steps, for chasing what only the Duo does: printed in DEBUG
+/// when Octavo is launched with `OCTAVO_CURL_TRACE` set, which a device's
+/// console shows (`docs/notes/curl.md`).
+func curlTrace(_ message: @autoclosure () -> String) {
+    #if DEBUG
+    guard tracesCurl else { return }
+    print("[curl \(String(format: "%.3f", CACurrentMediaTime()))] \(message())")
+    // A pipe buffers, and a crash would lose the last lines.
+    fflush(stdout)
+    #endif
+}
+
+#if DEBUG
+private let tracesCurl = ProcessInfo.processInfo.environment["OCTAVO_CURL_TRACE"] != nil
+#endif
+
 /// The curl (decision 27, Adam, 2026-11-07): UIKit's own page curl, a
 /// `UIPageViewController` with `.pageCurl`, as Apple Books has, over the same
 /// snapshot pictures the other turns draw (`docs/notes/curl.md`).
@@ -25,7 +41,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     /// What the pages show.
     let pages = ReaderCurlPages()
     private(set) weak var controller: UIPageViewController?
-    private var spread = false
+    private(set) var spread = false
     private weak var pan: UIPanGestureRecognizer?
     private let panDelegate = ReaderCurlPanDelegate()
     /// The pages UIKit was given each way, in the order it asks for them.
@@ -64,6 +80,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         turning = nil
         pages.turn = nil
         controller.setViewControllers(views(new: false), direction: .forward, animated: false)
+        curlTrace("made a controller, \(spread ? "spread" : "one page")")
         return controller
     }
 
@@ -78,9 +95,15 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         else { return }
         removePan()
         host.addGestureRecognizer(found)
+        found.addTarget(self, action: #selector(panned(_:)))
         panDelegate.uikit = found.delegate
         found.delegate = panDelegate
         pan = found
+    }
+
+    @objc private func panned(_ pan: UIPanGestureRecognizer) {
+        let point = pan.location(in: pan.view)
+        curlTrace("pan state \(pan.state.rawValue) at \(Int(point.x)),\(Int(point.y)), velocity \(Int(pan.velocity(in: pan.view).x))")
     }
 
     func removePan() {
@@ -101,6 +124,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     func play(_ turn: ReaderTurn) {
         guard let controller, pages.turn?.id == turn.id else { return }
         turning = .tap(id: turn.id)
+        curlTrace("tap \(turn.id): plays \(turn.side.rawValue), new page \(turn.new == nil ? "not drawn" : "drawn")")
         let next = views(new: true)
         let id = turn.id
         controller.setViewControllers(next, direction: turn.side == .right ? .forward : .reverse, animated: true) { [weak self] _ in
@@ -122,6 +146,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
 
     /// Clear pages over the live page, ready for the next turn.
     func reset() {
+        curlTrace("reset, was \(self.turning.map { "\($0)" } ?? "idle")")
         coming = [:]
         turning = nil
         pages.turn = nil
@@ -151,10 +176,15 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
 
     /// Asking commits nothing: UIKit asks as a finger lands.
     private func next(after page: UIViewController, side: ReaderTurnSide) -> UIViewController? {
+        let isCurrent = controller?.viewControllers?.contains { $0 === page } == true
         // A spread's second page: the other one coming in.
         if let pair = coming.values.first(where: { $0.contains { $0 === page } }) {
-            return pair.first { $0 !== page }
+            let other = pair.first { $0 !== page }
+            curlTrace("asked \(side == .right ? "after" : "before") a page coming in (current \(isCurrent)): \(other == nil ? "nil" : "its pair")")
+            return other
         }
+        let relocation = model?.relocation
+        curlTrace("asked \(side == .right ? "after" : "before") \(isCurrent ? "a current page" : "an unknown page"): can start \(self.canStartWithFinger), turning \(self.turning.map { "\($0)" } ?? "nil"), curling \(self.model?.isCurling == true), turns left \(relocation?.turnsLeft.map { "\($0)" } ?? "nil") right \(relocation?.turnsRight.map { "\($0)" } ?? "nil"), blank \(relocation?.blankPage == true), location \(relocation?.location?.current ?? -1)")
         guard canStartWithFinger, model?.canTurn(side) == true else { return nil }
         if coming[side] == nil {
             // Forward, the back of the page that turns is the next left page;
@@ -168,6 +198,8 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     // MARK: Delegate
 
     func pageViewController(_ controller: UIPageViewController, willTransitionTo pending: [UIViewController]) {
+        let side = coming.first(where: { $0.value.contains { $0 === pending.first } })?.key
+        curlTrace("will turn \(side?.rawValue ?? "an unknown way") to \(pending.count) pages, turning \(self.turning.map { "\($0)" } ?? "nil")")
         guard turning == nil, let model,
               let side = coming.first(where: { $0.value.contains { $0 === pending.first } })?.key,
               let turn = model.startCurl(side, finger: true)
@@ -176,6 +208,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     }
 
     func pageViewController(_ controller: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
+        curlTrace("finished, \(completed ? "landed" : "fell back"), turning \(self.turning.map { "\($0)" } ?? "nil")")
         guard case .finger(let id) = turning else { return reset() }
         landed(id: id, completed: completed)
     }
@@ -304,6 +337,7 @@ final class ReaderCurlPanDelegate: NSObject, UIGestureRecognizerDelegate {
     func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         touchStartedAt = touch.timestamp
         touchStart = touch.location(in: recognizer.view)
+        curlTrace("touch at \(Int(self.touchStart.x)),\(Int(self.touchStart.y)) of \(Int(recognizer.view?.bounds.width ?? 0))")
         return uikit?.gestureRecognizer?(recognizer, shouldReceive: touch) ?? true
     }
 
@@ -311,12 +345,32 @@ final class ReaderCurlPanDelegate: NSObject, UIGestureRecognizerDelegate {
     /// select text, and not while text is selected (a finger moving a
     /// selection's handle).
     func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-        guard curl?.canStartWithFinger == true else { return false }
+        guard curl?.canStartWithFinger == true else {
+            curlTrace("pan: not now")
+            return false
+        }
         let location = recognizer.location(in: recognizer.view)
         guard abs(location.x - touchStart.x) > abs(location.y - touchStart.y) else { return false }
         if let touchStartedAt, ProcessInfo.processInfo.systemUptime - touchStartedAt > ReaderSwipeRecognizer.pressDuration { return false }
-        return uikit?.gestureRecognizerShouldBegin?(recognizer) ?? true
+        // UIKit asks for the next page only once its pan has begun, and on a
+        // spread it crashes if there's none ("The number of view controllers
+        // provided (0) doesn't match the number required (2)", the book's
+        // first page on the Duo). So there has to be a page the way the
+        // finger moves and, on a spread, on the side it's touching.
+        guard let curl, let model = curl.model else { return false }
+        var sides: Set<ReaderTurnSide> = [location.x > touchStart.x ? .left : .right]
+        if curl.spread, let width = curl.controller?.view.bounds.width {
+            sides.insert(touchStart.x < width / 2 ? .left : .right)
+        }
+        guard sides.allSatisfy({ model.canTurn($0) }) else {
+            curlTrace("pan: no page \(sides.map(\.rawValue).sorted().joined(separator: " and "))")
+            return false
+        }
+        let begins = uikit?.gestureRecognizerShouldBegin?(recognizer) ?? true
+        curlTrace("pan: UIKit says \(begins ? "begin" : "don't begin") at \(Int(location.x)),\(Int(location.y)), from \(Int(self.touchStart.x)),\(Int(self.touchStart.y))")
+        return begins
     }
+
 
     func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         true

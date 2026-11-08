@@ -41,14 +41,20 @@ extension ReaderModel {
     /// Pictures the page as it is on the curl's pages and has foliate turn
     /// underneath, held if a finger turns it. `nil` if it can't start.
     func startCurl(_ side: ReaderTurnSide, finger: Bool) -> ReaderTurn? {
-        guard canStartCurl, curl.controller != nil, let geometry else { return nil }
+        guard canStartCurl, curl.controller != nil, let geometry else {
+            curlTrace("can't start a curl: phase \(String(describing: self.phase)), folding \(self.isFolding), curling \(self.isCurling), turn \(self.turnRun != nil || self.turn != nil)")
+            return nil
+        }
         closeNote(finger ? "a curl on the page" : "a tap elsewhere")
         if finger { queuedTurns.removeAll() }
         let size = geometry.size
         // UIKit's curl splits a spread in the middle.
         let spine: Double? = layout.columns == 2 ? Double(size.width) / 2 : nil
         let regions = ReaderTurn.regions(motion: .curl, side: side, size: size, spine: spine)
-        guard let old = pictures(regions.old, size: size, spine: spine, afterScreenUpdates: false) else { return nil }
+        guard let old = pictures(regions.old, size: size, spine: spine, afterScreenUpdates: false) else {
+            curlTrace("can't start a curl: no pictures")
+            return nil
+        }
         turnCount += 1
         var turn = ReaderTurn(
             id: turnCount, motion: .curl, side: side, geometry: geometry, layout: layout, spine: spine,
@@ -57,6 +63,7 @@ extension ReaderModel {
         )
         turn.hidesChapter = trip != nil
         isCurling = true
+        curlTrace("\(finger ? "finger" : "tap") \(turn.id): starts \(side.rawValue)")
         curl.show(turn)
         Task { await turnUnderCurl(turn, held: finger, regions: regions.new) }
         return turn
@@ -70,6 +77,7 @@ extension ReaderModel {
             "return await window.octavo.turn(side, hold)", arguments: ["side": turn.side.rawValue, "hold": held]
         ) as? [String: Any]
         guard curl.pages.turn?.id == turn.id else { return }
+        curlTrace("\(held ? "finger" : "tap") \(turn.id): foliate \(answer?["moved"] as? Bool == true ? "turned" : "didn't turn") after \(FoldReport.milliseconds(since: started)) ms")
         guard answer?["moved"] as? Bool == true else {
             // The book's first or last page: a tap's curl doesn't play.
             if !held, curl.turning == nil { curlEnded(id: turn.id, completed: false, finger: false) }
@@ -105,6 +113,7 @@ extension ReaderModel {
     /// kept or turned back; then the pages clear over the live page and a
     /// turn asked for meanwhile starts.
     func curlEnded(id: Int, completed: Bool, finger: Bool) {
+        curlTrace("\(finger ? "finger" : "tap") \(id): \(completed ? "landed" : "fell back")")
         guard curl.pages.turn?.id == id else { return }
         Task {
             if finger {
