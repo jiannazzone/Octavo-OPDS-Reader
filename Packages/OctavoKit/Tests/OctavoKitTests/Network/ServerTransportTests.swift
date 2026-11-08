@@ -121,7 +121,8 @@ struct ServerTransportTests {
             transport: transport(server)
         )
 
-        try await client.authorize()
+        // Its answer isn't the account's, though it says "OK".
+        await #expect(throws: KOSyncError.invalidResponse) { try await client.authorize() }
 
         let forwarded = try #require(other.requests.first)
         #expect(forwarded.headers["x-auth-user"] == nil)

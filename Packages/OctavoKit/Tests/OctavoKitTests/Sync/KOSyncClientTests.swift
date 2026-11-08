@@ -35,6 +35,21 @@ struct KOSyncClientTests {
         #expect(server.requests.first?.path == "/api/koreader/abc123/users/auth")
     }
 
+    /// Kavita's answer, measured.
+    @Test func kavitasSignInCounts() async throws {
+        let server = StubServer { _ in .json(#"{"username":"octavo"}"#) }
+
+        try await client(server, path: "api/koreader/abc123").authorize()
+    }
+
+    /// A sign-in page or a site's catch-all answers 200 too.
+    @Test(arguments: [#"<html><body>Sign in</body></html>"#, #"{"ok":true}"#, ""])
+    func anyOther200IsntASyncServer(body: String) async {
+        let server = StubServer { _ in StubServer.Response(status: 200, headers: ["Content-Type": "text/html"], body: Data(body.utf8)) }
+
+        await #expect(throws: KOSyncError.notASyncServer) { try await client(server).authorize() }
+    }
+
     @Test func aWrongPasswordIsUnauthorized() async {
         let server = StubServer { _ in .json(401, #"{"code":2001,"message":"Unauthorized"}"#) }
 

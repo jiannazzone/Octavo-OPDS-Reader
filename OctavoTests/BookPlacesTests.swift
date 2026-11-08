@@ -302,6 +302,22 @@ struct BookPlacesTests {
         #expect(store.progress(forBook: key)?.position == Self.iPhonePlace, "the place itself stays")
     }
 
+    // KOReader's Sign out, or a catalog switched off: a place waiting to go
+    // stays the iPhone's own, so the next account doesn't get it.
+    @Test func stoppingSyncKeepsAPlaceFromTheNextAccount() async throws {
+        let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
+        let places = places(backend)
+        _ = places.readerSync(for: Self.book)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+        places.readerClosed()
+
+        places.stopSending(to: Self.book.source)
+
+        #expect(places.pendingCount(on: Self.book.source) == 0)
+        #expect(store.progress(forBook: key)?.position == Self.iPhonePlace)
+        #expect(store.progress(forBook: key)?.needsPush == false)
+    }
+
     // The list of unsent places is kept on disk, so a relaunch still sends.
     @Test func aRelaunchStillSendsIt() async throws {
         let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))

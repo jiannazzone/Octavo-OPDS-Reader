@@ -23,14 +23,16 @@ public enum KOSyncError: Error, Equatable, Sendable {
     /// (`KOSync`), so it waits for the reader to offer it.
     case serverMoved
     /// An answer that isn't the protocol's, such as a proxy's sign-in page
-    /// with a 200.
+    /// with a 200, or one from another server a redirect led to.
     case invalidResponse
+    /// The account was signed out: nothing more goes to it, or comes from it.
+    case signedOut
 
     /// Whether sending it again later can't work.
     public var isPermanent: Bool {
         switch self {
         case .unavailable, .serverMoved: false
-        case .unauthorized, .notASyncServer, .unknownDocument, .rejected, .invalidPlace, .invalidResponse: true
+        case .unauthorized, .notASyncServer, .unknownDocument, .rejected, .invalidPlace, .invalidResponse, .signedOut: true
         }
     }
 
@@ -121,7 +123,7 @@ public struct KOSyncProgress: Equatable, Sendable {
 ///   a PUT's body is ignored.
 /// - The transport should be the account's own `ServerTransport` with a
 ///   small `maximumDataSize`: the answers are a few hundred bytes.
-public struct KOSyncClient: Sendable {
+public struct KOSyncClient: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     /// The protocol's root, e.g. `https://sync.example.com` or
     /// `https://books.example.com/koreader`.
     public let baseURL: URL
@@ -140,16 +142,32 @@ public struct KOSyncClient: Sendable {
         self.transport = transport
     }
 
+    /// Never prints the path (Kavita's key is in it), the username or the key.
+    public var description: String { "KOSyncClient(\(baseURL.host() ?? "?"))" }
+    public var debugDescription: String { description }
+
     /// `GET users/auth`: returns if the account signs in, else throws.
     public func authorize() async throws {
+        let data: Data
         do {
-            _ = try await send(request("users/auth"))
+            data = try await send(request("users/auth"))
         } catch KOSyncError.unknownDocument {
             throw KOSyncError.notASyncServer
         } catch KOSyncError.rejected(status: 403) {
             // Komga's answer to a wrong or missing API key (measured).
             throw KOSyncError.unauthorized
         }
+        // A sign-in page or a site's catch-all answers 200 too, so only the
+        // protocol's answer counts: the standalone server's `authorized`, or
+        // Kavita's `username` (both measured).
+        guard let body = try? JSONDecoder().decode(AuthBody.self, from: data),
+              body.authorized?.uppercased() == "OK" || body.username != nil
+        else { throw KOSyncError.notASyncServer }
+    }
+
+    private struct AuthBody: Decodable {
+        var authorized: String?
+        var username: String?
     }
 
     /// `GET syncs/progress/{document}`: the server's place for the book, or
@@ -186,6 +204,9 @@ public struct KOSyncClient: Sendable {
     private func send(_ request: URLRequest) async throws -> Data {
         let (data, response) = try await transport.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw KOSyncError.invalidResponse }
+        // Redirected to another server, which never had the account's key
+        // (`ServerTransport.credentialHeaders`): its answer isn't the account's.
+        if let final = response.url, Origin(final) != Origin(baseURL) { throw KOSyncError.invalidResponse }
         switch response.statusCode {
         case 200: return data
         case 401: throw KOSyncError.unauthorized

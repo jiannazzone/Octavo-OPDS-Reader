@@ -251,15 +251,11 @@ nonisolated struct ServerStore: Sendable {
         try save(saved)
     }
 
-    /// Keeps the KOReader account, or forgets it (`nil`). Like `add`, a list
-    /// that can't be decoded is replaced.
+    /// Keeps the KOReader account, or forgets it (`nil`). Unlike `add`, a
+    /// list that can't be decoded throws and stays: replacing it would leave
+    /// the launch sweep to delete every server's sign-in.
     func setKOReader(_ account: SavedKOReaderAccount?) throws {
-        var saved: SavedServers
-        do {
-            saved = try read()
-        } catch is DecodingError {
-            saved = SavedServers()
-        }
+        var saved = try read()
         saved.koreader = account
         try save(saved)
     }

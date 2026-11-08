@@ -173,7 +173,7 @@ struct KOSyncTests {
         #expect(server.pushes == 0)
     }
 
-    @Test func whatItSawOutlivesALaunchAndForgettingClearsIt() async throws {
+    @Test func whatItSawOutlivesALaunchAndSigningOutClearsIt() async throws {
         let server = FakeKOSyncServer()
         let (file, document) = try book()
         server.set(document, progress: theirs, percentage: 0.37)
@@ -186,8 +186,18 @@ struct KOSyncTests {
         #expect(await relaunched.wasPulled(document))
         #expect(!(await KOSyncPlaces(file: first.file).wasPulled(document)))
 
-        await relaunched.forget()
-        #expect(try await self.sync(server, file: file, places: relaunched).pull()?.origin == SyncedPosition.Origin.elsewhere(.first))
+        await relaunched.close()
+        #expect(!FileManager.default.fileExists(atPath: first.file.path))
+        // Signed out: nothing more is asked or sent, and what a push already
+        // under way says doesn't bring the file back.
+        let pushes = server.pushes
+        await #expect(throws: KOSyncError.signedOut) { try await self.sync(server, file: file, places: relaunched).pull() }
+        await #expect(throws: KOSyncError.signedOut) {
+            try await self.sync(server, file: file, places: relaunched).push(ReadingPosition(fraction: 0.5, xpointer: theirs))
+        }
+        #expect(server.pushes == pushes)
+        await relaunched.said(KOSyncProgress(progress: theirs, percentage: 0.5), about: document)
+        #expect(!FileManager.default.fileExists(atPath: first.file.path))
     }
 
     /// The address may hold Kavita's key.

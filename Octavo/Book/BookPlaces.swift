@@ -238,6 +238,20 @@ final class BookPlaces {
         revision += 1
     }
 
+    /// KOReader sync stopped for `library` (Sign out, or its switch off):
+    /// the places waiting to go stay this iPhone's own, so the next account
+    /// doesn't get them, as Sign in again keeps one account's places from
+    /// another (decision 36). What the account said no longer shows.
+    func stopSending(to library: LibrarySourceID) {
+        for (key, book) in unsent where book.source == library {
+            guard var progress = store.progress(forBook: key), progress.needsPush else { continue }
+            progress.needsPush = false
+            try? store.save(progress, forBook: key)
+        }
+        forget(server: library)
+        reset(library)
+    }
+
     /// `library` went: what it said no longer applies.
     func reset(_ library: LibrarySourceID) {
         let prefix = StoredBookKeys.prefix(of: library)

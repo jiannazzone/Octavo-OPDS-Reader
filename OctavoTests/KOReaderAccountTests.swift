@@ -62,6 +62,17 @@ struct KOReaderAccountTests {
         #expect(saved.servers.first?.libraryServer()?.syncsWithKOReader == false)
     }
 
+    /// A list that can't be read stays as it is: replacing it with one that
+    /// holds only the account would leave the sweep to delete every server's
+    /// sign-in.
+    @Test func signingInLeavesAListThatCantBeRead() throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("{ not json".utf8).write(to: store.fileURL)
+
+        #expect(throws: (any Error).self) { try store.setKOReader(SavedKOReaderAccount(id: id)) }
+        #expect(try String(contentsOf: store.fileURL, encoding: .utf8) == "{ not json")
+    }
+
     /// The launch sweep keeps the account's key and pin, and only while the
     /// list has it.
     @Test func theSweepKeepsTheAccount() throws {

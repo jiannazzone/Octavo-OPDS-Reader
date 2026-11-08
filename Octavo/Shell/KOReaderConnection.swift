@@ -34,7 +34,7 @@ final class KOReaderConnection {
 
 /// One KOReader sync account: its client, and what its server last said
 /// about each book.
-nonisolated struct KOReaderAccount: Sendable {
+nonisolated struct KOReaderAccount: Sendable, CustomStringConvertible {
     /// What its secrets are kept under (`SavedKOReaderAccount`).
     let id: String
     let address: URL
@@ -84,6 +84,9 @@ nonisolated struct KOReaderAccount: Sendable {
     var host: String {
         address.host().map { host in address.port.map { "\(host):\($0)" } ?? host } ?? ""
     }
+
+    /// Never prints the path (Kavita's key is in it) or the username.
+    var description: String { "KOReaderAccount(\(host))" }
 
     func sync(for file: URL) -> KOSync {
         KOSync(client: client, file: file, places: places, device: Self.device, deviceID: deviceID)

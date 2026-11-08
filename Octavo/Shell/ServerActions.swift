@@ -173,9 +173,10 @@ final class ServerActions {
     /// launch sweep to delete the key. Nothing is kept if any of it fails.
     func signInToKOReader(_ account: KOSyncAccount, id: String) async throws {
         try await KOReaderAccount.client(id: id, account: account).authorize()
-        if let old = koreader.account, old.id != id { signOutOfKOReader() }
         let store = KeychainKOSyncAccountStore(accountID: id)
         try store.save(account)
+        // Only once the new one is kept: a failed save leaves the old.
+        if let old = koreader.account, old.id != id { signOutOfKOReader() }
         do {
             try servers.setKOReader(SavedKOReaderAccount(id: id))
         } catch {
@@ -195,6 +196,9 @@ final class ServerActions {
         try? servers.setKOReader(nil)
         try? ServerCredentials.removeAll(serverID: account.id)
         try? FileManager.default.removeItem(at: account.places.file)
+        // A push or pull already under way stops before it sends the key
+        // again, and can't write the file back.
+        Task { await account.places.close() }
         koreader.connect(nil)
         let catalogs = library.connections.map(\.server).filter(\.syncsWithKOReader).map(\.id)
         forgetKOReaderPlaces(of: [.files] + catalogs)
@@ -209,13 +213,8 @@ final class ServerActions {
         if !on { forgetKOReaderPlaces(of: [id]) }
     }
 
-    /// These libraries' places no longer go to the account, and what it
-    /// said no longer shows.
     private func forgetKOReaderPlaces(of libraries: [LibrarySourceID]) {
-        for id in libraries {
-            places.forget(server: id)
-            places.reset(id)
-        }
+        for id in libraries { places.stopSending(to: id) }
     }
 
     /// `server` is one removed before, coming back at a new ID: its kept

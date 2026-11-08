@@ -33,6 +33,7 @@ public struct KOSync: ProgressSync {
     public var wantsXPointers: Bool { true }
 
     public func pull() async throws -> SyncedPosition? {
+        guard await places.isOpen else { throw KOSyncError.signedOut }
         let document = try await document()
         let progress = try await client.progress(of: document)
         await places.pulled(document)
@@ -41,6 +42,7 @@ public struct KOSync: ProgressSync {
 
     public func push(_ position: ReadingPosition) async throws {
         guard let xpointer = position.xpointer else { throw KOSyncError.invalidPlace }
+        guard await places.isOpen else { throw KOSyncError.signedOut }
         let document = try await document()
         if await !places.wasPulled(document) {
             let remote = try await client.progress(of: document)
@@ -49,6 +51,8 @@ public struct KOSync: ProgressSync {
                 throw KOSyncError.serverMoved
             }
         }
+        // Signed out while this was under way: the key isn't sent again.
+        guard await places.isOpen else { throw KOSyncError.signedOut }
         try await client.update(document, progress: xpointer, percentage: position.fraction, device: device, deviceID: deviceID)
         let sent = KOSyncProgress(progress: xpointer, percentage: position.fraction)
         let readBack = try? await client.progress(of: document)
@@ -95,6 +99,8 @@ public actor KOSyncPlaces {
     public nonisolated let file: URL
     private var lastSaid: [String: Said]?
     private var pulledSinceLaunch: Set<String> = []
+    /// Until Sign out (`close`).
+    public private(set) var isOpen = true
 
     private struct Said: Codable, Equatable {
         var progress: String
@@ -118,6 +124,7 @@ public actor KOSyncPlaces {
     }
 
     func said(_ progress: KOSyncProgress, about document: KOSyncDocument) {
+        guard isOpen else { return }
         var all = load()
         all[document.id] = Said(progress: progress.progress, percentage: progress.percentage)
         lastSaid = all
@@ -126,6 +133,7 @@ public actor KOSyncPlaces {
     }
 
     func pulled(_ document: KOSyncDocument) {
+        guard isOpen else { return }
         pulledSinceLaunch.insert(document.id)
     }
 
@@ -133,8 +141,11 @@ public actor KOSyncPlaces {
         pulledSinceLaunch.contains(document.id)
     }
 
-    /// Sign out, or another account: nothing it said applies any more.
-    public func forget() {
+    /// Sign out: nothing it said applies any more, and nothing more is
+    /// asked or sent (`KOSync` checks), so a push or pull already under way
+    /// can't bring the file back.
+    public func close() {
+        isOpen = false
         lastSaid = [:]
         pulledSinceLaunch = []
         try? FileManager.default.removeItem(at: file)
