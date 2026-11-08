@@ -56,6 +56,7 @@ struct ReaderXPointerTests {
               <pre>  Pre  india   juliet</pre>
               <p>
         <span>W</span>hen kilo lima.</p>
+              <p>&#160;<span>N</span>ovember oscar.</p>
               <p>\(words)</p>
             </div>
           </body>
@@ -119,6 +120,8 @@ struct ReaderXPointerTests {
         ("/body/DocFragment[2]/body/div/pre/text().7", "india juliet", "/body/DocFragment[2]/body/div/pre.0"),
         // The line break before a drop cap isn't a text node to KOReader.
         ("/body/DocFragment[2]/body/div/p[5]/text().4", "kilo lima.", "/body/DocFragment[2]/body/div/p[5].0"),
+        // A no-break space is text to KOReader, before a drop cap too.
+        ("/body/DocFragment[2]/body/div/p[6]/text()[2].0", "ovember oscar.", "/body/DocFragment[2]/body/div/p[6].0"),
         // Inside a table, the place sent back is the table.
         ("/body/DocFragment[2]/body/div/table/tr/td/text().5", "hotel", "/body/DocFragment[2]/body/div/table.0"),
         // Words that aren't there fall back to their element.
@@ -180,13 +183,25 @@ struct ReaderXPointerTests {
     }
 
     /// A place from KOReader has no CFI: the bridge finds it to open there.
+    /// The fraction points far past it, so only the place can show it.
     @Test func opensAtKOReadersPlace() async throws {
-        let remote = ReadingPosition(fraction: 0.05, xpointer: "/body/DocFragment[2]/body/div/p[4]/text().13")
+        let remote = ReadingPosition(fraction: 0.9, xpointer: "/body/DocFragment[2]/body/div/p[4]/text().13")
         let model = try start(sync: KOReaderBackend(remote: SyncedPosition(position: remote)))
 
         #expect(await eventually(timeout: .seconds(30)) { model.relocation?.sectionIndex == 1 })
         let shown = try await model.page.callJavaScript("return await window.octavo.visibleText(2000)") as? String
         #expect(shown?.contains("foxtrot golf.") == true)
+    }
+}
+
+extension ReaderXPointerTests {
+    /// What `opensAtKOReadersPlace` rests on: that fraction alone shows other words.
+    @Test func theFractionAloneOpensElsewhere() async throws {
+        let model = try start(sync: KOReaderBackend(remote: SyncedPosition(position: ReadingPosition(fraction: 0.9))))
+
+        #expect(await eventually(timeout: .seconds(30)) { model.relocation?.sectionIndex == 1 })
+        let shown = try await model.page.callJavaScript("return await window.octavo.visibleText(2000)") as? String
+        #expect(shown?.contains("foxtrot golf.") == false)
     }
 }
 

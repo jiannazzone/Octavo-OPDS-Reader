@@ -1120,7 +1120,9 @@ const xpointerOf = (index, node) => {
 const XPOINTER = /^\/body\/DocFragment\[(\d{1,5})\](?:\/body((?:\/[A-Za-z][\w-]{0,63}(?:\[\d{1,6}\])?){0,64}?)(?:\/text\(\)(?:\[(\d{1,6})\])?)?)?(?:\.(\d{1,9}))?$/
 const XPOINTER_STEP = /^([A-Za-z][\w-]*)(?:\[(\d+)\])?$/
 const CSS_SPACE = /[ \t\n\r\f]/
-const HAS_TEXT = /\S/
+// Anything but CSS whitespace: a no-break space is text to KOReader (measured),
+// though `\S` would call it blank.
+const HAS_TEXT = /[^ \t\n\r\f]/
 
 // Text nodes as `text()[n]` counts them: a blank one only among a
 // paragraph's own words, after something in it (not the line break before a
@@ -1154,9 +1156,16 @@ const creToDOM = (text, offset, keepsSpaces) => {
 
 // Where KOReader's place falls in the book: its CFI, fraction and chapter.
 // Words that don't resolve fall back to their element; an element that
-// doesn't exist is `null`, never a guess. The string is only matched and
-// walked, never evaluated.
+// doesn't exist is `null`, never a guess, and so is one foliate can't place.
+// The string is only matched and walked, never evaluated.
 const resolveXPointer = async xpointer => {
+    try {
+        return await findXPointer(xpointer)
+    } catch {
+        return null
+    }
+}
+const findXPointer = async xpointer => {
     const v = requireView()
     const match = typeof xpointer === 'string' && xpointer.length <= 2048 ? XPOINTER.exec(xpointer) : null
     if (!match || v.isFixedLayout) return null
@@ -1817,7 +1826,7 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
     // Nothing is rendered yet, so the attributes are all it takes.
     applyAttributes()
 
-    const opening = cfi ?? (xpointer ? (await resolveXPointer(xpointer).catch(() => null))?.cfi ?? null : null)
+    const opening = cfi ?? (xpointer ? (await resolveXPointer(xpointer))?.cfi ?? null : null)
     const restoredFrom = await restore(opening, finiteOrNull(fraction))
     const result = {
         restoredFrom,

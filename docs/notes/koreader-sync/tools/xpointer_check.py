@@ -94,10 +94,11 @@ def cre_texts(parent):
     """Text nodes as `text()[n]` counts them: blank ones only inside a
     paragraph's own text, after something in it (not the line break before a
     drop cap), never between blocks."""
-    keep_blank = any(c.nodeType == Node.TEXT_NODE and c.data.strip() for c in parent.childNodes)
+    # A no-break space is text to KOReader; only CSS whitespace is blank.
+    keep_blank = any(c.nodeType == Node.TEXT_NODE and c.data.strip(CSS_SPACE) for c in parent.childNodes)
     out, started = [], False
     for c in parent.childNodes:
-        has_text = c.nodeType == Node.TEXT_NODE and bool(c.data.strip())
+        has_text = c.nodeType == Node.TEXT_NODE and bool(c.data.strip(CSS_SPACE))
         if c.nodeType == Node.TEXT_NODE and (has_text or (keep_blank and started)):
             out.append(c)
         if c.nodeType == Node.ELEMENT_NODE or has_text:
