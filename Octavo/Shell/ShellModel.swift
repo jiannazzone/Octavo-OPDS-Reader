@@ -649,5 +649,9 @@ nonisolated struct DebugProgressSync: ProgressSync {
     }
 
     var wantsXPointers: Bool { wrapping.wantsXPointers }
+
+    func adopted(_ remote: SyncedPosition) async {
+        await wrapping.adopted(remote)
+    }
 }
 #endif

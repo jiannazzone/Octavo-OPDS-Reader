@@ -19,6 +19,9 @@ public enum KOSyncError: Error, Equatable, Sendable {
     /// A place this client won't send: empty, too long, or not a finite
     /// percentage. KOReader opens a book at page 1 for a place it can't read.
     case invalidPlace
+    /// The first push since launch found a place this iPhone hasn't seen
+    /// (`KOSync`), so it waits for the reader to offer it.
+    case serverMoved
     /// An answer that isn't the protocol's, such as a proxy's sign-in page
     /// with a 200.
     case invalidResponse
@@ -26,7 +29,7 @@ public enum KOSyncError: Error, Equatable, Sendable {
     /// Whether sending it again later can't work.
     public var isPermanent: Bool {
         switch self {
-        case .unavailable: false
+        case .unavailable, .serverMoved: false
         case .unauthorized, .notASyncServer, .unknownDocument, .rejected, .invalidPlace, .invalidResponse: true
         }
     }

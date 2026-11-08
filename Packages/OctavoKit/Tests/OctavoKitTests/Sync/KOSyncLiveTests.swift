@@ -58,6 +58,26 @@ struct KOSyncLiveTests {
         #expect(place.device == "Octavo")
     }
 
+    /// KOSync over a real server: its own place comes back unchanged, and
+    /// another device's move shows as one.
+    @Test func ownPlacesAndAnotherDevicesMove() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "kosync-live-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "book.epub")
+        try Data(UUID().uuidString.utf8).write(to: file)
+        let sync = KOSync(client: client(), file: file, places: KOSyncPlaces(file: folder.appending(path: "places.json")), device: "Octavo", deviceID: "octavo-live-tests")
+
+        #expect(try await sync.pull() == nil)
+        try await sync.push(ReadingPosition(fraction: 0.31, xpointer: "/body/DocFragment[4]/body/p[2].0"))
+        #expect(try await sync.pull()?.origin == SyncedPosition.Origin.elsewhere(.unchanged))
+
+        try await client().update(try KOSyncDocument(fileAt: file), progress: "/body/DocFragment[9]/body/p[7]/text().12", percentage: 0.64, device: "Kindle", deviceID: "AAAA")
+        let moved = try #require(try await sync.pull())
+        #expect(moved.origin == .elsewhere(.moved))
+        #expect(moved.position == ReadingPosition(fraction: 0.64, xpointer: "/body/DocFragment[9]/body/p[7]/text().12"))
+    }
+
     @Test(.enabled(if: LiveKOSync.sampleBooks != nil, "Set OCTAVO_SAMPLE_BOOKS"))
     func aliceIsTheDocumentKOReaderNamesIt() throws {
         let alice = try #require(LiveKOSync.sampleBooks).appending(path: "alice-in-wonderland.epub")

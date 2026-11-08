@@ -162,6 +162,35 @@ struct BookPlacesTests {
         #expect(places.progress(of: Self.book) == 0.5)
     }
 
+    /// Another reader's place this iPhone hasn't seen isn't sent over from
+    /// the book's screen: the reader offers it first (KOReader).
+    @Test(arguments: [SyncedPosition.Change.first, .moved])
+    func anUnsentPlaceWaitsForAKOReaderPlaceItHasntSeen(change: SyncedPosition.Change) async throws {
+        let theirs = ReadingPosition(fraction: 0.2, xpointer: "/body/DocFragment[2]/body/p[3].0")
+        let backend = FakeProgressSync(remote: SyncedPosition(position: theirs, origin: .elsewhere(change)))
+        let places = places(backend)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+
+        places.refresh(Self.book)
+
+        #expect(await eventuallyAwaiting { await backend.pulls == 1 })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(await backend.pushes.isEmpty)
+        #expect(store.progress(forBook: key)?.needsPush == true)
+        #expect(places.progress(of: Self.book) == 0.5)
+    }
+
+    @Test func butGoesOverOneItHasSeen() async throws {
+        let theirs = ReadingPosition(fraction: 0.2, xpointer: "/body/DocFragment[2]/body/p[3].0")
+        let backend = FakeProgressSync(remote: SyncedPosition(position: theirs, origin: .elsewhere(.unchanged)))
+        let places = places(backend)
+        try store.save(Self.iPhonePlace, forBook: key, needsPush: true)
+
+        places.refresh(Self.book)
+
+        #expect(await eventuallyAwaiting { await backend.pushes == [Self.iPhonePlace] })
+    }
+
     @Test func aRetryThatFailsStaysNotSynced() async throws {
         let backend = FakeProgressSync(remote: SyncedPosition(position: Self.serverPlace, updatedAt: Self.longAgo))
         await backend.set(pushError: URLError(.notConnectedToInternet))

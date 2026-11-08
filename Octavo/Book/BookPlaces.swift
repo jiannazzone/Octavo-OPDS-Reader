@@ -241,11 +241,11 @@ final class BookPlaces {
     }
 
     /// Sends the iPhone's position if it's unsent and wins over `remote`,
-    /// as it would when the book opens. A failure leaves it for next time.
+    /// as it would when the book opens. Not over another reader's place
+    /// this iPhone hasn't seen (`OpeningPosition.mayPush`): the reader offers
+    /// that first. A failure leaves it for next time.
     private func pushUnsent(_ key: String, to backend: any ProgressSync, over remote: SyncedPosition?) async {
-        guard let local = store.progress(forBook: key), local.needsPush,
-              OpeningPosition.choose(local: local, remote: remote) == .local(local.position)
-        else { return }
+        guard let local = store.progress(forBook: key), OpeningPosition.mayPush(local, over: remote) else { return }
         do {
             try await backend.push(local.position)
         } catch {
@@ -273,6 +273,10 @@ nonisolated struct SharedProgressSync: ProgressSync {
     }
 
     var wantsXPointers: Bool { backend.wantsXPointers }
+
+    func adopted(_ remote: SyncedPosition) async {
+        await backend.adopted(remote)
+    }
 
     func push(_ position: ReadingPosition) async throws {
         try await backend.push(position)

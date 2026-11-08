@@ -21,4 +21,18 @@ public struct ReadingPosition: Codable, Hashable, Sendable {
         self.pageNumber = pageNumber
         self.xpointer = xpointer
     }
+
+    /// The spine item it's in, from 0: the CFI's second step halved, less
+    /// one, else KOReader's `DocFragment`, less one. `nil` if neither says.
+    public var spineIndex: Int? {
+        if let cfi, let step = Self.firstMatch(#"^epubcfi\(/\d+/(\d+)"#, in: cfi), step % 2 == 0, step > 0 { return step / 2 - 1 }
+        if let xpointer, let fragment = Self.firstMatch(#"^/body/DocFragment\[(\d+)\]"#, in: xpointer), fragment > 0 { return fragment - 1 }
+        return nil
+    }
+
+    private static func firstMatch(_ pattern: String, in text: String) -> Int? {
+        guard let match = try? Regex(pattern).firstMatch(in: text), match.count > 1,
+              let digits = match[1].substring.map(String.init), digits.count < 7 else { return nil }
+        return Int(digits)
+    }
 }

@@ -46,6 +46,18 @@ Against KOReader's release build, or a device, on the five sample books and a co
 
 ## Chunk 3: the rule
 
+**Done 2026-11-08.** As built, which differs from the plan below in three places:
+
+- **`SyncedPosition.origin`:** `.exact` (BookOrbit, the default) or `.elsewhere(Change)`, where `Change` is `.first`, `.unchanged` or `.moved`.
+- **`OpeningPosition.choose` for `.elsewhere`:** with no local place it opens there (at the start if the place has neither an xpointer nor a percentage). Otherwise it opens there only if the place `.moved`, is ahead (`isAhead`: a later spine item, else `aheadMargin`, 1 point, further in the same one) and nothing is unsent. Everything else opens locally, for the reader to offer. **Differs:** the "same section, no timestamp" row went. `isAhead` already keeps a section-start place from moving you back, and Komga is plain OPDS now.
+- **`OpeningPosition.mayPush`:** the book's screen and `retryUnsent` send an unsent place only over a KOReader place this iPhone has seen (`.unchanged`). `BookPlaces.pushUnsent` uses it, and BookOrbit's behaviour is unchanged.
+- **`Sync/KOSync.swift`:** `KOSync` (one per book, reading its file's document when needed) and `KOSyncPlaces` (one per account, a file named by a digest, so Kavita's key in an address isn't written; `forget()` for sign-out). **Differs:** the baseline isn't recorded at the first pull, or the screen would later push over a place nobody saw. It's recorded when a push is read back, or when the reader adopts the place (`ProgressSync.adopted`, called in chunk 4). The very start (percentage 0) is no place: Kavita answers that for a book never read.
+- **The first push since launch** asks the server first, and an unseen place throws `KOSyncError.serverMoved`, a temporary error that leaves the place unsent. **Differs:** later pushes don't ask. Reading on past an offered place keeps yours, as with BookOrbit's capsule.
+- **Tests:** `OpeningPositionElsewhereTests`, `KOSyncTests` (against a server that rewrites places as Kavita does), one more in `KOSyncLiveTests`, and two in `BookPlacesTests`.
+- **Left for chunk 4:** `ReaderModel.didOpen` still pushes an unsent local place when it opens. It has to use `mayPush` as the screen does, call `adopted` when it opens at, or goes to, a KOReader place, and offer `.first` and `.moved` places in the capsule.
+
+As planned:
+
 `OpeningPosition.choose` stays as it is for BookOrbit. It trusts the server, which is wrong here.
 
 - `SyncedPosition` gains a kind: `.exact` (BookOrbit, the default) or `.elsewhere(moved:)`.
