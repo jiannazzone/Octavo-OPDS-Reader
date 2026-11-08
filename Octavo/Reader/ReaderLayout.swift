@@ -46,18 +46,26 @@ nonisolated struct ReaderGeometry: Equatable, Sendable, Codable {
     var safeArea = ReaderInsets.zero
 }
 
-/// The margins setting (decision 8): foliate ties the outer margins and the
-/// gutter between two pages together as its `gap`, a share of the page
-/// area's width. Approved values 2026-11-01. The Customize panel (#18)
-/// binds to `key`.
+/// The margins setting (decision 8), a slider's five steps from narrow to
+/// wide: foliate ties the outer margins and the gutter between two pages
+/// together as its `gap`, a share of the page area's width. Narrow, Medium
+/// and Wide approved 2026-11-01; the steps between them 2026-11-07, each
+/// halfway between its neighbours on the page. The Customize panel (#18)
+/// binds to `key`; the raw values are what's saved.
 nonisolated enum ReaderMargins: String, CaseIterable, Sendable, Codable {
     /// Text reaches the side column's edge: the margin itself lies under
     /// the column. Unfolded, the gutter is a point wider than the hinge's
     /// 40 pt.
     case narrow
+    /// Two fifths of the margin under the column: 23 pt folded, ending
+    /// 14 pt short of the column; unfolded a 48 pt gutter and 29 pt from
+    /// the column.
+    case mediumNarrow
     /// The frames (07–09): foliate's own 7%, 27 pt folded and 55 pt
     /// unfolded (to the whole point).
     case medium
+    /// 32 pt folded, 67 pt unfolded.
+    case mediumWide
     case wide
 
     static let key = "reader.margins"
@@ -67,9 +75,42 @@ nonisolated enum ReaderMargins: String, CaseIterable, Sendable, Codable {
     var gapPercent: Double {
         switch self {
         case .narrow: 4.6
+        case .mediumNarrow: 5.8
         case .medium: 7
+        case .mediumWide: 8.5
         case .wide: 10
         }
+    }
+
+    /// How much of the margin lies under the side column (and, unfolded,
+    /// the strip that mirrors it), so the text reaches towards it. Narrow
+    /// all of it; the step after it enough to sit halfway to Medium, which
+    /// reaches none.
+    var underColumn: Double {
+        switch self {
+        case .narrow: 1
+        case .mediumNarrow: 0.4
+        case .medium, .mediumWide, .wide: 0
+        }
+    }
+
+    /// What VoiceOver reads for the step; only Narrow and Wide show, at the
+    /// slider's ends.
+    var name: String {
+        switch self {
+        case .narrow: "Narrow"
+        case .mediumNarrow: "Fairly Narrow"
+        case .medium: "Medium"
+        case .mediumWide: "Fairly Wide"
+        case .wide: "Wide"
+        }
+    }
+
+    /// The slider's step, 0 for Narrow to 4 for Wide.
+    var step: Int { Self.allCases.firstIndex(of: self) ?? 0 }
+
+    init(step: Int) {
+        self = Self.allCases[min(max(step, 0), Self.allCases.count - 1)]
     }
 }
 
@@ -188,9 +229,10 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
             }
     }
 
-    /// One page across the safe area's width. With narrow margins the view
-    /// reaches under each side's inset by its own margin, so the text meets
-    /// the inset's edge.
+    /// One page across the safe area's width. The view reaches under each
+    /// side's inset by the share of its margin the setting puts there
+    /// (`underColumn`): with Narrow, all of it, so the text meets the
+    /// inset's edge.
     ///
     /// The view and the margin are whole points (`wholePageGap`).
     static func single(in geometry: ReaderGeometry, margins: ReaderMargins) -> ReaderLayout {
@@ -198,14 +240,14 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
         let width = Double(geometry.size.width)
         let content = max(0, width - safe.left - safe.right)
         let share = margins.gapPercent / 100
-        let reachesLeft = margins == .narrow && safe.left > 0
-        let reachesRight = margins == .narrow && safe.right > 0
-        let sides = (reachesLeft ? 1.0 : 0) + (reachesRight ? 1.0 : 0)
+        let reachLeft = safe.left > 0 ? margins.underColumn : 0
+        let reachRight = safe.right > 0 ? margins.underColumn : 0
+        let sides = reachLeft + reachRight
         let margin = (share * content / (1 - sides * share)).rounded()
         let view = (content + sides * margin).rounded(.down)
         // Rounding the view down takes the fraction off the left, so the text
-        // still meets the right-hand inset's edge.
-        let right = max(0, Self.snapped(safe.right - (reachesRight ? margin : 0)))
+        // still ends where the setting puts it against the right-hand inset.
+        let right = max(0, Self.snapped(safe.right - reachRight * margin))
         let left = max(0, width - right - view)
         return ReaderLayout(
             columns: 1, gapPercent: Self.gapPercent(margin, of: view, else: margins.gapPercent),
@@ -218,7 +260,8 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
     /// stays half a point clear of it each side. The view is as wide as the
     /// shorter side allows, so the margins match on both sides (unfolded,
     /// the left edge gives up what the side column takes on the right).
-    /// Narrow margins reach under both edges by the margin.
+    /// The view reaches under both edges by the share of the margin the
+    /// setting puts there (`underColumn`): with Narrow, all of it.
     ///
     /// The view and the gap are whole points (`wholePageGap`).
     static func spread(in geometry: ReaderGeometry, fold: CGRect?, margins: ReaderMargins) -> ReaderLayout {
@@ -229,13 +272,13 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
         let mid = fold.map { Double($0.midX) } ?? (contentLeft + contentRight) / 2
         let half = max(0, min(mid - contentLeft, contentRight - mid))
         let foldWidth = Double(fold?.width ?? 0)
-        let reaches = margins == .narrow
+        let reach = margins.underColumn
         let share = margins.gapPercent / 100
-        // The setting's gap, `share` of the view, which with narrow margins
-        // includes the gap twice more.
-        let setting = reaches ? share * 2 * half / (1 - 2 * share) : share * 2 * half
+        // The setting's gap, `share` of the view, which includes the part of
+        // the gap reaching under each edge.
+        let setting = share * 2 * half / (1 - 2 * reach * share)
         let gap = max(setting.rounded(), foldWidth > 0 ? (foldWidth + 1).rounded(.up) : 0)
-        let view = (2 * half + (reaches ? 2 * gap : 0)).rounded(.down)
+        let view = (2 * half + 2 * reach * gap).rounded(.down)
         let left = Self.snapped(mid - view / 2)
         return ReaderLayout(
             columns: 2,
