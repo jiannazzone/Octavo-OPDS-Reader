@@ -115,7 +115,8 @@ nonisolated enum ReaderTheme: String, CaseIterable, Sendable, Codable, Identifia
         case .original: nil
         case .paper: Colors(background: "#f7f3ea", text: "#2b2a28", link: "#5a4a2a")
         case .sepia: Colors(background: "#f3e9d2", text: "#3b2f1e", link: "#6b4a1e")
-        case .night: Colors(background: "#121212", text: "#d6d3ce", link: "#9cb8e8")
+        // A dark grey at 9.2:1, not near-black (Adam, 2026-11-07).
+        case .night: Colors(background: "#1e1e1e", text: "#c4c0b8", link: "#93acd6")
         }
     }
 

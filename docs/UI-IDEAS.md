@@ -162,7 +162,7 @@ The book-mode spine shadow should vary. Today it's one fixed gradient over the g
 
 ## A Night that isn't pure black (Adam, 2026-11-07)
 
-Night mode shouldn't be pure black. Night's page is `#121212` today (`ReaderTheme.night`), with `#d6d3ce` text. Not looked into yet: whether that's the black he saw, or the shell around it.
+Night mode shouldn't be pure black. **Decided 2026-11-07:** decision 15 in `docs/design/direction.md`. The page was `#121212` already, but reading on it was hard on the eyes; Night is now a dark grey with dimmer text.
 
 ## Aa didn't respond (Adam, 2026-11-07)
 
