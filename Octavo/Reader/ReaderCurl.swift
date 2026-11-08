@@ -155,7 +155,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         if let pair = coming.values.first(where: { $0.contains { $0 === page } }) {
             return pair.first { $0 !== page }
         }
-        guard canStartWithFinger else { return nil }
+        guard canStartWithFinger, model?.canTurn(side) == true else { return nil }
         if coming[side] == nil {
             // Forward, the back of the page that turns is the next left page;
             // back, it's the right page before.
@@ -239,6 +239,16 @@ private struct ReaderCurlPage: View {
     let isNew: Bool
     let half: ReaderTurnSide?
 
+    /// Whether the new page is a picture on this page of the curl.
+    static func isPictured(_ half: ReaderTurnSide?, in turn: ReaderTurn) -> Bool {
+        let new = ReaderTurn.regions(motion: .curl, side: turn.side, size: turn.size, spine: turn.spine).new
+        return switch half {
+        case nil: new.contains(.whole)
+        case .left: new.contains(.left)
+        case .right: new.contains(.right)
+        }
+    }
+
     var body: some View {
         if let turn = pages.turn {
             let rect = half.map { ReaderTurn.half($0, of: turn.size, spine: turn.spine ?? 0) } ?? CGRect(origin: .zero, size: turn.size)
@@ -260,6 +270,11 @@ private struct ReaderCurlPage: View {
     @ViewBuilder private func page(_ turn: ReaderTurn) -> some View {
         if !isNew {
             ReaderTurnPage(turn: turn, picture: turn.old[half], place: turn.oldPlace)
+        } else if !Self.isPictured(half, in: turn) {
+            // A page the curl uncovers: clear over the web view, which shows
+            // it, with its footer.
+            ReaderTurnUncovered(turn: turn)
+                .animation(.easeOut(duration: ReaderTurnMotion.fade.duration), value: turn.new != nil)
         } else {
             // The page's colour until foliate has drawn the new page, which
             // fades in if the curl is already moving (a chapter loading).

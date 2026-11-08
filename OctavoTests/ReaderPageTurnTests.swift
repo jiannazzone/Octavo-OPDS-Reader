@@ -180,15 +180,15 @@ struct ReaderPageTurnTests {
         #expect(back.new == .whole)
     }
 
-    /// UIKit curls view controllers, so every page it shows is a picture:
-    /// both halves of a spread, before and after.
-    @Test func aCurlTakesEveryPage() {
-        let spread = ReaderTurn.regions(motion: .curl, side: .right, size: Self.spread, spine: 475.5)
-        #expect(spread.old == [.left, .right])
-        #expect(spread.new == [.left, .right])
-        let page = ReaderTurn.regions(motion: .curl, side: .left, size: CGSize(width: 466, height: 678), spine: nil)
-        #expect(page.old == .whole)
-        #expect(page.new == .whole)
+    /// A curl takes what a flip takes: the page it uncovers is the web view,
+    /// clear under UIKit's curl.
+    @Test(arguments: [ReaderTurnSide.left, .right], [CGSize(width: 466, height: 678), Self.spread])
+    func aCurlTakesWhatAFlipTakes(side: ReaderTurnSide, size: CGSize) {
+        let spine: Double? = size == Self.spread ? 475.5 : nil
+        let curl = ReaderTurn.regions(motion: .curl, side: side, size: size, spine: spine)
+        let flip = ReaderTurn.regions(motion: .flip, side: side, size: size, spine: spine)
+        #expect(curl.old == flip.old)
+        #expect(curl.new == flip.new)
     }
 
     @Test func halvesMeetAtTheSpine() {

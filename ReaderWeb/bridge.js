@@ -175,6 +175,18 @@ const relocationWatchers = new Set()
 // own relocate event leaves out.
 let lastRelocateReason = null
 
+// Whether there's a page to each side, for a curl under a finger, which
+// UIKit asks about as the finger lands (`ReaderCurl`). The fixed-layout
+// renderer doesn't say, so those are left out.
+const turnsFrom = r => {
+    if (typeof r?.atStart !== 'boolean' || typeof r?.atEnd !== 'boolean') return {}
+    const forward = forwardSide()
+    return {
+        turnsLeft: forward === 'left' ? !r.atEnd : !r.atStart,
+        turnsRight: forward === 'right' ? !r.atEnd : !r.atStart,
+    }
+}
+
 const onRelocate = ({ detail }) => {
     relocations++
     const message = {
@@ -194,6 +206,7 @@ const onRelocate = ({ detail }) => {
             }
             : null,
         ...(view.isFixedLayout ? fixedPlace(detail) : {}),
+        ...turnsFrom(view.renderer),
     }
     message.startCFI = startOf(message.cfi)
     for (const watch of relocationWatchers) watch(detail, message)

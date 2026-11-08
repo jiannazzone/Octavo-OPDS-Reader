@@ -62,18 +62,16 @@ struct ReaderTurn: Equatable {
     }
 
     /// The pictures a turn needs before it starts, and once the new page is
-    /// drawn, in the page's coordinates. A flip needs the new page only where
-    /// it's on the back of the turning page; elsewhere the web view shows it.
+    /// drawn, in the page's coordinates. A flip or a curl needs the new page
+    /// only where it's on the back of the turning page (or is the page coming
+    /// over, one page going back); elsewhere the web view shows it.
     nonisolated static func regions(motion: ReaderTurnMotion, side: ReaderTurnSide, size: CGSize, spine: Double?) -> (old: Regions, new: Regions) {
         switch motion {
         case .slide:
             return (.whole, .whole)
         case .fade, .none:
             return (.whole, [])
-        case .curl:
-            // UIKit curls view controllers: every page it shows is a picture.
-            return spine == nil ? (.whole, .whole) : ([.left, .right], [.left, .right])
-        case .flip:
+        case .flip, .curl:
             guard spine != nil else { return (.whole, side == .left ? .whole : []) }
             return ([.left, .right], side == .right ? .left : .right)
         }
@@ -258,7 +256,7 @@ private struct ReaderTurnIncoming: View {
 
 /// The page a turn uncovers: the web view itself, which already shows it,
 /// under the page's colour until it's drawn.
-private struct ReaderTurnUncovered: View {
+struct ReaderTurnUncovered: View {
     let turn: ReaderTurn
 
     var body: some View {

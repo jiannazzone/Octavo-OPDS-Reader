@@ -13,6 +13,12 @@ extension ReaderModel {
         phase == .open && !isFolding && !isCurling && turnRun == nil && turn == nil
     }
 
+    /// Whether there's a page to `side`: not at the book's start or end.
+    /// Unknown counts as yes, and foliate finds out (`bridge.js` `turn`).
+    func canTurn(_ side: ReaderTurnSide) -> Bool {
+        (side == .left ? relocation?.turnsLeft : relocation?.turnsRight) != false
+    }
+
     /// A tap, a key or the trackpad asked for a turn. One asked for while a
     /// tap's curl plays waits for it to land (UIKit's can't end early); one
     /// while a finger curls is dropped.
@@ -83,6 +89,7 @@ extension ReaderModel {
         if !held { playCurl(turn) }
         // A snapshot taken as the page reached the screen can miss it by a
         // frame; a second look settles it.
+        guard !regions.isEmpty else { return }
         try? await Task.sleep(for: .milliseconds(100))
         guard curl.pages.turn?.id == turn.id, let fresh = pictures(regions, size: turn.size, spine: turn.spine, afterScreenUpdates: false) else { return }
         curl.pages.turn?.new = fresh
