@@ -133,10 +133,18 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
     func play(_ turn: ReaderTurn) {
         guard let controller, pages.turn?.id == turn.id else { return }
         turning = .tap(id: turn.id)
-        curlTrace("tap \(turn.id): plays \(turn.side.rawValue), new page \(turn.new == nil ? "not drawn" : "drawn")")
+        curlTrace("tap \(turn.id): plays \(turn.side.rawValue), new page \(self.pages.turn?.new == nil ? "not drawn" : "drawn")")
         // In the spread's order, left then right.
         let next = turn.side == .right ? coming[.right] ?? [] : (coming[.left] ?? []).reversed()
         let id = turn.id
+        // UIKit copies the back of a page that curls on one page as it
+        // starts, so the pages coming in are drawn first, and a picture that
+        // came before the curl doesn't fade in.
+        next.forEach {
+            $0.view.setNeedsLayout()
+            $0.view.layoutIfNeeded()
+        }
+        pages.isCurling = true
         transitioning = true
         controller.setViewControllers(next, direction: turn.side == .right ? .forward : .reverse, animated: true) { [weak self] _ in
             guard let self else { return }
@@ -164,6 +172,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
         curlTrace("reset, was \(self.turning.map { "\($0)" } ?? "idle")\(self.transitioning ? ", mid-curl" : "")")
         turning = nil
         pages.turn = nil
+        pages.isCurling = false
         // Mid-curl, UIKit's pages can't be set; the curl's end resets them.
         guard !transitioning else { return }
         controller?.setViewControllers(waiting, direction: .forward, animated: false)
@@ -224,6 +233,7 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
             return
         }
         turning = .finger(id: turn.id)
+        pages.isCurling = true
     }
 
     func pageViewController(_ controller: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
@@ -250,6 +260,8 @@ final class ReaderCurl: NSObject, UIPageViewControllerDataSource, UIPageViewCont
 /// turn starts.
 @Observable final class ReaderCurlPages {
     var turn: ReaderTurn?
+    /// UIKit is curling them: a new page that comes now fades in.
+    var isCurling = false
     /// For the book-mode spine shadow, drawn on the pages so it turns with
     /// them; set by `ReaderCurlView`.
     @ObservationIgnored weak var model: ReaderModel?
@@ -327,7 +339,7 @@ private struct ReaderCurlPage: View {
             // A page the curl uncovers: clear over the web view, which shows
             // it, with its footer.
             ReaderTurnUncovered(turn: turn)
-                .animation(.easeOut(duration: ReaderTurnMotion.fade.duration), value: turn.new != nil)
+                .animation(fadeIn, value: turn.new != nil)
         } else {
             // The page's colour until foliate has drawn the new page, which
             // fades in if the curl is already moving (a chapter loading).
@@ -339,8 +351,14 @@ private struct ReaderCurlPage: View {
                 }
             }
             .frame(width: turn.size.width, height: turn.size.height, alignment: .topLeading)
-            .animation(.easeOut(duration: ReaderTurnMotion.fade.duration), value: turn.new != nil)
+            .animation(fadeIn, value: turn.new != nil)
         }
+    }
+
+    /// A new page fades in if it comes while the page curls (a chapter
+    /// loading); before, it's there as the curl starts.
+    private var fadeIn: Animation? {
+        pages.isCurling ? .easeOut(duration: ReaderTurnMotion.fade.duration) : nil
     }
 }
 
