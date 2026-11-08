@@ -39,6 +39,8 @@ final class ShellModel {
     let connection = ConnectionMonitor()
     /// Adding a server.
     let setup = SetupModel()
+    /// Signing in to KOReader sync, from Settings or a catalog's setup.
+    let koreaderSignIn = KOReaderSignIn()
     /// Where the servers are kept between launches.
     let servers: ServerStore
     /// The servers Remove server took away, whose kept books wait for them.
@@ -158,6 +160,14 @@ final class ShellModel {
             self[path: setupTab].pop()
         }
         setup.finished = { [weak self] in self?.serverAdded($0) }
+        koreaderSignIn.push = { [weak self] in
+            guard let self else { return }
+            self[path: setupTab].push(.setup($0))
+        }
+        koreaderSignIn.pop = { [weak self] in
+            guard let self else { return }
+            self[path: setupTab].pop()
+        }
         setup.saved = { [servers] in servers.load().servers }
         // The saved servers, at once: the first frame shows the tabs, which
         // load as each answers.
@@ -224,6 +234,18 @@ final class ShellModel {
     /// Settings) the tab it was opened in.
     private var setupTab: ShellTab {
         showsSetup ? .setup : tab
+    }
+
+    /// Connect (or Sign in) on a catalog's setup. With "Sync with KOReader"
+    /// on and no account yet, KOReader's sign-in goes first, from the fields
+    /// on the same screen, then the catalog. An account kept before the
+    /// catalog fails stays: the screen then shows it.
+    func connectCatalog() {
+        if setup.koreaderSync, koreader.account == nil {
+            koreaderSignIn.signIn(with: serverActions) { [weak self] in self?.setup.connectToCatalog() }
+        } else {
+            setup.connectToCatalog()
+        }
     }
 
     /// Setup finished: keep the server. The first opens Home; another opens
@@ -491,6 +513,19 @@ final class ShellModel {
         #endif
     }
 
+    /// A book whose place comes from KOReader once it's downloaded
+    /// (`docs/notes/koreader-sync-plan.md`, question 4): an EPUB from a
+    /// catalog switched on for KOReader sync, with an account, not on the
+    /// iPhone yet. Until then it shows no place, not even an old one of this
+    /// iPhone's, which KOReader may have moved on from.
+    func waitsForDownload(_ book: SourcedBook) -> Bool {
+        guard koreader.account != nil, book.source != .files,
+              Self.syncsWithKOReader(book, on: library.server(book.source)),
+              book.book.primaryFile?.format?.lowercased() == "epub"
+        else { return false }
+        return opener.status(of: book) != .downloaded
+    }
+
     /// Whether `book` comes from Files or a catalog switched on for KOReader
     /// sync.
     static func syncsWithKOReader(_ book: SourcedBook, on server: LibraryServer?) -> Bool {
@@ -579,8 +614,8 @@ final class ShellModel {
     /// `-shellCoverStrip failed|offline|downloading|protected`,
     /// `-shellOpen collection|deep|cover|collections|authors` (sample books,
     /// and the lists of collections and authors),
-    /// `-shellOpen settings|server|storage|licences` (Settings, or one of
-    /// its pages),
+    /// `-shellOpen settings|server|koreader|catalog|storage|licences` (Settings, one of
+    /// its pages, or catalog setup from it),
     /// `-shellReading 1` (the first book in Continue reading, once connected)
     /// `-searchQuery austen` (typed into Search, once connected),
     /// `-forgetServer 1` (no server), `-setupCatalog <address>`
@@ -647,6 +682,8 @@ final class ShellModel {
             case "settings": self[path: tab].replace([.settings])
             case "server":
                 if let id = library.server?.id { self[path: tab].replace([.settings, .settingsPage(.server(id))]) }
+            case "koreader": self[path: tab].replace([.settings, .settingsPage(.koreader)])
+            case "catalog": self[path: tab].replace([.settings, .setup(.opds)])
             case "storage": self[path: tab].replace([.settings, .settingsPage(.storage)])
             case "licences": self[path: tab].replace([.settings, .settingsPage(.licences)])
             default: break

@@ -115,4 +115,32 @@ struct KOReaderAccountTests {
         #expect(shell.servers.load()[.test]?.koreaderSync == false)
         #expect(shell.library.server(.test)?.syncsWithKOReader == false)
     }
+
+    /// Question 4: an EPUB from a catalog that syncs, not downloaded, shows
+    /// no place until it is. Everything else shows its place as before.
+    @Test func aBookThatWaitsForItsDownload() throws {
+        let shell = makeShell()
+        let url = URL(string: "http://nas.lan/opds")!
+        shell.library.add(LibraryServer(
+            id: .test, name: "Calibre", source: OPDSSource(catalogURL: url, transport: ServerTransport(server: url)),
+            syncsWithKOReader: true
+        ))
+        func book(_ format: String) -> SourcedBook {
+            .test(LibraryBook(
+                id: LibraryBookID(rawValue: format), title: "Moby-Dick",
+                files: [LibraryFile(id: LibraryFileID(rawValue: format), format: format, isPrimary: true)]
+            ))
+        }
+        let epub = book("epub")
+
+        // No account yet: nothing waits.
+        #expect(!shell.waitsForDownload(epub))
+        shell.koreader.connect(KOReaderAccount(id: id, account: Self.account, positions: shell.places.store.directory, deviceID: "test"))
+        #expect(shell.waitsForDownload(epub))
+        // Not an EPUB, or from Files, or the catalog switched off.
+        #expect(!shell.waitsForDownload(book("pdf")))
+        #expect(!shell.waitsForDownload(SourcedBook(source: .files, book: epub.book)))
+        shell.library.setSyncsWithKOReader(.test, false)
+        #expect(!shell.waitsForDownload(epub))
+    }
 }

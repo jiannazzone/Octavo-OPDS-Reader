@@ -55,6 +55,7 @@ struct SetupScreen: View {
         case .bookOrbit: BookOrbitSetup()
         case .opds: CatalogSetup()
         case .trust: TrustSetup()
+        case .koreaderTrust: KOReaderTrustSetup()
         case .sync: SyncSetup()
         }
     }
@@ -223,7 +224,7 @@ private struct CatalogSetup: View {
         } form: {
             VStack(alignment: .leading, spacing: 12) {
                 AddressField(prompt: "https://books.example.com/opds", address: $setup.catalogAddress) {
-                    setup.connectToCatalog()
+                    shell.connectCatalog()
                 }
                 // The catalog's own name isn't known until it has answered.
                 SetupField("Name", text: $setup.catalogName, prompt: setup.signIn?.title ?? "Optional", isName: true)
@@ -235,10 +236,11 @@ private struct CatalogSetup: View {
                         .textContentType(.username)
                     SetupField(signIn.passwordLabel ?? "Password", text: $setup.catalogPassword, secure: true)
                         .textContentType(.password)
-                        .onSubmit { setup.connectToCatalog() }
+                        .onSubmit { shell.connectCatalog() }
                 }
-                SetupButton(setup.signIn == nil ? "Connect" : "Sign in", working: setup.working) {
-                    setup.connectToCatalog()
+                KOReaderSetupToggle(isOn: $setup.koreaderSync)
+                SetupButton(setup.signIn == nil ? "Connect" : "Sign in", working: setup.working || shell.koreaderSignIn.working) {
+                    shell.connectCatalog()
                 }
                 SetupError(message: setup.error)
             }
@@ -257,18 +259,75 @@ private struct CatalogSetup: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .onDisappear { setup.leftStep() }
+        .onDisappear {
+            setup.leftStep()
+            shell.koreaderSignIn.left()
+        }
+    }
+}
+
+/// "Sync with KOReader" on a catalog's setup (`docs/notes/koreader-sync-plan.md`,
+/// questions 2 and 5): with no account yet, KOReader's fields under it,
+/// which Connect signs in with first; with one, whose it is.
+private struct KOReaderSetupToggle: View {
+    @Binding var isOn: Bool
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        @Bindable var signIn = shell.koreaderSignIn
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle("Sync with KOReader", isOn: $isOn)
+                .padding(.top, 8)
+            if isOn {
+                if let account = shell.koreader.account {
+                    Text("As \(account.username) on \(account.host).")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    AddressField(label: "Sync server", prompt: "sync.example.com", address: $signIn.address) {
+                        shell.connectCatalog()
+                    }
+                    SetupField("Username", text: $signIn.username)
+                        .textContentType(.username)
+                    SetupField("Password", text: $signIn.password, secure: true)
+                        .textContentType(.password)
+                        .onSubmit { shell.connectCatalog() }
+                    SetupError(message: signIn.error)
+                }
+            }
+            Text(KOReaderSettingsPage.catalogLimits)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Setup's "Trust this server".
+private struct TrustSetup: View {
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        TrustPage(question: shell.setup.trustQuestion, decide: shell.setup.decideTrust)
+    }
+}
+
+/// KOReader sync's, from Settings or a catalog's setup.
+private struct KOReaderTrustSetup: View {
+    @Environment(ShellModel.self) private var shell
+
+    var body: some View {
+        TrustPage(question: shell.koreaderSignIn.trust.question, decide: shell.koreaderSignIn.decideTrust)
     }
 }
 
 /// "Trust this server" (decision 25): who the certificate says it's for, and
 /// its fingerprint to compare with the server's own.
-private struct TrustSetup: View {
-    @Environment(ShellModel.self) private var shell
+private struct TrustPage: View {
+    let question: TrustQuestion?
+    let decide: (Bool) -> Void
 
     var body: some View {
-        let setup = shell.setup
-        if let question = setup.trustQuestion {
+        if let question {
             let certificate = question.certificate
             SetupPage {
                 VStack(alignment: .leading, spacing: 12) {
@@ -311,9 +370,9 @@ private struct TrustSetup: View {
                         }
                     }
                     if question.changed {
-                        SetupButton("Don’t connect", working: false) { setup.decideTrust(false) }
+                        SetupButton("Don’t connect", working: false) { decide(false) }
                         Button(role: .destructive) {
-                            setup.decideTrust(true)
+                            decide(true)
                         } label: {
                             Text(certificate.isTrustedBySystem ? "Use the new certificate" : "Trust the new certificate")
                                 .frame(maxWidth: .infinity)
@@ -322,9 +381,9 @@ private struct TrustSetup: View {
                         .controlSize(.large)
                         .foregroundStyle(.red)
                     } else {
-                        SetupButton("Trust", working: false) { setup.decideTrust(true) }
+                        SetupButton("Trust", working: false) { decide(true) }
                         Button {
-                            setup.decideTrust(false)
+                            decide(false)
                         } label: {
                             Text("Cancel")
                                 .frame(maxWidth: .infinity)
@@ -444,6 +503,7 @@ private struct SetupChoice: View {
 /// encrypted" under it for plain http (decision 25), naming the risk on
 /// other networks (Adam, step 16).
 private struct AddressField: View {
+    var label = "Address"
     let prompt: String
     @Binding var address: String
     /// Return: the step's action.
@@ -451,7 +511,7 @@ private struct AddressField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            SetupField("Address", text: $address, prompt: prompt)
+            SetupField(label, text: $address, prompt: prompt)
                 .keyboardType(.URL)
                 .textContentType(.URL)
                 .submitLabel(.go)

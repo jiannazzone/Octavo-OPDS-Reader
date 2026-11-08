@@ -60,6 +60,10 @@ struct BookCoverPage: View {
             guard let book, page.markedFinished == nil else { return }
             shell.library.detailsLoaded(SourcedBook(source: sourceID, book: book))
         }
+        // Downloaded: its place can come from KOReader now (question 4).
+        .onChange(of: shell.opener.status(of: sourced) == .downloaded) { _, downloaded in
+            if downloaded { shell.places.refresh(sourced) }
+        }
         .onChange(of: scenePhase) { _, phase in
             // Not under the reader: its own pushes keep the place current.
             guard phase == .active, shell.reader.reading == nil else { return }

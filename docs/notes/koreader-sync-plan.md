@@ -115,6 +115,13 @@ As planned:
 - A per-catalog switch (question 2), saved on the `SavedServer` and optional so saved files still read: in `CatalogSetup` with the account fields inline while there's no account, and on the catalog's server page. `ShellModel.koreaderSync` checks it. Files books need only the account.
 - From the answers below: an EPUB on a synced catalog that isn't downloaded has no place row, bar or Search place, and a download pulls at once (4). The toggle's footer and the account page state the limits (5). The capsule says "KOReader" (6).
 
+**Done (2026-11-08), checked on Octavo KOReader Duo against `dev/kosync` and the local COPS:**
+- The account (`KOSyncAccount`: address and key) is one Keychain item under its ID (`KeychainKOSyncAccountStore`); `Servers.json` keeps only `koreader.id`, since a Kavita address or a Komga username can be a key. The sweep keeps it. A list that names an account the Keychain no longer has forgets it at launch.
+- Sign in and Sign out are `ServerActions` (`signInToKOReader`, `signOutOfKOReader`), with the "Trust this server" step shared with setup (`TrustStep`, out of `SetupModel`). Sign out forgets the account's places file, the places waiting to go and what it said; each catalog's switch stays.
+- Settings' row and page (`KOReaderSettingsPage`); the toggle on catalog setup, with the fields inline and Connect signing in first (`ShellModel.connectCatalog`); the toggle on a catalog's page, with the fields under it while there's no account.
+- `ShellModel.waitsForDownload`: a synced catalog's EPUB that isn't downloaded has no place row, bar or Search place; downloading it pulls (`BookCoverPage`).
+- Not checked yet: the trust step against the self-signed `dev/kosync` (port 3351), and a pulled place appearing right after a download (the server had none for that book).
+
 ## Chunk 6: review and docs
 
 - Security review, for Adam's sign-off:

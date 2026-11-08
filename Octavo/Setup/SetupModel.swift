@@ -8,6 +8,8 @@ nonisolated enum SetupStep: Hashable, Sendable {
     /// were imported without one.
     case choose
     case bookOrbit, opds, trust, sync
+    /// "Trust this server" for KOReader sync's server (`KOReaderSignIn`).
+    case koreaderTrust
 }
 
 /// Adding the server on first launch (`docs/design/direction.md`,
@@ -49,14 +51,18 @@ final class SetupModel {
 
     /// Where reading progress syncs, for the sync step.
     var syncsProgress = true
+    /// A catalog's "Sync with KOReader" (`SavedServer.koreaderSync`).
+    var koreaderSync = false
 
     /// Signing in or connecting: one try at a time, with a time limit.
     let connecting = Attempt()
     var working: Bool { connecting.running }
     /// Shown under the fields (decision 22).
     private(set) var error: String?
+    /// "Trust this server", when a certificate needs it.
+    let trust = TrustStep { SavedServer.newID().rawValue }
     /// What the trust step asks about.
-    private(set) var trustQuestion: TrustQuestion?
+    var trustQuestion: TrustQuestion? { trust.question }
     /// A BookOrbit server signed in to, waiting for the sync step.
     private(set) var pending: SavedServer?
 
@@ -69,13 +75,6 @@ final class SetupModel {
     /// The servers already added, for telling the same one twice.
     @ObservationIgnored var saved: () -> [SavedServer] = { [] }
 
-    /// Secrets are stored under this ID as setup goes (tokens, a password, a
-    /// trusted certificate); it becomes the server's when setup finishes.
-    @ObservationIgnored private var attemptID = SavedServer.newID()
-    /// The address `attemptID`'s secrets are for.
-    @ObservationIgnored private var attemptAddress: URL?
-    /// What to try again once a certificate is trusted.
-    @ObservationIgnored private var afterTrust: (() -> Void)?
 
     // MARK: BookOrbit
 
@@ -174,7 +173,8 @@ final class SetupModel {
                         id: id, kind: .opds, address: secret?.redact(address) ?? address,
                         name: Self.name(title ?? asked?.title, url: parsed.url),
                         customName: Self.customName(catalogName),
-                        username: credentials?.username, authScheme: asked?.scheme
+                        username: credentials?.username, authScheme: asked?.scheme,
+                        koreaderSync: koreaderSync
                     ))
                 case .signInRequired(let request):
                     if asked != nil {
@@ -225,21 +225,10 @@ final class SetupModel {
 
     /// Trust or Cancel on the trust step: back to the form, and on if
     /// trusted.
-    func decideTrust(_ trust: Bool) {
-        guard let question = trustQuestion else { return }
+    func decideTrust(_ trusted: Bool) {
+        guard trust.question != nil else { return }
         pop()
-        trustQuestion = nil
-        guard trust else {
-            error = "Not connected: the server’s certificate wasn’t trusted."
-            return
-        }
-        do {
-            try KeychainCertificatePinStore(serverID: attemptID.rawValue).save(question.certificate.pinToSave)
-        } catch {
-            self.error = "Couldn’t keep the certificate. Try again."
-            return
-        }
-        afterTrust?()
+        if let message = trust.decide(trusted) { error = message }
     }
 
     // MARK: State
@@ -258,12 +247,10 @@ final class SetupModel {
         catalogPassword = ""
         signIn = nil
         syncsProgress = true
+        koreaderSync = false
         error = nil
-        trustQuestion = nil
         pending = nil
-        afterTrust = nil
-        attemptID = SavedServer.newID()
-        attemptAddress = nil
+        trust.reset()
     }
 
     /// Back out of a step: stop waiting for its server.
@@ -297,27 +284,17 @@ final class SetupModel {
         }
     }
 
-    /// The ID to keep secrets under for `url`. A different address starts
-    /// over, so a certificate trusted for one server never applies to
-    /// another.
+    /// The ID to keep secrets under for `url` (`TrustStep.id(for:)`).
     private func serverID(for url: URL) -> LibrarySourceID {
-        if let attemptAddress, attemptAddress != url {
-            try? ServerCredentials.removeAll(serverID: attemptID.rawValue)
-            attemptID = SavedServer.newID()
-        }
-        attemptAddress = url
-        return attemptID
+        LibrarySourceID(rawValue: trust.id(for: url))
     }
 
     private func failed(_ error: any Error, server: String, retry: @escaping () -> Void) {
-        let pin = try? KeychainCertificatePinStore(serverID: attemptID.rawValue).load()
-        if let question = TrustQuestion(error, trusted: pin) {
-            trustQuestion = question
-            afterTrust = retry
+        if trust.ask(error, retry: retry) {
             push(.trust)
             return
         }
-        self.error = Self.message(for: error, server: server, host: attemptAddress?.host())
+        self.error = Self.message(for: error, server: server, host: trust.host)
     }
 
     /// What went wrong, in words, under the fields.
