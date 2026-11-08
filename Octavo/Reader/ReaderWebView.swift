@@ -18,6 +18,8 @@ import WebKit
 /// under the spine shadow, what moves over it.
 struct ReaderWebView: View {
     let model: ReaderModel
+    /// The theme on the page, for the spine shadow's colour.
+    let theme: ReaderTheme
     /// The progress bar covers the footer's place while it shows.
     var showsFooter = true
     /// The way back has the chapter's place in the footer (decision 33).
@@ -57,9 +59,8 @@ struct ReaderWebView: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                if showsSpineShadow, model.isBookMode, let page = model.geometry?.size,
-                   let gap = model.layout.gap(inReaderWidth: Double(page.width)) {
-                    ReaderSpineShadow(gap: gap, height: Double(page.height))
+                if showsSpineShadow {
+                    ReaderSpineShadow(model: model, theme: theme)
                 }
             }
             .overlay(alignment: .topLeading) {

@@ -158,7 +158,7 @@ Decided and built 2026-11-06 (`docs/design/direction.md`, Home): this book on th
 
 ## The spine shadow should vary (Adam, 2026-11-07)
 
-The book-mode spine shadow should vary. Today it's one fixed gradient over the gap, peaking at 20% black (`ReaderSpineShadow`), whatever the hinge angle or theme, so it barely shows on Night. Not looked into yet: what it should vary with (the angle, the theme, or both).
+The book-mode spine shadow should vary. It was one fixed gradient over the gap, peaking at 20% black (`ReaderSpineShadow`), whatever the hinge angle or theme, so it barely showed on Night. **Decided and built 2026-11-07:** it follows both (decision 9 in `docs/design/direction.md`): darker as the book closes, within the gap, warm on Paper and Sepia and stronger on Night. Not chosen: reaching onto the pages when closed; neutral black on every theme.
 
 ## A Night that isn't pure black (Adam, 2026-11-07)
 
