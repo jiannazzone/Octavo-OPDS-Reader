@@ -16,6 +16,7 @@ final class ShellModel {
     private var libraryPath = ShellPath()
     private var searchPath = ShellPath()
     private var setupPath = ShellPath()
+    private var settingsPath = ShellPath()
 
     /// The books, and where they come from.
     let library: LibraryModel
@@ -84,7 +85,7 @@ final class ShellModel {
 
     /// The tabs laid out as a list and what's picked from it (`TabSplit`),
     /// where nothing pairs up as pages.
-    static let splitTabs: Set<ShellTab> = [.home, .library, .search]
+    static let splitTabs: Set<ShellTab> = [.home, .library, .search, .settings]
 
     /// The split tabs showing both columns now (`TabSplit`): there, with
     /// nothing picked, the right column shows the tab's `defaultPick`, and a
@@ -95,8 +96,21 @@ final class ShellModel {
     /// current book (decision 26). It isn't picked, so folding still shows
     /// the tab's list.
     func defaultPick(_ tab: ShellTab) -> ShellRoute? {
-        guard tab == .home else { return nil }
-        return library.continueReading.first.map(ShellRoute.cover)
+        switch tab {
+        case .home: library.continueReading.first.map(ShellRoute.cover)
+        // The server's page, as system Settings opens on General; with no
+        // server yet (books imported), Books on iPhone.
+        case .settings: .settingsPage(library.server.map { .server($0.id) } ?? .storage)
+        case .library, .search, .setup: nil
+        }
+    }
+
+    /// Settings, as a sheet over the tabs (`SettingsSheet`).
+    private(set) var showsSettings = false
+
+    /// The screens in front: Settings' while its sheet is up, else the tab's.
+    private var frontTab: ShellTab {
+        showsSettings ? .settings : tab
     }
 
     /// The tab whose screens are showing: setup's, while it shows instead of
@@ -148,6 +162,9 @@ final class ShellModel {
             if landsOnHome { tab = .home }
         }
         tour.isImporting = { [weak self] in self?.isImporting ?? false }
+        // Settings closed for the replay (it would cover the tour); it comes
+        // back where it was.
+        tour.replayEnded = { [weak self] in self?.showsSettings = true }
         library.serverAdded = { [weak self] in
             guard let self else { return }
             search.reset()
@@ -166,6 +183,8 @@ final class ShellModel {
                 let kept = routes.filter { !$0.belongs(to: id) }
                 if kept.count != routes.count { self[path: tab].replace(kept) }
             }
+            // The last server gone: Home, or setup with no books.
+            if library.connections.isEmpty { showsSettings = false }
         }
         connection.onReturn = { [weak self] in self?.retryUnsentPlaces() }
         Task.detached(priority: .background) { ShellModel.clearOldInboxFiles() }
@@ -220,6 +239,7 @@ final class ShellModel {
             case .library: libraryPath
             case .search: searchPath
             case .setup: setupPath
+            case .settings: settingsPath
             }
         }
         set {
@@ -228,6 +248,7 @@ final class ShellModel {
             case .library: libraryPath = newValue
             case .search: searchPath = newValue
             case .setup: setupPath = newValue
+            case .settings: settingsPath = newValue
             }
         }
     }
@@ -249,9 +270,9 @@ final class ShellModel {
     }
 
     /// Where setup's steps go: setup itself, or (adding a server later from
-    /// Settings) the tab it was opened in.
+    /// Settings) Settings' own screens.
     private var setupTab: ShellTab {
-        showsSetup ? .setup : tab
+        showsSetup ? .setup : frontTab
     }
 
     /// Connect (or Sign in) on a catalog's setup. With "Sync with KOReader"
@@ -272,6 +293,7 @@ final class ShellModel {
         guard let server = serverActions.keep(added) else { return }
         let isFirst = library.connections.isEmpty
         addsBooksAfterTour = false
+        showsSettings = false
         for tab in ShellTab.allCases { self[path: tab].replace([]) }
         tab = isFirst ? .home : .library
         setup.reset()
@@ -448,6 +470,7 @@ final class ShellModel {
         if case .setup = route {
             self[path: setupTab].open(route, twoPages: isTwoPages(in: setupTab))
         } else {
+            let tab = frontTab
             // From the default pick on the right: it stays under the push.
             if expandedSplits.contains(tab), self[path: tab].routes.isEmpty, let pick = defaultPick(tab) {
                 self[path: tab].replace([pick])
@@ -494,9 +517,16 @@ final class ShellModel {
         tab = .library
     }
 
-    /// The Settings button at the top of the side column.
+    /// The Settings button in the side column: Settings as a sheet, from its
+    /// first page.
     func openSettings() {
-        push(.settings)
+        self[path: .settings].replace([])
+        showsSettings = true
+    }
+
+    /// Settings' close button, or the sheet swiped down.
+    func closeSettings() {
+        showsSettings = false
     }
 
     // MARK: Books
@@ -626,6 +656,7 @@ final class ShellModel {
         let hasServer = library.server != nil
         tour.finish()
         if hasServer {
+            showsSettings = true
             push(.setup(.choose))
         } else {
             setupImportFailures = []
@@ -717,13 +748,22 @@ final class ShellModel {
                 self[path: .library].replace([.feed(list, from: SampleLibrarySource.id)])
             case "deep": self[path: .library].replace([classics, .cover(book)])
             case "cover": self[path: .library].replace([.cover(book)])
-            case "settings": self[path: tab].replace([.settings])
+            case "settings": openSettings()
             case "server":
-                if let id = library.server?.id { self[path: tab].replace([.settings, .settingsPage(.server(id))]) }
-            case "koreader": self[path: tab].replace([.settings, .settingsPage(.koreader)])
-            case "catalog": self[path: tab].replace([.settings, .setup(.opds)])
-            case "storage": self[path: tab].replace([.settings, .settingsPage(.storage)])
-            case "licences": self[path: tab].replace([.settings, .settingsPage(.licences)])
+                openSettings()
+                if let id = library.server?.id { self[path: .settings].replace([.settingsPage(.server(id))]) }
+            case "koreader":
+                openSettings()
+                self[path: .settings].replace([.settingsPage(.koreader)])
+            case "catalog":
+                openSettings()
+                self[path: .settings].replace([.setup(.opds)])
+            case "storage":
+                openSettings()
+                self[path: .settings].replace([.settingsPage(.storage)])
+            case "licences":
+                openSettings()
+                self[path: .settings].replace([.settingsPage(.licences)])
             default: break
             }
             if reads, let first = library.continueReading.first {

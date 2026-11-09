@@ -32,6 +32,8 @@ final class TourController {
     /// reading, and Home if the tour itself ended (not an import, which goes
     /// to the Library).
     @ObservationIgnored var played: (_ landsOnHome: Bool) -> Void = { _ in }
+    /// A replay ended: back to the Settings it was shown from.
+    @ObservationIgnored var replayEnded: () -> Void = {}
     /// Files are coming in: a new install opened with one waits to see
     /// whether it arrives.
     @ObservationIgnored var isImporting: () -> Bool = { false }
@@ -185,7 +187,7 @@ final class TourController {
     func finish() {
         guard let finished = playing else { return }
         end()
-        guard !finished.isReplay else { return }
+        guard !finished.isReplay else { return replayEnded() }
         record.set(.played)
         played(true)
     }

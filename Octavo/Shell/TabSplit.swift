@@ -18,6 +18,8 @@ import SwiftUI
 ///   `ShellModel.defaultPick` (Home's current book), or says nothing is.
 struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
     let tab: ShellTab
+    /// The buttons stay on the list in both postures: Settings' close.
+    var buttonsOnList = false
     @ViewBuilder let menu: () -> Menu
     @ToolbarContentBuilder let buttons: () -> Buttons
     @Environment(ShellModel.self) private var shell
@@ -30,7 +32,7 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
                 .environment(\.menuColumn, tab)
                 .measuresSpread()
                 .toolbar {
-                    if sizeClass == .compact { buttons() }
+                    if buttonsOnList || sizeClass == .compact { buttons() }
                 }
         } detail: {
             NavigationStack(path: pushed) {
@@ -44,7 +46,7 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
                     } else {
                         ContentUnavailableView("No Book Selected", systemImage: "books.vertical")
                             .toolbar {
-                                if sizeClass != .compact { buttons() }
+                                if !buttonsOnList, sizeClass != .compact { buttons() }
                             }
                     }
                 }
@@ -63,10 +65,9 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
     private func screen(_ route: ShellRoute) -> some View {
         ShellScreen(route: route)
             .measuresSpread()
-            .navigationTitle(route.title ?? "")
-            .toolbarTitleDisplayMode(route.title == nil ? .inline : .large)
+            .routeTitle(route.title)
             .toolbar {
-                if sizeClass != .compact { buttons() }
+                if !buttonsOnList, sizeClass != .compact { buttons() }
             }
     }
 
@@ -74,6 +75,29 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
     /// there change.
     private var pushed: Binding<[ShellRoute]> {
         Binding { shell[path: tab].pushed } set: { shell[path: tab].setPushed($0) }
+    }
+}
+
+extension View {
+    /// A route's large title; a screen without one (a book's, a page of
+    /// Settings) names itself, or has none.
+    func routeTitle(_ title: String?) -> some View {
+        modifier(RouteTitle(title: title))
+    }
+}
+
+private struct RouteTitle: ViewModifier {
+    let title: String?
+
+    func body(content: Content) -> some View {
+        if let title {
+            content
+                .navigationTitle(title)
+                .toolbarTitleDisplayMode(.large)
+        } else {
+            content
+                .toolbarTitleDisplayMode(.inline)
+        }
     }
 }
 

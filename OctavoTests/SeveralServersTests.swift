@@ -795,11 +795,14 @@ struct SeveralServersShellTests {
         #expect(model.tab == .home)
         model.openSettings()
         model.push(.setup(.choose))
+        #expect(model[path: .settings].routes == [.setup(.choose)])
         model.setup.finished(second)
         #expect(model.tab == .library)
+        #expect(!model.showsSettings)
         #expect(model.library.server?.id == second.id)
         #expect(model[path: .home].routes.isEmpty)
         #expect(model[path: .library].routes.isEmpty)
+        #expect(model[path: .settings].routes.isEmpty)
     }
 
     @Test func aSecondOfTheSameNameGetsANumber() {
@@ -891,9 +894,8 @@ struct SeveralServersShellTests {
         model.push(.cover(gone))
         model.push(.cover(kept))
         model.select(.home)
-        model.lastSpread = .duoUnfolded
         model.openSettings()
-        model.push(.settingsPage(.server(first.id)))
+        model.pick(.settingsPage(.server(first.id)), in: .settings)
 
         await model.serverActions.remove(first.id, removingBooks: true)
 
@@ -907,7 +909,8 @@ struct SeveralServersShellTests {
         #expect(model.library.onIPhone.books().map(\.id) == [kept.id])
         #expect(model.places.store.progress(forBook: kept.storageKey ?? "") != nil)
         #expect(model[path: .library].routes == [.cover(kept)], "only what showed its books closes")
-        #expect(model[path: .home].routes == [.settings])
+        #expect(model[path: .settings].routes.isEmpty, "the removed server's page closes")
+        #expect(model.showsSettings, "with another server left, Settings stays")
         #expect(!model.needsSetup)
     }
 

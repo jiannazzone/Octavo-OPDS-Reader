@@ -24,12 +24,7 @@ struct AppShell: View {
                 if model.showsSetup {
                     // No tabs, and nothing to skip to (decision 6) unless
                     // the tour brought you here.
-                    ScreenStack(
-                        tab: .setup, title: "Add your books", showsSettings: false,
-                        skip: model.addsBooksAfterTour ? { model.skipAddingBooks() } : nil
-                    ) {
-                        SetupStart()
-                    }
+                    SetupStack(skip: model.addsBooksAfterTour ? { model.skipAddingBooks() } : nil)
                 } else {
                     tabs
                 }
@@ -73,6 +68,12 @@ struct AppShell: View {
         ) { result in
             guard case .success(let urls) = result else { return }
             Task { await model.importBooks(urls) }
+        }
+        // Settings, from the gear (`SettingsSheet`).
+        // Not over setup: a replay's Add your books comes back to it on Skip.
+        .sheet(isPresented: Binding(get: { model.showsSettings && !model.showsSetup }, set: { if !$0 { model.closeSettings() } })) {
+            SettingsSheet()
+                .presentationSizing(.page)
         }
         // Open in Octavo, from another app's share sheet.
         .onOpenURL { url in

@@ -571,11 +571,13 @@ struct ShellModelTests {
         #expect(model[path: .library].routes.isEmpty)
     }
 
-    @Test func settingsOpensOnTheCurrentTab() {
+    @Test func settingsOpensOverTheCurrentTab() {
         let model = makeShell()
         model.select(.library)
         model.openSettings()
-        #expect(model[path: .library].top == .settings)
+        #expect(model.showsSettings)
+        #expect(model.tab == .library)
+        #expect(model[path: .library].routes.isEmpty)
     }
 
     @Test func aBookJoinsContinueReadingOnceItOpens() async throws {

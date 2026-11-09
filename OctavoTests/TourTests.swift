@@ -609,6 +609,7 @@ struct TourShellTests {
         #expect(model.tour.playing == nil)
         #expect(model[path: model.tab].routes == routes)
         #expect(model.tab == .home)
+        #expect(model.showsSettings)
     }
 
     @Test func aReplayFoldedStartsOnTheCover() {
@@ -704,7 +705,9 @@ struct TourShellTests {
         #expect(model.tour.playing == nil)
         #expect(!model.showsSetup)
         #expect(!model.picksFiles)
-        #expect(model[path: model.tab].routes == routes + [.setup(.choose)])
+        #expect(model.showsSettings)
+        #expect(model[path: .settings].routes == [.setup(.choose)])
+        #expect(model[path: model.tab].routes == routes)
     }
 
     @Test func aReplayEndingOnAddYourBooksReturnsToSettingsOnSkip() {
@@ -716,6 +719,7 @@ struct TourShellTests {
         #expect(model.showsSetup)
         model.skipAddingBooks()
         #expect(!model.showsSetup)
+        #expect(model.showsSettings)
         #expect(model[path: model.tab].routes == routes)
     }
 

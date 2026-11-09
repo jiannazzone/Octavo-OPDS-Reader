@@ -1,12 +1,12 @@
 import Foundation
 import OctavoKit
 
-/// The tabs in the side column: Home, Library and Search. Settings isn't a
-/// tab; a button at the top of the column opens it (`docs/design/direction.md`).
-/// `setup` isn't a tab either: it's the screens before there's a server,
-/// shown instead of the tabs.
+/// The tabs in the side column: Home, Library and Search. `settings` isn't a
+/// tab: the gear opens it as a sheet over the tabs (Adam, 2026-11-08), with
+/// screens of its own. `setup` isn't a tab either: it's the screens before
+/// there's a server, shown instead of the tabs.
 nonisolated enum ShellTab: String, Hashable, Sendable, CaseIterable {
-    case home, library, search, setup
+    case home, library, search, setup, settings
 }
 
 /// A page of Settings, opened from its list.

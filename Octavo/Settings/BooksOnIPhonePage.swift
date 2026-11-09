@@ -19,13 +19,12 @@ struct BooksOnIPhonePage: View {
     var body: some View {
         let books = order.sorted(shell.downloads())
         if books.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                ScreenTitle("Books on iPhone")
-                ContentUnavailableView(
-                    "No books on iPhone", systemImage: "book.closed",
-                    description: Text("Books you download or import show here.")
-                )
-            }
+            ContentUnavailableView(
+                "No books on iPhone", systemImage: "book.closed",
+                description: Text("Books you download or import show here.")
+            )
+            .navigationTitle("Books on iPhone")
+            .toolbarTitleDisplayMode(.inline)
         } else {
             list(books)
         }
