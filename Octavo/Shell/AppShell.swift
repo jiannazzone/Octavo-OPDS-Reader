@@ -131,7 +131,7 @@ struct AppShell: View {
                 }
             }
             Tab(value: .search, role: .search) {
-                TabSplit(tab: .search) {
+                TabStack(tab: .search) {
                     SearchView()
                 } buttons: {
                     settingsButton
