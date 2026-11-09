@@ -179,7 +179,8 @@ final class BookOpener {
                 guard let file = full.readableFile else { throw BookFilesError.unreadableFormat }
                 let id = book.id
                 let url = try await files.download(file, in: book.source, from: source) { fraction in
-                    Task { @MainActor [weak self] in self?.progressed(id, to: fraction) }
+                    // The download's own task holds the opener until it ends.
+                    Task { @MainActor in self.progressed(id, to: fraction) }
                 }
                 // Cancelled as the file landed: it goes too.
                 if Task.isCancelled {

@@ -32,15 +32,15 @@ struct CoverScreen: View {
         if let source = library.source(for: book.source) {
             BookCoverPage(book: book.book, sourceID: book.source, source: source)
                 .id(library.connection)
-                .environment(\.openLibraryEntry) { entry in
+                .environment(\.openLibraryEntry, EnvironmentAction(id: book.source) { entry in
                     shell.push(.feed(entry, from: book.source))
-                }
-                .environment(\.openBook) { opened in
+                })
+                .environment(\.openBook, EnvironmentAction(id: book.source) { opened in
                     shell.reader.open(SourcedBook(source: book.source, book: opened))
-                }
-                .environment(\.downloadBook) { downloading in
+                })
+                .environment(\.downloadBook, EnvironmentAction(id: book.source) { downloading in
                     shell.downloadBook(SourcedBook(source: book.source, book: downloading))
-                }
+                })
         } else {
             LibraryNotConnected()
         }

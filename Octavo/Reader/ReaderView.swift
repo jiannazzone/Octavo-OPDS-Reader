@@ -339,6 +339,7 @@ private struct ReaderScreen: View {
             // alive after the reader closes.
             let controls = $controls
             let panel = $panel
+            let shell = shell
             model.onControlsTap = { zone in
                 withAnimation(.easeOut(duration: 0.2)) {
                     if zone == "dismiss" {
