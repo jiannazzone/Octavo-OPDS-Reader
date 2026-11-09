@@ -116,7 +116,7 @@ struct AppShell: View {
                 }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                TabSplit(tab: .library) {
+                TabStack(tab: .library) {
                     LibraryView()
                 } buttons: {
                     if model.library.hasSeveralServers {

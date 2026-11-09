@@ -1,77 +1,67 @@
 import OctavoKit
 import SwiftUI
 
-/// The Library tab's list (`TabSplit`): the library's sections as shelves
-/// (`docs/design/direction.md`, Library), each a heading over a row of
-/// covers; the same layout for every server. A heading or a cover is picked
-/// for the right column, or folded opens over the list.
-///
-/// A `List` whose selection is the pick, so the folded stack has the
-/// system's Back; each shelf is a row, tagged with the section it opens.
+/// The Library tab's top screen (`TabStack`): the library's sections as
+/// shelves (`docs/design/direction.md`, Library), each a heading over one row
+/// of covers across both pages; the same layout for every server. A heading
+/// or a cover pushes its screen with the system's Back.
 struct LibraryView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        List(selection: shell.pickBinding(.library)) {
-            content
-        }
-        .listStyle(.plain)
-        // The banners' row takes no room without a banner.
-        .environment(\.defaultMinListRowHeight, 0)
-        // Another server's lists, which may be at the same links, and from
-        // the top.
-        .id(library.server?.id)
-        // With several servers, the chosen one's name; the side column has
-        // the menu of them (`ServersMenu`, decision 36).
-        .navigationTitle(library.hasSeveralServers ? library.server?.name ?? "Library" : "Library")
-        .toolbarTitleDisplayMode(.inlineLarge)
+        content
+            // With several servers, the chosen one's name; the side column
+            // has the menu of them (`ServersMenu`, decision 36).
+            .navigationTitle(library.hasSeveralServers ? library.server?.name ?? "Library" : "Library")
+            .toolbarTitleDisplayMode(.large)
     }
 
     @ViewBuilder
     private var content: some View {
         if let server = library.server {
-            VStack(alignment: .leading, spacing: 12) {
-                ConnectionBannerSlot()
-                // Files an import couldn't take, when none came in (with one
-                // that did, On iPhone shows it).
-                ImportFailureBanner()
-            }
-            .padding(.horizontal, SpreadMetrics.margin)
-            .listRow(top: 0, bottom: 0)
             if let root = library.root {
-                ForEach(Self.sections(root)) { section in
-                    LibraryShelf(entry: section, source: server.id)
-                        .listRow()
-                        .tag(ShellRoute.feed(section, from: server.id))
-                }
-                // Last, after the server's own sections (Adam, 2026-11-02).
-                OnIPhoneShelf()
-                    .listRow()
-                    .tag(ShellRoute.onIPhone)
-            } else if library.connectionProblem != nil {
-                // The banner says why, and retries; what's on the iPhone
-                // still reads (decision 22).
-                OnIPhoneShelf()
-                    .listRow()
-                    .tag(ShellRoute.onIPhone)
-            } else if library.rootFailed {
-                EmptyInvitation(
-                    symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
-                    message: "The server didn’t send its lists.", actionTitle: "Try again"
-                ) { Task { await library.retry() } }
-                .fillsList()
+                LibraryContents(source: server.id, sections: Self.sections(root))
+                    // Another server's lists, which may be at the same links,
+                    // and from the top.
+                    .id(server.id)
             } else {
-                LibraryContentsPlaceholder()
-                    .listRow()
+                VStack(alignment: .leading, spacing: 12) {
+                    // On the left page, as over the shelves (`LibraryContents`).
+                    ConnectionBannerSlot()
+                        .padding(.horizontal, SpreadMetrics.margin)
+                        .onLeftPage()
+                    ImportFailureBanner()
+                        .padding(.horizontal, SpreadMetrics.margin)
+                        .onLeftPage()
+                    if library.connectionProblem != nil {
+                        // The banner says why, and retries; what's on the
+                        // iPhone still reads (decision 22).
+                        ScrollView {
+                            OnIPhoneShelf()
+                                .padding(.top, SpreadMetrics.margin)
+                        }
+                    } else if library.rootFailed {
+                        // On the left page, the right one empty: no lists
+                        // came to show beside it.
+                        EmptyPages(server: nil) {
+                            EmptyInvitation(
+                                symbol: "exclamationmark.triangle", title: "Couldn’t load your library",
+                                message: "The server didn’t send its lists.", actionTitle: "Try again"
+                            ) { Task { await library.retry() } }
+                        }
+                    } else {
+                        LibraryContentsPlaceholder()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         } else if !shell.onIPhoneBooks().isEmpty {
             // Books imported, no server yet: the books themselves (Adam,
             // 2026-11-02).
-            OnIPhoneRows(offersServer: true)
+            OnIPhoneContent(offersServer: true)
         } else {
             NoLibraryInvitation()
-                .fillsList()
         }
     }
 
@@ -119,18 +109,32 @@ struct ServersMenu: View {
     }
 }
 
-extension View {
-    /// A row of a split's list as the screen's own content, edge to edge:
-    /// a shelf, a banner. `top` and `bottom` space it from its neighbours.
-    func listRow(top: CGFloat = 14, bottom: CGFloat = 14) -> some View {
-        listRowInsets(EdgeInsets(top: top, leading: 0, bottom: bottom, trailing: 0))
-            .listRowSeparator(.hidden)
-    }
+/// The sections as shelves, one under another, in one scroll view across
+/// both pages.
+struct LibraryContents: View {
+    let source: LibrarySourceID
+    let sections: [LibraryEntry]
 
-    /// An invitation with a split's list to itself: centred in it.
-    func fillsList() -> some View {
-        containerRelativeFrame(.vertical)
-            .listRow(top: 0, bottom: 0)
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                ConnectionBannerSlot()
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .onLeftPage()
+                // Files an import couldn't take, when none came in (with
+                // one that did, On iPhone shows it).
+                ImportFailureBanner()
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .onLeftPage()
+                ForEach(sections) { section in
+                    LibraryShelf(entry: section, source: source)
+                }
+                // Last, after the server's own sections (Adam, 2026-11-02).
+                OnIPhoneShelf()
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
     }
 }
 

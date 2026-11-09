@@ -136,3 +136,18 @@ private struct MeasuresSpread: ViewModifier {
             }
     }
 }
+
+extension View {
+    /// A row of a split's list as the screen's own content, edge to edge:
+    /// a shelf, a banner. `top` and `bottom` space it from its neighbours.
+    func listRow(top: CGFloat = 14, bottom: CGFloat = 14) -> some View {
+        listRowInsets(EdgeInsets(top: top, leading: 0, bottom: bottom, trailing: 0))
+            .listRowSeparator(.hidden)
+    }
+
+    /// An invitation with a split's list to itself: centred in it.
+    func fillsList() -> some View {
+        containerRelativeFrame(.vertical)
+            .listRow(top: 0, bottom: 0)
+    }
+}

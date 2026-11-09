@@ -66,35 +66,6 @@ struct OnIPhoneContent: View {
     }
 }
 
-/// The Library with no server yet (Adam, 2026-11-02): the books on the
-/// iPhone as rows of the split's list, with their count, ending with the
-/// Have a server? card.
-struct OnIPhoneRows: View {
-    var offersServer = false
-    @Environment(ShellModel.self) private var shell
-
-    var body: some View {
-        let books = shell.onIPhoneBooks()
-        VStack(alignment: .leading, spacing: 14) {
-            Text(books.count == 1 ? "1 book" : "\(books.count) books")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            ImportFailureBanner()
-        }
-        .padding(.horizontal, SpreadMetrics.margin)
-        .listRow(top: 4, bottom: 0)
-        SpreadGrid(items: books) { book in
-            BookGridCell(book: book)
-        }
-        .listRow()
-        if offersServer {
-            HaveAServerCard()
-                .padding(.horizontal, SpreadMetrics.margin)
-                .listRow()
-        }
-    }
-}
-
 /// The Library's last shelf: "On iPhone 5 ›" over one row of its covers.
 /// Nothing while the iPhone has no books.
 struct OnIPhoneShelf: View {
