@@ -22,3 +22,6 @@ dev/opds/data/
 
 # Local KOReader sync server's state (dev/kosync/README.md)
 dev/kosync/data/
+
+# App Store screenshots and marketing art, kept on this Mac only
+/Assets/
