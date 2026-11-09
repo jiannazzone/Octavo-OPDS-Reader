@@ -68,6 +68,7 @@ A second `WebView` would keep every style, but it brings a web process, an async
 - **Open, flat or half open:** on the other page from the mark, the `ReaderLayout.barSpans` stretch for that page, 12 pt from the fold and the safe area. The text's first line is level with the mark, so the card's top is 58 pt above it, the buttons' row. It moves up to stay above the footer and down to stay on the page.
 - **Folded, or sideways:** along the bottom, unless that hides the mark and the top doesn't. Too long to miss it, it's on the side away from the mark.
 - **The bottom limit** is 4 pt above the footer's line, so the numbers stay.
+- **The top limit** is 12 pt below the safe area on the Duo, whose buttons are in the side column. On an iPhone or an iPad, Back and ··· sit in the bar over the page, so it's 12 pt below the bar (`ReaderModel.barBottom`): at the safe area's 12 pt the card's ✕ landed under ··· (found taking the App Store shots, 2026-11-09). Adam picked this over hiding the buttons while a note is open.
 - **A long note** grows to the whole of that, then scrolls under the buttons.
 
 ## Closing, and your place

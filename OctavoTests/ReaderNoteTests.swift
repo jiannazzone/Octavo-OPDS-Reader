@@ -18,6 +18,12 @@ struct ReaderNotePlacementTests {
         safeArea: ReaderInsets(top: 0, left: 0, bottom: 34, right: 84)
     )
 
+    /// An iPhone 17 Pro upright: Back and ··· in the bar over the page.
+    private static let iPhone = ReaderGeometry(
+        size: CGSize(width: 402, height: 874),
+        safeArea: ReaderInsets(top: 62, left: 0, bottom: 34, right: 0)
+    )
+
     private static func mark(x: Double, y: Double) -> ReaderNote.Mark {
         ReaderNote.Mark(x: x, y: y, width: 8, height: 12)
     }
@@ -94,6 +100,17 @@ struct ReaderNotePlacementTests {
         let frame = placement.frame(height: 285, textInset: 58)
         #expect(Double(frame.minY) == placement.top)
         #expect(Double(frame.maxY) < 320)
+    }
+
+    @Test func offTheDuoItStartsBelowTheBarsButtons() {
+        let layout = ReaderLayout(posture: .closed, geometry: Self.iPhone, margins: .medium)
+        // A mark down the page sends the card to the top, under the bar.
+        let placement = ReaderNotePlacement(mark: Self.mark(x: 300, y: 780), layout: layout, geometry: Self.iPhone, barBottom: 116)
+        #expect(placement.top == 116 + ReaderLayout.edgeInset)
+        #expect(Double(placement.frame(height: 150, textInset: 58).minY) == placement.top)
+        // On the Duo the buttons are in the side column: no bar to clear.
+        let duo = ReaderNotePlacement(mark: Self.mark(x: 100, y: 540), layout: onePage(), geometry: Self.folded)
+        #expect(duo.top == ReaderLayout.edgeInset)
     }
 
     @Test func aReportedHalfOpenSpreadIsLaidOutTheSame() {

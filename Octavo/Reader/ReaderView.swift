@@ -210,7 +210,10 @@ private struct ReaderScreen: View {
                     if let note = model.note, model.phase == .open, let geometry = model.geometry {
                         ReaderNoteLayer(
                             note: note,
-                            placement: ReaderNotePlacement(mark: note.mark, layout: model.layout, geometry: geometry),
+                            placement: ReaderNotePlacement(
+                                mark: note.mark, layout: model.layout, geometry: geometry,
+                                barBottom: shell.hasHinge ? 0 : model.barBottom
+                            ),
                             theme: appearance.theme(darkMode: darkMode),
                             goToNote: model.goToNote,
                             close: { model.closeNote("✕") },
