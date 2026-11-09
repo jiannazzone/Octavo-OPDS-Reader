@@ -600,13 +600,25 @@ struct DownloadRing: View {
 extension EnvironmentValues {
     /// Opens a library entry's books, such as an author's (decision 20).
     /// The Library (#13) provides it; without it the author isn't a link.
-    @Entry var openLibraryEntry: ((LibraryEntry) -> Void)?
+    @Entry var openLibraryEntry: EnvironmentAction<LibraryEntry>?
     /// Opens the book in the reader (Open). The shell (#13) provides it so
     /// the book joins Home's Continue reading; without it the opener opens
     /// the book directly.
-    @Entry var openBook: ((LibraryBook) -> Void)?
+    @Entry var openBook: EnvironmentAction<LibraryBook>?
     /// Downloads the book without opening it (Download). The shell provides
     /// it so Search can find the book on the iPhone; without it the opener
     /// downloads directly.
-    @Entry var downloadBook: ((LibraryBook) -> Void)?
+    @Entry var downloadBook: EnvironmentAction<LibraryBook>?
+}
+
+/// A closure for the environment, compared by the server whose books it acts
+/// on (`id`). A bare closure can't be compared, so SwiftUI would update every
+/// view reading it each time it's set.
+struct EnvironmentAction<Value>: Equatable {
+    nonisolated let id: LibrarySourceID
+    let perform: (Value) -> Void
+
+    func callAsFunction(_ value: Value) { perform(value) }
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
 }

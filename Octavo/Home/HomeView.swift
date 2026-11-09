@@ -306,12 +306,12 @@ private struct CurrentBookStrip: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(16)
         .glassEffect(in: .rect(cornerRadius: 28))
-        .environment(\.openBook) { opened in
+        .environment(\.openBook, EnvironmentAction(id: book.source) { opened in
             shell.reader.open(SourcedBook(source: book.source, book: opened))
-        }
-        .environment(\.downloadBook) { downloading in
+        })
+        .environment(\.downloadBook, EnvironmentAction(id: book.source) { downloading in
             shell.downloadBook(SourcedBook(source: book.source, book: downloading))
-        }
+        })
     }
 }
 

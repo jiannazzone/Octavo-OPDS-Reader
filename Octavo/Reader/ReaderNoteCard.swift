@@ -49,7 +49,7 @@ private struct ReaderNoteCard: View {
     let swiped: (ReaderTurnSide) -> Void
 
     /// How far below the card's top its text starts: the buttons' row.
-    static let textInset = 58.0
+    nonisolated static let textInset = 58.0
     private static let horizontalPadding = 18.0
     private static let cornerRadius = 26.0
 
