@@ -7,7 +7,7 @@ import SwiftUI
 /// (decision 37), and the others are on the right page. Only books in
 /// progress, but for the newest books filling the right page when there are
 /// one or two. A book opens its own screen, and unfolded the current book has
-/// Open; unfolding here opens nothing.
+/// Open; unfolding here opens nothing. The tab's top screen (`TabStack`).
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
@@ -15,15 +15,12 @@ struct HomeView: View {
 
     var body: some View {
         let state = HomeState(library)
-        TitledScreen {
-            // Unfolded, the book you're reading has the left page to itself.
-            if !(spread.isTwoPages && state.showsBooks) {
-                ScreenTitle("Home")
-                    .onLeftPage()
-            }
-        } content: {
-            content(state)
-        }
+        // Unfolded, the book you're reading has the left page to itself, with
+        // no title over it.
+        let titled = !(spread.isTwoPages && state.showsBooks)
+        content(state)
+            .navigationTitle(titled ? "Home" : "")
+            .toolbarTitleDisplayMode(titled ? .large : .inline)
     }
 
     @ViewBuilder
@@ -201,10 +198,10 @@ struct CurrentBook: View {
 
 /// Unfolded, the book you're reading has the left page: its cover edge to
 /// edge on its blur, as the folded book's screen draws it (`BookCoverArt`),
-/// with a glass strip over its foot, 8 pt from the edges as the folded sheet
-/// is: the title, place and Open (decision 37). Open moves this cover
-/// onto the right page as a book's screen does (`CoverSpots`). `nil` while
-/// Home loads.
+/// with a glass strip over its foot, 8 pt inside the safe area as the folded
+/// sheet is (Adam, 2026-11-09): the title, place and Open (decision 37).
+/// Open moves this cover onto the right page as a book's screen does
+/// (`CoverSpots`). `nil` while Home loads.
 struct CurrentBookPage: View {
     let book: SourcedBook?
     @Environment(LibraryModel.self) private var library
@@ -244,7 +241,6 @@ struct CurrentBookPage: View {
             .ignoresSafeArea(edges: .vertical)
         }
         .loadingCover(of: book, size: .full, into: $cover)
-        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     private var page: some View {

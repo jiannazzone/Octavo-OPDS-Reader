@@ -1,27 +1,20 @@
 import OctavoKit
 import SwiftUI
 
-/// The Library tab's top screen: the library's sections as shelves
-/// (`docs/design/direction.md`, Library), each a heading over one row of
-/// covers across both pages; the same layout for every server.
+/// The Library tab's top screen (`TabStack`): the library's sections as
+/// shelves (`docs/design/direction.md`, Library), each a heading over one row
+/// of covers across both pages; the same layout for every server. A heading
+/// or a cover pushes its screen with the system's Back.
 struct LibraryView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        TitledScreen {
-            // With several servers, the title is the menu of them (decision 36).
-            Group {
-                if library.hasSeveralServers {
-                    LibraryServerMenu()
-                } else {
-                    ScreenTitle("Library")
-                }
-            }
-            .onLeftPage()
-        } content: {
-            content
-        }
+        content
+            // With several servers, the chosen one's name; the side column
+            // has the menu of them (`ServersMenu`, decision 36).
+            .navigationTitle(library.hasSeveralServers ? library.server?.name ?? "Library" : "Library")
+            .toolbarTitleDisplayMode(.large)
     }
 
     @ViewBuilder
@@ -61,6 +54,7 @@ struct LibraryView: View {
                         LibraryContentsPlaceholder()
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         } else if !shell.onIPhoneBooks().isEmpty {
             // Books imported, no server yet: the books themselves (Adam,
@@ -88,90 +82,35 @@ struct LibraryView: View {
     }
 }
 
-/// The Library's title with several servers (decision 36): the chosen
-/// server's name and a chevron, where `ScreenTitle` would be. A tap opens a
-/// popover under it, with the servers and Add a server. Not a `Menu`, whose
-/// label iOS squashes into the glass as it opens: built for a small button,
-/// it made a blob of a large title and hid it while open (Adam, 2026-11-05).
-struct LibraryServerMenu: View {
+/// The servers, in the side column with several (decision 36): the chosen
+/// one checked, then Add a server.
+struct ServersMenu: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @State private var isOpen = false
-    /// A menu's row, growing with the text size.
-    @ScaledMetric private var rowHeight: CGFloat = 44
 
     var body: some View {
-        Button {
-            isOpen = true
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(library.server?.name ?? "Library")
-                    .font(.largeTitle.bold())
-                    .lineLimit(untilLargerText: 1)
-                Image(systemName: "chevron.down")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.tint)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityHint("Shows your servers")
-        .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-            rows
-                .presentationCompactAdaptation(.popover)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, SpreadMetrics.titleTop)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// As tall as its rows, scrolling if there are more than fit.
-    private var rows: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        Menu("Servers", systemImage: "server.rack") {
+            Picker("Server", selection: chosen) {
                 ForEach(library.connections, id: \.server.id) { connection in
-                    let isChosen = connection.server.id == library.server?.id
-                    row(connection.server.name, symbol: "checkmark", showsSymbol: isChosen) {
-                        isOpen = false
-                        shell.serverActions.choose(connection.server.id)
-                    }
-                    .accessibilityAddTraits(isChosen ? .isSelected : [])
-                }
-                Divider()
-                    .padding(.leading, 16)
-                row("Add a server", symbol: "plus", showsSymbol: true) {
-                    isOpen = false
-                    shell.push(.setup(.choose))
+                    Text(connection.server.name).tag(Optional(connection.server.id))
                 }
             }
-            .padding(.vertical, 6)
+            Divider()
+            Button("Add a server", systemImage: "plus") {
+                shell.push(.setup(.choose))
+            }
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(width: 300, height: min(CGFloat(library.connections.count + 1) * rowHeight + 13, 440))
     }
 
-    private func row(_ title: String, symbol: String, showsSymbol: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: symbol)
-                    .font(.subheadline.weight(.semibold))
-                    .opacity(showsSymbol ? 1 : 0)
-                    .accessibilityHidden(!showsSymbol)
-                Text(title)
-                    .lineLimit(untilLargerText: 1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .frame(height: rowHeight)
-            .contentShape(.rect)
+    private var chosen: Binding<LibrarySourceID?> {
+        Binding { library.server?.id } set: { id in
+            if let id { shell.serverActions.choose(id) }
         }
-        .buttonStyle(.plain)
     }
 }
 
-/// The sections as shelves, one under another.
+/// The sections as shelves, one under another, in one scroll view across
+/// both pages.
 struct LibraryContents: View {
     let source: LibrarySourceID
     let sections: [LibraryEntry]
@@ -199,9 +138,8 @@ struct LibraryContents: View {
     }
 }
 
-/// One section as a shelf: a heading ("All · 7 ›") that opens the section
-/// over the whole spread, over one row of its covers running across both
-/// pages (three folded). A book on the shelf opens its own screen; a list
+/// One section as a shelf: a heading ("All · 7 ›") that opens the section,
+/// over one row of its covers (running across both pages on a spread). A book on the shelf opens its own screen; a list
 /// of lists (series, authors) shows a tile for each that opens it. A list
 /// whose entries list no covers (BookOrbit collections) is just its
 /// heading.

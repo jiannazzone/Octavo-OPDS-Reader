@@ -2,39 +2,31 @@ import OctavoKit
 import SwiftUI
 
 /// Settings (decision 24, frames 34–37): the server, Library's one switch,
-/// Keep screen on, Close book when folded, the books on the iPhone and About.
+/// Keep screen on, Close book when folded (with a hinge only), the books on
+/// the iPhone and About.
 /// Reading choices live in the reader's Text and theme panel, not here. Those
 /// two are the exception: they're set once and left (Adam, 2026-11-06).
 ///
-/// Folded, the list and each page are screens of their own. Unfolded, the
-/// list is on the left page and the chosen page on the right (the server's,
-/// to start with); a tap on the left changes the right page without a slide
-/// (Adam, 2026-11-02). A fold keeps the page that was chosen on top.
-///
-/// The list and the page each keep their place in the view across a fold,
-/// so a fold doesn't start them again (a name half typed, a confirmation).
-struct SettingsScreen: View {
-    /// `nil`: the list itself.
-    let page: SettingsPage?
-    @Environment(\.spread) private var spread
-    @Environment(LibraryModel.self) private var library
+/// A sheet from the gear holding the system's split, as system Settings is
+/// on the open Duo (Adam, 2026-11-08): the list on the left (`SettingsList`),
+/// the chosen page on the right (the server's, to start with), where a page's
+/// own screens push. Folded, the list, and a row pushes its page with Back.
+struct SettingsSheet: View {
+    @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        // With no server yet (books imported), Storage's page to start with.
-        let first: SettingsPage = library.server.map { .server($0.id) } ?? .storage
-        // Folded, the list or the page.
-        SpreadPages(folded: page == nil ? .left : .right) { _ in
-            SettingsList(chosen: spread.isTwoPages ? page ?? first : nil)
-        } right: { _ in
-            SettingsPageView(page: page ?? first)
+        TabSplit(tab: .settings) {
+            SettingsList()
+        } buttons: {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(role: .close) { shell.closeSettings() }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.systemGroupedBackground))
     }
 }
 
 /// The page a row opens.
-private struct SettingsPageView: View {
+struct SettingsPageView: View {
     let page: SettingsPage
 
     var body: some View {
@@ -47,36 +39,22 @@ private struct SettingsPageView: View {
     }
 }
 
-/// A page of Settings: its title over a grouped list, on the page's own
-/// background (the screen's, so the hinge between the pages matches).
+/// A page of Settings: a grouped list under its title.
 struct SettingsPageList<Content: View>: View {
     let title: String
-    /// Settings' own list, which is on the left page unfolded.
-    var isOnLeftPage = false
     @ViewBuilder let content: () -> Content
-    @Environment(\.spread) private var spread
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ScreenTitle(title)
-            List { content() }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
-                .contentMargins(.top, 4, for: .scrollContent)
-                // At the screen's edge a list otherwise gets this margin from
-                // the system, worked out again on every frame of a slide: its
-                // rows stop at the margin while the rest of the screen carries
-                // on, and they shrink. Stated here, it moves with them.
-                .contentMargins(.leading, isOnLeftPage || !spread.isTwoPages ? SpreadMetrics.margin : 0, for: .scrollContent)
-        }
+        List { content() }
+            .listStyle(.insetGrouped)
+            .navigationTitle(title)
+            .toolbarTitleDisplayMode(.inline)
     }
 }
 
 /// Settings' list (frame 34, without its Reading progress row: Adam,
 /// 2026-11-02).
 struct SettingsList: View {
-    /// Unfolded: the page beside the list, marked in it.
-    let chosen: SettingsPage?
     @Environment(ShellModel.self) private var shell
     @Environment(LibraryModel.self) private var library
     @AppStorage(LibrarySettings.titlesUnderCoversKey) private var titlesUnderCovers = false
@@ -84,7 +62,9 @@ struct SettingsList: View {
     @AppStorage(ReaderSettings.closeBookWhenFoldedKey) private var closesBookWhenFolded = ReaderSettings.closeBookWhenFoldedDefault
 
     var body: some View {
-        SettingsPageList(title: "Settings", isOnLeftPage: true) {
+        // A `List` whose selection is the page on the right (`TabSplit`): a
+        // row is a link to its page, so folded it pushes with Back.
+        List(selection: shell.pickBinding(.settings)) {
             // Each server, then Add a server (decision 36). "Server" with one
             // or none, as before.
             Section(library.hasSeveralServers ? "Servers" : "Server") {
@@ -94,27 +74,18 @@ struct SettingsList: View {
                             Text(connection.server.name)
                             Text(connection.server.detail)
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryInRow)
                         }
                     }
                 }
-                Button {
-                    shell.push(.setup(.choose))
-                } label: {
-                    HStack {
-                        Text("Add a server")
-                            .foregroundStyle(.tint)
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.forward")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .contentShape(.rect)
+                NavigationLink(value: ShellRoute.setup(.choose)) {
+                    Text("Add a server")
+                        .foregroundStyle(.tintInRow)
                 }
             }
             Section {
                 row(.koreader) {
-                    LabeledContent("KOReader sync", value: shell.koreader.account?.username ?? "Off")
+                    valueRow("KOReader sync", value: shell.koreader.account?.username ?? "Off")
                 }
             } footer: {
                 Text("Syncs your place with KOReader for books from catalogs and Files.")
@@ -132,7 +103,9 @@ struct SettingsList: View {
                         Text(time.name).tag(time)
                     }
                 }
-                Toggle("Close book when folded", isOn: $closesBookWhenFolded)
+                if shell.hasHinge {
+                    Toggle("Close book when folded", isOn: $closesBookWhenFolded)
+                }
             } header: {
                 Text("Reading")
             } footer: {
@@ -140,7 +113,7 @@ struct SettingsList: View {
             }
             Section {
                 row(.storage) {
-                    LabeledContent("Books on iPhone", value: shell.downloads().summary())
+                    valueRow("Books on iPhone", value: shell.downloads().summary())
                 }
                 ClearCoversRow()
             } header: {
@@ -150,7 +123,8 @@ struct SettingsList: View {
             }
             Section {
                 Button {
-                    shell.tour.show()
+                    // The sheet would cover the tour; it comes back after.
+                    if shell.tour.show() { shell.closeSettings() }
                 } label: {
                     HStack {
                         Text("Show the tour")
@@ -180,6 +154,9 @@ struct SettingsList: View {
             ReaderSettingsSection()
             #endif
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Settings")
+        .toolbarTitleDisplayMode(.inlineLarge)
     }
 
     private func link(_ title: LocalizedStringKey, to destination: URL) -> some View {
@@ -198,23 +175,20 @@ struct SettingsList: View {
     }
 
     private func row(_ page: SettingsPage, @ViewBuilder label: () -> some View) -> some View {
-        Button {
-            // Folded, the page slides in over the list; unfolded, it shows
-            // beside the list at once (`ShellRoute.leftPage`).
-            shell.push(.settingsPage(page))
-        } label: {
-            HStack {
-                label()
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.forward")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(.rect)
+        NavigationLink(value: ShellRoute.settingsPage(page)) {
+            label()
         }
-        .foregroundStyle(.primary)
-        .listRowBackground(chosen == page ? Color.accentColor.opacity(0.14) : nil)
-        .accessibilityAddTraits(chosen == page ? .isSelected : [])
+    }
+
+    /// A row's name with its value at the right, the value readable on the
+    /// row's accent fill too (`LabeledContent`'s own grey isn't).
+    private func valueRow(_ title: String, value: String) -> some View {
+        LabeledContent {
+            Text(value)
+                .foregroundStyle(.secondaryInRow)
+        } label: {
+            Text(title)
+        }
     }
 }
 

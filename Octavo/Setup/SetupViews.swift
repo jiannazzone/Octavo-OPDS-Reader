@@ -668,7 +668,7 @@ struct SignInAgainScreen: View {
                 try await shell.serverActions.signInAgain(saved.id, username: username, password: password)
                 guard isCurrent() else { return }
                 self.password = ""
-                shell.pop(shell.tab)
+                shell.back()
             } catch {
                 guard isCurrent() else { return }
                 self.error = SetupModel.message(for: error, server: saved.displayName, host: host)

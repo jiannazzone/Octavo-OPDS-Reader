@@ -36,7 +36,7 @@ final class CoverSpots {
         reporters[screen] = nil
     }
 
-    /// `book`'s cover on the screen showing: Home's when Home's root is
+    /// `book`'s cover on the screen showing: Home's when Home's top screen is
     /// showing, else the book's screen's if that's on top.
     func spot(for book: SourcedBook.ID, onHome: Bool, top: ShellRoute?) -> CoverSpot? {
         let screen: Screen
@@ -61,6 +61,8 @@ struct CoverSpot: Equatable {
     var image: UIImage?
     var title: String
     var author: String
+    /// On a spread's left page (Cover | Details); else it fills its screen.
+    var spread = false
 }
 
 extension UIWindow {

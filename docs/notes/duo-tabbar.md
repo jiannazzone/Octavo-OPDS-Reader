@@ -1,5 +1,7 @@
 # SwiftUI `TabView` on the Duo
 
+> Superseded 2026-11-08 for navigation: each tab is the system's push stack (`split-shell.md`). What's below about the side column still holds.
+
 Step 1 of #6 (app shell). Written 2026-10-31 on 'Octavo Shell Duo' (185ADEDA-2C89-415C-9EA0-3A5C582944C8, iPhone Duo, iOS 27.1 simulator, Xcode 27.2), driven with Hinge 0.3.0. Screenshots are in `duo-tabbar/`, at 1× (466×678 folded, 951×669 unfolded). The probe that made them is `duo-tabbar/TabBarProbe.swift` (not in the app target; see Reproducing).
 
 ## Summary

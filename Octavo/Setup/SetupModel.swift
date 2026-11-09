@@ -180,7 +180,7 @@ final class SetupModel {
                     if asked != nil {
                         error = "That username or password didn’t work."
                     } else if request.scheme == nil {
-                        error = "This catalog signs in a way Octavo can’t yet."
+                        error = "This catalog signs in a way Octavo can’t."
                     } else {
                         signIn = request
                     }

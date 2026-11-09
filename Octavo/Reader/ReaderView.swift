@@ -148,7 +148,7 @@ private struct ReaderScreen: View {
                 }
                 .overlay(alignment: .topLeading) {
                     if chrome.showsBackBar, let trip = model.trip, let geometry = model.geometry,
-                       let left = model.layout.textColumns(inReaderWidth: Double(geometry.size.width))?.first?.lowerBound {
+                       let left = model.layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height))?.first?.lowerBound {
                         ReaderBackBar(trip: trip, back: model.goBack, stay: model.settleTrip)
                             .fixedSize()
                             .offset(x: left, y: chrome.backBarTop(in: geometry, layout: model.layout, barHeight: barHeight))
@@ -232,6 +232,9 @@ private struct ReaderScreen: View {
                     withAnimation { controls.toggle() }
                 }
                 .toolbar { buttons }
+                // Inside the stack, the safe area's top includes the bar
+                // holding the column's buttons.
+                .onGeometryChange(for: Double.self) { Double($0.safeAreaInsets.top) } action: { model.barBottomChanged($0) }
         }
         // The column's buttons, the footer, the bar and the panel in the
         // page's colours. Here, not for the window, so `systemColorScheme`
@@ -776,7 +779,7 @@ struct ReaderFooterLines: View {
     @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width)),
+        if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height)),
            let first = columns.first, let last = columns.last {
             let spread = columns.count > 1
             let centre = ReaderChromeLayout.footerLineCentre(in: geometry, layout: layout)

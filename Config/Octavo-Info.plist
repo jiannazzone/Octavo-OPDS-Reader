@@ -65,6 +65,15 @@
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<!--
+	  One window on iPad. Every window would get its own ShellModel, and two
+	  would write the same records and books.
+	-->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>

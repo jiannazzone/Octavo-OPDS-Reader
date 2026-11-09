@@ -32,6 +32,8 @@ final class TourController {
     /// reading, and Home if the tour itself ended (not an import, which goes
     /// to the Library).
     @ObservationIgnored var played: (_ landsOnHome: Bool) -> Void = { _ in }
+    /// A replay ended: back to the Settings it was shown from.
+    @ObservationIgnored var replayEnded: () -> Void = {}
     /// Files are coming in: a new install opened with one waits to see
     /// whether it arrives.
     @ObservationIgnored var isImporting: () -> Bool = { false }
@@ -110,12 +112,15 @@ final class TourController {
     }
 
     /// Show the tour, in Settings: from the beginning, and back to Settings.
-    func show() {
-        guard playing == nil, reader.reading == nil else { return }
+    /// `false` if it can't start now (one is playing, or a book is open).
+    @discardableResult
+    func show() -> Bool {
+        guard playing == nil, reader.reading == nil else { return false }
         let place = TourReplayPlace()
         SampleBook.startAtFirstChapter(in: place.positions)
         replayPlace = place
         begin(TourFlow(fold: hingeFold, isReplay: true))
+        return true
     }
 
     private func begin(_ flow: TourFlow) {
@@ -185,7 +190,7 @@ final class TourController {
     func finish() {
         guard let finished = playing else { return }
         end()
-        guard !finished.isReplay else { return }
+        guard !finished.isReplay else { return replayEnded() }
         record.set(.played)
         played(true)
     }

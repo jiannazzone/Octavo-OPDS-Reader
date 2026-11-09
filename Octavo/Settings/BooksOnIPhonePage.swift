@@ -19,13 +19,12 @@ struct BooksOnIPhonePage: View {
     var body: some View {
         let books = order.sorted(shell.downloads())
         if books.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
-                ScreenTitle("Books on iPhone")
-                ContentUnavailableView(
-                    "No books on iPhone", systemImage: "book.closed",
-                    description: Text("Books you download or import show here.")
-                )
-            }
+            ContentUnavailableView(
+                "No books on iPhone", systemImage: "book.closed",
+                description: Text("Books you download or import show here.")
+            )
+            .navigationTitle("Books on iPhone")
+            .toolbarTitleDisplayMode(.inline)
         } else {
             list(books)
         }
@@ -100,7 +99,10 @@ struct ClearCoversRow: View {
             Task { await library.covers.clear() }
         } label: {
             LabeledContent {
+                // Grey like the other values: the button's `.primary` would
+                // override `LabeledContent`'s own.
                 Text(size.map { $0 == 0 ? "None" : ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "")
+                    .foregroundStyle(.secondary)
             } label: {
                 Text("Clear covers")
                     .foregroundStyle((size ?? 0) == 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))

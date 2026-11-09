@@ -41,10 +41,11 @@ struct BookCoverPage: View {
                             guard page.isExpanded else { return }
                             withAnimation(BookSheet.animation) { page.isExpanded = false }
                         }
-                    // 8 pt from the bottom edge, as in frame 03.
+                    // Inside the safe area on every device, over an iPhone's
+                    // tabs (Adam, 2026-11-09; it was 8 pt from the bottom
+                    // edge, frame 03).
                     BookSheet(page: page, source: source, sourceID: sourceID)
                         .padding(8)
-                        .ignoresSafeArea(.container, edges: .bottom)
                 }
             }
         }
@@ -107,6 +108,7 @@ struct BookCoverArt: View {
     let book: SourcedBook.ID
     let screen: CoverSpots.Screen
     @Environment(ShellModel.self) private var shell
+    @Environment(\.spread) private var layout
     /// Where it was last laid out, to report again on appearing.
     @State private var frame: CGRect?
     @State private var reporter = UUID()
@@ -132,7 +134,7 @@ struct BookCoverArt: View {
     }
 
     private var spot: CoverSpot? {
-        frame.map { CoverSpot(book: book, frame: $0, image: image, title: title, author: author) }
+        frame.map { CoverSpot(book: book, frame: $0, image: image, title: title, author: author, spread: layout.isTwoPages) }
     }
 
     private func report() {

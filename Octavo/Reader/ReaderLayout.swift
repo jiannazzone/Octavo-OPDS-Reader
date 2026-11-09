@@ -332,9 +332,11 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
     /// `(1 - gap)` of the view wide, capped at `max-inline-size` per column,
     /// split into columns padded by half of foliate's gap each side. Below
     /// the cap the outer margins and the gutter all come out at `gap`% of
-    /// the view. `nil` while foliate decides the columns.
-    func textColumns(inReaderWidth width: Double) -> [ClosedRange<Double>]? {
-        guard let columns, columns > 0 else { return nil }
+    /// the view. While foliate decides the columns (no fold: an iPhone, an
+    /// iPad), its own choice for a reader `height` tall (`foliateColumns`);
+    /// `nil` without one.
+    func textColumns(inReaderWidth width: Double, height: Double? = nil) -> [ClosedRange<Double>]? {
+        guard let columns = columns ?? height.map({ foliateColumns(width: width, height: $0) }), columns > 0 else { return nil }
         let count = Double(columns)
         let viewWidth = width - leftInset - rightInset
         let share = (gapPercent ?? Self.defaultGapPercent) / 100
@@ -347,6 +349,18 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
             let start = containerLeft + Double(index) * container / count + gap / 2
             return start...(start + columnWidth)
         }
+    }
+
+    /// The columns foliate lays out when it decides them, as `paginator.js`
+    /// does: one in a portrait view, otherwise as many `max-inline-size`
+    /// columns as the text area needs, up to two.
+    func foliateColumns(width: Double, height: Double) -> Int {
+        let viewWidth = width - leftInset - rightInset
+        guard viewWidth > height - topInset - bottomInset else { return 1 }
+        let share = (gapPercent ?? Self.defaultGapPercent) / 100
+        let column = maxInlineSize ?? Self.defaultMaxInlineSize
+        let container = min(viewWidth * (1 - share), column * 2)
+        return min(2, max(1, Int((container / column).rounded(.up))))
     }
 
     /// How far the bar and a panel keep from the safe area's sides and the
