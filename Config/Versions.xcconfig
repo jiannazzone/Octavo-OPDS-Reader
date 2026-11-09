@@ -1,5 +1,6 @@
 // The app's version and build number, in one place. A release bumps them here
 // (.claude/skills/octavo-prepare-update). Every upload needs a new build number:
-// the release commit's date in UTC, e.g. 2026.11.09 (Adam).
+// the release commit's date in UTC, e.g. 2026.11.09, or the next day's when
+// that date already has an upload. Digits and up to two periods only (Adam).
 MARKETING_VERSION = 1.0
-CURRENT_PROJECT_VERSION = 2026.11.09
+CURRENT_PROJECT_VERSION = 2026.11.10
