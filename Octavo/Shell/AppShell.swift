@@ -109,7 +109,21 @@ struct AppShell: View {
                 ScreenStack(tab: .home, title: nil) { HomeView() }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                ScreenStack(tab: .library, title: nil, importsBooks: true) { LibraryView() }
+                TabSplit(tab: .library) {
+                    LibraryView()
+                } buttons: {
+                    if model.library.hasSeveralServers {
+                        ToolbarItem(placement: .topBarTrailing) { ServersMenu() }
+                    }
+                    // The Library's + for Import from Files, above Settings
+                    // (Adam, 2026-11-02).
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Import from Files", systemImage: "plus") { model.showFilePicker() }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Settings", systemImage: "gearshape") { model.openSettings() }
+                    }
+                }
             }
             Tab(value: .search, role: .search) {
                 ScreenStack(tab: .search, title: "Search") { SearchView() }

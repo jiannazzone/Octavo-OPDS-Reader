@@ -65,4 +65,26 @@ nonisolated struct ShellPath: Hashable, Sendable {
         self.routes = routes
         lastMove = .replace
     }
+
+    // MARK: In a split (`TabSplit`)
+
+    /// What's picked in the tab's list: the right column's first screen.
+    var pick: ShellRoute? { routes.first }
+
+    /// The screens pushed in the right column, over its pick.
+    var pushed: [ShellRoute] { Array(routes.dropFirst()) }
+
+    /// Picks `route` in the list, in place of whatever the right column
+    /// showed; `nil` goes back to the list (folded, Back from the pick).
+    mutating func pick(_ route: ShellRoute?) {
+        guard route != pick || route == nil else { return }
+        replace(route.map { [$0] } ?? [])
+    }
+
+    /// The right column's stack after Back or a swipe there.
+    mutating func setPushed(_ pushed: [ShellRoute]) {
+        guard let pick else { return }
+        lastMove = pushed.count > self.pushed.count ? .push : .pop
+        routes = [pick] + pushed
+    }
 }

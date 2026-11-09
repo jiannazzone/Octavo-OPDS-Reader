@@ -78,8 +78,13 @@ final class ShellModel {
     /// landed on (an unfold reports before the scene moves), not the hinge,
     /// which says open on a Duo turned sideways too.
     func isTwoPages(in tab: ShellTab) -> Bool {
-        (spreads[tab] ?? lastSpread)?.isTwoPages == true
+        guard !Self.splitTabs.contains(tab) else { return false }
+        return (spreads[tab] ?? lastSpread)?.isTwoPages == true
     }
+
+    /// The tabs laid out as a list and what's picked from it (`TabSplit`),
+    /// where nothing pairs up as pages.
+    static let splitTabs: Set<ShellTab> = [.library]
 
     /// The tab whose screens are showing: setup's, while it shows instead of
     /// the tabs.
@@ -431,6 +436,22 @@ final class ShellModel {
             self[path: setupTab].open(route, twoPages: isTwoPages(in: setupTab))
         } else {
             self[path: tab].open(route, twoPages: isTwoPages(in: tab))
+        }
+    }
+
+    /// Picks `route` in `tab`'s list (`TabSplit`): the right column shows
+    /// it in place of what it showed; folded, it opens over the list.
+    func pick(_ route: ShellRoute?, in tab: ShellTab) {
+        self[path: tab].pick(route)
+    }
+
+    /// Opens `route` from a split's list (`menu`), or on top of the current
+    /// tab from anywhere else.
+    func open(_ route: ShellRoute, inMenuOf menu: ShellTab?) {
+        if let menu {
+            pick(route, in: menu)
+        } else {
+            push(route)
         }
     }
 
