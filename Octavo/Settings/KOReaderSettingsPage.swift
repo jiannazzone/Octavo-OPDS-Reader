@@ -28,7 +28,7 @@ struct KOReaderSettingsPage: View {
             Button("Sign out", role: .destructive) { shell.serverActions.signOutOfKOReader() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Your places stay on this iPhone.")
+            Text("Your places stay on this \(ThisDevice.name).")
         }
         .onDisappear { shell.koreaderSignIn.left() }
     }

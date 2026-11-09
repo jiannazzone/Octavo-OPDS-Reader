@@ -501,7 +501,7 @@ struct BookDetails: View {
             if sourceID == .files {
                 // The only copy: Remove from iPhone, always asked (Adam,
                 // 2026-11-02).
-                Button("Remove from iPhone", role: .destructive) {
+                Button("Remove from \(ThisDevice.name)", role: .destructive) {
                     removingImported = SourcedBook(source: sourceID, book: page.current)
                 }
                 .frame(maxWidth: .infinity)
@@ -526,7 +526,7 @@ struct BookDetails: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 4)
             .confirmationDialog(
-                "Remove “\(page.current.title.isEmpty ? "Untitled" : page.current.title)” from this iPhone?",
+                "Remove “\(page.current.title.isEmpty ? "Untitled" : page.current.title)” from this \(ThisDevice.name)?",
                 isPresented: $confirmsRemoval,
                 titleVisibility: .visible
             ) {

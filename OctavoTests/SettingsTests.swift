@@ -1,6 +1,7 @@
 import Foundation
 import OctavoKit
 import Testing
+import UIKit
 @testable import Octavo
 
 /// Settings (step 14, a sheet from the gear since 2026-11-08): its pages,
@@ -403,5 +404,14 @@ private struct OpenCatalog: HTTPTransport {
 
     func download(for request: URLRequest, delegate: (any URLSessionTaskDelegate)?) async throws -> (URL, URLResponse) {
         throw URLError(.unsupportedURL)
+    }
+}
+
+/// What the app calls the device (Adam, 2026-11-09): "On iPad" on an iPad,
+/// "On iPhone" everywhere else, the Duo included.
+struct ThisDeviceTests {
+    @Test func anIPadIsAnIPad() {
+        #expect(ThisDevice.name(for: .pad) == "iPad")
+        #expect(ThisDevice.name(for: .phone) == "iPhone")
     }
 }

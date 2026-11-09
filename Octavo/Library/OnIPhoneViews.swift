@@ -29,7 +29,7 @@ struct OnIPhoneContent: View {
                     ImportFailureBanner()
                         .padding(.horizontal, SpreadMetrics.margin)
                     EmptyInvitation(
-                        symbol: "book.closed", title: "No books on iPhone",
+                        symbol: "book.closed", title: "No books on \(ThisDevice.name)",
                         message: "Books you download or import show here.", actionTitle: "Import from Files"
                     ) { shell.showFilePicker() }
                     .scrollingOnItsPage()
@@ -79,7 +79,7 @@ struct OnIPhoneShelf: View {
                     shell.push(.onIPhone)
                 } label: {
                     HStack(spacing: 6) {
-                        Text("On iPhone")
+                        Text("On \(ThisDevice.name)")
                             .font(.title3.weight(.semibold))
                         Text(books.count, format: .number)
                             .font(.title3)
@@ -91,7 +91,7 @@ struct OnIPhoneShelf: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("On iPhone, \(books.count) books")
+                .accessibilityLabel("On \(ThisDevice.name), \(books.count) books")
                 .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, SpreadMetrics.margin)
                 .onLeftPage()

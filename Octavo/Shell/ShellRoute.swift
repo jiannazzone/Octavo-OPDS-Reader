@@ -35,11 +35,11 @@ nonisolated enum ShellRoute: Hashable, Sendable {
 
     /// The screen's large title. `nil` for a book's screen, and for a page of
     /// Settings, which names itself.
-    var title: String? {
+    @MainActor var title: String? {
         switch self {
         case .feed(let entry, _): entry.kind == .author ? AuthorIndex.displayName(entry) : entry.title
         case .settingsPage, .cover: nil
-        case .onIPhone: "On iPhone"
+        case .onIPhone: "On \(ThisDevice.name)"
         case .setup(.choose): "Add a server"
         case .setup(.bookOrbit): "Sign in to BookOrbit"
         case .setup(.opds): "Add an OPDS catalog"

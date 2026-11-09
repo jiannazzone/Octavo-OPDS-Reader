@@ -113,7 +113,7 @@ struct SettingsList: View {
             }
             Section {
                 row(.storage) {
-                    valueRow("Books on iPhone", value: shell.downloads().summary())
+                    valueRow("Books on \(ThisDevice.name)", value: shell.downloads().summary())
                 }
                 ClearCoversRow()
             } header: {

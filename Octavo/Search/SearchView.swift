@@ -29,7 +29,7 @@ struct SearchView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 ConnectionBannerSlot()
                                 if let server, !search.serverSearches {
-                                    Text("\(server.name) doesn’t offer search. Showing books on your iPhone.")
+                                    Text("\(server.name) doesn’t offer search. Showing books on your \(ThisDevice.name).")
                                         .font(.footnote)
                                         .foregroundStyle(.secondary)
                                 }
@@ -409,7 +409,7 @@ private struct SearchServerSection: View {
     }
 
     private var name: String {
-        connection?.server.name ?? "On iPhone"
+        connection?.server.name ?? "On \(ThisDevice.name)"
     }
 
     var body: some View {

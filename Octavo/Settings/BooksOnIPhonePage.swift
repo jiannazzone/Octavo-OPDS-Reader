@@ -20,10 +20,10 @@ struct BooksOnIPhonePage: View {
         let books = order.sorted(shell.downloads())
         if books.isEmpty {
             ContentUnavailableView(
-                "No books on iPhone", systemImage: "book.closed",
+                "No books on \(ThisDevice.name)", systemImage: "book.closed",
                 description: Text("Books you download or import show here.")
             )
-            .navigationTitle("Books on iPhone")
+            .navigationTitle("Books on \(ThisDevice.name)")
             .toolbarTitleDisplayMode(.inline)
         } else {
             list(books)
@@ -31,7 +31,7 @@ struct BooksOnIPhonePage: View {
     }
 
     private func list(_ books: [DownloadedBook]) -> some View {
-        SettingsPageList(title: "Books on iPhone") {
+        SettingsPageList(title: "Books on \(ThisDevice.name)") {
             Section {
                 ForEach(books) { book in
                     DownloadedBookRow(book: book)
@@ -160,7 +160,7 @@ private struct ConfirmRemovingImported: ViewModifier {
 
     func body(content: Content) -> some View {
         content.confirmationDialog(
-            book.map { "Remove “\($0.book.title.isEmpty ? "Untitled" : $0.book.title)” from this iPhone?" } ?? "",
+            book.map { "Remove “\($0.book.title.isEmpty ? "Untitled" : $0.book.title)” from this \(ThisDevice.name)?" } ?? "",
             isPresented: Binding(get: { book != nil }, set: { if !$0 { book = nil } }),
             titleVisibility: .visible,
             presenting: book
