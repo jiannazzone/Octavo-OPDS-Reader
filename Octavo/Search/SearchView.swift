@@ -6,7 +6,8 @@ import SwiftUI
 /// away with the screen when a result opens, which iOS's own field in the
 /// top bar wouldn't). Before typing, your recent searches and the
 /// library's lists to browse; then the results, which open their screens
-/// in this tab.
+/// in this tab. The tab's top screen (`TabStack`), under the system's large
+/// title.
 struct SearchView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
@@ -51,8 +52,12 @@ struct SearchView: View {
             // Held to the top left: a screen narrower than the spread
             // (only placeholders on the left page) would otherwise centre.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .navigationTitle("Search")
+            .toolbarTitleDisplayMode(.large)
         } else {
             NoLibraryInvitation()
+                .navigationTitle("Search")
+                .toolbarTitleDisplayMode(.large)
         }
     }
 }

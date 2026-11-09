@@ -7,7 +7,7 @@ import SwiftUI
 /// (decision 37), and the others are on the right page. Only books in
 /// progress, but for the newest books filling the right page when there are
 /// one or two. A book opens its own screen, and unfolded the current book has
-/// Open; unfolding here opens nothing.
+/// Open; unfolding here opens nothing. The tab's top screen (`TabStack`).
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
@@ -15,15 +15,12 @@ struct HomeView: View {
 
     var body: some View {
         let state = HomeState(library)
-        TitledScreen {
-            // Unfolded, the book you're reading has the left page to itself.
-            if !(spread.isTwoPages && state.showsBooks) {
-                ScreenTitle("Home")
-                    .onLeftPage()
-            }
-        } content: {
-            content(state)
-        }
+        // Unfolded, the book you're reading has the left page to itself, with
+        // no title over it.
+        let titled = !(spread.isTwoPages && state.showsBooks)
+        content(state)
+            .navigationTitle(titled ? "Home" : "")
+            .toolbarTitleDisplayMode(titled ? .large : .inline)
     }
 
     @ViewBuilder

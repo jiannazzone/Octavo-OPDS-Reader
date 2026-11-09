@@ -345,18 +345,19 @@ struct OtherWaysInShellTests {
         #expect(!model[path: .library].routes.contains(.cover(book)))
     }
 
-    // Settings' Add a server goes into the tab it was opened in, and so do
-    // the steps after it.
-    @Test func addingAServerLaterStaysInTheTab() async throws {
+    // Settings' Add a server goes into Settings, and so do the steps after
+    // it.
+    @Test func addingAServerLaterStaysInSettings() async throws {
         let model = shell()
         await model.importBooks([try ImportFixtures.epub(in: folder)])
         model.openSettings()
-        model.push(.setup(.choose))
+        model.pick(.setup(.choose), in: .settings)
         model.setup.push(.bookOrbit)
-        #expect(model[path: .library].routes == [.settings, .setup(.choose), .setup(.bookOrbit)])
+        #expect(model[path: .settings].routes == [.setup(.choose), .setup(.bookOrbit)])
         #expect(model[path: .setup].routes.isEmpty)
+        #expect(model[path: .library].routes.isEmpty)
         model.setup.pop()
-        #expect(model[path: .library].routes == [.settings, .setup(.choose)])
+        #expect(model[path: .settings].routes == [.setup(.choose)])
     }
 
     // Remove all downloads and Remove server leave imported books and the

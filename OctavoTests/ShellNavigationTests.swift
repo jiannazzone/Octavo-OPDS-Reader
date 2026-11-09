@@ -278,10 +278,8 @@ struct ShellPathTests {
         path.push(Self.a)
         path.push(Self.b)
         #expect(path.routes == [Self.a, Self.b])
-        #expect(path.lastMove == .push)
         path.pop()
         #expect(path.top == Self.a)
-        #expect(path.lastMove == .pop)
     }
 
     @Test func poppingTheRootDoesNothing() {
@@ -289,45 +287,32 @@ struct ShellPathTests {
         path.pop()
         path.popToRoot()
         #expect(path.routes.isEmpty)
-        #expect(path.lastMove == .replace)
     }
 
-    // Only a route with a left page pairs up; any other is pushed, folded
-    // or not, and Back takes one step.
-    @Test(arguments: [false, true])
-    func otherRoutesArePushed(twoPages: Bool) {
+    // The pick is the right column's first screen; what's pushed goes over it.
+    @Test func aPickReplacesWhatTheRightColumnShowed() {
         var path = ShellPath()
-        path.open(Self.a, twoPages: twoPages)
-        path.open(Self.b, twoPages: twoPages)
-        #expect(path.routes == [Self.a, Self.b])
-        #expect(path.lastMove == .push)
-        path.back(twoPages: twoPages)
-        #expect(path.routes == [Self.a])
-    }
-
-    // Unfolded, the list under its page is drawn by the page, and only then.
-    @Test func aLeftPageIsHiddenUnderItsPageUnfolded() {
-        var path = ShellPath()
-        path.push(Self.a)
-        path.push(.settings)
-        path.push(.settingsPage(.storage))
-        // Depth 2 is the list, under its page at depth 3.
-        #expect(path.isDrawnByTheOneAbove(2, twoPages: true))
-        #expect(!path.isDrawnByTheOneAbove(2, twoPages: false))
-        #expect(!path.isDrawnByTheOneAbove(1, twoPages: true))
-        #expect(!path.isDrawnByTheOneAbove(3, twoPages: true))
-        #expect(!path.isDrawnByTheOneAbove(0, twoPages: true))
-        path.push(.signInAgain(SampleLibrarySource.id))
-        #expect(path.isDrawnByTheOneAbove(2, twoPages: true), "a screen over the page leaves the pair as it was")
-        #expect(!path.isDrawnByTheOneAbove(3, twoPages: true))
-    }
-
-    @Test func replacingDoesntAnimate() {
-        var path = ShellPath()
-        path.push(Self.a)
-        path.replace([Self.b])
+        path.pick(Self.a)
+        path.push(Self.b)
+        #expect(path.pick == Self.a)
+        #expect(path.pushed == [Self.b])
+        path.pick(Self.b)
         #expect(path.routes == [Self.b])
-        #expect(path.lastMove == .replace)
+        path.pick(nil)
+        #expect(path.routes.isEmpty)
+    }
+
+    // Back or a swipe in the right column keeps the pick under it.
+    @Test func theRightColumnsStackKeepsThePick() {
+        var path = ShellPath()
+        path.pick(Self.a)
+        path.setPushed([Self.b, .cover(SampleRoutes.book(3))])
+        #expect(path.routes == [Self.a, Self.b, .cover(SampleRoutes.book(3))])
+        path.setPushed([])
+        #expect(path.routes == [Self.a])
+        var none = ShellPath()
+        none.setPushed([Self.b])
+        #expect(none.routes.isEmpty, "nothing pushes without a pick")
     }
 }
 
@@ -376,6 +361,20 @@ struct ShellModelTests {
         model.hingeChanged(.unfold)
         #expect(await eventually { model.reader.reading != nil })
         #expect(model.reader.reading?.book.id == Self.book.book.id)
+    }
+
+    // Not under Settings' sheet.
+    @Test func unfoldingUnderSettingsOpensNothing() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.opener.download(Self.book, from: StubLibrarySource())
+        #expect(await eventually { model.opener.status(of: Self.book) == .downloaded })
+        model.select(.library)
+        model.pick(.cover(Self.book), in: .library)
+        model.openSettings()
+        model.hingeChanged(.unfold)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(model.reader.reading == nil)
     }
 
     // Nothing downloads until Download or Open is tapped.
@@ -555,7 +554,7 @@ struct ShellModelTests {
         model.push(SampleRoutes.collections)
         model.push(SampleRoutes.classics)
         #expect(model[path: .library].routes == [SampleRoutes.collections, SampleRoutes.classics])
-        model.pop(.library)
+        model.back()
         #expect(model[path: .library].routes == [SampleRoutes.collections])
         #expect(model[path: .home].routes.isEmpty)
     }
@@ -571,11 +570,13 @@ struct ShellModelTests {
         #expect(model[path: .library].routes.isEmpty)
     }
 
-    @Test func settingsOpensOnTheCurrentTab() {
+    @Test func settingsOpensOverTheCurrentTab() {
         let model = makeShell()
         model.select(.library)
         model.openSettings()
-        #expect(model[path: .library].top == .settings)
+        #expect(model.showsSettings)
+        #expect(model.tab == .library)
+        #expect(model[path: .library].routes.isEmpty)
     }
 
     @Test func aBookJoinsContinueReadingOnceItOpens() async throws {

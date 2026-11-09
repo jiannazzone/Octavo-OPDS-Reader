@@ -1,5 +1,7 @@
 # Settings (step 14)
 
+> Superseded 2026-11-08: Settings is a system sheet with its own split (`split-shell.md`). Remove server, Sign out and the pages below still hold.
+
 Step 14 of `docs/PLAN.md`, built 2026-11-02. Settings replaces the stand-in that opened from the gear at the top of the side column: the server and its page (Sign out, Remove server), Library's one switch, Books on iPhone, and About. The design questions were decided with Adam from picture mockups (`docs/design/direction.md`, Settings in the library pass). Screenshots are in `settings/`.
 
 ## What it looks like

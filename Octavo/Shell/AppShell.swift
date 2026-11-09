@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The app's root: three tabs in the side column (Home, Library, Search),
-/// each a `ScreenStack` whose top screen fills the spread, and the reader
-/// over them when a book is open.
+/// each the system's split of a list and what's picked from it
+/// (`TabSplit`), and the reader over them when a book is open.
 ///
 /// The reader is a layer over the tabs, not a `fullScreenCover`: a cover
 /// presented by an unfold (which starts about 200 ms before the scene moves
@@ -24,12 +24,7 @@ struct AppShell: View {
                 if model.showsSetup {
                     // No tabs, and nothing to skip to (decision 6) unless
                     // the tour brought you here.
-                    ScreenStack(
-                        tab: .setup, title: "Add your books", showsSettings: false,
-                        skip: model.addsBooksAfterTour ? { model.skipAddingBooks() } : nil
-                    ) {
-                        SetupStart()
-                    }
+                    SetupStack(skip: model.addsBooksAfterTour ? { model.skipAddingBooks() } : nil)
                 } else {
                     tabs
                 }
@@ -74,6 +69,14 @@ struct AppShell: View {
             guard case .success(let urls) = result else { return }
             Task { await model.importBooks(urls) }
         }
+        // Settings, from the gear (`SettingsSheet`).
+        // Not over setup: a replay's Add your books comes back to it on Skip.
+        // SwiftUI writes false back when setup hides it too; only a close
+        // or a swipe down closes Settings.
+        .sheet(isPresented: Binding(get: { model.showsSettings && !model.showsSetup }, set: { if !$0, !model.showsSetup { model.closeSettings() } })) {
+            SettingsSheet()
+                .presentationSizing(.page)
+        }
         // Open in Octavo, from another app's share sheet.
         .onOpenURL { url in
             Task { await model.openSharedFile(url) }
@@ -106,14 +109,40 @@ struct AppShell: View {
     private var tabs: some View {
         TabView(selection: Binding(get: { model.tab }, set: { model.select($0) })) {
             Tab("Home", systemImage: "house", value: .home) {
-                ScreenStack(tab: .home, title: nil) { HomeView() }
+                TabStack(tab: .home) {
+                    HomeView()
+                } buttons: {
+                    settingsButton
+                }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
-                ScreenStack(tab: .library, title: nil, importsBooks: true) { LibraryView() }
+                TabStack(tab: .library) {
+                    LibraryView()
+                } buttons: {
+                    if model.library.hasSeveralServers {
+                        ToolbarItem(placement: .topBarTrailing) { ServersMenu() }
+                    }
+                    // The Library's + for Import from Files, above Settings
+                    // (Adam, 2026-11-02).
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Import from Files", systemImage: "plus") { model.showFilePicker() }
+                    }
+                    settingsButton
+                }
             }
             Tab(value: .search, role: .search) {
-                ScreenStack(tab: .search, title: "Search") { SearchView() }
+                TabStack(tab: .search) {
+                    SearchView()
+                } buttons: {
+                    settingsButton
+                }
             }
+        }
+    }
+
+    private var settingsButton: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button("Settings", systemImage: "gearshape") { model.openSettings() }
         }
     }
 }

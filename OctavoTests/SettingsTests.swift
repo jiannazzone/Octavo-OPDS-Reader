@@ -3,94 +3,93 @@ import OctavoKit
 import Testing
 @testable import Octavo
 
-/// Settings (step 14): its pages folded and unfolded, Remove server, the
-/// books on the iPhone and the licences.
+/// Settings (step 14, a sheet from the gear since 2026-11-08): its pages,
+/// what opens from them, Remove server, the books on the iPhone and the
+/// licences.
 @MainActor
 @Suite(.temporaryFiles)
 struct SettingsNavigationTests {
-    private func shell(_ spread: Spread) -> ShellModel {
+    // The gear brings Settings up as a sheet over the tab, which stays as it
+    // was, and opens on the server's page.
+    @Test func theGearOpensASheetOverTheTab() {
         let model = makeShell()
-        model.lastSpread = spread
-        return model
+        model.select(.library)
+        model.push(SampleRoutes.collections)
+        model.openSettings()
+        #expect(model.showsSettings)
+        #expect(model[path: .settings].routes.isEmpty)
+        #expect(model[path: .library].routes == [SampleRoutes.collections])
+        model.closeSettings()
+        #expect(!model.showsSettings)
+        #expect(model[path: .library].routes == [SampleRoutes.collections])
     }
 
-    // Folded, a row's page slides in over the list, and Back returns to it.
-    @Test func foldedAPageGoesOverTheList() {
-        let model = shell(.duoFolded)
-        model.openSettings()
-        model.push(.settingsPage(.storage))
-        #expect(model[path: .home].routes == [.settings, .settingsPage(.storage)])
-        #expect(model[path: .home].lastMove == .push)
-        model.back(.home)
-        #expect(model[path: .home].routes == [.settings])
+    @Test func itOpensOnTheServersPage() async {
+        let model = makeShell()
+        #expect(model.defaultPick(.settings) == .settingsPage(.storage))
+        await model.library.connectSampleLibrary()
+        #expect(model.defaultPick(.settings) == .settingsPage(.server(SampleLibrarySource.id)))
     }
 
-    // Unfolded, the list stays and the right page changes without a slide.
-    @Test func unfoldedAPageReplacesTheOneBesideTheList() {
-        let model = shell(.duoUnfolded)
+    // A row picks its page; folded, Back from it returns to the list.
+    @Test func aRowPicksItsPage() {
+        let model = makeShell()
         model.openSettings()
-        model.push(.settingsPage(.storage))
-        #expect(model[path: .home].routes == [.settings, .settingsPage(.storage)])
-        #expect(model[path: .home].lastMove == .replace)
-        model.push(.settingsPage(.licences))
-        #expect(model[path: .home].routes == [.settings, .settingsPage(.licences)])
-        #expect(model[path: .home].lastMove == .replace)
+        model.pick(.settingsPage(.storage), in: .settings)
+        #expect(model[path: .settings].routes == [.settingsPage(.storage)])
+        model.pick(.settingsPage(.licences), in: .settings)
+        #expect(model[path: .settings].routes == [.settingsPage(.licences)])
+        model.pick(nil, in: .settings)
+        #expect(model[path: .settings].routes.isEmpty)
     }
 
-    // Unfolded, the list and its page are one screen: Back leaves both.
-    @Test func unfoldedBackLeavesSettings() {
-        let model = shell(.duoUnfolded)
+    // A screen opened from a page (Sign in again) goes over it, in Settings.
+    @Test func aScreenFromAPageStaysInSettings() {
+        let model = makeShell()
         model.openSettings()
-        model.push(.settingsPage(.server(SampleLibrarySource.id)))
-        model.back(.home)
-        #expect(model[path: .home].routes.isEmpty)
-        #expect(model[path: .home].lastMove == .pop)
-    }
-
-    // Folded on a page, then unfolded: Back leaves the list too, as the two
-    // are one screen now.
-    @Test func backAfterUnfoldingOnAPageLeavesSettings() {
-        let model = shell(.duoFolded)
-        model.openSettings()
-        model.push(.settingsPage(.storage))
-        model.lastSpread = .duoUnfolded
-        model.back(.home)
-        #expect(model[path: .home].routes.isEmpty)
-    }
-
-    // A screen opened from a page (Sign in again) goes back to the page.
-    @Test func backFromAScreenOverAPageIsOneStep() {
-        let model = shell(.duoUnfolded)
-        model.openSettings()
-        model.push(.settingsPage(.server(SampleLibrarySource.id)))
+        model.pick(.settingsPage(.server(SampleLibrarySource.id)), in: .settings)
         model.push(.signInAgain(SampleLibrarySource.id))
-        #expect(model[path: .home].lastMove == .push)
-        model.back(.home)
-        #expect(model[path: .home].routes == [.settings, .settingsPage(.server(SampleLibrarySource.id))])
+        #expect(model[path: .settings].routes == [.settingsPage(.server(SampleLibrarySource.id)), .signInAgain(SampleLibrarySource.id)])
+        #expect(model[path: .home].routes.isEmpty)
     }
 
-    // Switching tabs, the tab going out of sight measures one page; the tab
-    // on screen still goes by its own two.
-    @Test func eachTabGoesByItsOwnSpread() {
-        let model = shell(.duoFolded)
-        model.spreads[.home] = .duoUnfolded
-        model.spreads[.library] = .duoFolded
+    // Open, with nothing picked, a push goes over the page showing.
+    @Test func openAPushKeepsThePageUnderIt() {
+        let model = makeShell()
         model.openSettings()
-        model.push(.settingsPage(.storage))
-        #expect(model[path: .home].lastMove == .replace)
-        model.back(.home)
-        #expect(model[path: .home].routes.isEmpty)
+        model.expandedSplits.insert(.settings)
+        model.push(.signInAgain(SampleLibrarySource.id))
+        #expect(model[path: .settings].routes == [.settingsPage(.storage), .signInAgain(SampleLibrarySource.id)])
     }
 
-    // Without the list beneath, a page opens over what's there like any
-    // screen.
-    @Test func aPageWithoutItsListIsPushed() {
-        let model = shell(.duoUnfolded)
-        model.push(.settingsPage(.storage))
-        #expect(model[path: .home].routes == [.settingsPage(.storage)])
-        #expect(model[path: .home].lastMove == .push)
-        model.back(.home)
-        #expect(model[path: .home].routes.isEmpty)
+    // A file opened in Octavo lands on the Library, not under Settings.
+    @Test func anImportClosesSettings() async throws {
+        let model = makeShell()
+        let folder = URL.testDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        model.openSettings()
+        await model.importBooks([try ImportFixtures.epub(in: folder)])
+        #expect(!model.showsSettings)
+        #expect(model.tab == .library)
+    }
+
+    // Picking what's picked goes back to it from what was pushed over it.
+    @Test func pickingThePickAgainGoesBackToIt() {
+        let model = makeShell()
+        model.pick(SampleRoutes.collections, in: .library)
+        model.push(.cover(SampleRoutes.book(3)))
+        model.pick(SampleRoutes.collections, in: .library)
+        #expect(model[path: .library].routes == [SampleRoutes.collections])
+    }
+
+    // Opened again, it starts from its first page.
+    @Test func itOpensAfreshEachTime() {
+        let model = makeShell()
+        model.openSettings()
+        model.pick(.settingsPage(.licences), in: .settings)
+        model.closeSettings()
+        model.openSettings()
+        #expect(model[path: .settings].routes.isEmpty)
     }
 }
 
