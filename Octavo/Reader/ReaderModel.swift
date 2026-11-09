@@ -136,7 +136,7 @@ final class ReaderModel {
     /// the stack inside measures it: 78 pt on an iPhone 17 Pro held sideways,
     /// which has no status bar above it, so the text starts below it
     /// (`updateGeometry`). Folded on the Duo it's 24, inside foliate's margin.
-    @ObservationIgnored private var barBottom = 0.0
+    @ObservationIgnored private(set) var barBottom = 0.0
     @ObservationIgnored private var lastGeometry: ReaderGeometry?
     @ObservationIgnored private var sentTapMode: ReaderTapMode?
     @ObservationIgnored private var sentAppearance: ReaderAppearanceScript?

@@ -64,7 +64,10 @@ nonisolated struct ReaderNotePlacement: Equatable, Sendable {
     /// one page.
     static let clearance = 4.0
 
-    init(mark: ReaderNote.Mark, layout: ReaderLayout, geometry: ReaderGeometry) {
+    /// `barBottom`: where the reader's own bar ends while its buttons sit over
+    /// the page (an iPhone or an iPad), so the card starts below Back and ···.
+    /// 0 on the Duo, which keeps them in its side column.
+    init(mark: ReaderNote.Mark, layout: ReaderLayout, geometry: ReaderGeometry, barBottom: Double = 0) {
         let spans = layout.barSpans(in: geometry, bookMode: true)
         if spans.count == 2, let fold = layout.fold {
             isFacing = true
@@ -73,7 +76,7 @@ nonisolated struct ReaderNotePlacement: Equatable, Sendable {
             isFacing = false
             span = spans[0]
         }
-        top = geometry.safeArea.top + ReaderLayout.edgeInset
+        top = max(geometry.safeArea.top, barBottom) + ReaderLayout.edgeInset
         bottom = ReaderChromeLayout.footerLineTop(in: geometry, layout: layout) - Self.clearance
         markTop = mark.y
         markBottom = mark.y + mark.height
