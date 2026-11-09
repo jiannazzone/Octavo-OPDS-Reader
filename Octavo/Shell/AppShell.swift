@@ -111,6 +111,7 @@ struct AppShell: View {
             Tab("Home", systemImage: "house", value: .home) {
                 TabStack(tab: .home) {
                     HomeView()
+                        .twoPagesWhenWide()
                 } buttons: {
                     settingsButton
                 }

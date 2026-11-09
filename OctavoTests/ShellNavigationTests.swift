@@ -40,6 +40,32 @@ struct SpreadTests {
         #expect(!Spread(width: 867, divisions: [nearTheEdge]).isTwoPages)
     }
 
+    // No fold: two pages only in a room wide enough, held sideways (an iPad
+    // in landscape), and only for a screen that asks; never an iPhone
+    // turned sideways or a portrait iPad.
+    @Test func withoutAFoldOnlyAWideRoomSplits() throws {
+        let ipad = Spread(width: 1376, height: 1032, divisions: [])
+        #expect(!ipad.isTwoPages, "shelves and lists run across")
+        let pages = try #require(ipad.splitWhenWide.pages)
+        #expect(pages.leftWidth == pages.rightWidth)
+        #expect(pages.leftWidth + pages.hingeWidth + pages.rightWidth == 1376)
+        #expect(!Spread(width: 1032, height: 1376, divisions: []).splitWhenWide.isTwoPages)
+        #expect(!Spread(width: 956, height: 440, divisions: []).splitWhenWide.isTwoPages)
+        #expect(!Spread(width: 1376, divisions: []).splitWhenWide.isTwoPages, "no height: a measurement without one stays one page")
+    }
+
+    // The Duo: a screen that splits when wide splits exactly as the fold
+    // does, in every posture, and never down the middle of a room.
+    @Test func onTheDuoTheFoldDecides() {
+        let open = Spread(width: 867, height: 760, divisions: [Self.hinge])
+        #expect(open.splitWhenWide == open)
+        #expect(open.widePages == nil)
+        let folded = Spread(width: 382, height: 760, divisions: [])
+        #expect(folded.splitWhenWide == folded)
+        let sideways = Spread(width: 1100, height: 700, divisions: [CGRect(x: 0, y: 330, width: 1100, height: 40)])
+        #expect(!sideways.splitWhenWide.isTwoPages, "a fold across the room: one page, as before")
+    }
+
     // Three covers folded; four on the left page and three on the right.
     @MainActor @Test func gridColumnsPerPage() {
         #expect(SpreadMetrics.columns(382) == 3)
