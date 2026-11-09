@@ -309,14 +309,23 @@ extension ReaderModel {
     // MARK: Pictures
 
     /// The pages as they are now, for a cover's motion (decision 28): each
-    /// half of a spread, or the one page.
+    /// half of a spread, or the one page. With no fold and the page sideways,
+    /// foliate decides the columns, and the screen under the reader may be
+    /// a spread split down the middle (an iPad's, `Spread.widePages`): the
+    /// halves at the middle too, for a cover that closes onto it.
     func coverPages() -> ReaderCoverPages {
         let paper = Color(hex: appearance.background)
         guard let geometry else { return ReaderCoverPages(paper: paper, fraction: shownFraction) }
         let size = geometry.size
         let spine = layout.columns == 2 ? spine(in: geometry) : nil
-        let regions: ReaderTurn.Regions = spine == nil ? .whole : [.left, .right]
-        let taken = pictures(regions, size: size, spine: spine, afterScreenUpdates: true)
+        let regions: ReaderTurn.Regions = if spine != nil {
+            [.left, .right]
+        } else if layout.columns == nil, size.width > size.height {
+            [.whole, .left, .right]
+        } else {
+            .whole
+        }
+        let taken = pictures(regions, size: size, spine: spine ?? Double(size.width) / 2, afterScreenUpdates: true)
         return ReaderCoverPages(left: taken?.left, right: taken?.right, whole: taken?.whole, spine: spine, paper: paper, fraction: shownFraction, layout: layout)
     }
 
