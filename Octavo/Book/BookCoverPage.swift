@@ -20,7 +20,6 @@ struct BookCoverPage: View {
     let source: any LibrarySource
     @Environment(ShellModel.self) private var shell
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
         let sourced = SourcedBook(source: sourceID, book: book)
@@ -36,9 +35,8 @@ struct BookCoverPage: View {
                 BookInfoPage(page: page, source: source, sourceID: sourceID)
             } folded: {
                 ZStack(alignment: .bottom) {
-                    // Open, not under the list beside it (`TabSplit`).
                     BookCoverArt(page: page, thumbnail: thumbnail, book: sourced.id)
-                        .ignoresSafeArea(edges: sizeClass == .compact ? .all : [.vertical, .trailing])
+                        .ignoresSafeArea()
                         .onTapGesture {
                             guard page.isExpanded else { return }
                             withAnimation(BookSheet.animation) { page.isExpanded = false }

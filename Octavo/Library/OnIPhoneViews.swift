@@ -70,14 +70,13 @@ struct OnIPhoneContent: View {
 /// Nothing while the iPhone has no books.
 struct OnIPhoneShelf: View {
     @Environment(ShellModel.self) private var shell
-    @Environment(\.menuColumn) private var menu
 
     var body: some View {
         let books = shell.onIPhoneBooks()
         if !books.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Button {
-                    shell.open(.onIPhone, inMenuOf: menu)
+                    shell.push(.onIPhone)
                 } label: {
                     HStack(spacing: 6) {
                         Text("On iPhone")

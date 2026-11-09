@@ -65,9 +65,9 @@ final class ShellModel {
     /// A debug launch argument is connecting a server: the tabs show, not
     /// setup, while it does.
     private var connectingAtLaunch = false
-    /// The split tabs showing both columns now (`TabSplit`): there, with
-    /// nothing picked, the right column shows the tab's `defaultPick`, and a
-    /// push goes over it.
+    /// The splits showing both columns now (`TabSplit`, Settings' on a wide
+    /// sheet): there, with nothing picked, the right column shows the
+    /// `defaultPick`, and a push goes over it.
     @ObservationIgnored var expandedSplits: Set<ShellTab> = []
 
     /// What a split tab's right column shows with nothing picked, without
@@ -120,9 +120,7 @@ final class ShellModel {
         )
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
-            // The screen on top, or the default pick showing in its place
-            // (`TabSplit`).
-            let top = self[path: tab].top ?? (expandedSplits.contains(tab) ? defaultPick(tab) : nil)
+            let top = self[path: tab].top
             return ReaderPresenter.Underneath(onHome: tab == .home && top == nil, top: top, inTour: tour.playing != nil)
         }
         tour.installSampleBook = { [weak self] in self?.installSampleBook() }
@@ -458,15 +456,6 @@ final class ShellModel {
         self[path: tab].pick(route)
     }
 
-    /// Opens `route` from a split's list (`menu`), or on top of the current
-    /// tab from anywhere else.
-    func open(_ route: ShellRoute, inMenuOf menu: ShellTab?) {
-        if let menu {
-            pick(route, in: menu)
-        } else {
-            push(route)
-        }
-    }
 
     /// Back from the screen in front: Settings' while its sheet is up, else
     /// the tab's (Sign in again, once signed in).

@@ -1,26 +1,20 @@
 import SwiftUI
 
-/// A tab as the system's split (Adam, 2026-11-08): the tab's list on the
-/// left, and what's picked from it on the right, where further screens push.
-/// Folded, and on an iPhone, it collapses to one stack with the system's
-/// Back and swipe. The tab's state is its `ShellPath`: the pick, then what's
-/// pushed over it.
+/// Settings' split, in its sheet (`SettingsSheet`): its list on the left and
+/// the chosen page on the right, where further screens push. Compact (the
+/// open Duo's sheet, an iPhone) it collapses to one stack with the system's
+/// Back and swipe. Its state is a `ShellPath`: the pick, then what's pushed
+/// over it.
 ///
 /// - The list is a `List` whose selection is the pick
-///   (`ShellModel.pickBinding`): that's what gives the folded stack its Back.
-///   A list in a plain scroll view collapses with none.
-/// - Open, the Duo's side column holds the right column's buttons; folded,
-///   the list's. So the tab's own buttons (`buttons`) go with whichever
-///   column is the one on screen.
-/// - Each column lays its screens out by its own room (`measuresSpread`):
-///   one page, or two across the hinge with the list hidden.
-/// - Open, with nothing picked, the right column shows the tab's
-///   `ShellModel.defaultPick` (Home's current book), or says nothing is.
+///   (`ShellModel.pickBinding`): that's what gives the collapsed stack its
+///   Back. A list in a plain scroll view collapses with none.
+/// - With two columns and nothing picked, the right column shows
+///   `ShellModel.defaultPick` (the server's page) without picking it.
 struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
     let tab: ShellTab
-    /// The buttons stay on the list in both postures: Settings' close.
-    var buttonsOnList = false
     @ViewBuilder let menu: () -> Menu
+    /// On the list, in both postures (Settings' close).
     @ToolbarContentBuilder let buttons: () -> Buttons
     @Environment(ShellModel.self) private var shell
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -29,25 +23,18 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             menu()
-                .environment(\.menuColumn, tab)
                 .measuresSpread()
-                .toolbar {
-                    if buttonsOnList || sizeClass == .compact { buttons() }
-                }
+                .toolbar { buttons() }
         } detail: {
             NavigationStack(path: pushed) {
                 Group {
                     if let pick = shell[path: tab].pick ?? shell.defaultPick(tab) {
                         // Another pick is another screen, not this one with
-                        // the last one's state (Home's default book, then
-                        // one picked).
+                        // the last one's state.
                         screen(pick)
                             .id(pick)
                     } else {
                         ContentUnavailableView("No Book Selected", systemImage: "books.vertical")
-                            .toolbar {
-                                if !buttonsOnList, sizeClass != .compact { buttons() }
-                            }
                     }
                 }
                 .navigationDestination(for: ShellRoute.self) { screen($0) }
@@ -66,9 +53,6 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
         ShellScreen(route: route)
             .measuresSpread()
             .routeTitle(route.title)
-            .toolbar {
-                if !buttonsOnList, sizeClass != .compact { buttons() }
-            }
     }
 
     /// The right column's stack over the pick, which Back and the swipe
@@ -78,76 +62,9 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
     }
 }
 
-extension View {
-    /// A route's large title; a screen without one (a book's, a page of
-    /// Settings) names itself, or has none.
-    func routeTitle(_ title: String?) -> some View {
-        modifier(RouteTitle(title: title))
-    }
-}
-
-private struct RouteTitle: ViewModifier {
-    let title: String?
-
-    func body(content: Content) -> some View {
-        if let title {
-            content
-                .navigationTitle(title)
-                .toolbarTitleDisplayMode(.large)
-        } else {
-            content
-                .toolbarTitleDisplayMode(.inline)
-        }
-    }
-}
-
 extension ShellModel {
     /// What a split's `List` selects: `tab`'s pick.
     func pickBinding(_ tab: ShellTab) -> Binding<ShellRoute?> {
         Binding { self[path: tab].pick } set: { self.pick($0, in: tab) }
-    }
-}
-
-extension EnvironmentValues {
-    /// The tab whose split list the view is in: what it opens becomes the
-    /// pick (`ShellModel.open(_:inMenuOf:)`). `nil` elsewhere, where it
-    /// pushes.
-    @Entry var menuColumn: ShellTab?
-}
-
-extension View {
-    /// Lays the view out by the room it has (`Spread`), for a column of a
-    /// split: one page, or two when it spans the hinge.
-    func measuresSpread() -> some View {
-        modifier(MeasuresSpread())
-    }
-}
-
-private struct MeasuresSpread: ViewModifier {
-    @State private var spread: Spread?
-
-    func body(content: Content) -> some View {
-        content
-            .environment(\.spread, spread ?? .onePage)
-            .onSpreadChange { new in
-                // Narrower than a page: the layout before the first real one.
-                guard new.width >= Spread.minimumPageWidth, new != spread else { return }
-                spread = new
-            }
-    }
-}
-
-extension View {
-    /// A row of a split's list as the screen's own content, edge to edge:
-    /// a shelf, a banner. `top` and `bottom` space it from its neighbours.
-    func listRow(top: CGFloat = 14, bottom: CGFloat = 14) -> some View {
-        listRowInsets(EdgeInsets(top: top, leading: 0, bottom: bottom, trailing: 0))
-            .listRowSeparator(.hidden)
-    }
-
-    /// An invitation with a split's list to itself: centred in it.
-    func fillsList() -> some View {
-        containerRelativeFrame(.vertical)
-            .listRow(top: 0, bottom: 0)
     }
 }

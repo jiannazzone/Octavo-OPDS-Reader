@@ -151,7 +151,6 @@ struct LibraryShelf: View {
     var hiding: Set<SourcedBook.ID> = []
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.menuColumn) private var menu
 
     /// Whether a shelf of `feed` has covers to show, or may once it loads.
     static func hasCovers(_ feed: FeedModel, from source: LibrarySourceID, hiding: Set<SourcedBook.ID> = []) -> Bool {
@@ -179,7 +178,7 @@ struct LibraryShelf: View {
 
     private func heading(_ feed: FeedModel?) -> some View {
         Button {
-            shell.open(.feed(entry, from: source), inMenuOf: menu)
+            shell.push(.feed(entry, from: source))
         } label: {
             HStack(spacing: 6) {
                 Text(entry.title)

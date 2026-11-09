@@ -15,11 +15,10 @@ struct OpenButton<Label: View>: View {
     var fillsRow = false
     @ViewBuilder let label: () -> Label
     @Environment(ShellModel.self) private var shell
-    @Environment(\.menuColumn) private var menu
 
     var body: some View {
         Button {
-            shell.open(route, inMenuOf: menu)
+            shell.push(route)
         } label: {
             label()
                 .frame(maxWidth: fillsRow ? .infinity : nil, alignment: .leading)

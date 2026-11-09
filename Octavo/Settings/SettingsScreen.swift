@@ -14,7 +14,7 @@ struct SettingsSheet: View {
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        TabSplit(tab: .settings, buttonsOnList: true) {
+        TabSplit(tab: .settings) {
             SettingsList()
         } buttons: {
             ToolbarItem(placement: .topBarLeading) {
