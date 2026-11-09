@@ -74,7 +74,7 @@ KOReader v2026.07.1's release build (`koreader-linux-arm64`), headless in a thro
 - **Its Progress sync menu** (v2026.07.1) has "Document matching method", Binary by default or Filename. A device set to Filename never meets Octavo's places. "Device hostname" sets the `device` it sends, else its model code (`Kobo_daylight`, `kindlepw2`). "Automatically keep documents in sync" is off by default.
 - **KOReader's percentage is close to foliate's:** at the same words, a median gap of 0.2–0.9 points per book, 2.0 at the 90th percentile. It's farther only where pictures take whole pages: 16 points in Pride and Prejudice's illustrated front matter. Good enough for a place line, never for landing.
 
-Not covered: Adam's modern EPUBs (calibre conversions, Kobo's `koboSpan`s, books from stores), a KOReader newer than v2026.07.1, other screen sizes and fonts, and KOReader's own sync menu (only the engine was driven).
+Not covered: calibre conversions, Kobo's `koboSpan`s, KOReader on a real e-reader, a KOReader newer than v2026.07.1, other screen sizes and fonts, and KOReader's own sync menu (only the engine was driven). Books from stores are below.
 
 ### Octavo's bridge against it (2026-11-08)
 
@@ -83,6 +83,14 @@ Not covered: Adam's modern EPUBs (calibre conversions, Kobo's `koboSpan`s, books
 - **Octavo → KOReader:** 149/150 land on the words the bridge names, and none was refused. The one is a table whose cells KOReader joins with a space.
 - **KOReader → Octavo:** 1,016/1,021 resolve to the same words (Alice 54/55, Frankenstein 129/130, Moby-Dick 375/376, Pride and Prejudice 229/230, Sherlock 229/230), after the drop-cap rule above (it was 1,012). The five left are each book's cover (`…/div/svg.0`), which resolves to the cover and only shows as a miss because a picture has no words to compare. The bridge also handles `<pre>`, which the Python model doesn't.
 - **Where KOReader's DOM may differ** (a table, an SVG, MathML), Octavo sends the whole element. A table without `<tbody>` is one: the browser's XML parser adds none.
+
+### On five store EPUBs (2026-11-08)
+
+Five of Adam's own DRM-free EPUBs from stores, published 2013–2024, through `run.sh` and `bridge-check.sh` on an iPhone Duo simulator, KOReader v2026.07.1. They aren't in the repo or named here.
+
+- **Octavo → KOReader:** 150/150 land on the words the bridge names, and none was withheld. The Python model's word-level and paragraph-level places are 150/150 each.
+- **KOReader → Octavo:** 1,061/1,070 resolve to the same words. All 9 misses are pictures: covers as `img` or `svg`, a copyright page's image, an image in a chapter heading, and two scene-break images, where the bridge lands on the same sentence after the break's alt text. Each resolves to the picture, which has no words to compare.
+- **KOReader's percentage against foliate's** at the same words: a median gap of 0.1–0.3 points per book, 1.7 at most.
 
 ## What would go wrong as first designed
 
