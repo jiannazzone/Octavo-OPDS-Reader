@@ -82,7 +82,9 @@ struct AppShell: View {
             Task { await model.openSharedFile(url) }
         }
         .onHingeChange { old, new in
-            model.tour.hingeReported(HingeTransition.Fold(new.hinge?.status))
+            let fold = HingeTransition.Fold(new.hinge?.status)
+            model.hingeReported(fold)
+            model.tour.hingeReported(fold)
             model.hingeChanged(HingeTransition(from: old, to: new))
         }
         // Nothing from the hinge by now: no fold on this iPhone (decision 29).

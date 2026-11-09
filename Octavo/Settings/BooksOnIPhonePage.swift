@@ -99,7 +99,10 @@ struct ClearCoversRow: View {
             Task { await library.covers.clear() }
         } label: {
             LabeledContent {
+                // Grey like the other values: the button's `.primary` would
+                // override `LabeledContent`'s own.
                 Text(size.map { $0 == 0 ? "None" : ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "")
+                    .foregroundStyle(.secondary)
             } label: {
                 Text("Clear covers")
                     .foregroundStyle((size ?? 0) == 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))

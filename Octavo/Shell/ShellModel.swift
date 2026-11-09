@@ -65,6 +65,9 @@ final class ShellModel {
     /// A debug launch argument is connecting a server: the tabs show, not
     /// setup, while it does.
     private var connectingAtLaunch = false
+    /// A hinge has reported (the Duo). Without one Settings leaves out Close
+    /// book when folded, which would do nothing (Adam, 2026-11-09).
+    private(set) var hasHinge = false
     /// The splits showing both columns now (`TabSplit`, Settings' on a wide
     /// sheet): there, with nothing picked, the right column shows the
     /// `defaultPick`, and a push goes over it.
@@ -558,6 +561,11 @@ final class ShellModel {
         if book.source == .files { return true }
         guard let server else { return false }
         return server.id == book.source && server.source is OPDSSource && server.syncsWithKOReader
+    }
+
+    /// Every report from the hinge, the first as the shell appears.
+    func hingeReported(_ fold: HingeTransition.Fold?) {
+        if fold != nil, !hasHinge { hasHinge = true }
     }
 
     /// The Duo as the book:

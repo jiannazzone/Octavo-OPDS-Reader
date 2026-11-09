@@ -2,7 +2,8 @@ import OctavoKit
 import SwiftUI
 
 /// Settings (decision 24, frames 34–37): the server, Library's one switch,
-/// Keep screen on, Close book when folded, the books on the iPhone and About.
+/// Keep screen on, Close book when folded (with a hinge only), the books on
+/// the iPhone and About.
 /// Reading choices live in the reader's Text and theme panel, not here. Those
 /// two are the exception: they're set once and left (Adam, 2026-11-06).
 ///
@@ -102,7 +103,9 @@ struct SettingsList: View {
                         Text(time.name).tag(time)
                     }
                 }
-                Toggle("Close book when folded", isOn: $closesBookWhenFolded)
+                if shell.hasHinge {
+                    Toggle("Close book when folded", isOn: $closesBookWhenFolded)
+                }
             } header: {
                 Text("Reading")
             } footer: {
