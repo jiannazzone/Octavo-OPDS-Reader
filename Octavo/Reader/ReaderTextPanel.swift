@@ -206,7 +206,7 @@ struct ReaderTextPanel: View {
                 }
             }
             if appearance.matchDarkMode, darkMode, appearance.theme != .night {
-                Text("Night while the iPhone is in Dark Mode. Turn off Match Dark Mode to choose.")
+                Text("Night while the \(ThisDevice.name) is in Dark Mode. Turn off Match Dark Mode to choose.")
                     .font(.footnote)
                     .foregroundStyle(.secondaryOnGlass)
             }

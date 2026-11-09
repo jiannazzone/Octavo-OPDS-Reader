@@ -267,7 +267,7 @@ final class SetupModel {
 
     /// The server didn't answer in time.
     private func timedOut(_ url: URL) {
-        error = "\(url.host() ?? "The server") didn’t answer. Check the address, including any port (such as :3300), and that this iPhone is on the same network."
+        error = "\(url.host() ?? "The server") didn’t answer. Check the address, including any port (such as :3300), and that this \(ThisDevice.name) is on the same network."
     }
 
     private func parse(_ text: String) -> ServerAddress.Parsed? {
@@ -318,14 +318,14 @@ final class SetupModel {
         case let error as URLError:
             switch error.code {
             case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff:
-                return "This iPhone is offline."
+                return "This \(ThisDevice.name) is offline."
             case .cannotFindHost, .dnsLookupFailed:
                 return "Can’t find \(place). Check the address."
             case .secureConnectionFailed, .serverCertificateHasBadDate, .serverCertificateNotYetValid,
                  .serverCertificateHasUnknownRoot, .serverCertificateUntrusted, .clientCertificateRejected:
                 return "Couldn’t make a secure connection to \(place)."
             default:
-                return "Can’t reach \(place). Check the address, including any port (such as :3300), and that this iPhone is on the same network."
+                return "Can’t reach \(place). Check the address, including any port (such as :3300), and that this \(ThisDevice.name) is on the same network."
             }
         default:
             return "Couldn’t connect to \(server). Try again."

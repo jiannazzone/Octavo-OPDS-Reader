@@ -36,7 +36,7 @@ struct ConnectionBanner: View {
 
     private var message: String {
         switch problem {
-        case .unreachable(let server): "Can’t reach \(server). Showing books on your iPhone."
+        case .unreachable(let server): "Can’t reach \(server). Showing books on your \(ThisDevice.name)."
         case .signedOut(let server): "Signed out of \(server). Reading still works; sync is paused."
         }
     }

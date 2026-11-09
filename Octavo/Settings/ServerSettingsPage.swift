@@ -75,14 +75,14 @@ struct ServerSettingsPage: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(server.syncsProgress
-                ? "Your downloaded books stay on this iPhone. Reading progress syncs again once you sign in."
-                : "Your downloaded books stay on this iPhone.")
+                ? "Your downloaded books stay on this \(ThisDevice.name). Reading progress syncs again once you sign in."
+                : "Your downloaded books stay on this \(ThisDevice.name).")
         }
         .alert("Remove \(server.name)?", isPresented: Binding { removal != nil } set: { if !$0 { removal = nil } }, presenting: removal) { removal in
             if removal.downloads.isEmpty {
                 Button("Remove", role: .destructive) { remove(removingBooks: false) }
             } else {
-                Button("Keep books on iPhone") { remove(removingBooks: false) }
+                Button("Keep books on \(ThisDevice.name)") { remove(removingBooks: false) }
                     .keyboardShortcut(.defaultAction)
                 Button("Remove books too", role: .destructive) { remove(removingBooks: true) }
             }
@@ -143,8 +143,8 @@ struct ServerSettingsPage: View {
         guard !downloads.isEmpty else { return "You can add it again any time." }
         let size = ByteCountFormatter.string(fromByteCount: downloads.reduce(0) { $0 + $1.size }, countStyle: .file)
         if downloads.count == 1 {
-            return "Its downloaded book uses \(size). Remove it too, or keep it on this iPhone?"
+            return "Its downloaded book uses \(size). Remove it too, or keep it on this \(ThisDevice.name)?"
         }
-        return "Its \(downloads.count) downloaded books use \(size). Remove them too, or keep them on this iPhone?"
+        return "Its \(downloads.count) downloaded books use \(size). Remove them too, or keep them on this \(ThisDevice.name)?"
     }
 }

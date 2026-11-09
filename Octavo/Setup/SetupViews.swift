@@ -429,7 +429,7 @@ private struct SyncSetup: View {
                     title: "This BookOrbit server", detail: "Your place matches BookOrbit’s reader and apps",
                     selected: setup.syncsProgress
                 ) { setup.syncsProgress = true }
-                SetupChoice(title: "Don’t sync", detail: "Your place stays on this iPhone", selected: !setup.syncsProgress) {
+                SetupChoice(title: "Don’t sync", detail: "Your place stays on this \(ThisDevice.name)", selected: !setup.syncsProgress) {
                     setup.syncsProgress = false
                 }
                 SetupButton("Done", working: false) { setup.finishBookOrbit() }
@@ -674,7 +674,7 @@ struct SignInAgainScreen: View {
                 self.error = SetupModel.message(for: error, server: saved.displayName, host: host)
             }
         } timedOut: {
-            error = "\(host ?? saved.displayName) didn’t answer. Check that this iPhone is on the same network as the server."
+            error = "\(host ?? saved.displayName) didn’t answer. Check that this \(ThisDevice.name) is on the same network as the server."
         }
     }
 
