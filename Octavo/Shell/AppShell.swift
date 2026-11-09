@@ -109,7 +109,7 @@ struct AppShell: View {
     private var tabs: some View {
         TabView(selection: Binding(get: { model.tab }, set: { model.select($0) })) {
             Tab("Home", systemImage: "house", value: .home) {
-                TabSplit(tab: .home) {
+                TabStack(tab: .home) {
                     HomeView()
                 } buttons: {
                     settingsButton

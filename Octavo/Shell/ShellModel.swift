@@ -70,16 +70,14 @@ final class ShellModel {
     /// push goes over it.
     @ObservationIgnored var expandedSplits: Set<ShellTab> = []
 
-    /// What a split tab's right column shows with nothing picked: Home's
-    /// current book (decision 26). It isn't picked, so folding still shows
-    /// the tab's list.
+    /// What a split tab's right column shows with nothing picked, without
+    /// picking it: Settings' first page.
     func defaultPick(_ tab: ShellTab) -> ShellRoute? {
         switch tab {
-        case .home: library.continueReading.first.map(ShellRoute.cover)
         // The server's page, as system Settings opens on General; with no
         // server yet (books imported), Books on iPhone.
         case .settings: .settingsPage(library.server.map { .server($0.id) } ?? .storage)
-        case .library, .search, .setup: nil
+        case .home, .library, .search, .setup: nil
         }
     }
 
@@ -123,10 +121,9 @@ final class ShellModel {
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
             // The screen on top, or the default pick showing in its place
-            // (Home's current book). Home draws no cover of its own to land
-            // on (`TabSplit`).
+            // (`TabSplit`).
             let top = self[path: tab].top ?? (expandedSplits.contains(tab) ? defaultPick(tab) : nil)
-            return ReaderPresenter.Underneath(top: top, inTour: tour.playing != nil)
+            return ReaderPresenter.Underneath(onHome: tab == .home && top == nil, top: top, inTour: tour.playing != nil)
         }
         tour.installSampleBook = { [weak self] in self?.installSampleBook() }
         tour.played = { [weak self] landsOnHome in

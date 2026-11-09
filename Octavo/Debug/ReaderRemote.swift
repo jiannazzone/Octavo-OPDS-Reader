@@ -208,6 +208,7 @@ enum ReaderRemote {
         case "coverSpots":
             return shell.reader.coverSpots.spots.map { screen, spot in
                 let name = switch screen {
+                case .home: "home"
                 case .book(let id): "book \(id.book.rawValue)"
                 }
                 return "\(name): \(spot.book.book.rawValue) \(spot.frame) image \(spot.image != nil)"

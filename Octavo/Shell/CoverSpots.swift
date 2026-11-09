@@ -3,13 +3,16 @@ import UIKit
 
 /// Where the screens show a book's cover, in the window, for the book
 /// opening and closing like a cover (`ReaderCoverMotion`): a book's own
-/// screen (`BookCoverArt`). Each cover reports here as it lays out and as it
+/// screen, and Home's left page unfolded, which draw it alike
+/// (`BookCoverArt`). Each cover reports here as it lays out and as it
 /// appears, and takes its report away when it goes; the shell asks for the
 /// one under the reader. Not observed: nothing draws from it.
 @MainActor
 final class CoverSpots {
-    /// The screen a cover is on: each book's screen keeps its own.
+    /// The screen a cover is on. Home's stays under a book's screen pushed
+    /// over it, which may be the same book's, so each keeps its own.
     enum Screen: Hashable {
+        case home
         case book(SourcedBook.ID)
     }
 
@@ -33,10 +36,17 @@ final class CoverSpots {
         reporters[screen] = nil
     }
 
-    /// `book`'s cover on its screen, if that's the one on top.
-    func spot(for book: SourcedBook.ID, top: ShellRoute?) -> CoverSpot? {
-        guard case .cover(let shown)? = top, shown.id == book else { return nil }
-        guard let spot = spots[.book(book)], spot.book == book, !spot.frame.isEmpty else { return nil }
+    /// `book`'s cover on the screen showing: Home's when Home's top screen is
+    /// showing, else the book's screen's if that's on top.
+    func spot(for book: SourcedBook.ID, onHome: Bool, top: ShellRoute?) -> CoverSpot? {
+        let screen: Screen
+        if onHome {
+            screen = .home
+        } else {
+            guard case .cover(let shown)? = top, shown.id == book else { return nil }
+            screen = .book(book)
+        }
+        guard let spot = spots[screen], spot.book == book, !spot.frame.isEmpty else { return nil }
         return spot
     }
 }
