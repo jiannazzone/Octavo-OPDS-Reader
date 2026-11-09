@@ -232,6 +232,9 @@ private struct ReaderScreen: View {
                     withAnimation { controls.toggle() }
                 }
                 .toolbar { buttons }
+                // Inside the stack, the safe area's top includes the bar
+                // holding the column's buttons.
+                .onGeometryChange(for: Double.self) { Double($0.safeAreaInsets.top) } action: { model.barBottomChanged($0) }
         }
         // The column's buttons, the footer, the bar and the panel in the
         // page's colours. Here, not for the window, so `systemColorScheme`

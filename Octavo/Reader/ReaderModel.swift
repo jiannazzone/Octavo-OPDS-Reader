@@ -132,6 +132,11 @@ final class ReaderModel {
     /// turned sideways), measured outside the reader's own toolbar so
     /// showing the controls never moves the text.
     @ObservationIgnored private var safeArea = ReaderInsets.zero
+    /// How far down the navigation bar holding the column's buttons ends, as
+    /// the stack inside measures it: 78 pt on an iPhone 17 Pro held sideways,
+    /// which has no status bar above it, so the text starts below it
+    /// (`updateGeometry`). Folded on the Duo it's 24, inside foliate's margin.
+    @ObservationIgnored private var barBottom = 0.0
     @ObservationIgnored private var lastGeometry: ReaderGeometry?
     @ObservationIgnored private var sentTapMode: ReaderTapMode?
     @ObservationIgnored private var sentAppearance: ReaderAppearanceScript?
@@ -338,6 +343,13 @@ final class ReaderModel {
         if let lastGeometry { updateGeometry(lastGeometry) }
     }
 
+    /// The navigation bar's bottom changed (`barBottom`).
+    func barBottomChanged(_ bottom: Double) {
+        guard bottom != barBottom else { return }
+        barBottom = bottom
+        if let lastGeometry { updateGeometry(lastGeometry) }
+    }
+
     /// `geometry` with the page's own size, once the page has reported it,
     /// and the safe area.
     private func updateGeometry(_ geometry: ReaderGeometry) {
@@ -345,6 +357,13 @@ final class ReaderModel {
         var geometry = geometry
         if let viewport { geometry.size = viewport }
         geometry.safeArea = safeArea
+        // With nothing above the column's buttons (an iPhone held sideways
+        // has no status bar), the text starts below them, past foliate's own
+        // margin. Elsewhere the status bar keeps it clear already, and the
+        // bar's room would cost a line.
+        if safeArea.top == 0 {
+            geometry.safeArea.top = max(0, barBottom - ReaderLayout.verticalMargin)
+        }
         guard geometry != self.geometry else { return }
         self.geometry = geometry
         relayout()
