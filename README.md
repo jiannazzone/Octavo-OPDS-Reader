@@ -10,9 +10,9 @@
   <img src="docs/readme/opening.gif" width="640" alt="Tapping Open on Pride and Prejudice: the cover swings over the spine and the book opens across both pages of an iPhone Duo.">
 </p>
 
-> **Status:** it works today if you build it yourself. There's no TestFlight or App Store version yet.
+> **Status:** 1.0 is on its way to the App Store. Until then, you can build it yourself.
 
-Octavo is a free, open-source e-reader built for iPhone Duo. It reads from [BookOrbit](https://github.com/bookorbit/bookorbit), from any OPDS catalog, and from files you import. No accounts, no subscriptions, no tracking.
+Octavo is a free, open-source e-reader built for iPhone Duo first, and it works on any iPhone or iPad too. It reads from [BookOrbit](https://github.com/bookorbit/bookorbit), from any OPDS catalog, and from files you import. No accounts, no subscriptions, no tracking.
 
 <table>
   <tr>
@@ -25,9 +25,25 @@ Octavo is a free, open-source e-reader built for iPhone Duo. It reads from [Book
 ## What it does
 
 - **Opens like a book.** One page folded, two pages open, and a real spread with a shadow at the spine when half open. Your place holds as you move between them.
-- **Keeps your place.** With BookOrbit, your position matches its web reader exactly, in both directions.
-- **Lets you look something up.** Jump to a map or a glossary, then tap "Back to page 312". Your place doesn't move, here or on the server, until you settle somewhere new.
+- **Keeps your place.** With BookOrbit, your position matches its web reader exactly, in both directions. With KOReader sync, EPUBs keep their place with KOReader on your other devices.
+- **Lets you look something up.** Jump to a map or a glossary, then tap "Back to page 312". Your place doesn't move, here or on the server, until you settle somewhere new. Footnotes open over the page.
 - **Reads your way.** Four themes, fonts, text size, line spacing, margins and page turns. Contents, bookmarks and search in the book, and a scrubber that zooms in to one page at a time.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/readme/iphone-library.jpg" width="180" alt="A BookOrbit library on iPhone: rows of covers for All, Recently added, Collections and Series."><br>Your library</td>
+    <td align="center"><img src="docs/readme/iphone-book.jpg" width="180" alt="The Count of Monte Cristo's page on iPhone: its cover fills the screen, with 17% read and a Download button."><br>A book</td>
+    <td align="center"><img src="docs/readme/iphone-footnote.jpg" width="180" alt="A page of Don Quixote on iPhone with a footnote's text in a card over the top."><br>A footnote</td>
+    <td align="center"><img src="docs/readme/iphone-night.jpg" width="180" alt="Gitanjali in the Night theme on iPhone, with the Text and Theme card open."><br>Night theme</td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/readme/ipad-library.jpg" width="300" alt="A BookOrbit library on iPad, with rows of covers for All, Recently added, Series and Authors."><br>Library on iPad</td>
+    <td align="center"><img src="docs/readme/ipad-book.jpg" width="300" alt="Noli Me Tangere's page on iPad, its cover filling the screen."><br>A book on iPad</td>
+  </tr>
+</table>
 
 ## Works with
 
@@ -38,11 +54,13 @@ Octavo is a free, open-source e-reader built for iPhone Duo. It reads from [Book
 | **Files** | Import EPUB, MOBI, AZW3 or FB2, or open them in Octavo from another app |
 | **KOReader sync** | Your place in EPUBs from Files and catalogs, kept with KOReader on your other devices. They need the same file |
 
+Add as many servers and catalogs as you like.
+
 Books and sign-ins stay between your iPhone and your server. Passwords go in the Keychain, plain http only goes to home and VPN addresses, and self-signed certificates work once you trust them.
 
 ## Not yet
 
-PDF and comics, highlights and notes, and iCloud sync.
+PDF and comics, highlights and notes, and iCloud sync. Octavo can't open books with DRM, and it doesn't sell books or come with a catalog.
 
 ## Build it
 
@@ -54,7 +72,7 @@ cd Octavo-OPDS-Reader
 open Octavo.xcodeproj
 ```
 
-Run the `Octavo` scheme on an iPhone Duo or its simulator. You don't need a server to try it: Pride and Prejudice is built in, and a short tour opens it.
+Run the `Octavo` scheme on an iPhone Duo, any iPhone or iPad, or a simulator. You don't need a server to try it: Pride and Prejudice is built in, and a short tour opens it.
 
 To run the tests:
 
