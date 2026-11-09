@@ -109,6 +109,7 @@ struct BookCoverArt: View {
     let book: SourcedBook.ID
     let screen: CoverSpots.Screen
     @Environment(ShellModel.self) private var shell
+    @Environment(\.spread) private var layout
     /// Where it was last laid out, to report again on appearing.
     @State private var frame: CGRect?
     @State private var reporter = UUID()
@@ -134,7 +135,7 @@ struct BookCoverArt: View {
     }
 
     private var spot: CoverSpot? {
-        frame.map { CoverSpot(book: book, frame: $0, image: image, title: title, author: author) }
+        frame.map { CoverSpot(book: book, frame: $0, image: image, title: title, author: author, spread: layout.isTwoPages) }
     }
 
     private func report() {

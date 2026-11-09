@@ -150,10 +150,11 @@ final class ShellModel {
         )
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
-            return ReaderPresenter.Underneath(
-                onHome: tab == .home && self[path: .home].top == nil,
-                top: self[path: tab].top, twoPages: isTwoPages(in: tab), inTour: tour.playing != nil
-            )
+            // The screen on top, or the default pick showing in its place
+            // (Home's current book). Home draws no cover of its own to land
+            // on (`TabSplit`).
+            let top = self[path: tab].top ?? (expandedSplits.contains(tab) ? defaultPick(tab) : nil)
+            return ReaderPresenter.Underneath(top: top, inTour: tour.playing != nil)
         }
         tour.installSampleBook = { [weak self] in self?.installSampleBook() }
         tour.played = { [weak self] landsOnHome in
@@ -623,7 +624,8 @@ final class ShellModel {
         if tour.playing != nil { return tour.hingeChanged(transition) }
         switch transition {
         case .unfold:
-            guard reader.reading == nil, case .cover(let book)? = self[path: tab].top,
+            // Not under Settings' sheet.
+            guard reader.reading == nil, !showsSettings, case .cover(let book)? = self[path: tab].top,
                   opener.status(of: book) == .downloaded
             else { return }
             reader.open(book, .unfolded)

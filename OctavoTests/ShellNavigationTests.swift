@@ -378,6 +378,20 @@ struct ShellModelTests {
         #expect(model.reader.reading?.book.id == Self.book.book.id)
     }
 
+    // Not under Settings' sheet.
+    @Test func unfoldingUnderSettingsOpensNothing() async throws {
+        let files = try TemporaryBookFiles()
+        let model = await connectedShell(files)
+        model.opener.download(Self.book, from: StubLibrarySource())
+        #expect(await eventually { model.opener.status(of: Self.book) == .downloaded })
+        model.select(.library)
+        model.pick(.cover(Self.book), in: .library)
+        model.openSettings()
+        model.hingeChanged(.unfold)
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(model.reader.reading == nil)
+    }
+
     // Nothing downloads until Download or Open is tapped.
     @Test func unfoldingOnABookNotOnTheIPhoneStaysOnItsScreen() async throws {
         let files = try TemporaryBookFiles()

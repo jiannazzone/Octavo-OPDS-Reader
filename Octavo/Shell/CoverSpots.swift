@@ -61,6 +61,8 @@ struct CoverSpot: Equatable {
     var image: UIImage?
     var title: String
     var author: String
+    /// On a spread's left page (Cover | Details); else it fills its screen.
+    var spread = false
 }
 
 extension UIWindow {

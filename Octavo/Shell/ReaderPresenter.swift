@@ -14,10 +14,8 @@ final class ReaderPresenter {
     struct Underneath {
         /// Home's own page is the top of the tab showing.
         var onHome = false
-        /// The top screen of the tab showing.
+        /// The screen on top of the tab showing.
         var top: ShellRoute?
-        /// Two pages in the tab showing.
-        var twoPages = false
         /// The tour is playing: only its sample book opens.
         var inTour = false
     }
@@ -238,9 +236,9 @@ final class ReaderPresenter {
             cover: spot.image, title: spot.title, author: spot.author,
             coverFrame: spot.frame, windowSize: window.bounds.size, bookScreen: screen.map { ReaderSnapshot(view: $0, frame: window.bounds) },
             closing: pages,
-            // Cover | Details (or Home's spread) unfolded; the cover fills the
-            // screen folded.
-            spread: under.twoPages,
+            // Cover | Details, as its screen draws it; else the cover fills
+            // its screen.
+            spread: spot.spread,
             reduceMotion: UIAccessibility.isReduceMotionEnabled,
             paper: Self.paper(in: window), pageTurn: pageTurn, leafStyle: leafStyle
         )
