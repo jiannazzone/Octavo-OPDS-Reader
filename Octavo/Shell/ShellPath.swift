@@ -76,8 +76,14 @@ nonisolated struct ShellPath: Hashable, Sendable {
 
     /// Picks `route` in the list, in place of whatever the right column
     /// showed; `nil` goes back to the list (folded, Back from the pick).
+    /// Picking what's picked goes back to it, over whatever was pushed.
     mutating func pick(_ route: ShellRoute?) {
-        guard route != pick || route == nil else { return }
+        if let route, route == pick {
+            guard !pushed.isEmpty else { return }
+            routes = [route]
+            lastMove = .pop
+            return
+        }
         replace(route.map { [$0] } ?? [])
     }
 

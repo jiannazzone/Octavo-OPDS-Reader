@@ -112,12 +112,15 @@ final class TourController {
     }
 
     /// Show the tour, in Settings: from the beginning, and back to Settings.
-    func show() {
-        guard playing == nil, reader.reading == nil else { return }
+    /// `false` if it can't start now (one is playing, or a book is open).
+    @discardableResult
+    func show() -> Bool {
+        guard playing == nil, reader.reading == nil else { return false }
         let place = TourReplayPlace()
         SampleBook.startAtFirstChapter(in: place.positions)
         replayPlace = place
         begin(TourFlow(fold: hingeFold, isReplay: true))
+        return true
     }
 
     private func begin(_ flow: TourFlow) {

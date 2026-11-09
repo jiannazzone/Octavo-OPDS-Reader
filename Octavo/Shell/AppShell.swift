@@ -71,7 +71,9 @@ struct AppShell: View {
         }
         // Settings, from the gear (`SettingsSheet`).
         // Not over setup: a replay's Add your books comes back to it on Skip.
-        .sheet(isPresented: Binding(get: { model.showsSettings && !model.showsSetup }, set: { if !$0 { model.closeSettings() } })) {
+        // SwiftUI writes false back when setup hides it too; only a close
+        // or a swipe down closes Settings.
+        .sheet(isPresented: Binding(get: { model.showsSettings && !model.showsSetup }, set: { if !$0, !model.showsSetup { model.closeSettings() } })) {
             SettingsSheet()
                 .presentationSizing(.page)
         }

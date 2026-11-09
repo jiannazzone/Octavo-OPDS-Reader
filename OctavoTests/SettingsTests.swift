@@ -62,6 +62,26 @@ struct SettingsNavigationTests {
         #expect(model[path: .settings].routes == [.settingsPage(.storage), .signInAgain(SampleLibrarySource.id)])
     }
 
+    // A file opened in Octavo lands on the Library, not under Settings.
+    @Test func anImportClosesSettings() async throws {
+        let model = makeShell()
+        let folder = URL.testDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        model.openSettings()
+        await model.importBooks([try ImportFixtures.epub(in: folder)])
+        #expect(!model.showsSettings)
+        #expect(model.tab == .library)
+    }
+
+    // Picking what's picked goes back to it from what was pushed over it.
+    @Test func pickingThePickAgainGoesBackToIt() {
+        let model = makeShell()
+        model.pick(SampleRoutes.collections, in: .library)
+        model.push(.cover(SampleRoutes.book(3)))
+        model.pick(SampleRoutes.collections, in: .library)
+        #expect(model[path: .library].routes == [SampleRoutes.collections])
+    }
+
     // Opened again, it starts from its first page.
     @Test func itOpensAfreshEachTime() {
         let model = makeShell()

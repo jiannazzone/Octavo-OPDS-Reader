@@ -120,8 +120,8 @@ struct SettingsList: View {
             }
             Section {
                 Button {
-                    shell.closeSettings()
-                    shell.tour.show()
+                    // The sheet would cover the tour; it comes back after.
+                    if shell.tour.show() { shell.closeSettings() }
                 } label: {
                     HStack {
                         Text("Show the tour")

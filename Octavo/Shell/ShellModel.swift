@@ -367,6 +367,9 @@ final class ShellModel {
         importFailures += failures
         setupImportFailures = []
         reader.close()
+        // An import lands on the Library, not under Settings (a replay's end
+        // brings it back).
+        showsSettings = false
         tab = .library
         self[path: .library].replace(imported.isEmpty || library.server == nil ? [] : [.onIPhone])
     }
