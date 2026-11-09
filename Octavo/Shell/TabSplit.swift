@@ -14,6 +14,8 @@ import SwiftUI
 ///   column is the one on screen.
 /// - Each column lays its screens out by its own room (`measuresSpread`):
 ///   one page, or two across the hinge with the list hidden.
+/// - Open, with nothing picked, the right column shows the tab's
+///   `ShellModel.defaultPick` (Home's current book), or says nothing is.
 struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
     let tab: ShellTab
     @ViewBuilder let menu: () -> Menu
@@ -33,8 +35,12 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
         } detail: {
             NavigationStack(path: pushed) {
                 Group {
-                    if let pick = shell[path: tab].pick {
+                    if let pick = shell[path: tab].pick ?? shell.defaultPick(tab) {
+                        // Another pick is another screen, not this one with
+                        // the last one's state (Home's default book, then
+                        // one picked).
                         screen(pick)
+                            .id(pick)
                     } else {
                         ContentUnavailableView("No Book Selected", systemImage: "books.vertical")
                             .toolbar {
@@ -43,6 +49,13 @@ struct TabSplit<Menu: View, Buttons: ToolbarContent>: View {
                     }
                 }
                 .navigationDestination(for: ShellRoute.self) { screen($0) }
+            }
+        }
+        .onChange(of: sizeClass, initial: true) {
+            if sizeClass == .compact {
+                shell.expandedSplits.remove(tab)
+            } else {
+                shell.expandedSplits.insert(tab)
             }
         }
     }

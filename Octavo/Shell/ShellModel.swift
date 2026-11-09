@@ -84,7 +84,20 @@ final class ShellModel {
 
     /// The tabs laid out as a list and what's picked from it (`TabSplit`),
     /// where nothing pairs up as pages.
-    static let splitTabs: Set<ShellTab> = [.library]
+    static let splitTabs: Set<ShellTab> = [.home, .library, .search]
+
+    /// The split tabs showing both columns now (`TabSplit`): there, with
+    /// nothing picked, the right column shows the tab's `defaultPick`, and a
+    /// push goes over it.
+    @ObservationIgnored var expandedSplits: Set<ShellTab> = []
+
+    /// What a split tab's right column shows with nothing picked: Home's
+    /// current book (decision 26). It isn't picked, so folding still shows
+    /// the tab's list.
+    func defaultPick(_ tab: ShellTab) -> ShellRoute? {
+        guard tab == .home else { return nil }
+        return library.continueReading.first.map(ShellRoute.cover)
+    }
 
     /// The tab whose screens are showing: setup's, while it shows instead of
     /// the tabs.
@@ -435,6 +448,10 @@ final class ShellModel {
         if case .setup = route {
             self[path: setupTab].open(route, twoPages: isTwoPages(in: setupTab))
         } else {
+            // From the default pick on the right: it stays under the push.
+            if expandedSplits.contains(tab), self[path: tab].routes.isEmpty, let pick = defaultPick(tab) {
+                self[path: tab].replace([pick])
+            }
             self[path: tab].open(route, twoPages: isTwoPages(in: tab))
         }
     }

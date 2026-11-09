@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The app's root: three tabs in the side column (Home, Library, Search),
-/// each a `ScreenStack` whose top screen fills the spread, and the reader
-/// over them when a book is open.
+/// each the system's split of a list and what's picked from it
+/// (`TabSplit`), and the reader over them when a book is open.
 ///
 /// The reader is a layer over the tabs, not a `fullScreenCover`: a cover
 /// presented by an unfold (which starts about 200 ms before the scene moves
@@ -106,7 +106,11 @@ struct AppShell: View {
     private var tabs: some View {
         TabView(selection: Binding(get: { model.tab }, set: { model.select($0) })) {
             Tab("Home", systemImage: "house", value: .home) {
-                ScreenStack(tab: .home, title: nil) { HomeView() }
+                TabSplit(tab: .home) {
+                    HomeView()
+                } buttons: {
+                    settingsButton
+                }
             }
             Tab("Library", systemImage: "books.vertical", value: .library) {
                 TabSplit(tab: .library) {
@@ -120,14 +124,22 @@ struct AppShell: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Import from Files", systemImage: "plus") { model.showFilePicker() }
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Settings", systemImage: "gearshape") { model.openSettings() }
-                    }
+                    settingsButton
                 }
             }
             Tab(value: .search, role: .search) {
-                ScreenStack(tab: .search, title: "Search") { SearchView() }
+                TabSplit(tab: .search) {
+                    SearchView()
+                } buttons: {
+                    settingsButton
+                }
             }
+        }
+    }
+
+    private var settingsButton: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button("Settings", systemImage: "gearshape") { model.openSettings() }
         }
     }
 }

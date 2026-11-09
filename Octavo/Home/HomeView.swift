@@ -1,68 +1,105 @@
 import OctavoKit
 import SwiftUI
 
-/// The Home tab (`docs/design/direction.md`, Home): the book you're reading
-/// as a large cover, with your other books in progress beneath it folded;
-/// unfolded its cover fills the left page as on its folded screen
-/// (decision 37), and the others are on the right page. Only books in
-/// progress, but for the newest books filling the right page when there are
-/// one or two. A book opens its own screen, and unfolded the current book has
-/// Open; unfolding here opens nothing.
+/// The Home tab's list (`TabSplit`, `docs/design/direction.md`, Home): the
+/// book you're reading as a large cover, with your other books in progress
+/// beneath it. Only books in progress. A book opens its own screen; open,
+/// with nothing picked, the right column shows the book you're reading
+/// (decision 26). Unfolding here opens nothing.
+///
+/// A `List` whose selection is the pick, so the folded stack has the
+/// system's Back; each book is a row, tagged with its screen.
 struct HomeView: View {
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
-    @Environment(\.spread) private var spread
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         let state = HomeState(library)
-        TitledScreen {
-            // Unfolded, the book you're reading has the left page to itself.
-            if !(spread.isTwoPages && state.showsBooks) {
-                ScreenTitle("Home")
-                    .onLeftPage()
-            }
-        } content: {
-            content(state)
+        List(selection: shell.pickBinding(.home)) {
+            rows(state)
+        }
+        .listStyle(.plain)
+        // The banners' row takes no room without a banner.
+        .environment(\.defaultMinListRowHeight, 0)
+        .refreshable { await library.loadHome() }
+        .navigationTitle("Home")
+        .toolbarTitleDisplayMode(.inlineLarge)
+        // Each book's place as the server has it, so the rows show where
+        // the books open (`BookPlaces`): when Home shows, when its books
+        // change, and when the app comes back (not under the reader).
+        .onAppear { refreshPlaces() }
+        .onChange(of: library.continueReading.map(\.id)) { refreshPlaces() }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active, shell.reader.reading == nil else { return }
+            refreshPlaces(again: true)
         }
     }
 
     @ViewBuilder
-    private func content(_ state: HomeState) -> some View {
+    private func rows(_ state: HomeState) -> some View {
+        VStack(spacing: 12) { HomeBannersSlot() }
+            .padding(.horizontal, SpreadMetrics.margin)
+            .listRow(top: 0, bottom: 0)
         switch state {
         case .noLibrary:
             NoLibraryInvitation()
+                .fillsList()
         case .loading:
-            HomeContent(books: nil)
+            CurrentBookPlaceholder(coverWidth: Self.coverWidth)
+                .padding(.horizontal, SpreadMetrics.margin)
+                .listRow(top: 8)
+            ForEach(0..<3, id: \.self) { _ in
+                ContinueReadingRowPlaceholder(coverHeight: ContinueReadingRow.standardCoverHeight, verticalPadding: 6)
+                    .padding(.horizontal, 14)
+                    .listRow(top: 1, bottom: 1)
+            }
         case .nothingInProgress:
-            // The Library's newest books beside the invitation, not beside a
-            // problem.
-            EmptyPages(server: library.continueReadingFailed ? nil : library.server?.id) {
-                VStack(spacing: 0) {
-                    VStack(spacing: 12) { HomeBannersSlot() }
-                        .padding(.horizontal, SpreadMetrics.margin)
-                    if !library.continueReadingFailed {
-                        // Frame 25.
-                        EmptyInvitation(
-                            symbol: "books.vertical", title: "Nothing in progress",
-                            message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
-                        ) { shell.select(.library) }
-                        .scrollingOnItsPage()
-                    } else if library.homeProblems.isEmpty {
-                        EmptyInvitation(
-                            symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
-                            message: library.hasSeveralServers ? "Your servers didn’t send them." : "The server didn’t send them.", actionTitle: "Try again"
-                        ) { Task { await library.loadHome() } }
-                        .scrollingOnItsPage()
-                    } else {
-                        // The banner says why, and retries.
-                        Spacer()
-                    }
+            invitation
+                .fillsList()
+        case .reading(let books):
+            CurrentBook(book: books[0], coverWidth: Self.coverWidth)
+                .padding(.horizontal, SpreadMetrics.margin)
+                .listRow(top: 8)
+                .tag(ShellRoute.cover(books[0]))
+            if books.count > 1 {
+                AlsoReadingHeading()
+                    .padding(.horizontal, SpreadMetrics.margin)
+                    .listRow(top: 14, bottom: 6)
+                ForEach(books.dropFirst()) { book in
+                    ContinueReadingRow(book: book, progress: shell.places.progress(of: book))
+                        .padding(.horizontal, 14)
+                        .listRow(top: 1, bottom: 1)
+                        .tag(ShellRoute.cover(book))
                 }
             }
-        case .reading(let books):
-            HomeContent(books: books)
         }
     }
+
+    @ViewBuilder
+    private var invitation: some View {
+        if !library.continueReadingFailed {
+            // Frame 25.
+            EmptyInvitation(
+                symbol: "books.vertical", title: "Nothing in progress",
+                message: "Pick a book from your Library to start reading.", actionTitle: "Open Library"
+            ) { shell.select(.library) }
+        } else if library.homeProblems.isEmpty {
+            EmptyInvitation(
+                symbol: "exclamationmark.triangle", title: "Couldn’t load your books in progress",
+                message: library.hasSeveralServers ? "Your servers didn’t send them." : "The server didn’t send them.", actionTitle: "Try again"
+            ) { Task { await library.loadHome() } }
+        }
+        // Otherwise the banner says why, and retries.
+    }
+
+    private func refreshPlaces(again: Bool = false) {
+        for book in library.continueReading {
+            shell.places.refreshRow(book, again: again)
+        }
+    }
+
+    private static let coverWidth: CGFloat = 190
 }
 
 /// What Home shows, decided in one place: its content and its title go by it.
@@ -320,7 +357,7 @@ private struct CurrentBookStrip: View {
 }
 
 /// The current book's shapes while Home loads.
-private struct CurrentBookPlaceholder: View {
+struct CurrentBookPlaceholder: View {
     let coverWidth: CGFloat
 
     var body: some View {
@@ -357,7 +394,7 @@ struct AlsoReading: View {
     }
 }
 
-private struct AlsoReadingHeading: View {
+struct AlsoReadingHeading: View {
     var body: some View {
         Text("Also reading")
             .font(.title3.weight(.semibold))
@@ -533,7 +570,7 @@ struct ContinueReadingRow: View {
 }
 
 /// A row's shapes while Home loads.
-private struct ContinueReadingRowPlaceholder: View {
+struct ContinueReadingRowPlaceholder: View {
     let coverHeight: CGFloat
     let verticalPadding: CGFloat
 

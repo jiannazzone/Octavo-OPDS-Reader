@@ -21,7 +21,9 @@ struct SearchView: View {
                     .padding(.horizontal, SpreadMetrics.margin)
                     .padding(.bottom, 12)
                     .onLeftPage()
-                ScrollView {
+                // A `List` whose selection is the pick (`TabSplit`), so the
+                // folded stack has the system's Back; the results are one row.
+                List(selection: shell.pickBinding(.search)) {
                     VStack(alignment: .leading, spacing: 20) {
                         // With several, each server says so in its own section.
                         if !library.hasSeveralServers {
@@ -45,14 +47,20 @@ struct SearchView: View {
                         }
                     }
                     .padding(.bottom, 20)
+                    .listRow(top: 0, bottom: 0)
                 }
+                .listStyle(.plain)
                 .scrollDismissesKeyboard(.immediately)
             }
             // Held to the top left: a screen narrower than the spread
             // (only placeholders on the left page) would otherwise centre.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .navigationTitle("Search")
+            .toolbarTitleDisplayMode(.inlineLarge)
         } else {
             NoLibraryInvitation()
+                .navigationTitle("Search")
+                .toolbarTitleDisplayMode(.inlineLarge)
         }
     }
 }
@@ -197,6 +205,7 @@ private struct BrowseLists: View {
     var chips: [LibraryEntry]?
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
+    @Environment(\.menuColumn) private var menu
 
     var body: some View {
         if let chips = chips ?? library.root?.chips, !chips.isEmpty {
@@ -204,7 +213,7 @@ private struct BrowseLists: View {
                 SearchHeading(title)
                 ChipFlow(spacing: 8) {
                     ForEach(chips) { chip in
-                        Button(chip.title) { shell.push(.feed(chip, from: source)) }
+                        Button(chip.title) { shell.open(.feed(chip, from: source), inMenuOf: menu) }
                             .buttonStyle(.bordered)
                             .buttonBorderShape(.capsule)
                             .tint(.secondary)
