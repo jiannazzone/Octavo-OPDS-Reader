@@ -276,14 +276,13 @@ struct BookPlace {
     }
 
     /// Why a book in a format the reader doesn't read can't be downloaded
-    /// (unglue.it lists many PDFs). "Yet" only for the formats it's meant to
-    /// read later (`CLAUDE.md`, Rendering).
+    /// (unglue.it lists many PDFs). No "yet": App Review doesn't like
+    /// promises of features to come (Adam, 2026-11-08).
     static func unsupported(_ format: String?) -> String {
         guard let format = format?.trimmingCharacters(in: .whitespaces), !format.isEmpty else {
             return "Octavo can’t open this book’s files."
         }
-        let planned: Set = ["pdf", "cbz", "cbr"]
-        return "Octavo can’t open \(format.uppercased()) files\(planned.contains(format.lowercased()) ? " yet" : "")."
+        return "Octavo can’t open \(format.uppercased()) files."
     }
 
     /// The place alone: "30%", "Not started", "Finished", or the problem.

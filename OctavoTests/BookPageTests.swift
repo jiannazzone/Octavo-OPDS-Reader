@@ -80,7 +80,7 @@ struct BookPageTests {
 
     @Test(arguments: [
         (BookOpenButton.State.failed(offline: true), false, String?("Needs a connection to download.")),
-        (BookOpenButton.State.unsupported(format: "pdf"), false, String?("Octavo can’t open PDF files yet.")),
+        (BookOpenButton.State.unsupported(format: "pdf"), false, String?("Octavo can’t open PDF files.")),
         (BookOpenButton.State.unsupported(format: "DJVU"), false, String?("Octavo can’t open DJVU files.")),
         (BookOpenButton.State.unsupported(format: nil), false, String?("Octavo can’t open this book’s files.")),
         (.failed(offline: false), false, "Couldn’t download. Check your connection."),
