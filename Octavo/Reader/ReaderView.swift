@@ -148,7 +148,7 @@ private struct ReaderScreen: View {
                 }
                 .overlay(alignment: .topLeading) {
                     if chrome.showsBackBar, let trip = model.trip, let geometry = model.geometry,
-                       let left = model.layout.textColumns(inReaderWidth: Double(geometry.size.width))?.first?.lowerBound {
+                       let left = model.layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height))?.first?.lowerBound {
                         ReaderBackBar(trip: trip, back: model.goBack, stay: model.settleTrip)
                             .fixedSize()
                             .offset(x: left, y: chrome.backBarTop(in: geometry, layout: model.layout, barHeight: barHeight))
@@ -779,7 +779,7 @@ struct ReaderFooterLines: View {
     @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
-        if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width)),
+        if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height)),
            let first = columns.first, let last = columns.last {
             let spread = columns.count > 1
             let centre = ReaderChromeLayout.footerLineCentre(in: geometry, layout: layout)

@@ -106,6 +106,21 @@ struct ReaderLayoutTests {
         #expect(ReaderLayout(posture: .noHinge, geometry: nil).columns == nil)
     }
 
+    // Where the footer and the way back go without a fold: foliate's own
+    // choice, one page upright and two sideways (iPhone 17 Pro, iPad Pro 13).
+    @Test(arguments: [(CGSize(width: 402, height: 874), 1), (CGSize(width: 874, height: 402), 2),
+                      (CGSize(width: 1032, height: 1376), 1), (CGSize(width: 1376, height: 1032), 2)])
+    func withoutAFoldTheTextColumnsAreFoliates(size: CGSize, count: Int) throws {
+        let layout = ReaderLayout(posture: .noHinge, geometry: ReaderGeometry(size: size))
+        #expect(layout.textColumns(inReaderWidth: Double(size.width)) == nil)
+        let columns = try #require(layout.textColumns(inReaderWidth: Double(size.width), height: Double(size.height)))
+        #expect(columns.count == count)
+        #expect(columns[0].lowerBound > 0)
+        #expect(try #require(columns.last).upperBound < Double(size.width))
+        // A fold's layout keeps its own count.
+        #expect(ReaderLayout(posture: .closed, geometry: Self.folded).textColumns(inReaderWidth: 466, height: 502)?.count == 1)
+    }
+
     // Without a hinge report, the fold's region alone still makes a spread.
     @Test(arguments: [false, true])
     func noHingeStillFollowsTheFold(active: Bool) {

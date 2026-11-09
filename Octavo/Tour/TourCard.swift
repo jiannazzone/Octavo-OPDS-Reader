@@ -29,7 +29,7 @@ struct TourCardSlot: View {
 
     /// The left page's text, or the one page's.
     static func column(in geometry: ReaderGeometry, layout: ReaderLayout) -> ClosedRange<Double> {
-        if let first = layout.textColumns(inReaderWidth: Double(geometry.size.width))?.first { return first }
+        if let first = layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height))?.first { return first }
         let left = geometry.safeArea.left + 16
         return left...max(left, Double(geometry.size.width) - geometry.safeArea.right - 16)
     }
