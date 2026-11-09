@@ -25,3 +25,23 @@ nonisolated struct OnAccent: ShapeStyle {
 extension ShapeStyle where Self == OnAccent {
     static var onAccent: OnAccent { OnAccent() }
 }
+
+/// Grey or tinted words in a list row that fills with the accent when it's
+/// selected (Settings' list on a wide sheet, while the list has the focus):
+/// `base` until then, the words on a filled button on the fill. The system
+/// turns only plain words white there, and these vanished.
+nonisolated struct InSelectableRow<Base: ShapeStyle>: ShapeStyle {
+    let base: Base
+
+    func resolve(in environment: EnvironmentValues) -> some ShapeStyle {
+        environment.backgroundProminence == .increased ? AnyShapeStyle(OnAccent()) : AnyShapeStyle(base)
+    }
+}
+
+extension ShapeStyle where Self == InSelectableRow<HierarchicalShapeStyle> {
+    static var secondaryInRow: Self { InSelectableRow(base: .secondary) }
+}
+
+extension ShapeStyle where Self == InSelectableRow<TintShapeStyle> {
+    static var tintInRow: Self { InSelectableRow(base: .tint) }
+}

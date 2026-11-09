@@ -73,19 +73,18 @@ struct SettingsList: View {
                             Text(connection.server.name)
                             Text(connection.server.detail)
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryInRow)
                         }
                     }
                 }
                 NavigationLink(value: ShellRoute.setup(.choose)) {
-                    // Selected (a wide sheet), the row fills with the accent.
                     Text("Add a server")
-                        .foregroundStyle(shell[path: .settings].pick == .setup(.choose) ? AnyShapeStyle(.onAccent) : AnyShapeStyle(.tint))
+                        .foregroundStyle(.tintInRow)
                 }
             }
             Section {
                 row(.koreader) {
-                    LabeledContent("KOReader sync", value: shell.koreader.account?.username ?? "Off")
+                    valueRow("KOReader sync", value: shell.koreader.account?.username ?? "Off")
                 }
             } footer: {
                 Text("Syncs your place with KOReader for books from catalogs and Files.")
@@ -111,7 +110,7 @@ struct SettingsList: View {
             }
             Section {
                 row(.storage) {
-                    LabeledContent("Books on iPhone", value: shell.downloads().summary())
+                    valueRow("Books on iPhone", value: shell.downloads().summary())
                 }
                 ClearCoversRow()
             } header: {
@@ -175,6 +174,17 @@ struct SettingsList: View {
     private func row(_ page: SettingsPage, @ViewBuilder label: () -> some View) -> some View {
         NavigationLink(value: ShellRoute.settingsPage(page)) {
             label()
+        }
+    }
+
+    /// A row's name with its value at the right, the value readable on the
+    /// row's accent fill too (`LabeledContent`'s own grey isn't).
+    private func valueRow(_ title: String, value: String) -> some View {
+        LabeledContent {
+            Text(value)
+                .foregroundStyle(.secondaryInRow)
+        } label: {
+            Text(title)
         }
     }
 }
