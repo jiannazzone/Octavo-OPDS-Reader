@@ -198,10 +198,10 @@ struct CurrentBook: View {
 
 /// Unfolded, the book you're reading has the left page: its cover edge to
 /// edge on its blur, as the folded book's screen draws it (`BookCoverArt`),
-/// with a glass strip over its foot, 8 pt from the edges as the folded sheet
-/// is: the title, place and Open (decision 37). Open moves this cover
-/// onto the right page as a book's screen does (`CoverSpots`). `nil` while
-/// Home loads.
+/// with a glass strip over its foot, 8 pt inside the safe area as the folded
+/// sheet is (Adam, 2026-11-09): the title, place and Open (decision 37).
+/// Open moves this cover onto the right page as a book's screen does
+/// (`CoverSpots`). `nil` while Home loads.
 struct CurrentBookPage: View {
     let book: SourcedBook?
     @Environment(LibraryModel.self) private var library
@@ -241,7 +241,6 @@ struct CurrentBookPage: View {
             .ignoresSafeArea(edges: .vertical)
         }
         .loadingCover(of: book, size: .full, into: $cover)
-        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     private var page: some View {

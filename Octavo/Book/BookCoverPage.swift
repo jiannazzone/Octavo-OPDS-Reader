@@ -41,10 +41,11 @@ struct BookCoverPage: View {
                             guard page.isExpanded else { return }
                             withAnimation(BookSheet.animation) { page.isExpanded = false }
                         }
-                    // 8 pt from the bottom edge, as in frame 03.
+                    // Inside the safe area on every device, over an iPhone's
+                    // tabs (Adam, 2026-11-09; it was 8 pt from the bottom
+                    // edge, frame 03).
                     BookSheet(page: page, source: source, sourceID: sourceID)
                         .padding(8)
-                        .ignoresSafeArea(.container, edges: .bottom)
                 }
             }
         }
