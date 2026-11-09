@@ -78,8 +78,9 @@ struct SettingsList: View {
                     }
                 }
                 NavigationLink(value: ShellRoute.setup(.choose)) {
+                    // Selected (a wide sheet), the row fills with the accent.
                     Text("Add a server")
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(shell[path: .settings].pick == .setup(.choose) ? AnyShapeStyle(.onAccent) : AnyShapeStyle(.tint))
                 }
             }
             Section {
