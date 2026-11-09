@@ -36,4 +36,5 @@ On "Octavo Probe Duo" (iOS 27.1 simulator), by tapping and the hinge tool:
 ## Known rough edges
 
 - "No Book Selected" on Settings' empty right column (iPad, where the sheet is wide): wording not approved.
+- An iPad turned upright on Home starts with Home's large title scrolled away (the spread had none); a pull brings it back. Forcing a new screen didn't help. Adam: fine as is (2026-11-08).
 - Not checked yet: iPad, plain iPhones, the Accessibility checks in `accessibility.md` (they ran on the old shell), Reduce Motion with the system's pushes.
