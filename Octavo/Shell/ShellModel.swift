@@ -65,28 +65,6 @@ final class ShellModel {
     /// A debug launch argument is connecting a server: the tabs show, not
     /// setup, while it does.
     private var connectingAtLaunch = false
-    /// The spread the tab on screen measured last, which a tab opening for
-    /// the first time lays out for until it has measured its own
-    /// (`ScreenStack`).
-    @ObservationIgnored var lastSpread: Spread?
-    /// Each tab's spread, as its own stack measured it. A tab out of sight
-    /// still measures, without the hinge's region (switching tabs took two
-    /// pages to one for every tab), so each goes by its own.
-    @ObservationIgnored var spreads: [ShellTab: Spread] = [:]
-
-    /// Two pages in `tab`, for navigation there: what `ShellPath` pairs up,
-    /// and what the stack hides for it. The spread on screen, which a tap
-    /// landed on (an unfold reports before the scene moves), not the hinge,
-    /// which says open on a Duo turned sideways too.
-    func isTwoPages(in tab: ShellTab) -> Bool {
-        guard !Self.splitTabs.contains(tab) else { return false }
-        return (spreads[tab] ?? lastSpread)?.isTwoPages == true
-    }
-
-    /// The tabs laid out as a list and what's picked from it (`TabSplit`),
-    /// where nothing pairs up as pages.
-    static let splitTabs: Set<ShellTab> = [.home, .library, .search, .settings]
-
     /// The split tabs showing both columns now (`TabSplit`): there, with
     /// nothing picked, the right column shows the tab's `defaultPick`, and a
     /// push goes over it.
@@ -111,12 +89,6 @@ final class ShellModel {
     /// The screens in front: Settings' while its sheet is up, else the tab's.
     private var frontTab: ShellTab {
         showsSettings ? .settings : tab
-    }
-
-    /// The tab whose screens are showing: setup's, while it shows instead of
-    /// the tabs.
-    func isShowing(_ tab: ShellTab) -> Bool {
-        showsSetup ? tab == .setup : tab == self.tab
     }
 
     /// A debug override for the cover's strip, to look at its states without
@@ -472,14 +444,14 @@ final class ShellModel {
     /// setup.
     func push(_ route: ShellRoute) {
         if case .setup = route {
-            self[path: setupTab].open(route, twoPages: isTwoPages(in: setupTab))
+            self[path: setupTab].push(route)
         } else {
             let tab = frontTab
             // From the default pick on the right: it stays under the push.
             if expandedSplits.contains(tab), self[path: tab].routes.isEmpty, let pick = defaultPick(tab) {
                 self[path: tab].replace([pick])
             }
-            self[path: tab].open(route, twoPages: isTwoPages(in: tab))
+            self[path: tab].push(route)
         }
     }
 
@@ -499,14 +471,10 @@ final class ShellModel {
         }
     }
 
-    /// Back.
-    func pop(_ tab: ShellTab) {
-        self[path: tab].pop()
-    }
-
-    /// Back, or a swipe from the edge.
-    func back(_ tab: ShellTab) {
-        self[path: tab].back(twoPages: isTwoPages(in: tab))
+    /// Back from the screen in front: Settings' while its sheet is up, else
+    /// the tab's (Sign in again, once signed in).
+    func back() {
+        self[path: frontTab].pop()
     }
 
     func popToRoot(_ tab: ShellTab) {

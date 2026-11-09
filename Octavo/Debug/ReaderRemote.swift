@@ -204,11 +204,10 @@ enum ReaderRemote {
             guard let motion = shell.reader.coverMotion else { return "no cover motion" }
             return motion.debugState
         case "spread":
-            return "lastSpread \(shell.lastSpread.map { "\($0.width) pages \($0.pages.map { "\($0)" } ?? "nil")" } ?? "nil") twoPages \(shell.isTwoPages(in: shell.tab)) tabs \(shell.spreads.map { "\($0.key) \($0.value.isTwoPages)" }.sorted())"
+            return "expanded \(shell.expandedSplits.map(\.rawValue).sorted())"
         case "coverSpots":
             return shell.reader.coverSpots.spots.map { screen, spot in
                 let name = switch screen {
-                case .home: "home"
                 case .book(let id): "book \(id.book.rawValue)"
                 }
                 return "\(name): \(spot.book.book.rawValue) \(spot.frame) image \(spot.image != nil)"

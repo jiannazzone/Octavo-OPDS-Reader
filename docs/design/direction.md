@@ -13,6 +13,7 @@ Measured in spike 2b (`docs/notes/duo-spreads.md`):
 ## Library pass (decided with Adam, 2026-11-01)
 
 ### Shell
+- **Amended 2026-11-08 (Adam): the system's navigation, on every device** (`docs/notes/split-shell.md`). Each tab is the system's split: its list on the left, what's picked on the right, collapsing to one stack with the system's Back folded and on an iPhone. Settings is a system sheet from the gear. The points below are the custom shell it replaced; where they disagree, the note wins.
 - **Apple's tab bar, everything else ours.** The system tab bar stays in the side column; Octavo draws the screens, how they move, and the Back and action buttons at the top of the side column.
 - **Three tabs: Home, Library, Search.** Settings is a button at the top of the side column on a tab's top screen, not a tab.
 - **One screen, two pages.** Every screen is a spread: content flows from the left page onto the right, and nothing sits on the hinge. Folded, you see one page. Folded or unfolded it is the same stack of screens; a fold only lays the top screen out again.

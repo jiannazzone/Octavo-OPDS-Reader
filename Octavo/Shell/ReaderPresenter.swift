@@ -12,8 +12,6 @@ import UIKit
 final class ReaderPresenter {
     /// What's under the reader as a book opens or closes, from the shell.
     struct Underneath {
-        /// Home's own page is the top of the tab showing.
-        var onHome = false
         /// The screen on top of the tab showing.
         var top: ShellRoute?
         /// The tour is playing: only its sample book opens.
@@ -226,8 +224,7 @@ final class ReaderPresenter {
     private func coverMotion(for book: OpenedBook, closing pages: ReaderCoverPages?) -> ReaderCoverMotion? {
         let id = SourcedBook.ID(source: book.source, book: book.book.id)
         let under = underneath()
-        // The tour covers Home.
-        guard let spot = coverSpots.spot(for: id, onHome: under.onHome && !under.inTour, top: under.top),
+        guard let spot = coverSpots.spot(for: id, top: under.top),
               let window = UIWindow.key, window.bounds.intersects(spot.frame)
         else { return nil }
         let screen = pages == nil ? window.snapshotView(afterScreenUpdates: false) : nil

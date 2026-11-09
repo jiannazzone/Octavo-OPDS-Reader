@@ -48,7 +48,7 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 | **Settings:** the list | ✓ | ✓ | ✓ folded | ✓ folded | ✓ | | |
 | **Settings:** a server's page, Books on iPhone | ✓ | ✓ | ✓ folded | A server's page, unfolded | A server's page, unfolded | | |
 
-"✓ Duo" means only on Adam's Duo. He ran these with Dark Mode and Reduce Motion on, and all passed: a book's screen and Back, a swipe back, a Settings page, opening a book, turning pages, the panels, a bookmark and a search result unfolded; folding while reading, half open and folding on Home; the book sheet, opening a book, turning pages and the panels folded; Show the tour and Skip.
+"✓ Duo" means only on Adam's Duo. The shell moved to the system's navigation on 2026-11-08 (`split-shell.md`), after these checks: the navigation rows need checking again. He ran these with Dark Mode and Reduce Motion on, and all passed: a book's screen and Back, a swipe back, a Settings page, opening a book, turning pages, the panels, a bookmark and a search result unfolded; folding while reading, half open and folding on Home; the book sheet, opening a book, turning pages and the panels folded; Show the tour and Skip.
 
 ## Reduced Motion
 
@@ -56,9 +56,7 @@ What each motion does with the setting on:
 
 | Motion | With Reduce Motion | Where |
 |---|---|---|
-| A pushed screen, Back | Fades, 0.2 s | `ScreenStack` |
-| Screens re-laying out on a fold | At once | `ScreenStack` |
-| A swipe back | Follows the finger, then fades when let go | `ScreenStack` |
+| A pushed screen, Back, a swipe back | The system's (not checked since the shell moved to it, 2026-11-08) | `TabSplit`, `SetupStack` |
 | Page turn, Automatic | Fades, 0.3 s | `ReaderPageTurn` |
 | Page turn, picked by hand | Stays. It's the reader's own choice (Adam, `docs/design/direction.md`), which Apple's finer in-app setting allows | `ReaderPageTurn` |
 | Opening and closing a book | Fades, 0.3 s | `ReaderCoverMotion` |

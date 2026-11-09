@@ -11,7 +11,6 @@ struct ShellScreen: View {
     var body: some View {
         switch route {
         case .feed(let entry, let source): FeedScreen(entry: entry, source: source)
-        case .settings: SettingsList()
         case .settingsPage(let page): SettingsPageView(page: page)
         case .cover(let book): CoverScreen(book: book)
         case .setup(let step): SetupScreen(step: step)
