@@ -907,41 +907,68 @@ final class ReaderModel {
     /// Offers `remote` in the capsule, if another reader moved it and it
     /// isn't on this page. KOReader's place is found in the book first, and
     /// placed by the bridge, since its percentage is another engine's.
+    ///
+    /// The page may move while it's asked (opening re-lays it out right after
+    /// `opened`), which makes its answers stale: then it asks again, a few
+    /// times, instead of dropping the offer until the app next comes back.
     private func offer(_ remote: SyncedPosition, pushes: Int) async {
+        for attempt in 0..<Self.offerAttempts {
+            if attempt > 0 { try? await Task.sleep(for: .milliseconds(300)) }
+            guard await offerOnce(remote, pushes: pushes) == .pageMoved else { return }
+        }
+        log.notice("The page kept moving; the server's place wasn't offered")
+    }
+
+    private static let offerAttempts = 5
+
+    private enum OfferOutcome {
+        case done
+        /// The page moved, or couldn't answer, while it was asked.
+        case pageMoved
+    }
+
+    private func offerOnce(_ remote: SyncedPosition, pushes: Int) async -> OfferOutcome {
         let isKOReaders: Bool
         let cfi: String
         if case .elsewhere(let change) = remote.origin {
-            guard change != .unchanged, let xpointer = remote.position.xpointer, xpointer != serverXPointer, phase == .open else { return }
+            guard change != .unchanged, let xpointer = remote.position.xpointer, xpointer != serverXPointer, phase == .open else { return .done }
             let found: Any?
             do {
                 found = try await page.callJavaScript("return await window.octavo.resolveXPointer(x)", arguments: ["x": xpointer])
             } catch {
-                // The page couldn't answer (a re-layout, closing): next time.
-                return
+                // The page couldn't answer (a re-layout, closing).
+                return phase == .open ? .pageMoved : .done
             }
             guard let resolved = (found as? [String: Any])?["cfi"] as? String else {
                 // Not in this copy of the book, or not a place it can find.
                 serverXPointer = xpointer
-                return
+                return .done
             }
             isKOReaders = true
             cfi = resolved
         } else {
-            guard let remoteCFI = remote.position.cfi, remoteCFI != serverCFI else { return }
+            guard let remoteCFI = remote.position.cfi, remoteCFI != serverCFI else { return .done }
             isKOReaders = false
             cfi = remoteCFI
         }
-        guard pushes == pushCount, let pageStart = relocation?.startCFI ?? relocation?.cfi, phase == .open else { return }
+        guard pushes == pushCount, let pageStart = relocation?.startCFI ?? relocation?.cfi, phase == .open else { return .done }
         let asked = relocationCount
         let flags = try? await page.callJavaScript("return await window.octavo.onPage(cfis)", arguments: ["cfis": [cfi]]) as? [Bool]
-        guard asked == relocationCount, pushes == pushCount, let flag = flags?.first else { return }
+        guard pushes == pushCount else { return .done }
+        guard asked == relocationCount, let flag = flags?.first else { return .pageMoved }
         // Away, the page showing isn't your place, so it says nothing.
         let onPage = trip == nil && flag
-        if isKOReaders { serverXPointer = remote.position.xpointer } else { serverCFI = cfi }
+        // Known from here on, unless the page moved before it was offered,
+        // when it's asked again.
+        let known = { [self] in if isKOReaders { serverXPointer = remote.position.xpointer } else { serverCFI = cfi } }
         log.debug("server's place \(cfi, privacy: .public) \(onPage ? "is on this page" : "offered")")
-        guard !onPage else { return }
+        guard !onPage else {
+            known()
+            return .done
+        }
         let place = await describe(cfi)
-        guard asked == relocationCount else { return }
+        guard asked == relocationCount else { return .pageMoved }
+        known()
         await pusher?.backendMoved()
         pushedSinceOffer = false
         serverPlace = ReaderServerPlace(
@@ -953,6 +980,7 @@ final class ReaderModel {
             source: isKOReaders ? "KOReader" : nil,
             remote: remote
         )
+        return .done
     }
 
     /// The app came back, or the connection did: offer the server's place
