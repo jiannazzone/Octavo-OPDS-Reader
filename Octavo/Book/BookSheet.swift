@@ -268,10 +268,22 @@ struct BookPlace {
         case .failed(offline: true): return "Needs a connection to download."
         case .failed(offline: false): return "Couldn’t download. Check your connection."
         case .protected: return "This file is DRM-protected and cannot be opened."
+        case .unsupported(let format): return unsupported(format)
         default: break
         }
         if finishedFailed { return "Couldn’t mark it finished. Check your connection." }
         return nil
+    }
+
+    /// Why a book in a format the reader doesn't read can't be downloaded
+    /// (unglue.it lists many PDFs). "Yet" only for the formats it's meant to
+    /// read later (`CLAUDE.md`, Rendering).
+    static func unsupported(_ format: String?) -> String {
+        guard let format = format?.trimmingCharacters(in: .whitespaces), !format.isEmpty else {
+            return "Octavo can’t open this book’s files."
+        }
+        let planned: Set = ["pdf", "cbz", "cbr"]
+        return "Octavo can’t open \(format.uppercased()) files\(planned.contains(format.lowercased()) ? " yet" : "")."
     }
 
     /// The place alone: "30%", "Not started", "Finished", or the problem.
@@ -363,6 +375,8 @@ struct BookOpenButton: View {
         case failed(offline: Bool)
         /// Downloaded, and refused for its DRM.
         case protected
+        /// Its files are all in formats the reader doesn't read.
+        case unsupported(format: String?)
     }
 
     /// The opener's state, or the debug stand-in (`-shellCoverStrip`).
@@ -374,6 +388,7 @@ struct BookOpenButton: View {
         case .protected: return .protected
         case nil: break
         }
+        if !shell.opener.canOpen(book.book) { return .unsupported(format: book.book.primaryFile?.format) }
         return switch shell.opener.status(of: book) {
         case .downloaded: .open
         case .notDownloaded: .download
@@ -430,8 +445,8 @@ struct BookOpenButton: View {
             }
             .buttonStyle(.glassProminent)
             .foregroundStyle(.onAccent)
-        case .protected:
-            // Greyed out, as for a format the reader can't open.
+        case .protected, .unsupported:
+            // Greyed out; the place line says why.
             Button {} label: {
                 Label("Download", systemImage: "arrow.down")
                     .frame(maxWidth: fillsWidth ? .infinity : nil)
