@@ -26,33 +26,52 @@ nonisolated struct EmptyListWording: Equatable {
         }
     }
 
-    /// The Unread shelf's list, once every book has been started (#131).
-    static let unread = EmptyListWording(title: "No unread books", message: "Books you haven’t started show here.")
-
-    private init(title: String, message: String) {
+    init(title: String, message: String) {
         self.title = title
         self.message = message
     }
+
+    /// A list filtered to nothing (#131).
+    init(filter: LibraryFilter) {
+        switch filter {
+        case .all, .unread:
+            title = "No unread books"
+            message = "Books you haven’t started show here."
+        case .reading:
+            title = "No books in progress"
+            message = "Books you’re reading show here."
+        case .finished:
+            title = "No finished books"
+            message = "Books you finish show here."
+        }
+    }
 }
 
-/// A list that came back with nothing in it.
+/// A list that came back with nothing in it. Filtered, it offers the
+/// list's every book.
 struct EmptyFeed: View {
     let entry: LibraryEntry
     let feed: FeedModel
+    var filter = LibraryFilter.all
+    var showAll: () -> Void = {}
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        EmptyPages(server: feed.source, excluding: entry.link) {
+        EmptyPages(server: feed.source, excluding: feed.link) {
             // A reload that failed, unless the problem's banner says why. It
             // stays this screen: `FeedContent` would load the list again.
             if feed.state == .failed, library.connection(feed.source)?.problem == nil {
                 FeedFailedInvitation(feed: feed)
                     .scrollingOnItsPage()
+            } else if filter != .all {
+                let wording = EmptyListWording(filter: filter)
+                EmptyInvitation(
+                    symbol: "books.vertical", title: wording.title, message: wording.message, actionTitle: "Show All Books", action: showAll
+                )
+                .scrollingOnItsPage()
             } else {
-                let wording = entry.link == library.connection(feed.source)?.root?.unread
-                    ? .unread
-                    : EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
+                let wording = EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
                 EmptyInvitation(
                     symbol: "books.vertical", title: wording.title,
                     message: wording.message, actionTitle: "Open Library"

@@ -150,6 +150,7 @@ final class ServerActions {
             try? library.onIPhone.record(book)
         }
         library.forgetBooks(of: id)
+        SavedSorts.forget(id)
         places.forget(server: id)
         if server.canReturn, !removingBooks {
             try? removedServers.add(RemovedServer(identity: server.identity, id: id))

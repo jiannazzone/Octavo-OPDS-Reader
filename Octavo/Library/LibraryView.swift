@@ -21,7 +21,7 @@ struct LibraryView: View {
     private var content: some View {
         if let server = library.server {
             if let root = library.root {
-                LibraryContents(source: server.id, sections: Self.sections(root))
+                LibraryContents(source: server.id, sections: Self.sections(root), opens: Self.opens(root))
                     // Another server's lists, which may be at the same links,
                     // and from the top.
                     .id(server.id)
@@ -80,6 +80,13 @@ struct LibraryView: View {
         return sections
     }
 
+    /// The Unread shelf's heading opens All with Unread picked (Adam,
+    /// 2026-11-09), so it's All once the filter is taken off.
+    static func opens(_ root: LibraryRoot) -> [LibraryLink: LibraryEntry] {
+        guard let unread = root.unread, let all = root.chips.first else { return [:] }
+        return [unread: LibraryEntry(kind: all.kind, title: all.title, link: unread)]
+    }
+
     /// The server's newest books, by the name its shelf has. `nil` if the
     /// server has no such list.
     static func newest(_ root: LibraryRoot) -> LibraryEntry? {
@@ -119,6 +126,8 @@ struct ServersMenu: View {
 struct LibraryContents: View {
     let source: LibrarySourceID
     let sections: [LibraryEntry]
+    /// What a heading opens, if not its shelf's own list.
+    var opens: [LibraryLink: LibraryEntry] = [:]
 
     var body: some View {
         ScrollView {
@@ -132,7 +141,7 @@ struct LibraryContents: View {
                     .padding(.horizontal, SpreadMetrics.margin)
                     .onLeftPage()
                 ForEach(sections) { section in
-                    LibraryShelf(entry: section, source: source)
+                    LibraryShelf(entry: section, source: source, opens: opens[section.link])
                 }
                 // Last, after the server's own sections (Adam, 2026-11-02).
                 OnIPhoneShelf()
@@ -154,6 +163,8 @@ struct LibraryShelf: View {
     var maxRows = 1
     /// Books already on the screen beside the shelf (Home's).
     var hiding: Set<SourcedBook.ID> = []
+    /// What the heading opens, if not `entry`.
+    var opens: LibraryEntry?
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
@@ -183,7 +194,7 @@ struct LibraryShelf: View {
 
     private func heading(_ feed: FeedModel?) -> some View {
         Button {
-            shell.push(.feed(entry, from: source))
+            shell.push(.feed(opens ?? entry, from: source))
         } label: {
             HStack(spacing: 6) {
                 Text(entry.title)
@@ -267,36 +278,78 @@ struct LibraryContentsPlaceholder: View {
 }
 
 /// A list opened from the Library: a section, a collection's, series' or
-/// author's books, or an OPDS feed's entries. Fills the spread.
+/// author's books, or an OPDS feed's entries. Fills the spread. A list of
+/// books has Sort and Filter in the side column (#131), and picking one
+/// shows the list from the top in that order.
 struct FeedScreen: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
     @Environment(LibraryModel.self) private var library
+    /// The list as sorted and filtered here. `nil`: as it opened.
+    @State private var picked: LibraryLink?
 
     var body: some View {
-        if let feed = library.feed(entry.link, from: source) {
-            if feed.cameBackEmpty {
-                EmptyFeed(entry: entry, feed: feed)
-            } else {
-                FeedContent(feed: feed, numbered: entry.kind == .series) {
-                    if let summary = summary(feed) {
-                        Text(summary)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 20)
+        if let books = library.source(for: source) {
+            let link = picked ?? SavedSorts.opening(entry.link, from: books, server: source)
+            let order = books.order(of: link)
+            if let feed = library.feed(link, from: source) {
+                Group {
+                    if feed.cameBackEmpty {
+                        EmptyFeed(entry: entry, feed: feed, filter: order?.filter ?? .all) {
+                            picked = books.link(link, sortedBy: order?.sort, showing: .all)
+                        }
+                    } else {
+                        FeedContent(feed: feed, numbered: entry.kind == .series) {
+                            if let summary = summary(feed, filtered: order.map { $0.filter != .all } ?? false) {
+                                Text(summary)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 20)
+                            }
+                        }
+                        // Each order is a list of its own, from the top.
+                        .id(link)
                     }
                 }
+                .modifier(FilteredTitle(filter: order?.filter))
+                .toolbar {
+                    if let order {
+                        ListOrderButtons(order: order) { sort, filter in
+                            if let sort, sort != order.sort, order.takesRememberedSort { SavedSorts.remember(sort, for: source) }
+                            picked = books.link(link, sortedBy: sort, showing: filter)
+                        }
+                    }
+                }
+            } else {
+                LibraryNotConnected()
             }
         } else {
             LibraryNotConnected()
         }
     }
 
-    /// "5 books", "Series · 3 books". Nothing for lists of lists.
-    private func summary(_ feed: FeedModel) -> String? {
-        guard feed.entries.isEmpty, let count = feed.total ?? entry.count else { return nil }
+    /// "5 books", "Series · 3 books". Filtered, the list's name comes first,
+    /// as the title says what's shown ("Unread"; "All · 65 books"). Nothing
+    /// for lists of lists.
+    private func summary(_ feed: FeedModel, filtered: Bool) -> String? {
+        guard feed.entries.isEmpty, let count = feed.total ?? (filtered ? nil : entry.count) else { return nil }
         let books = count == 1 ? "1 book" : "\(count) books"
+        if filtered { return "\(ShellRoute.feed(entry, from: source).title ?? entry.title) · \(books)" }
         return entry.kind == .series ? "Series · \(books)" : books
+    }
+}
+
+/// While a list is filtered, its title is what's shown ("Unread"; Adam,
+/// 2026-11-09). Otherwise the route's.
+private struct FilteredTitle: ViewModifier {
+    let filter: LibraryFilter?
+
+    func body(content: Content) -> some View {
+        if let filter, filter != .all {
+            content.navigationTitle(filter.title)
+        } else {
+            content
+        }
     }
 }
 

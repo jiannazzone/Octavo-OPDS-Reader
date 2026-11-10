@@ -12,6 +12,16 @@ Scoped on 2026-11-09, before anything is built. Step 1, the Unread shelf, is in 
 
 Adam then asked for sorting on the other lists too (collections, series, authors), for OPDS catalogs and for books on the iPhone, and whether sort and filter should be split into two buttons. That's what the rest of this note scopes.
 
+## Built for BookOrbit (Adam, 2026-11-10)
+
+The first of the three pull requests, approved from simulator screenshots:
+
+- **Sort:** Title, Author, Recently added on All, collections and smart scopes, remembered per server (`SavedSorts`). A smart scope no longer opens in its own order from BookOrbit. A series offers Reading order, Title, Recently added and always opens in reading order; an author's books offer Title and Recently added. Recently added has Filter only.
+- **Filter:** All books, Unread, Reading (`reading` or `rereading`), Finished (`read`). A series' and an author's books filter on the iPhone (`BookOrbitSource.filtered`), the rest on the server.
+- **Filtered,** the title is the filter and the line under it names the list: "Unread", "All · 65 books". Sort and Filter share one capsule until Filter is on; then Filter stands alone, filled.
+- **Empty:** "No unread books" / "Books you haven’t started show here.", "No books in progress" / "Books you’re reading show here.", "No finished books" / "Books you finish show here.", each with Show All Books.
+- The Library's All shelf stays in title order whatever sort is remembered.
+
 ## What each library can do
 
 Measured against the local servers (`dev/bookorbit/`, `dev/opds/`). Timing used throwaway copies with **2,000 books**: a calibre library made with `calibredb` and served by separate COPS and Calibre-Web containers, and 2,000 tiny EPUBs in 200 folders for Komga. All times are on this Mac with no Wi-Fi in the way, so they show the server's own speed.
