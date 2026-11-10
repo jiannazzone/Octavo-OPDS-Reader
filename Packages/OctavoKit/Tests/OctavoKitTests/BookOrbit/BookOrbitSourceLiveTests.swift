@@ -74,6 +74,9 @@ struct BookOrbitSourceLiveTests {
         let started = all.books.filter { ($0.progress ?? 0) > 0 }
         #expect(!started.isEmpty)
         #expect(Set(unread.books.map(\.id)).isDisjoint(with: started.map(\.id)))
+        // In All's order, by title.
+        let unreadIDs = Set(unread.books.map(\.id))
+        #expect(unread.books.map(\.id) == all.books.map(\.id).filter(unreadIDs.contains))
     }
 
     @Test func opensCollectionsAndSmartScopes() async throws {

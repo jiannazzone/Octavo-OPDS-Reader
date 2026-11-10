@@ -52,7 +52,7 @@ public struct BookOrbitSource: LibrarySource {
                 return bookFeed(try await client.books(sort: [.newest], page: page, size: pageSize), page: page) { .recent(page: $0) }
             case .unread(let page):
                 return bookFeed(
-                    try await client.books(filter: .unread, sort: [.newest], page: page, size: pageSize), page: page
+                    try await client.books(filter: .unread, sort: [.title], page: page, size: pageSize), page: page
                 ) { .unread(page: $0) }
             case .continueReading:
                 // One page: BookOrbit caps the list (its own home shows 20)

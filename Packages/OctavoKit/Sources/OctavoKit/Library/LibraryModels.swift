@@ -54,7 +54,7 @@ public struct LibraryRoot: Hashable, Codable, Sendable {
     public var search: LibrarySearchSupport
     /// Newest books first, for Home. `nil` if the source has no such list.
     public var recentlyAdded: LibraryLink?
-    /// Books not started, newest first, as a Library shelf. `nil` if the
+    /// Books not started, by title, as a Library shelf. `nil` if the
     /// source doesn't track reading (OPDS).
     public var unread: LibraryLink?
     /// The books the server says you're reading, most recently read first,

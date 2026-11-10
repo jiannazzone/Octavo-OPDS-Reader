@@ -90,7 +90,7 @@ struct BookOrbitSourceTests {
         #expect(server.requests.first?.json?["sort"] as? [[String: String]] == [["field": "addedAt", "dir": "desc"]])
     }
 
-    @Test func unreadFiltersOnStatusAndProgressNewestFirst() async throws {
+    @Test func unreadFiltersOnStatusAndProgressByTitle() async throws {
         let server = StubServer { request in
             let page = (request.json?["pagination"] as? [String: Any])?["page"] as? Int
             return page == 0 ? .json(201, #"{"items":[\#(frankenstein),\#(study)],"total":3,"page":0,"size":2}"#)
@@ -104,7 +104,7 @@ struct BookOrbitSourceTests {
         #expect(first.next == link(.unread(page: 1)))
         let body = try #require(server.requests.first?.json)
         #expect(Set(body.keys) == ["filter", "sort", "pagination"])
-        #expect(body["sort"] as? [[String: String]] == [["field": "addedAt", "dir": "desc"]])
+        #expect(body["sort"] as? [[String: String]] == [["field": "title", "dir": "asc"]])
         // Measured against v3.6.0 (`docs/notes/bookorbit-api.md`, "Filtering").
         let filter = try JSONSerialization.data(withJSONObject: try #require(body["filter"]), options: .sortedKeys)
         #expect(String(decoding: filter, as: UTF8.self) == #"{"join":"AND","rules":[{"field":"readProgress","operator":"isUnread","type":"rule"},{"join":"OR","rules":[{"field":"readStatus","operator":"isEmpty","type":"rule"},{"field":"readStatus","operator":"includesAny","type":"rule","value":["unread"]}],"type":"group"}],"type":"group"}"#)
