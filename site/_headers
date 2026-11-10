@@ -1,0 +1,13 @@
+# Cloudflare Pages adds these to the site's responses (docs: Pages > Configuration > Headers).
+# Everything the site uses comes from the site itself, so the policy allows nothing else:
+# no inline script, no other host, no frames, no forms.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
+  Strict-Transport-Security: max-age=31536000
+
+# The font's name changes if the font does, so it can be kept for a year.
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
