@@ -1,0 +1,162 @@
+:root {
+  --oxblood: #8B2E23;
+  --paper: #FBF8F3;
+  --card: #FFFFFF;
+  --ink: #1D1A17;
+  --muted: #6B625A;
+  --line: rgba(29, 26, 23, 0.10);
+  --link: var(--oxblood);
+  --serif: "Source Serif 4", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* Above each section (and the footer), and between a section's words and its pictures */
+  --space-section: 72px;
+  --space-first: 56px;
+  --space-media: 36px;
+}
+
+@media (min-width: 900px) {
+  :root { --space-section: 104px; --space-first: 72px; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #151211;
+    --card: #201B19;
+    --ink: #F2ECE6;
+    --muted: #A99F96;
+    --line: rgba(242, 236, 230, 0.12);
+    --link: #E58C7E;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 17px/1.55 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+img, video { display: block; max-width: 100%; height: auto; }
+a { color: var(--link); }
+
+h1, h2, h3 { font-family: var(--serif); font-weight: 700; line-height: 1.15; margin: 0; }
+h2 { font-size: clamp(28px, 4vw, 40px); margin-bottom: 12px; }
+h3 { font-size: 21px; margin-bottom: 6px; }
+p { margin: 0; }
+
+.wrap { width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+@media (min-width: 700px) { .wrap { padding: 0 32px; } }
+
+/* Hero: the App Store's oxblood over a dimmed wall of covers */
+
+.hero {
+  color: #FFF;
+  background:
+    linear-gradient(color-mix(in srgb, var(--oxblood) 88%, transparent), color-mix(in srgb, var(--oxblood) 88%, transparent)),
+    url("images/cover-wall.jpg") center / cover var(--oxblood);
+  padding: 56px 0 48px;
+}
+.hero-grid { display: grid; gap: 40px; align-items: center; }
+@media (min-width: 900px) {
+  .hero { padding: 88px 0; }
+  .hero-grid { grid-template-columns: 5fr 7fr; }
+}
+.icon { width: 88px; height: 88px; border-radius: 22%; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); margin-bottom: 20px; }
+.hero h1 { font-size: clamp(44px, 7vw, 64px); }
+.lede { font-family: var(--serif); font-size: clamp(22px, 2.6vw, 27px); line-height: 1.3; margin-top: 12px; }
+.sub { color: rgba(255, 255, 255, 0.82); margin-top: 14px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 28px; }
+
+/* A stand-in for Apple's badge until the app is live */
+.store {
+  display: inline-flex; flex-direction: column; justify-content: center;
+  height: 52px; padding: 0 20px; border-radius: 10px;
+  background: #000; color: #FFF; line-height: 1.1;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.store-small { font-size: 11px; }
+.store-big { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
+.secondary { color: #FFF; font-weight: 600; text-underline-offset: 3px; }
+
+/* The video plays in the Duo frame's screen opening (120, 120, 2853 × 2007 of 3093 × 2247). */
+.duo-video { position: relative; }
+/* The shadow sits on a still shape behind the device (58, 50, 2985 × 2139, corners about 290),
+   so it isn't redrawn with every frame of the video. */
+.duo-video::before {
+  content: "";
+  position: absolute;
+  left: 1.88%; top: 2.23%; width: 96.51%; height: 95.19%;
+  border-radius: 9.7% / 13.6%;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+.duo-video video {
+  position: absolute;
+  left: 3.88%; top: 5.34%; width: 92.24%; height: 89.32%;
+  object-fit: fill;
+  /* The frame's corners are rounded outside and in: show the video only through its screen. */
+  -webkit-mask: url("images/duo-screen-mask.png") 0 0 / 100% 100% no-repeat;
+  mask: url("images/duo-screen-mask.png") 0 0 / 100% 100% no-repeat;
+}
+.duo-frame { position: relative; width: 100%; pointer-events: none; }
+
+/* Sections */
+
+/* `main >` outranks `.wrap`'s own padding. */
+main > .wrap { padding-top: var(--space-section); }
+main > .wrap:first-child { padding-top: var(--space-first); }
+
+/* The one style for words under a heading */
+.intro { color: var(--muted); font-size: 19px; max-width: 640px; }
+.note { margin-top: 20px; }
+
+/* Folded and open stand at the same height. */
+.fold-row { display: flex; gap: 32px; margin-top: var(--space-media); align-items: flex-end; }
+.fold-row figure { margin: 0; flex: 1.377 1 0; }
+.fold-row figure:first-child { flex: 0.717 1 0; }
+@media (max-width: 640px) {
+  .fold-row { flex-direction: column; align-items: center; }
+  .fold-row figure { flex: none; width: 100%; }
+  .fold-row figure:first-child { width: 52%; }
+}
+.fold-row img { width: 100%; }
+figcaption { color: var(--muted); font-size: 15px; margin-top: 12px; text-align: center; }
+
+.phone, .tablet, .fold-row img { filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.18)); }
+.phone { width: 100%; max-width: 280px; }
+
+.feature { display: grid; gap: 32px; justify-items: center; }
+@media (min-width: 760px) {
+  .feature { grid-template-columns: 1fr 1fr; align-items: center; justify-items: start; }
+  .feature .phone { justify-self: center; }
+  .feature.flip .phone { order: 2; }
+}
+
+.cards { display: grid; gap: 16px; margin-top: var(--space-media); }
+@media (min-width: 640px) { .cards { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 980px) { .cards { grid-template-columns: repeat(4, 1fr); } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
+.card p { color: var(--muted); font-size: 16px; }
+
+.devices-row { display: flex; gap: 24px; align-items: flex-end; justify-content: center; margin-top: var(--space-media); }
+/* iPad 13" (282 mm) and iPhone 6.3" (150 mm) at their real sizes against each other:
+   the phone's frame is 0.34 of the tablet's width. */
+.devices-row .tablet { width: 58%; max-width: 520px; }
+.devices-row .phone { width: 19.7%; max-width: 177px; }
+/* On a phone that would leave the iPhone too small to read, so each gets a readable size. */
+@media (max-width: 640px) {
+  .devices-row { flex-direction: column; align-items: center; gap: 32px; }
+  .devices-row .tablet { width: 100%; }
+  .devices-row .phone { width: 60%; max-width: 280px; }
+}
+
+.footer {
+  margin-top: var(--space-section); padding-top: 28px; padding-bottom: 48px;
+  border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 15px;
+}
+.footer nav { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 14px; }
+.footer nav a { font-weight: 600; text-decoration: none; }
+.footer p + p { margin-top: 6px; }

@@ -43,8 +43,8 @@ run() {
 
 # The same paths as `ci.yml`. No changed files at all still runs the tests.
 files=$(git diff --no-renames --name-only origin/main...HEAD)
-if ! grep -qvE '^(docs/|README\.md$|CLAUDE\.md$)' <<< "$files"; then
-    echo "Only docs changed, so there's nothing to test."
+if ! grep -qvE '^(docs/|site/|README\.md$|CLAUDE\.md$)' <<< "$files"; then
+    echo "Only docs or the website changed, so there's nothing to test."
 elif [ "$(cat "$passed" 2> /dev/null)" = "$sha" ]; then
     echo "$sha has already passed here."
 else
