@@ -340,15 +340,19 @@ public actor BookOrbitClient {
     }
 
     /// `POST books/query`: books across every library the user can see.
-    /// `query` matches titles, authors and series.
-    public func books(matching query: String? = nil, sort: [BookOrbitBookSort] = [], page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
+    /// `query` matches titles, authors and series; `filter` narrows them.
+    public func books(
+        matching query: String? = nil, filter: BookOrbitBookFilter? = nil, sort: [BookOrbitBookSort] = [],
+        page: Int = 0, size: Int = 50
+    ) async throws -> BookOrbitPage<BookOrbitBook> {
         struct Body: Encodable {
             struct Pagination: Encodable { var page: Int; var size: Int }
             var q: String?
+            var filter: BookOrbitBookFilter?
             var sort: [BookOrbitBookSort]
             var pagination: Pagination
         }
-        let body = Body(q: query, sort: sort, pagination: .init(page: page, size: size))
+        let body = Body(q: query, filter: filter, sort: sort, pagination: .init(page: page, size: size))
         return try decode(BookOrbitPage<BookOrbitBook>.self, from: try await send(jsonRequest("books/query", method: "POST", body: body)))
     }
 

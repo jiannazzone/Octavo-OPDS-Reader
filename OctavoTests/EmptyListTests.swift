@@ -32,6 +32,11 @@ struct EmptyListTests {
         #expect(EmptyListWording(kind: .author, server: "BookOrbit").title == "No books by this author")
     }
 
+    @Test func theUnreadListSaysWhatGoesInIt() {
+        #expect(EmptyListWording.unread.title == "No unread books")
+        #expect(EmptyListWording.unread.message == "Books you haven’t started show here.")
+    }
+
     // The right page's heading matches the shelf's.
     @MainActor @Test func theNewestBooksGoByTheirShelfsName() {
         let latest = LibraryEntry(kind: .feed, title: "Latest books", link: link("latest"))
@@ -46,6 +51,27 @@ struct EmptyListTests {
         let root = LibraryRoot(chips: [LibraryEntry(kind: .feed, title: "All", link: link("all"))], search: .unavailable, recentlyAdded: link("recent"))
         #expect(LibraryView.newest(root)?.title == "Recently added")
         #expect(LibraryView.newest(root)?.link == link("recent"))
+    }
+
+    // BookOrbit's: All, Recently added, Unread, then the rest (#131).
+    @MainActor @Test func unreadComesAfterRecentlyAdded() {
+        let chips = ["All", "Collections", "Series"].map { LibraryEntry(kind: .feed, title: $0, link: link($0)) }
+        let root = LibraryRoot(chips: chips, search: .unavailable, recentlyAdded: link("recent"), unread: link("unread"))
+        #expect(LibraryView.sections(root).map(\.title) == ["All", "Recently added", "Unread", "Collections", "Series"])
+        #expect(LibraryView.sections(root)[2].link == link("unread"))
+    }
+
+    @MainActor @Test func unreadIsSecondWithoutRecentlyAdded() {
+        let chips = ["All", "Series"].map { LibraryEntry(kind: .feed, title: $0, link: link($0)) }
+        let root = LibraryRoot(chips: chips, search: .unavailable, unread: link("unread"))
+        #expect(LibraryView.sections(root).map(\.title) == ["All", "Unread", "Series"])
+    }
+
+    // OPDS catalogs have no unread list.
+    @MainActor @Test func noUnreadShelfWithoutTheList() {
+        let chips = ["All", "Series"].map { LibraryEntry(kind: .feed, title: $0, link: link($0)) }
+        let root = LibraryRoot(chips: chips, search: .unavailable, recentlyAdded: link("recent"))
+        #expect(LibraryView.sections(root).map(\.title) == ["All", "Recently added", "Series"])
     }
 
     @MainActor @Test func aServerMayHaveNoNewestBooks() {

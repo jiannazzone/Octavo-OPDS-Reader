@@ -66,11 +66,16 @@ struct LibraryView: View {
     }
 
     /// The server's own sections, with Recently added second when the server
-    /// has such a list and doesn't already show it.
+    /// has such a list and doesn't already show it, and Unread after it
+    /// (BookOrbit, #131).
     static func sections(_ root: LibraryRoot) -> [LibraryEntry] {
         var sections = root.chips
         if let recent = root.recentlyAdded, !sections.contains(where: { $0.link == recent }) {
             sections.insert(LibraryEntry(kind: .feed, title: "Recently added", link: recent), at: min(1, sections.count))
+        }
+        if let unread = root.unread, !sections.contains(where: { $0.link == unread }) {
+            let after = sections.firstIndex { $0.link == root.recentlyAdded }.map { $0 + 1 } ?? min(1, sections.count)
+            sections.insert(LibraryEntry(kind: .feed, title: "Unread", link: unread), at: after)
         }
         return sections
     }
