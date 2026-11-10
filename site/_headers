@@ -8,6 +8,6 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()
   Strict-Transport-Security: max-age=31536000
 
-# The font's name changes if the font does, so it can be kept for a year.
+# The font's name carries its version (v15), so a new font gets a new name and this can be kept for a year.
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable

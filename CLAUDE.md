@@ -46,7 +46,10 @@ xcrun devicectl device install app --device <UDID> <DerivedData>/Build/Products/
   - `Octavo/Tour/` is the tour for a new install (`TourFlow`, the steps; `TourController`, when it starts and ends and what the hinge does to it; `TourRecord`, whether it has played; `docs/notes/tour.md`).
   - `Octavo/Reader/` is the reader (`ReaderView` with its controls, footer and progress bar; `WebView`, `octavo://` scheme handler, hinge → layout). `Octavo/Debug/` holds DEBUG-only tooling: `ReaderRemote` lets the check scripts in `docs/notes/` drive the reader through `Documents/spike-command.json` (the spike's file names and commands, kept so the tools run unchanged), plus debug switches for the Settings stand-in. The spike's screens (`Octavo/Spike/`) were deleted in #17.
   - `Config/Octavo-Info.plist` (ATS: local networking plus home-name and 100.64/10 exceptions, `docs/notes/network-trust.md`), `dev/bookorbit/` (local server), `docs/notes/` (engineering notes, indexed in its README).
-  - `site/` is the one-page website: plain HTML and CSS, no build step. Cloudflare Pages deploys it from `main` (output directory `site`, watch path `site/*`) and builds a preview of every pushed branch.
+  - `site/` is the website: the home page, Privacy, Support and 404, in plain HTML and CSS with no build step. Cloudflare Pages deploys it from `main` (output directory `site`, watch path `site/*`) and builds a preview of every pushed branch.
+    - `site/_headers` gives every page a content security policy that allows only the site's own files and no inline script, so scripts go in files of their own and nothing loads from another host (the font is served from `site/fonts/`, not Google Fonts).
+    - `site/privacy.html` and `site/support.html` carry the same words as `docs/PRIVACY.md` and `docs/SUPPORT.md`, which version 1.0 and its listing link to: change both.
+    - A file cached for a year (`/fonts/*`) carries its version in its name.
 - Swift 6, default `MainActor` isolation in the app target, `@Observable` state. Deployment target iOS 27.1, so hinge APIs need no availability guards.
 - **Never push to GitHub (`git push`, `gh pr create`) without the owner's explicit OK for that push.** Commit locally and ask. Show the owner every GitHub issue as a draft before creating it.
 - **Every pull request: `Scripts/local-tests.sh "<your Duo simulator>"`.** GitHub runs only `swift test`, so the app's tests run here, and `main` requires the "Local tests" status this posts. Commit everything and update from `main` first, or it refuses. Run it before opening a pull request, and again after every push: each commit needs its own pass, and a commit that isn't on GitHub yet can't take the status. Any failure blocks, even one that looks unrelated: fix it or tell the owner. Put its result lines in the pull request. Never post that status any other way.
@@ -155,7 +158,8 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
 
 - This project is **MPL-2.0**.
 - **BookOrbit is AGPL-3.0 with additional terms**, which include a mandatory "Powered by BookOrbit" notice for any work containing BookOrbit material. **Never copy code, JS, CSS or assets from BookOrbit or its Android client** into this repo. Calling its REST API is fine.
-- Allowed dependencies need MPL-compatible licenses (MIT, BSD, Apache-2.0, MPL). List each one in `THIRD-PARTY-NOTICES.md`.
+- Allowed dependencies need MPL-compatible licenses (MIT, BSD, Apache-2.0, MPL). List each one in `THIRD-PARTY-NOTICES.md`. Fonts may also be SIL OFL 1.1, as the reader fonts are (decision 16).
+- `THIRD-PARTY-NOTICES.md` is the app's Licences page (bundled, and its list is tested), so it lists only what ships in the app. The website's own assets carry their licences beside them in `site/` (Source Serif 4's in `site/fonts/`).
 - No GPL/AGPL dependencies (they conflict with App Store distribution).
 
 ## First spike: done (2026-10-31)
