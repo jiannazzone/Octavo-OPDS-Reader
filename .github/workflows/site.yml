@@ -1,0 +1,36 @@
+# Deploys the website when site/ changes on main (docs/notes/ci.md, "The website").
+# Cloudflare Pages' own watch paths skip merge commits, and every change reaches main
+# as one, so GitHub decides instead: its path filter sees what a merge changed. The
+# step asks Cloudflare to build main through a deploy hook, whose URL is the
+# CLOUDFLARE_DEPLOY_HOOK secret. Automatic production deployments are off in Cloudflare,
+# so app changes never redeploy the site. Run it by hand to redeploy without a change.
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**']
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask Cloudflare Pages to build main
+        env:
+          HOOK: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::error::The CLOUDFLARE_DEPLOY_HOOK secret isn't set."
+            exit 1
+          fi
+          # The response names the build; the URL itself is never printed.
+          curl --fail --silent --show-error --max-time 30 -X POST "$HOOK"

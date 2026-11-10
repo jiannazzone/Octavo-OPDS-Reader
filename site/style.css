@@ -51,6 +51,8 @@ body {
 
 img, video { display: block; max-width: 100%; height: auto; }
 a { color: var(--link); }
+/* A keyboard focus ring in the link's own colour: white on oxblood, oxblood on paper. */
+a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
 
 h1, h2, h3 { font-family: var(--serif); font-weight: 700; line-height: 1.15; margin: 0; }
 h2 { font-size: clamp(28px, 4vw, 40px); margin-bottom: 12px; }
@@ -89,7 +91,7 @@ p { margin: 0; }
 }
 .store-small { font-size: 11px; }
 .store-big { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; }
-.secondary { color: #FFF; font-weight: 600; text-underline-offset: 3px; }
+.secondary { display: inline-flex; align-items: center; min-height: 44px; color: #FFF; font-weight: 600; text-underline-offset: 3px; }
 
 /* The video plays in the Duo frame's screen opening (120, 120, 2853 × 2007 of 3093 × 2247). */
 .duo-video { position: relative; }
@@ -137,9 +139,12 @@ figcaption { color: var(--muted); font-size: 15px; margin-top: 12px; text-align:
 .phone, .tablet, .fold-row img { filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.18)); }
 .phone { width: 100%; max-width: 280px; }
 
+/* In one column the heading comes first, so the screenshot has its words before it. */
 .feature { display: grid; gap: 32px; justify-items: center; }
+.feature > div { order: -1; justify-self: stretch; }
 @media (min-width: 760px) {
   .feature { grid-template-columns: 1fr 1fr; align-items: center; justify-items: start; }
+  .feature > div { order: 0; }
   .feature .phone { justify-self: center; }
   .feature.flip .phone { order: 2; }
 }
@@ -166,7 +171,7 @@ figcaption { color: var(--muted); font-size: 15px; margin-top: 12px; text-align:
 
 .bar { background: var(--oxblood); color: #FFF; }
 .bar .wrap { display: flex; align-items: center; height: 64px; }
-.bar a { display: inline-flex; align-items: center; gap: 12px; color: #FFF; text-decoration: none; font-family: var(--serif); font-weight: 700; font-size: 24px; }
+.bar a { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; color: #FFF; text-decoration: none; font-family: var(--serif); font-weight: 700; font-size: 24px; }
 .bar img { width: 36px; height: 36px; border-radius: 22%; }
 
 /* The column starts where the bar's name and the footer do. */
@@ -186,6 +191,7 @@ figcaption { color: var(--muted); font-size: 15px; margin-top: 12px; text-align:
   border-top: 1px solid var(--line);
   color: var(--muted); font-size: 15px;
 }
-.footer nav { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-bottom: 14px; }
-.footer nav a { font-weight: 600; text-decoration: none; }
+/* Links at least 44 px tall, the touch size Apple asks for. */
+.footer nav { display: flex; flex-wrap: wrap; gap: 0 24px; margin: -10px 0 4px; }
+.footer nav a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 600; text-decoration: none; }
 .footer p + p { margin-top: 6px; }

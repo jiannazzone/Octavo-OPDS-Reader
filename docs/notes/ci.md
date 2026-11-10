@@ -51,6 +51,12 @@ A run waited about 10 minutes for a runner, and on #57's run `41866624185` a job
 
 A pull request compares its merge commit with the base. A push to `main` compares with where `main` was before the push, so every commit in it counts when a stack lands several at once. Tests are skipped only when every changed file is under `docs/` or `site/` (the website), or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a change with no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too. `Scripts/local-tests.sh` goes by the same paths.
 
+## The website
+
+Cloudflare Pages serves `site/` (project `octavo-opds-reader`, output directory `site`), connected to this repository. Its build watch paths (`site/*`) skipped every merge into `main`, even ones that changed only `site/` (#128 needed a retry, and #129 never deployed), so they can't be what decides. Every change reaches `main` as a merge commit (the ruleset), and Cloudflare evidently doesn't see a merge's files.
+
+So GitHub decides. `.github/workflows/site.yml` runs on a push to `main` that changes `site/**`, since GitHub's path filter compares with where `main` was, and posts to a Cloudflare deploy hook for `main`, whose URL is the `CLOUDFLARE_DEPLOY_HOOK` secret. Automatic production deployments are off in Cloudflare (Settings > Builds > Branch control), so app changes never redeploy the site. `gh workflow run site.yml` redeploys without a change. The job needs no permissions and runs nothing from the repository.
+
 ## Signing
 
 The App tests job has no signing identity, so the build signs ad hoc (`CODE_SIGN_IDENTITY=-`). All 434 app tests passed that way on the simulator.
