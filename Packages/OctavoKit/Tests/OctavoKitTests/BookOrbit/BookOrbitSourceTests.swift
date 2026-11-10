@@ -22,8 +22,11 @@ private func page(_ items: String..., total: Int, page: Int = 0, size: Int = 2) 
 
 struct BookOrbitRouteTests {
     @Test(arguments: [
-        BookOrbitRoute.books(page: 0), .recent(page: 3), .unread(page: 1), .continueReading, .collections, .collection(id: 1, page: 2), .smartScope(id: 9, page: 0),
-        .seriesList(page: 1), .series(id: 3, page: 0), .authors(page: 4), .author(id: 5, page: 1),
+        BookOrbitRoute.books(page: 0), .recent(page: 3), .books(page: 1, filter: .unread), .continueReading, .collections, .collection(id: 1, page: 2),
+        .smartScope(id: 9, page: 0), .seriesList(page: 1), .series(id: 3, page: 0), .authors(page: 4), .author(id: 5, page: 1),
+        .books(page: 2, sort: .author, filter: .finished), .recent(page: 0, filter: .reading), .collection(id: 1, page: 0, sort: .recentlyAdded),
+        .smartScope(id: 9, page: 1, sort: .author, filter: .unread), .series(id: 3, page: 1, sort: .title, filter: .reading),
+        .author(id: 5, page: 0, sort: .recentlyAdded, filter: .unread),
         .search(query: "pride", page: 0), .search(query: "Tom & Jerry = fun+ 100%?#/", page: 2), .search(query: "Brontë", page: 0),
     ])
     func roundTripsThroughLinks(route: BookOrbitRoute) {
@@ -33,6 +36,16 @@ struct BookOrbitRouteTests {
     @Test func writesReadableLinks() {
         #expect(BookOrbitRoute.collection(id: 1, page: 2).link.rawValue == "collections/1?page=2")
         #expect(BookOrbitRoute.collections.link.rawValue == "collections")
+        #expect(BookOrbitRoute.books(page: 0, sort: .author, filter: .unread).link.rawValue == "books?page=0&sort=author&show=unread")
+        // A list's own sort isn't written, so each list has one link.
+        #expect(BookOrbitRoute.books(page: 0, sort: .title).link.rawValue == "books?page=0")
+        #expect(BookOrbitRoute.series(id: 3, page: 0, sort: .readingOrder).link.rawValue == "series/3?page=0")
+    }
+
+    @Test func aSortTheListDoesntOfferIsItsOwn() {
+        #expect(BookOrbitRoute(LibraryLink(rawValue: "series/3?page=0&sort=author")) == .series(id: 3, page: 0))
+        #expect(BookOrbitRoute(LibraryLink(rawValue: "books?page=0&sort=readingOrder&show=someday")) == .books(page: 0))
+        #expect(BookOrbitRoute(LibraryLink(rawValue: "recent?page=0&sort=title")) == .recent(page: 0))
     }
 
     @Test(arguments: [
@@ -53,7 +66,7 @@ struct BookOrbitSourceTests {
         #expect(root.chips.map(\.link) == [link(.books(page: 0)), link(.collections), link(.seriesList(page: 0)), link(.authors(page: 0))])
         #expect(root.search == .booksSeriesAndAuthors)
         #expect(root.recentlyAdded == link(.recent(page: 0)))
-        #expect(root.unread == link(.unread(page: 0)))
+        #expect(root.unread == link(.books(page: 0, filter: .unread)))
         #expect(root.continueReading == link(.continueReading))
         #expect(server.requests.isEmpty)
     }
@@ -98,10 +111,10 @@ struct BookOrbitSourceTests {
         }
         let source = source(server)
 
-        let first = try await source.feed(link(.unread(page: 0)))
+        let first = try await source.feed(link(.books(page: 0, filter: .unread)))
         #expect(first.books.map(\.title) == ["Frankenstein", "A Study in Scarlet"])
         #expect(first.total == 3)
-        #expect(first.next == link(.unread(page: 1)))
+        #expect(first.next == link(.books(page: 1, filter: .unread)))
         let body = try #require(server.requests.first?.json)
         #expect(Set(body.keys) == ["filter", "sort", "pagination"])
         #expect(body["sort"] as? [[String: String]] == [["field": "title", "dir": "asc"]])
@@ -216,10 +229,10 @@ struct BookOrbitSourceTests {
     }
 
     @Test(arguments: [
-        (BookOrbitRoute.collection(id: 1, page: 1), "/api/v1/collections/1/books", ["page": "1", "size": "2"]),
-        (.smartScope(id: 4, page: 0), "/api/v1/smart-scopes/4/books", ["page": "0", "size": "2"]),
-        (.series(id: 3, page: 0), "/api/v1/series/3/books", ["page": "0", "size": "2", "sort": "seriesIndex", "order": "asc"]),
+        (BookOrbitRoute.series(id: 3, page: 0), "/api/v1/series/3/books", ["page": "0", "size": "2", "sort": "seriesIndex", "order": "asc"]),
+        (.series(id: 3, page: 1, sort: .recentlyAdded), "/api/v1/series/3/books", ["page": "1", "size": "2", "sort": "addedAt", "order": "desc"]),
         (.author(id: 5, page: 2), "/api/v1/authors/5/books", ["page": "2", "size": "2", "sort": "title", "order": "asc"]),
+        (.author(id: 5, page: 0, sort: .recentlyAdded), "/api/v1/authors/5/books", ["page": "0", "size": "2", "sort": "addedAt", "order": "desc"]),
     ])
     func opensListsOfBooks(route: BookOrbitRoute, path: String, query: [String: String]) async throws {
         let server = StubServer { _ in page(alice, frankenstein, total: 9) }
@@ -233,6 +246,128 @@ struct BookOrbitSourceTests {
         #expect(request.method == "GET")
         #expect(request.path == path)
         #expect(request.query == query)
+    }
+
+    @Test(arguments: [
+        (BookOrbitRoute.books(page: 1, sort: .author, filter: .reading), BookOrbitRoute.books(page: 2, sort: .author, filter: .reading),
+         "/api/v1/books/query", ["field": "author", "dir": "asc"]),
+        (.collection(id: 1, page: 1), .collection(id: 1, page: 2), "/api/v1/collections/1/books/query", ["field": "title", "dir": "asc"]),
+        (.smartScope(id: 4, page: 1, sort: .recentlyAdded, filter: .reading), .smartScope(id: 4, page: 2, sort: .recentlyAdded, filter: .reading),
+         "/api/v1/smart-scopes/4/books/query", ["field": "addedAt", "dir": "desc"]),
+    ])
+    func queriesListsOfBooksOnTheServer(route: BookOrbitRoute, next: BookOrbitRoute, path: String, sort: [String: String]) async throws {
+        let server = StubServer { _ in page(alice, frankenstein, total: 9, page: 1) }
+
+        let feed = try await source(server).feed(route.link)
+
+        #expect(feed.books.count == 2)
+        #expect(feed.total == 9)
+        #expect(feed.next == next.link)
+        let request = try #require(server.requests.first)
+        #expect(request.method == "POST")
+        #expect(request.path == path)
+        #expect(request.query.isEmpty)
+        let body = try #require(request.json)
+        #expect(body["sort"] as? [[String: String]] == [sort])
+        #expect(body["pagination"] as? [String: Int] == ["page": 1, "size": 2])
+        #expect((body["filter"] != nil) == (route.order?.filter != .all))
+    }
+
+    @Test(arguments: [
+        (LibraryFilter.reading, #"{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["reading","rereading"]}],"type":"group"}"#),
+        (.finished, #"{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["read"]}],"type":"group"}"#),
+    ])
+    func filtersOnTheServersStatus(filter: LibraryFilter, json: String) async throws {
+        let server = StubServer { _ in page(alice, total: 1) }
+
+        _ = try await source(server).feed(link(.books(page: 0, filter: filter)))
+
+        let body = try #require(server.requests.first?.json)
+        let sent = try JSONSerialization.data(withJSONObject: try #require(body["filter"]), options: .sortedKeys)
+        #expect(String(decoding: sent, as: UTF8.self) == json)
+    }
+
+    @Test func offersSortsAndFiltersOnListsOfBooks() {
+        let source = source(StubServer { _ in .json("[]") })
+        let all = LibraryFilter.allCases
+
+        #expect(source.order(of: link(.books(page: 0))) == LibraryListOrder(
+            sorts: [.title, .author, .recentlyAdded], filters: all, sort: .title, filter: .all, takesRememberedSort: true
+        ))
+        #expect(source.order(of: link(.collection(id: 1, page: 0, sort: .author, filter: .unread)))?.sort == .author)
+        #expect(source.order(of: link(.collection(id: 1, page: 0, sort: .author, filter: .unread)))?.filter == .unread)
+        #expect(source.order(of: link(.series(id: 3, page: 0))) == LibraryListOrder(
+            sorts: [.readingOrder, .title, .recentlyAdded], filters: all, sort: .readingOrder, filter: .all, takesRememberedSort: false
+        ))
+        #expect(source.order(of: link(.author(id: 5, page: 0)))?.sorts == [.title, .recentlyAdded])
+        #expect(source.order(of: link(.recent(page: 0))) == LibraryListOrder(
+            sorts: [], filters: all, sort: nil, filter: .all, takesRememberedSort: false
+        ))
+        for route in [BookOrbitRoute.collections, .seriesList(page: 0), .authors(page: 0), .continueReading, .search(query: "pride", page: 0)] {
+            #expect(source.order(of: route.link) == nil)
+        }
+    }
+
+    @Test func linksEachSortAndFilterFromTheTop() {
+        let source = source(StubServer { _ in .json("[]") })
+
+        #expect(source.link(link(.books(page: 3)), sortedBy: .author, showing: .unread) == link(.books(page: 0, sort: .author, filter: .unread)))
+        #expect(source.link(link(.books(page: 0, filter: .unread)), sortedBy: .title, showing: .all) == link(.books(page: 0)))
+        // A sort the list doesn't offer gives its own.
+        #expect(source.link(link(.series(id: 3, page: 0)), sortedBy: .author, showing: .finished) == link(.series(id: 3, page: 0, filter: .finished)))
+        #expect(source.link(link(.recent(page: 0)), sortedBy: .title, showing: .reading) == link(.recent(page: 0, filter: .reading)))
+        #expect(source.link(link(.authors(page: 0)), sortedBy: .title, showing: .unread) == link(.authors(page: 0)))
+    }
+
+    /// `books/query` matches an author by any part of the name, so a
+    /// series' or an author's books filter here, from every page of the
+    /// list itself.
+    @Test(arguments: [
+        (BookOrbitRoute.series(id: 3, page: 0, sort: .title, filter: .unread), "/api/v1/series/3/books", "title"),
+        (.author(id: 5, page: 0, filter: .unread), "/api/v1/authors/5/books", "title"),
+    ])
+    func filtersASeriesOrAnAuthorOnTheIPhone(route: BookOrbitRoute, path: String, sort: String) async throws {
+        @Sendable func book(_ id: Int, status: String?, progress: Double?) -> String {
+            let status = status.map { #"{"status":"\#($0)"}"# } ?? "null"
+            let progress = progress.map { String($0) } ?? "null"
+            return #"{"id":\#(id),"title":"Book \#(id)","readStatus":\#(status),"readingProgress":\#(progress)}"#
+        }
+        let server = StubServer { request in
+            let page = Int(request.query["page"] ?? "") ?? -1
+            // A full page of 100, then a short one.
+            let books = page == 0
+                ? (1...100).map { book($0, status: $0 == 1 ? "reading" : nil, progress: $0 == 2 ? 10 : nil) }
+                : [book(101, status: "unread", progress: 0), book(102, status: "read", progress: nil), book(103, status: "want_to_read", progress: nil)]
+            return .json(#"{"items":[\#(books.joined(separator: ","))],"total":103,"page":\#(page),"size":100}"#)
+        }
+
+        let feed = try await source(server).feed(route.link)
+
+        #expect(feed.books.map(\.id.rawValue) == (3...101).map(String.init))
+        #expect(feed.total == 99)
+        #expect(feed.next == nil)
+        #expect(server.requests.map(\.path) == [path, path])
+        #expect(server.requests.map { $0.query["page"] } == ["0", "1"])
+        #expect(server.requests.allSatisfy { $0.query["size"] == "100" && $0.query["sort"] == sort })
+    }
+
+    @Test(arguments: [
+        // (status, progress as BookOrbit sends it, unread, reading, finished)
+        ("null", "null", true, false, false),
+        (#"{"status":"unread"}"#, "0", true, false, false),
+        (#"{"status":"unread"}"#, "30", false, false, false),
+        (#"{"status":"reading"}"#, "0", false, true, false),
+        (#"{"status":"rereading"}"#, "50", false, true, false),
+        (#"{"status":"read"}"#, "100", false, false, true),
+        (#"{"status":"want_to_read"}"#, "null", false, false, false),
+    ])
+    func matchesBooksAsTheServerDoes(status: String, progress: String, unread: Bool, reading: Bool, finished: Bool) throws {
+        let json = #"{"id":1,"title":"Book","readStatus":\#(status),"readingProgress":\#(progress)}"#
+        let book = try JSONDecoder().decode(BookOrbitBook.self, from: Data(json.utf8))
+        #expect(LibraryFilter.all.matches(book))
+        #expect(LibraryFilter.unread.matches(book) == unread)
+        #expect(LibraryFilter.reading.matches(book) == reading)
+        #expect(LibraryFilter.finished.matches(book) == finished)
     }
 
     @Test func seriesListByNameWithCovers() async throws {
@@ -297,9 +432,9 @@ struct BookOrbitSourceTests {
             request.query["page"] == "0" ? .json(#"{"items":[\#(alice),\#(frankenstein)]}"#) : .json(#"{"items":[\#(study)]}"#)
         }
         let source = source(server)
-        let first = try await source.feed(link(.collection(id: 1, page: 0)))
-        #expect(first.next == link(.collection(id: 1, page: 1)))
-        #expect(try await source.feed(link(.collection(id: 1, page: 1))).next == nil)
+        let first = try await source.feed(link(.author(id: 1, page: 0)))
+        #expect(first.next == link(.author(id: 1, page: 1)))
+        #expect(try await source.feed(link(.author(id: 1, page: 1))).next == nil)
     }
 
     @Test func dropsBooksThatDoNotDecode() async throws {

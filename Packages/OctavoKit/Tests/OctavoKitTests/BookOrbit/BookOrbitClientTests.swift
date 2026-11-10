@@ -238,8 +238,10 @@ struct BookOrbitEndpointTests {
 
         #expect(page.items.first?.title == "Moby Dick; Or, The Whale")
         let request = try #require(server.requests.first)
-        #expect(request.path == "/api/v1/collections/1/books")
-        #expect(request.query == ["page": "2", "size": "1"])
+        #expect(request.method == "POST")
+        #expect(request.path == "/api/v1/collections/1/books/query")
+        #expect(request.json?["pagination"] as? [String: Int] == ["page": 2, "size": 1])
+        #expect(request.json?["sort"] as? [[String: String]] == [["field": "title", "dir": "asc"]])
         #expect(request.headers["authorization"] == "Bearer access-1")
     }
 

@@ -79,6 +79,39 @@ struct BookOrbitSourceLiveTests {
         #expect(unread.books.map(\.id) == all.books.map(\.id).filter(unreadIDs.contains))
     }
 
+    /// Each filter on the server, and the same filters on the iPhone for a
+    /// series' and an author's books, agree (#131 step 2).
+    @Test func sortsAndFiltersListsOfBooks() async throws {
+        let source = try await source(pageSize: 100)
+        let allLink = try await source.root().chips[0].link
+        let all = try await everything(source, from: allLink)
+        var shown: [LibraryFilter: Set<LibraryBookID>] = [:]
+        for filter in LibraryFilter.allCases {
+            shown[filter] = Set(try await everything(source, from: source.link(allLink, sortedBy: nil, showing: filter)).books.map(\.id))
+        }
+        #expect(shown[.all] == Set(all.books.map(\.id)))
+        #expect(shown[.unread]!.isDisjoint(with: shown[.reading]!))
+        #expect(shown[.reading]!.isDisjoint(with: shown[.finished]!))
+        #expect(all.books.filter { shown[.finished]!.contains($0.id) }.allSatisfy { $0.isFinished == true })
+        #expect(!shown[.unread]!.isEmpty && !shown[.reading]!.isEmpty)
+
+        let byAuthor = try await everything(source, from: source.link(allLink, sortedBy: .author, showing: .all))
+        #expect(byAuthor.books.count == all.books.count)
+        #expect(byAuthor.books.map(\.id) != all.books.map(\.id))
+
+        // Series and authors filter here, from their own lists.
+        let series = try await everything(source, from: try await source.root().chips[2].link).entries.prefix(5)
+        let authors = try await everything(source, from: try await source.root().chips[3].link).entries
+            .sorted { ($0.count ?? 0) > ($1.count ?? 0) }.prefix(5)
+        for entry in series + authors {
+            let books = Set(try await everything(source, from: entry.link).books.map(\.id))
+            for filter in [LibraryFilter.unread, .reading, .finished] {
+                let filtered = try await everything(source, from: source.link(entry.link, sortedBy: nil, showing: filter))
+                #expect(Set(filtered.books.map(\.id)) == books.intersection(shown[filter]!), "\(entry.title), \(filter)")
+            }
+        }
+    }
+
     @Test func opensCollectionsAndSmartScopes() async throws {
         let source = try await source()
         let name = "Octavo live test"

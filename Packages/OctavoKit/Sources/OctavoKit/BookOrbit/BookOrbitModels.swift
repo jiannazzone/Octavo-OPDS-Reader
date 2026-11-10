@@ -175,6 +175,9 @@ public struct BookOrbitBookSort: Encodable, Hashable, Sendable {
 
     public static let title = BookOrbitBookSort("title")
     public static let newest = BookOrbitBookSort("addedAt", descending: true)
+    public static let author = BookOrbitBookSort("author")
+    /// A series' own order: `GET series/{id}/books` only.
+    public static let readingOrder = BookOrbitBookSort("seriesIndex")
     public static let relevance = BookOrbitBookSort("relevance", descending: true)
 
     private enum CodingKeys: String, CodingKey { case field, dir }
@@ -206,6 +209,12 @@ public indirect enum BookOrbitBookFilter: Encodable, Hashable, Sendable {
             .rule(field: "readStatus", operator: "includesAny", values: ["unread"]),
         ]),
     ])
+
+    /// Status `reading` or `rereading`, whatever the progress.
+    public static let reading = all([.rule(field: "readStatus", operator: "includesAny", values: ["reading", "rereading"])])
+
+    /// Status `read`, which Mark as Finished sets.
+    public static let finished = all([.rule(field: "readStatus", operator: "includesAny", values: ["read"])])
 
     private enum CodingKeys: String, CodingKey { case type, join, rules, field, `operator`, value }
 
