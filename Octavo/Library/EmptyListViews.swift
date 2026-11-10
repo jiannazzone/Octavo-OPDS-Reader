@@ -25,6 +25,14 @@ nonisolated struct EmptyListWording: Equatable {
             title = "No books in this list"
         }
     }
+
+    /// The Unread shelf's list, once every book has been started (#131).
+    static let unread = EmptyListWording(title: "No unread books", message: "Books you haven’t started show here.")
+
+    private init(title: String, message: String) {
+        self.title = title
+        self.message = message
+    }
 }
 
 /// A list that came back with nothing in it.
@@ -42,7 +50,9 @@ struct EmptyFeed: View {
                 FeedFailedInvitation(feed: feed)
                     .scrollingOnItsPage()
             } else {
-                let wording = EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
+                let wording = entry.link == library.connection(feed.source)?.root?.unread
+                    ? .unread
+                    : EmptyListWording(kind: entry.kind, server: library.server(feed.source)?.name ?? "the server")
                 EmptyInvitation(
                     symbol: "books.vertical", title: wording.title,
                     message: wording.message, actionTitle: "Open Library"

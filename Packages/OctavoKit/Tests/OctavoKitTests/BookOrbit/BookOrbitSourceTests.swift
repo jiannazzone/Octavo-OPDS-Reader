@@ -22,7 +22,7 @@ private func page(_ items: String..., total: Int, page: Int = 0, size: Int = 2) 
 
 struct BookOrbitRouteTests {
     @Test(arguments: [
-        BookOrbitRoute.books(page: 0), .recent(page: 3), .continueReading, .collections, .collection(id: 1, page: 2), .smartScope(id: 9, page: 0),
+        BookOrbitRoute.books(page: 0), .recent(page: 3), .unread(page: 1), .continueReading, .collections, .collection(id: 1, page: 2), .smartScope(id: 9, page: 0),
         .seriesList(page: 1), .series(id: 3, page: 0), .authors(page: 4), .author(id: 5, page: 1),
         .search(query: "pride", page: 0), .search(query: "Tom & Jerry = fun+ 100%?#/", page: 2), .search(query: "Brontë", page: 0),
     ])
@@ -53,6 +53,7 @@ struct BookOrbitSourceTests {
         #expect(root.chips.map(\.link) == [link(.books(page: 0)), link(.collections), link(.seriesList(page: 0)), link(.authors(page: 0))])
         #expect(root.search == .booksSeriesAndAuthors)
         #expect(root.recentlyAdded == link(.recent(page: 0)))
+        #expect(root.unread == link(.unread(page: 0)))
         #expect(root.continueReading == link(.continueReading))
         #expect(server.requests.isEmpty)
     }
@@ -87,6 +88,30 @@ struct BookOrbitSourceTests {
         let server = StubServer { _ in .json(201, #"{"items":[\#(alice)],"total":1,"page":0,"size":2}"#) }
         _ = try await source(server).feed(link(.recent(page: 0)))
         #expect(server.requests.first?.json?["sort"] as? [[String: String]] == [["field": "addedAt", "dir": "desc"]])
+    }
+
+    @Test func unreadFiltersOnStatusAndProgressNewestFirst() async throws {
+        let server = StubServer { request in
+            let page = (request.json?["pagination"] as? [String: Any])?["page"] as? Int
+            return page == 0 ? .json(201, #"{"items":[\#(frankenstein),\#(study)],"total":3,"page":0,"size":2}"#)
+                             : .json(201, #"{"items":[\#(alice)],"total":3,"page":1,"size":2}"#)
+        }
+        let source = source(server)
+
+        let first = try await source.feed(link(.unread(page: 0)))
+        #expect(first.books.map(\.title) == ["Frankenstein", "A Study in Scarlet"])
+        #expect(first.total == 3)
+        #expect(first.next == link(.unread(page: 1)))
+        let body = try #require(server.requests.first?.json)
+        #expect(Set(body.keys) == ["filter", "sort", "pagination"])
+        #expect(body["sort"] as? [[String: String]] == [["field": "addedAt", "dir": "desc"]])
+        // Measured against v3.6.0 (`docs/notes/bookorbit-api.md`, "Filtering").
+        let filter = try JSONSerialization.data(withJSONObject: try #require(body["filter"]), options: .sortedKeys)
+        #expect(String(decoding: filter, as: UTF8.self) == #"{"join":"AND","rules":[{"field":"readProgress","operator":"isUnread","type":"rule"},{"join":"OR","rules":[{"field":"readStatus","operator":"isEmpty","type":"rule"},{"field":"readStatus","operator":"includesAny","type":"rule","value":["unread"]}],"type":"group"}],"type":"group"}"#)
+
+        let second = try await source.feed(try #require(first.next))
+        #expect(second.books.map(\.title) == ["Alice's Adventures in Wonderland"])
+        #expect(second.next == nil)
     }
 
     @Test func continueReadingIsBookOrbitsOwnList() async throws {

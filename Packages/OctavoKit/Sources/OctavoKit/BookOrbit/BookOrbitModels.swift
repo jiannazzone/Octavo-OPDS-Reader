@@ -186,6 +186,48 @@ public struct BookOrbitBookSort: Encodable, Hashable, Sendable {
     }
 }
 
+/// A `books/query` filter: the rule tree BookOrbit's smart scopes use
+/// (`docs/notes/bookorbit-api.md`, "Filtering"). A group with no rules is a 400.
+public indirect enum BookOrbitBookFilter: Encodable, Hashable, Sendable {
+    case all([BookOrbitBookFilter])
+    case any([BookOrbitBookFilter])
+    /// `values` for operators that take a list (`includesAny`); BookOrbit
+    /// answers a single string there with a 500.
+    case rule(field: String, operator: String, values: [String]? = nil)
+
+    /// Status `unread` or none, and no progress (#131). Posting progress sets
+    /// the status to `reading`, so a book opened and turned once isn't
+    /// unread, even at 0%. `includesAny ["unread"]` matches no status too in
+    /// v3.6.0; `isEmpty` keeps it so if that changes.
+    public static let unread = all([
+        .rule(field: "readProgress", operator: "isUnread"),
+        .any([
+            .rule(field: "readStatus", operator: "isEmpty"),
+            .rule(field: "readStatus", operator: "includesAny", values: ["unread"]),
+        ]),
+    ])
+
+    private enum CodingKeys: String, CodingKey { case type, join, rules, field, `operator`, value }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        func group(_ join: String, _ rules: [BookOrbitBookFilter]) throws {
+            try c.encode("group", forKey: .type)
+            try c.encode(join, forKey: .join)
+            try c.encode(rules, forKey: .rules)
+        }
+        switch self {
+        case .all(let rules): try group("AND", rules)
+        case .any(let rules): try group("OR", rules)
+        case .rule(let field, let op, let values):
+            try c.encode("rule", forKey: .type)
+            try c.encode(field, forKey: .field)
+            try c.encode(op, forKey: .operator)
+            try c.encodeIfPresent(values, forKey: .value)
+        }
+    }
+}
+
 extension BookOrbitPage: Equatable where Item: Equatable {}
 extension BookOrbitPage: Hashable where Item: Hashable {}
 

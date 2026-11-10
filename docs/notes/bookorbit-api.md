@@ -45,6 +45,14 @@ Spike 1b (`BookOrbitClient` in OctavoKit) and 2a (sync), measured against the lo
 Checked live against v3.6.0, plus BookOrbit's request DTOs for parameter names (read for behaviour, nothing copied).
 
 - **All books:** `POST books/query {q?, sort: [{field, dir}], pagination: {page, size}}` returns `{items, total, page, size}` with status **201**. `size` is at most 200. Paging and sort go in the body; the same keys in the query string are ignored. The body is a zod schema that **silently drops unknown keys**, so a misspelt field just does nothing. Sort fields include `title`, `addedAt`, `relevance`, `seriesIndex`, `author`, `lastReadAt`. `q` matches titles, authors and series.
+- **Filtering `books/query` (#131):** `filter` is the smart scopes' rule tree, `{type: "group", join: "AND"|"OR", rules: [rule or group]}` with rules `{type: "rule", field, operator, value?}`. Measured 2026-11-09 against v3.6.0 with a throwaway user whose books had each mix of status and progress:
+  - A group with **no rules** is a 400 with no detail (so is `{}`). A wrong value type (`includesAny` with a string, not an array) is a 500.
+  - `readStatus` takes `includesAny`, `excludesAll`, `isEmpty`, `isNotEmpty`, with statuses `unread, want_to_read, reading, on_hold, rereading, read, skimmed, abandoned`. `includesAny ["unread"]` **also matches books with no status**, as `isEmpty` does.
+  - `readProgress` takes `isUnread`, `isInProgress`, `isFinished`. `isUnread` matches no progress **and 0%**, whatever the status.
+  - Posting progress sets the status to `reading` (`source: "auto"`), so a book opened and turned once has one even at 0%.
+  - **Unread** (status `unread` or none, and no progress) is `readProgress isUnread` AND (`readStatus isEmpty` OR `readStatus includesAny ["unread"]`). It matched by hand on every case: no status, `unread`, `read`, `want_to_read`, 0% `reading`, 0% `unread`, and 30% set back to `unread`. The OR keeps it right if `includesAny` stops matching an empty status.
+  - BookOrbit's source lists more fields (`author`, `genre`, `tag`, `addedAt`, `rating` and others) for step 2; none of them measured yet.
+  - `page` is **0-based**: page 1 of a short list comes back empty with the right `total`.
 - **Lists that reject unknown query parameters** (400 `property X should not exist`), with what each accepts:
   - `GET series`: `page, size ≤ 100, q, sort (relevance|name|bookCount|lastAddedAt|readProgress), order, libraryId, completionStatus`. The page adds `facets`. Items: `{id, name, bookCount, readCount, authors: [String], coverBookIds, volumes, gaps, …}`.
   - `GET series/{id}/books`: `page, size ≤ 100, sort (seriesIndex|title|addedAt), order, libraryId`. The page adds `seriesInfo`.

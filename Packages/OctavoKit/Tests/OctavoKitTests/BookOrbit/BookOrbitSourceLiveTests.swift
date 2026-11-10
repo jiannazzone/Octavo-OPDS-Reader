@@ -65,6 +65,15 @@ struct BookOrbitSourceLiveTests {
 
         let recent = try await everything(source, from: try #require(root.recentlyAdded))
         #expect(Set(recent.books.map(\.id)) == Set(all.books.map(\.id)))
+
+        // No unread book has progress or is read, and no book with progress
+        // is unread (seed.sh reads some).
+        let unread = try await everything(source, from: try #require(root.unread))
+        #expect(!unread.books.isEmpty)
+        #expect(unread.books.allSatisfy { ($0.progress ?? 0) == 0 && $0.isFinished != true })
+        let started = all.books.filter { ($0.progress ?? 0) > 0 }
+        #expect(!started.isEmpty)
+        #expect(Set(unread.books.map(\.id)).isDisjoint(with: started.map(\.id)))
     }
 
     @Test func opensCollectionsAndSmartScopes() async throws {

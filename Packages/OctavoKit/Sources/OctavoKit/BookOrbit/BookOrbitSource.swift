@@ -2,7 +2,8 @@ import Foundation
 
 /// A BookOrbit server as a `LibrarySource`.
 ///
-/// The chips are All, Collections (with smart scopes), Series and Authors.
+/// The chips are All, Collections (with smart scopes), Series and Authors,
+/// with Recently added and Unread as shelves.
 /// Lists span every library the user can see; podcast collections and scopes
 /// are left out. Search covers books, series and authors.
 public struct BookOrbitSource: LibrarySource {
@@ -36,6 +37,7 @@ public struct BookOrbitSource: LibrarySource {
             ],
             search: .booksSeriesAndAuthors,
             recentlyAdded: BookOrbitRoute.recent(page: 0).link,
+            unread: BookOrbitRoute.unread(page: 0).link,
             continueReading: BookOrbitRoute.continueReading.link
         )
     }
@@ -48,6 +50,10 @@ public struct BookOrbitSource: LibrarySource {
                 return bookFeed(try await client.books(sort: [.title], page: page, size: pageSize), title: "All", page: page) { .books(page: $0) }
             case .recent(let page):
                 return bookFeed(try await client.books(sort: [.newest], page: page, size: pageSize), page: page) { .recent(page: $0) }
+            case .unread(let page):
+                return bookFeed(
+                    try await client.books(filter: .unread, sort: [.newest], page: page, size: pageSize), page: page
+                ) { .unread(page: $0) }
             case .continueReading:
                 // One page: BookOrbit caps the list (its own home shows 20)
                 // rather than paging it.
@@ -293,6 +299,7 @@ private extension BookOrbitSmartScope {
 enum BookOrbitRoute: Hashable, Sendable {
     case books(page: Int)
     case recent(page: Int)
+    case unread(page: Int)
     case continueReading
     case collections
     case collection(id: Int, page: Int)
@@ -313,6 +320,7 @@ enum BookOrbitRoute: Hashable, Sendable {
         switch self {
         case .books(let page): paged("books", page)
         case .recent(let page): paged("recent", page)
+        case .unread(let page): paged("unread", page)
         case .continueReading: components.path = "continue-reading"
         case .collections: components.path = "collections"
         case .collection(let id, let page): paged("collections/\(id)", page)
@@ -339,6 +347,7 @@ enum BookOrbitRoute: Hashable, Sendable {
         switch (parts.first, parts.count, id) {
         case ("books", 1, _): self = .books(page: page)
         case ("recent", 1, _): self = .recent(page: page)
+        case ("unread", 1, _): self = .unread(page: page)
         case ("continue-reading", 1, _): self = .continueReading
         case ("collections", 1, _): self = .collections
         case ("collections", 2, let id?): self = .collection(id: id, page: page)
