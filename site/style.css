@@ -87,8 +87,13 @@ p { margin: 0; }
 
 /* Sections */
 
-main section { padding-top: 80px; }
-@media (min-width: 900px) { main section { padding-top: 112px; } }
+/* `main >` outranks `.wrap`'s own padding. */
+main > .wrap { padding-top: 72px; }
+main > .wrap:first-child { padding-top: 56px; }
+@media (min-width: 900px) {
+  main > .wrap { padding-top: 104px; }
+  main > .wrap:first-child { padding-top: 72px; }
+}
 .intro { color: var(--muted); max-width: 640px; font-size: 19px; }
 
 /* Folded, half open and open stand at the same height. */
