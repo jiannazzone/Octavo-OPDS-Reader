@@ -1,3 +1,5 @@
+<!-- The same words as site/support.html, which the website shows: change both. -->
+
 # Octavo Support
 
 Need help, or found a bug?
