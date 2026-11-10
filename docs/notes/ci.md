@@ -16,7 +16,7 @@ GitHub runs only `swift test`. The app's tests run on this Mac, through `Scripts
 `Scripts/local-tests.sh ["simulator name"]`:
 
 1. Refuses uncommitted or untracked files, because a new file builds here whether or not it's committed, and a branch behind `main`.
-2. Runs `swift test` and `xcodebuild test -parallel-testing-enabled NO`. If only `docs/`, `README.md` or `CLAUDE.md` changed, it skips both, as CI does.
+2. Runs `swift test` and `xcodebuild test -parallel-testing-enabled NO`. If only `docs/`, `site/`, `README.md` or `CLAUDE.md` changed, it skips both, as CI does.
 3. Remembers the pass for that commit and posts the "Local tests" status on it. A commit that isn't on GitHub yet can't take a status, so it says to push and run it again, and that run only posts.
 
 A status belongs to one commit, so a new push clears it. Anyone with write access could post one by hand. `CLAUDE.md` says not to, and nothing else stops them.
@@ -49,7 +49,7 @@ A run waited about 10 minutes for a runner, and on #57's run `41866624185` a job
 
 ## Docs-only changes
 
-A pull request compares its merge commit with the base. A push to `main` compares with where `main` was before the push, so every commit in it counts when a stack lands several at once. Tests are skipped only when every changed file is under `docs/`, or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a change with no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too. `Scripts/local-tests.sh` goes by the same paths.
+A pull request compares its merge commit with the base. A push to `main` compares with where `main` was before the push, so every commit in it counts when a stack lands several at once. Tests are skipped only when every changed file is under `docs/` or `site/` (the website), or is the root `README.md` or `CLAUDE.md`. These are exact paths, not "all Markdown", because a test reads `THIRD-PARTY-NOTICES.md`. Anything else runs the tests, and so does a change with no files. Moving a file counts as changing both paths, so moving code into `docs/` runs them too. `Scripts/local-tests.sh` goes by the same paths.
 
 ## Signing
 

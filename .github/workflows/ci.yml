@@ -51,7 +51,7 @@ jobs:
           files=$(git diff --no-renames --name-only "$base" HEAD)
           # The prefix stops a file name being read as a workflow command.
           printf '%s\n' "$files" | sed 's/^/changed: /'
-          if ! printf '%s\n' "$files" | grep -qvE '^(docs/|README\.md$|CLAUDE\.md$)'; then
+          if ! printf '%s\n' "$files" | grep -qvE '^(docs/|site/|README\.md$|CLAUDE\.md$)'; then
             code=false
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"

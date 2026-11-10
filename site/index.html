@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Octavo – OPDS Reader</title>
+  <meta name="description" content="Read the books on your own server, on a phone that opens like a book. A free, open-source e-reader for iPhone Duo, iPhone and iPad.">
+  <meta name="theme-color" content="#8B2E23">
+  <link rel="icon" href="images/icon.png">
+  <link rel="apple-touch-icon" href="images/icon.png">
+  <!-- Prototype only: self-host Source Serif 4 before launch, so visitors' addresses don't go to Google. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-text">
+      <img class="icon" src="images/icon.png" width="96" height="96" alt="">
+      <h1>Octavo</h1>
+      <p class="lede">Read the books on your own server, on a phone that opens like a book.</p>
+      <p class="sub">Free and open source. No accounts, no subscriptions, no tracking.</p>
+      <div class="actions">
+        <a class="store" href="#" aria-label="Download on the App Store">
+          <span class="store-small">Download on the</span>
+          <span class="store-big">App Store</span>
+        </a>
+        <a class="secondary" href="https://github.com/jiannazzone/Octavo-OPDS-Reader">Source on GitHub</a>
+      </div>
+    </div>
+    <div class="hero-media">
+      <div class="duo-video">
+        <video id="opening" src="images/duo-opening.mp4" poster="images/duo-opening-poster.jpg"
+               autoplay muted loop playsinline
+               aria-label="Tapping Open on Pride and Prejudice on an open iPhone Duo: the cover swings over the spine and the book opens across both pages, then the pages turn."></video>
+        <img class="duo-frame" src="images/duo-open-frame.webp" width="1600" height="1162" alt="">
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section class="wrap fold">
+    <h2>Opens like a book</h2>
+    <p class="intro">One page folded, two pages open, and a real spread with a shadow at the spine when half open. Your place holds as you move between them.</p>
+    <div class="fold-row">
+      <figure>
+        <img src="images/duo-folded.webp" width="560" height="781" alt="One page of Pride and Prejudice on the folded iPhone Duo." loading="lazy">
+        <figcaption>Folded: one page</figcaption>
+      </figure>
+      <figure>
+        <img src="images/duo-half-open.webp" width="1100" height="799" alt="Two pages with a shadow at the spine on the half-open iPhone Duo." loading="lazy">
+        <figcaption>Half open: a book</figcaption>
+      </figure>
+      <figure>
+        <img src="images/duo-open.webp" width="1100" height="799" alt="Two pages on the unfolded iPhone Duo." loading="lazy">
+        <figcaption>Open: two pages</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="wrap feature">
+    <img class="phone" src="images/iphone-book.webp" width="640" height="1308" alt="The Count of Monte Cristo's page on iPhone, 17% read and synced just now." loading="lazy">
+    <div>
+      <h2>Keeps your place</h2>
+      <p>With BookOrbit, your place stays synced with its web reader and other apps. With KOReader sync, EPUBs keep their place with KOReader on your other devices.</p>
+    </div>
+  </section>
+
+  <section class="wrap feature flip">
+    <img class="phone" src="images/iphone-footnote.webp" width="640" height="1308" alt="A page of Don Quixote on iPhone with a footnote's text in a card over the top." loading="lazy">
+    <div>
+      <h2>Lets you look something up</h2>
+      <p>Jump to a map or a glossary, then tap back. Your place doesn't move until you settle somewhere new. Footnotes open over the page.</p>
+    </div>
+  </section>
+
+  <section class="wrap feature">
+    <img class="phone" src="images/iphone-night.webp" width="640" height="1308" alt="Gitanjali in the Night theme on iPhone, with the Text and Theme card open." loading="lazy">
+    <div>
+      <h2>Reads your way</h2>
+      <p>Four themes, fonts, text size, line spacing, margins and page turns. Contents, bookmarks and search in the book, and a scrubber that zooms in to one page at a time.</p>
+    </div>
+  </section>
+
+  <section class="wrap works">
+    <h2>Works with</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>BookOrbit</h3>
+        <p>Your library, with your place and bookmarks synced.</p>
+      </div>
+      <div class="card">
+        <h3>OPDS catalogs</h3>
+        <p>Browse, search and download. Checked against Calibre-Web, COPS, Kavita and Komga.</p>
+      </div>
+      <div class="card">
+        <h3>Files</h3>
+        <p>Import EPUB, MOBI, AZW3 or FB2, or open them in Octavo from another app.</p>
+      </div>
+      <div class="card">
+        <h3>KOReader sync</h3>
+        <p>Your place in EPUBs, kept with KOReader on your other devices.</p>
+      </div>
+    </div>
+    <p class="note">Add as many servers and catalogs as you like. Octavo doesn't sell books or come with a catalog, and it can't open files with DRM, PDFs or comics.</p>
+  </section>
+
+  <section class="wrap devices">
+    <h2>On iPhone and iPad too</h2>
+    <p class="intro">Built for iPhone Duo first. The same app runs on any iPhone or iPad.</p>
+    <div class="devices-row">
+      <img class="tablet" src="images/ipad-library.webp" width="1000" height="1304" alt="A BookOrbit library on iPad, with rows of covers for All, Recently added, Series and Authors." loading="lazy">
+      <img class="phone" src="images/iphone-library.webp" width="640" height="1308" alt="The same library on iPhone." loading="lazy">
+    </div>
+  </section>
+
+  <section class="wrap private">
+    <h2>Private</h2>
+    <p>Books and sign-ins stay between your device and your server. Passwords go in the Keychain, plain http only goes to home and VPN addresses, and self-signed certificates work once you trust them.</p>
+  </section>
+
+</main>
+
+<footer class="wrap footer">
+  <nav>
+    <a href="https://github.com/jiannazzone/Octavo-OPDS-Reader/blob/main/docs/SUPPORT.md">Support</a>
+    <a href="https://github.com/jiannazzone/Octavo-OPDS-Reader/blob/main/docs/PRIVACY.md">Privacy</a>
+    <a href="https://github.com/jiannazzone/Octavo-OPDS-Reader">Source code</a>
+  </nav>
+  <p>Octavo is free software under the Mozilla Public License 2.0. It's a separate project from BookOrbit, and talks to it through its API.</p>
+  <p>© 2026 Joseph Iannazzone</p>
+</footer>
+
+<script>
+  // With Reduce Motion, the video waits for a tap instead of playing on its own.
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const video = document.getElementById('opening');
+    video.removeAttribute('autoplay');
+    video.pause();
+    video.controls = true;
+  }
+</script>
+</body>
+</html>
