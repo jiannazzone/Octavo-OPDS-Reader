@@ -51,7 +51,9 @@ Checked live against v3.6.0, plus BookOrbit's request DTOs for parameter names (
   - `readProgress` takes `isUnread`, `isInProgress`, `isFinished`. `isUnread` matches no progress **and 0%**, whatever the status.
   - Posting progress sets the status to `reading` (`source: "auto"`), so a book opened and turned once has one even at 0%.
   - **Unread** (status `unread` or none, and no progress) is `readProgress isUnread` AND (`readStatus isEmpty` OR `readStatus includesAny ["unread"]`). It matched by hand on every case: no status, `unread`, `read`, `want_to_read`, 0% `reading`, 0% `unread`, and 30% set back to `unread`. The OR keeps it right if `includesAny` stops matching an empty status.
-  - BookOrbit's source lists more fields (`author`, `genre`, `tag`, `addedAt`, `rating` and others) for step 2; none of them measured yet.
+  - `collections/{id}/books/query` and `smart-scopes/{id}/books/query` take the same body. A scope's own filter still applies under `filter`, and with no `sort` a scope keeps its own order (measured 2026-11-10).
+  - `series` takes only `includesAny` (anything else is a 400), matching the **exact** name, case and all. `author` takes `includesAny` and `includesAll` and matches **any part** of a name, in any case: `["Dumas"]` and `["alexandre dumas"]` both find Alexandre Dumas. An id matches nothing in either.
+  - BookOrbit's source lists more fields (`genre`, `tag`, `addedAt`, `rating` and others); none of them measured yet.
   - `page` is **0-based**: page 1 of a short list comes back empty with the right `total`.
 - **Lists that reject unknown query parameters** (400 `property X should not exist`), with what each accepts:
   - `GET series`: `page, size ≤ 100, q, sort (relevance|name|bookCount|lastAddedAt|readProgress), order, libraryId, completionStatus`. The page adds `facets`. Items: `{id, name, bookCount, readCount, authors: [String], coverBookIds, volumes, gaps, …}`.
@@ -60,7 +62,7 @@ Checked live against v3.6.0, plus BookOrbit's request DTOs for parameter names (
   - `GET authors/{id}/books`: `page, size ≤ 100, sort (title|publishedYear|addedAt), order, libraryId, collapseSeries`. Default `addedAt desc`.
   - `GET search`: `q` (2–200 characters), `limit` (1–10, default 5), `libraryId`. Returns `{query, books, authors, series}`, each `{items: [{item, matchedField, matchedText}], total}`.
 - **Continue reading (#13):** `GET dashboard/scrollers/continue-reading?limit=N` returns `{books: [book], total}`, the list BookOrbit's own home shows, most recently read first. Items are ordinary list books plus `readStatus {status, source, startedAt, finishedAt, updatedAt}`; `readStatus.updatedAt` gives the order. Not paged. Swagger marks `smartScopeId` required, but the call works without it. `dashboard/widgets/currently-reading` lists the same books in a different shape.
-- **Lists that don't validate the query:** `GET collections/{id}/books` (`page, size, q, collapseSeries`) and `GET smart-scopes/{id}/books` (`page, size, q`). `GET collections` and `GET smart-scopes` return plain arrays; either can hold `mediaType: "podcasts"` entries.
+- **Lists that don't validate the query:** `GET collections/{id}/books` (`page, size, q, collapseSeries`) and `GET smart-scopes/{id}/books` (`page, size, q`). Octavo uses their `books/query` forms (step 2 of #131). `GET collections` and `GET smart-scopes` return plain arrays; either can hold `mediaType: "podcasts"` entries.
 - **Shapes to decode tolerantly:**
   - `seriesIndex` is a **string** in 3.6 (`"1"`, `"2.5"`), in lists, in `seriesMemberships` and in the detail.
   - `title` can be `null` in lists.

@@ -40,12 +40,24 @@ public protocol LibrarySource: Sendable {
 
     /// Marks `book` finished, or not, on the server.
     func setFinished(_ finished: Bool, for book: LibraryBook) async throws
+
+    /// What the list at `link` can be sorted and filtered by, and how it is
+    /// now. `nil`: neither (lists of series or authors, search).
+    func order(of link: LibraryLink) -> LibraryListOrder?
+
+    /// The list at `link` sorted by `sort` and showing `filter`, as
+    /// `order(of:)` offers them.
+    func link(_ link: LibraryLink, sortedBy sort: LibrarySort?, showing filter: LibraryFilter) -> LibraryLink
 }
 
 extension LibrarySource {
     public var tracksFinished: Bool { false }
 
     public func setFinished(_ finished: Bool, for book: LibraryBook) async throws {}
+
+    public func order(of link: LibraryLink) -> LibraryListOrder? { nil }
+
+    public func link(_ link: LibraryLink, sortedBy sort: LibrarySort?, showing filter: LibraryFilter) -> LibraryLink { link }
 
     @discardableResult
     public func download(_ file: LibraryFile, to destination: URL) async throws -> URL {

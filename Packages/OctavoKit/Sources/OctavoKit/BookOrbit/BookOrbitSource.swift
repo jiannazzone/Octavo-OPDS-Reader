@@ -37,7 +37,7 @@ public struct BookOrbitSource: LibrarySource {
             ],
             search: .booksSeriesAndAuthors,
             recentlyAdded: BookOrbitRoute.recent(page: 0).link,
-            unread: BookOrbitRoute.unread(page: 0).link,
+            unread: BookOrbitRoute.books(page: 0, filter: .unread).link,
             continueReading: BookOrbitRoute.continueReading.link
         )
     }
@@ -46,14 +46,8 @@ public struct BookOrbitSource: LibrarySource {
         guard let route = BookOrbitRoute(link) else { throw LibraryError.invalidLink }
         return try await mappingErrors {
             switch route {
-            case .books(let page):
-                return bookFeed(try await client.books(sort: [.title], page: page, size: pageSize), title: "All", page: page) { .books(page: $0) }
-            case .recent(let page):
-                return bookFeed(try await client.books(sort: [.newest], page: page, size: pageSize), page: page) { .recent(page: $0) }
-            case .unread(let page):
-                return bookFeed(
-                    try await client.books(filter: .unread, sort: [.title], page: page, size: pageSize), page: page
-                ) { .unread(page: $0) }
+            case .list(let list, let page, let sort, let filter):
+                return try await listFeed(list, page: page, sort: sort ?? list.sorts.first ?? .title, filter: filter)
             case .continueReading:
                 // One page: BookOrbit caps the list (its own home shows 20)
                 // rather than paging it.
@@ -65,22 +59,14 @@ public struct BookOrbitSource: LibrarySource {
                 let entries = try await collections.filter(\.holdsBooks).map(entry)
                     + (try await scopes).filter(\.holdsBooks).map(entry)
                 return LibraryFeed(title: "Collections", entries: entries, total: entries.count)
-            case .collection(let id, let page):
-                return bookFeed(try await client.collectionBooks(collectionID: id, page: page, size: pageSize), page: page) { .collection(id: id, page: $0) }
-            case .smartScope(let id, let page):
-                return bookFeed(try await client.smartScopeBooks(scopeID: id, page: page, size: pageSize), page: page) { .smartScope(id: id, page: $0) }
             case .seriesList(let page):
                 let series = try await client.series(page: page, size: pageSize)
                 return LibraryFeed(title: "Series", entries: series.items.map(entry), total: series.total,
                                    next: next(after: page, of: series) { .seriesList(page: $0) })
-            case .series(let id, let page):
-                return bookFeed(try await client.seriesBooks(seriesID: id, page: page, size: pageSize), page: page) { .series(id: id, page: $0) }
             case .authors(let page):
                 let authors = try await client.authors(page: page, size: pageSize)
                 return LibraryFeed(title: "Authors", entries: authors.items.map(entry), total: authors.total,
                                    next: next(after: page, of: authors) { .authors(page: $0) })
-            case .author(let id, let page):
-                return bookFeed(try await client.authorBooks(authorID: id, page: page, size: pageSize), page: page) { .author(id: id, page: $0) }
             case .search(let query, let page):
                 return try await searchFeed(query, page: page)
             }
@@ -104,6 +90,18 @@ public struct BookOrbitSource: LibrarySource {
                 authors: try await matches.authors.map(entry)
             )
         }
+    }
+
+    public func order(of link: LibraryLink) -> LibraryListOrder? {
+        guard let route = BookOrbitRoute(link), let order = route.order else { return nil }
+        return LibraryListOrder(
+            sorts: route.sorts, filters: LibraryFilter.allCases, sort: order.sort, filter: order.filter,
+            takesRememberedSort: route.takesRememberedSort
+        )
+    }
+
+    public func link(_ link: LibraryLink, sortedBy sort: LibrarySort?, showing filter: LibraryFilter) -> LibraryLink {
+        BookOrbitRoute(link)?.ordered(sort, filter).link ?? link
     }
 
     public var tracksFinished: Bool { true }
@@ -169,6 +167,59 @@ public struct BookOrbitSource: LibrarySource {
             .search(query: query, page: $0)
         }
     }
+
+    /// One page of a list of books, sorted and filtered.
+    private func listFeed(_ list: BookOrbitRoute.BookList, page: Int, sort: LibrarySort, filter: LibraryFilter) async throws -> LibraryFeed {
+        let route = { BookOrbitRoute.list(list, page: $0, sort: list.sorts.isEmpty ? nil : sort, filter: filter) }
+        switch list {
+        case .books:
+            return bookFeed(
+                try await client.books(filter: filter.bookOrbit, sort: [sort.bookOrbit], page: page, size: pageSize), title: "All", page: page, route: route
+            )
+        case .recent:
+            return bookFeed(try await client.books(filter: filter.bookOrbit, sort: [.newest], page: page, size: pageSize), page: page, route: route)
+        case .collection(let id):
+            return bookFeed(
+                try await client.collectionBooks(collectionID: id, filter: filter.bookOrbit, sort: [sort.bookOrbit], page: page, size: pageSize),
+                page: page, route: route
+            )
+        case .smartScope(let id):
+            return bookFeed(
+                try await client.smartScopeBooks(scopeID: id, filter: filter.bookOrbit, sort: [sort.bookOrbit], page: page, size: pageSize),
+                page: page, route: route
+            )
+        case .series(let id) where filter == .all:
+            return bookFeed(try await client.seriesBooks(seriesID: id, sort: sort.bookOrbit, page: page, size: pageSize), page: page, route: route)
+        case .series(let id):
+            return try await filtered(filter) { try await client.seriesBooks(seriesID: id, sort: sort.bookOrbit, page: $0, size: $1) }
+        case .author(let id) where filter == .all:
+            return bookFeed(try await client.authorBooks(authorID: id, sort: sort.bookOrbit, page: page, size: pageSize), page: page, route: route)
+        case .author(let id):
+            return try await filtered(filter) { try await client.authorBooks(authorID: id, sort: sort.bookOrbit, page: $0, size: $1) }
+        }
+    }
+
+    /// Every page of a list that `books/query` can't filter (a series', an
+    /// author's books), keeping what `filter` shows: one page, from up to
+    /// `maxFilteredBooks`. `books/query` matches an author by any part of
+    /// the name ("Dumas"), so it can't stand in (`docs/notes/library-filters.md`).
+    private func filtered(
+        _ filter: LibraryFilter, _ fetch: (_ page: Int, _ size: Int) async throws -> BookOrbitPage<BookOrbitBook>
+    ) async throws -> LibraryFeed {
+        let size = 100
+        var books: [LibraryBook] = []
+        for page in 0..<(Self.maxFilteredBooks / size) {
+            let result = try await fetch(page, size)
+            books += result.items.filter(filter.matches).map(listed)
+            if result.items.count < size || (page + 1) * size >= result.total ?? .max {
+                return LibraryFeed(books: books, total: books.count)
+            }
+        }
+        return LibraryFeed(books: books, total: books.count, loadedOnly: Self.maxFilteredBooks)
+    }
+
+    /// The most books a filtered series or author list reads.
+    static let maxFilteredBooks = 2_000
 
     private func bookFeed(
         _ page: BookOrbitPage<BookOrbitBook>, title: String? = nil, page number: Int,
@@ -295,20 +346,102 @@ private extension BookOrbitSmartScope {
 }
 
 /// What a BookOrbit `LibraryLink` points at, written as a relative URL
-/// (`collections/1?page=2`).
+/// (`collections/1?page=2&sort=author&show=unread`). A list's sort and filter
+/// are written only when they aren't its own.
 enum BookOrbitRoute: Hashable, Sendable {
-    case books(page: Int)
-    case recent(page: Int)
-    case unread(page: Int)
+    /// A list of books. `sort` is one the list offers, `nil` if it offers
+    /// none (`BookList.ordered`).
+    case list(BookList, page: Int, sort: LibrarySort?, filter: LibraryFilter)
     case continueReading
     case collections
-    case collection(id: Int, page: Int)
-    case smartScope(id: Int, page: Int)
     case seriesList(page: Int)
-    case series(id: Int, page: Int)
     case authors(page: Int)
-    case author(id: Int, page: Int)
     case search(query: String, page: Int)
+
+    enum BookList: Hashable, Sendable {
+        case books, recent
+        case collection(Int), smartScope(Int), series(Int), author(Int)
+
+        /// The sorts it offers, its own first.
+        var sorts: [LibrarySort] {
+            switch self {
+            case .books, .collection, .smartScope: [.title, .author, .recentlyAdded]
+            case .series: [.readingOrder, .title, .recentlyAdded]
+            case .author: [.title, .recentlyAdded]
+            case .recent: []
+            }
+        }
+
+        /// Whether it opens in the sort remembered for the server; a
+        /// series' or an author's opens in its own.
+        var takesRememberedSort: Bool {
+            switch self {
+            case .books, .collection, .smartScope: true
+            case .recent, .series, .author: false
+            }
+        }
+
+        var path: String {
+            switch self {
+            case .books: "books"
+            case .recent: "recent"
+            case .collection(let id): "collections/\(id)"
+            case .smartScope(let id): "smart-scopes/\(id)"
+            case .series(let id): "series/\(id)"
+            case .author(let id): "authors/\(id)"
+            }
+        }
+
+        /// `sort` if it's offered, else its own.
+        func sort(_ sort: LibrarySort?) -> LibrarySort? {
+            sort.flatMap { sorts.contains($0) ? $0 : nil } ?? sorts.first
+        }
+    }
+
+    static func books(page: Int, sort: LibrarySort = .title, filter: LibraryFilter = .all) -> Self {
+        .list(.books, page: page, sort: sort, filter: filter)
+    }
+
+    static func recent(page: Int, filter: LibraryFilter = .all) -> Self {
+        .list(.recent, page: page, sort: nil, filter: filter)
+    }
+
+    static func collection(id: Int, page: Int, sort: LibrarySort = .title, filter: LibraryFilter = .all) -> Self {
+        .list(.collection(id), page: page, sort: sort, filter: filter)
+    }
+
+    static func smartScope(id: Int, page: Int, sort: LibrarySort = .title, filter: LibraryFilter = .all) -> Self {
+        .list(.smartScope(id), page: page, sort: sort, filter: filter)
+    }
+
+    static func series(id: Int, page: Int, sort: LibrarySort = .readingOrder, filter: LibraryFilter = .all) -> Self {
+        .list(.series(id), page: page, sort: sort, filter: filter)
+    }
+
+    static func author(id: Int, page: Int, sort: LibrarySort = .title, filter: LibraryFilter = .all) -> Self {
+        .list(.author(id), page: page, sort: sort, filter: filter)
+    }
+
+    /// The sorts a list of books offers, its own first.
+    var sorts: [LibrarySort] {
+        if case .list(let list, _, _, _) = self { list.sorts } else { [] }
+    }
+
+    var takesRememberedSort: Bool {
+        if case .list(let list, _, _, _) = self { list.takesRememberedSort } else { false }
+    }
+
+    /// A list of books' sort and filter. `nil` for the rest.
+    var order: (sort: LibrarySort?, filter: LibraryFilter)? {
+        if case .list(_, _, let sort, let filter) = self { (sort, filter) } else { nil }
+    }
+
+    /// The same list from the top, sorted by `sort` (if it offers it, else
+    /// its own) and showing `filter`.
+    func ordered(_ sort: LibrarySort?, _ filter: LibraryFilter) -> BookOrbitRoute {
+        guard case .list(let list, _, _, _) = self else { return self }
+        return .list(list, page: 0, sort: list.sort(sort), filter: filter)
+    }
 
     var link: LibraryLink {
         var components = URLComponents()
@@ -318,17 +451,14 @@ enum BookOrbitRoute: Hashable, Sendable {
             query.append(URLQueryItem(name: "page", value: String(page)))
         }
         switch self {
-        case .books(let page): paged("books", page)
-        case .recent(let page): paged("recent", page)
-        case .unread(let page): paged("unread", page)
+        case .list(let list, let page, let sort, let filter):
+            paged(list.path, page)
+            if let sort, sort != list.sorts.first { query.append(URLQueryItem(name: "sort", value: sort.rawValue)) }
+            if filter != .all { query.append(URLQueryItem(name: "show", value: filter.rawValue)) }
         case .continueReading: components.path = "continue-reading"
         case .collections: components.path = "collections"
-        case .collection(let id, let page): paged("collections/\(id)", page)
-        case .smartScope(let id, let page): paged("smart-scopes/\(id)", page)
         case .seriesList(let page): paged("series", page)
-        case .series(let id, let page): paged("series/\(id)", page)
         case .authors(let page): paged("authors", page)
-        case .author(let id, let page): paged("authors/\(id)", page)
         case .search(let text, let page):
             query.append(URLQueryItem(name: "q", value: text))
             paged("search", page)
@@ -344,22 +474,62 @@ enum BookOrbitRoute: Hashable, Sendable {
         guard page >= 0 else { return nil }
         let parts = components.path.split(separator: "/", omittingEmptySubsequences: false)
         let id = parts.count == 2 ? Int(parts[1]).flatMap { $0 > 0 ? $0 : nil } : nil
+        let list: BookList
         switch (parts.first, parts.count, id) {
-        case ("books", 1, _): self = .books(page: page)
-        case ("recent", 1, _): self = .recent(page: page)
-        case ("unread", 1, _): self = .unread(page: page)
-        case ("continue-reading", 1, _): self = .continueReading
-        case ("collections", 1, _): self = .collections
-        case ("collections", 2, let id?): self = .collection(id: id, page: page)
-        case ("smart-scopes", 2, let id?): self = .smartScope(id: id, page: page)
-        case ("series", 1, _): self = .seriesList(page: page)
-        case ("series", 2, let id?): self = .series(id: id, page: page)
-        case ("authors", 1, _): self = .authors(page: page)
-        case ("authors", 2, let id?): self = .author(id: id, page: page)
+        case ("books", 1, _): list = .books
+        case ("recent", 1, _): list = .recent
+        case ("collections", 2, let id?): list = .collection(id)
+        case ("smart-scopes", 2, let id?): list = .smartScope(id)
+        case ("series", 2, let id?): list = .series(id)
+        case ("authors", 2, let id?): list = .author(id)
+        case ("continue-reading", 1, _): self = .continueReading; return
+        case ("collections", 1, _): self = .collections; return
+        case ("series", 1, _): self = .seriesList(page: page); return
+        case ("authors", 1, _): self = .authors(page: page); return
         case ("search", 1, _):
             guard let query = items.first(where: { $0.name == "q" })?.value else { return nil }
             self = .search(query: query, page: page)
+            return
         default: return nil
+        }
+        let sort = items.first { $0.name == "sort" }?.value.flatMap(LibrarySort.init(rawValue:))
+        let filter = items.first { $0.name == "show" }?.value.flatMap(LibraryFilter.init(rawValue:)) ?? .all
+        self = .list(list, page: page, sort: list.sort(sort), filter: filter)
+    }
+}
+
+extension LibrarySort {
+    /// The sort as BookOrbit's lists take it: `books/query` (title, author,
+    /// recently added), `series/{id}/books` (reading order, title, recently
+    /// added) and `authors/{id}/books` (title, recently added).
+    var bookOrbit: BookOrbitBookSort {
+        switch self {
+        case .readingOrder: .readingOrder
+        case .title: .title
+        case .author: .author
+        case .recentlyAdded: .newest
+        }
+    }
+}
+
+extension LibraryFilter {
+    /// The `books/query` filter. `nil`: every book.
+    var bookOrbit: BookOrbitBookFilter? {
+        switch self {
+        case .all: nil
+        case .unread: .unread
+        case .reading: .reading
+        case .finished: .finished
+        }
+    }
+
+    /// Whether `book` passes, as `bookOrbit` would on the server.
+    func matches(_ book: BookOrbitBook) -> Bool {
+        switch self {
+        case .all: true
+        case .unread: (book.readingFraction ?? 0) == 0 && (book.readStatus == nil || book.readStatus == "unread")
+        case .reading: book.readStatus == "reading" || book.readStatus == "rereading"
+        case .finished: book.readStatus == "read"
         }
     }
 }

@@ -30,6 +30,9 @@ final class FeedModel {
     /// reload, so pulling down doesn't swap the screen for blank covers, and
     /// through one that fails, which `EmptyFeed` says itself.
     private(set) var cameBackEmpty = false
+    /// The source stopped reading the list after this many books (a
+    /// filtered series or author, #131).
+    private(set) var loadedOnly: Int?
 
     @ObservationIgnored private let library: any LibrarySource
     @ObservationIgnored private let report: (any Error) -> Void
@@ -124,6 +127,7 @@ final class FeedModel {
             entries = feed.entries
             books = feed.books
             cameBackEmpty = feed.entries.isEmpty && feed.books.isEmpty
+            loadedOnly = feed.loadedOnly
         } else {
             entries += feed.entries
             books += feed.books

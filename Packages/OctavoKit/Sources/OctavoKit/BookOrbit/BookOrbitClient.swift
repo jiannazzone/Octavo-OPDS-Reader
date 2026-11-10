@@ -324,9 +324,12 @@ public actor BookOrbitClient {
     // Paged lists below: `page` is 0-based. BookOrbit 3.6 allows `size` up to
     // 100 for series and authors, 200 for `books/query`.
 
-    /// `GET collections/{id}/books`.
-    public func collectionBooks(collectionID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
-        try await get("collections/\(collectionID)/books", query: pageQuery(page, size))
+    /// `POST collections/{id}/books/query`: `books(matching:…)` within the
+    /// collection.
+    public func collectionBooks(
+        collectionID: Int, filter: BookOrbitBookFilter? = nil, sort: [BookOrbitBookSort] = [.title], page: Int = 0, size: Int = 50
+    ) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await query("collections/\(collectionID)/books/query", filter: filter, sort: sort, page: page, size: size)
     }
 
     /// `GET smart-scopes`: saved filters, the user's own plus public ones.
@@ -334,9 +337,12 @@ public actor BookOrbitClient {
         try await get("smart-scopes", as: LossyArray<BookOrbitSmartScope>.self).elements
     }
 
-    /// `GET smart-scopes/{id}/books`, in the scope's own sort order.
-    public func smartScopeBooks(scopeID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
-        try await get("smart-scopes/\(scopeID)/books", query: pageQuery(page, size))
+    /// `POST smart-scopes/{id}/books/query`: `books(matching:…)` within the
+    /// scope, `filter` on top of its own. No `sort`: the scope's own order.
+    public func smartScopeBooks(
+        scopeID: Int, filter: BookOrbitBookFilter? = nil, sort: [BookOrbitBookSort] = [], page: Int = 0, size: Int = 50
+    ) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await query("smart-scopes/\(scopeID)/books/query", filter: filter, sort: sort, page: page, size: size)
     }
 
     /// `POST books/query`: books across every library the user can see.
@@ -345,15 +351,22 @@ public actor BookOrbitClient {
         matching query: String? = nil, filter: BookOrbitBookFilter? = nil, sort: [BookOrbitBookSort] = [],
         page: Int = 0, size: Int = 50
     ) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await self.query("books/query", matching: query, filter: filter, sort: sort, page: page, size: size)
+    }
+
+    /// `books/query`'s body, at `path`. An empty `sort` is left out.
+    private func query(
+        _ path: String, matching query: String? = nil, filter: BookOrbitBookFilter?, sort: [BookOrbitBookSort], page: Int, size: Int
+    ) async throws -> BookOrbitPage<BookOrbitBook> {
         struct Body: Encodable {
             struct Pagination: Encodable { var page: Int; var size: Int }
             var q: String?
             var filter: BookOrbitBookFilter?
-            var sort: [BookOrbitBookSort]
+            var sort: [BookOrbitBookSort]?
             var pagination: Pagination
         }
-        let body = Body(q: query, filter: filter, sort: sort, pagination: .init(page: page, size: size))
-        return try decode(BookOrbitPage<BookOrbitBook>.self, from: try await send(jsonRequest("books/query", method: "POST", body: body)))
+        let body = Body(q: query, filter: filter, sort: sort.isEmpty ? nil : sort, pagination: .init(page: page, size: size))
+        return try decode(BookOrbitPage<BookOrbitBook>.self, from: try await send(jsonRequest(path, method: "POST", body: body)))
     }
 
     /// `GET series`, by name.
@@ -361,9 +374,12 @@ public actor BookOrbitClient {
         try await get("series", query: pageQuery(page, size) + sortQuery("name", "asc"))
     }
 
-    /// `GET series/{id}/books`, in reading order.
-    public func seriesBooks(seriesID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
-        try await get("series/\(seriesID)/books", query: pageQuery(page, size) + sortQuery("seriesIndex", "asc"))
+    /// `GET series/{id}/books`, in reading order unless `sort` is `title` or
+    /// `addedAt`.
+    public func seriesBooks(
+        seriesID: Int, sort: BookOrbitBookSort = .readingOrder, page: Int = 0, size: Int = 50
+    ) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await get("series/\(seriesID)/books", query: pageQuery(page, size) + sortQuery(sort))
     }
 
     /// `GET authors`, by sort name ("Austen, Jane").
@@ -371,9 +387,12 @@ public actor BookOrbitClient {
         try await get("authors", query: pageQuery(page, size) + sortQuery("sortName", "asc"))
     }
 
-    /// `GET authors/{id}/books`, by title.
-    public func authorBooks(authorID: Int, page: Int = 0, size: Int = 50) async throws -> BookOrbitPage<BookOrbitBook> {
-        try await get("authors/\(authorID)/books", query: pageQuery(page, size) + sortQuery("title", "asc"))
+    /// `GET authors/{id}/books`, by title unless `sort` is `publishedYear` or
+    /// `addedAt`.
+    public func authorBooks(
+        authorID: Int, sort: BookOrbitBookSort = .title, page: Int = 0, size: Int = 50
+    ) async throws -> BookOrbitPage<BookOrbitBook> {
+        try await get("authors/\(authorID)/books", query: pageQuery(page, size) + sortQuery(sort))
     }
 
     /// `GET search`: books, series and authors matching `query`, up to
@@ -548,6 +567,10 @@ public actor BookOrbitClient {
 
     private func sortQuery(_ sort: String, _ order: String) -> [URLQueryItem] {
         [URLQueryItem(name: "sort", value: sort), URLQueryItem(name: "order", value: order)]
+    }
+
+    private func sortQuery(_ sort: BookOrbitBookSort) -> [URLQueryItem] {
+        sortQuery(sort.field, sort.descending ? "desc" : "asc")
     }
 
     private func apiURL(_ path: String) -> URL {
