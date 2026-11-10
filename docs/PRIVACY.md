@@ -1,3 +1,5 @@
+<!-- The same words as site/privacy.html, which the website shows: change both. -->
+
 # Octavo Privacy Policy
 
 Last updated: November 8, 2026

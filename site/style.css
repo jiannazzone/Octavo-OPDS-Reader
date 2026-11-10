@@ -152,6 +152,25 @@ figcaption { color: var(--muted); font-size: 15px; margin-top: 12px; text-align:
   .devices-row .phone { width: 60%; max-width: 280px; }
 }
 
+/* Other pages: a thin oxblood bar home, then one column of words */
+
+.bar { background: var(--oxblood); color: #FFF; }
+.bar .wrap { display: flex; align-items: center; height: 64px; }
+.bar a { display: inline-flex; align-items: center; gap: 12px; color: #FFF; text-decoration: none; font-family: var(--serif); font-weight: 700; font-size: 24px; }
+.bar img { width: 36px; height: 36px; border-radius: 22%; }
+
+/* The column starts where the bar's name and the footer do. */
+.doc { padding-top: var(--space-first); }
+.doc > * { max-width: 720px; }
+.doc h1 { font-size: clamp(34px, 5vw, 44px); }
+.doc .updated { color: var(--muted); margin-top: 8px; }
+.doc h2 { font-size: 24px; margin: 40px 0 8px; }
+.doc p, .doc ul { margin: 12px 0 0; }
+.doc ul { padding-left: 22px; }
+.doc li + li { margin-top: 8px; }
+.doc .lead { font-size: 19px; margin-top: 20px; }
+.doc code { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1px 5px; }
+
 .footer {
   margin-top: var(--space-section); padding-top: 28px; padding-bottom: 48px;
   border-top: 1px solid var(--line);
