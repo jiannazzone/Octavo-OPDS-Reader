@@ -285,7 +285,8 @@ struct FeedScreen: View {
     let entry: LibraryEntry
     let source: LibrarySourceID
     @Environment(LibraryModel.self) private var library
-    /// The list as sorted and filtered here. `nil`: as it opened.
+    /// The list as shown: as it opened (in the remembered sort), then as
+    /// sorted and filtered here. `nil` until it appears.
     @State private var picked: LibraryLink?
 
     var body: some View {
@@ -296,7 +297,7 @@ struct FeedScreen: View {
                 Group {
                     if feed.cameBackEmpty {
                         EmptyFeed(entry: entry, feed: feed, filter: order?.filter ?? .all) {
-                            picked = books.link(link, sortedBy: order?.sort, showing: .all)
+                            show(books.link(link, sortedBy: order?.sort, showing: .all), after: link)
                         }
                     } else {
                         FeedContent(feed: feed, numbered: entry.kind == .series) {
@@ -316,16 +317,23 @@ struct FeedScreen: View {
                     if let order {
                         ListOrderButtons(order: order) { sort, filter in
                             if let sort, sort != order.sort, order.takesRememberedSort { SavedSorts.remember(sort, for: source) }
-                            picked = books.link(link, sortedBy: sort, showing: filter)
+                            show(books.link(link, sortedBy: sort, showing: filter), after: link)
                         }
                     }
                 }
+                .onAppear { if picked == nil { picked = link } }
             } else {
                 LibraryNotConnected()
             }
         } else {
             LibraryNotConnected()
         }
+    }
+
+    private func show(_ next: LibraryLink, after shown: LibraryLink) {
+        guard next != shown else { return }
+        picked = next
+        library.moved(off: shown, from: source)
     }
 
     /// "5 books", "Series · 3 books". Filtered, the list's name comes first,
@@ -469,6 +477,11 @@ struct FeedContent<Header: View>: View {
             } else {
                 Button("Couldn’t load the rest · Try again") { Task { await feed.retry() } }
             }
+        case .loaded where feed.loadedOnly != nil:
+            Text("Only the first \((feed.loadedOnly ?? 0).formatted()) books were loaded.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 12)
         default:
             EmptyView()
         }

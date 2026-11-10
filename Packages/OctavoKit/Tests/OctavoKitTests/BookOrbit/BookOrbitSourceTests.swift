@@ -346,9 +346,24 @@ struct BookOrbitSourceTests {
         #expect(feed.books.map(\.id.rawValue) == (3...101).map(String.init))
         #expect(feed.total == 99)
         #expect(feed.next == nil)
+        #expect(feed.loadedOnly == nil)
         #expect(server.requests.map(\.path) == [path, path])
         #expect(server.requests.map { $0.query["page"] } == ["0", "1"])
         #expect(server.requests.allSatisfy { $0.query["size"] == "100" && $0.query["sort"] == sort })
+    }
+
+    @Test func aFilteredListSaysWhereItStopped() async throws {
+        let server = StubServer { request in
+            let page = Int(request.query["page"] ?? "") ?? 0
+            let books = (1...100).map { #"{"id":\#(page * 100 + $0),"title":"Book"}"# }
+            return .json(#"{"items":[\#(books.joined(separator: ","))],"total":2500,"page":\#(page),"size":100}"#)
+        }
+
+        let feed = try await source(server).feed(link(.author(id: 5, page: 0, filter: .unread)))
+
+        #expect(feed.books.count == 2_000)
+        #expect(feed.loadedOnly == 2_000)
+        #expect(server.requests.count == 20)
     }
 
     @Test(arguments: [

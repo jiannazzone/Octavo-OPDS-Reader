@@ -310,6 +310,23 @@ final class LibraryModel {
         return feed
     }
 
+    /// Lists filtered by read status (#131), which a new mark changes.
+    private func reloadFiltered(from source: LibrarySourceID) {
+        guard let library = self.source(for: source) else { return }
+        for (key, feed) in feeds where key.source == source && feed.state == .loaded && (library.order(of: key.link)?.filter ?? .all) != .all {
+            Task { await feed.reload() }
+        }
+    }
+
+    /// A sorted or filtered list the reader moved off (#131): dropped, so
+    /// trying each order doesn't keep every one for good. A list in its own
+    /// order, and the Unread shelf's, stay for the shelves.
+    func moved(off link: LibraryLink, from source: LibrarySourceID) {
+        guard let order = self.source(for: source)?.order(of: link), order.sort != order.sorts.first || order.filter != .all,
+              link != connection(source)?.root?.unread else { return }
+        feeds[FeedKey(source: source, link: link)] = nil
+    }
+
     /// The first few books at `link`, for a collection's row: from the
     /// server's preview source when it has one, else the list itself.
     func preview(_ link: LibraryLink, from source: LibrarySourceID) -> FeedModel? {
@@ -414,6 +431,7 @@ final class LibraryModel {
         } else {
             finishedOnIPhone = self.finished.books()
         }
+        reloadFiltered(from: book.source)
         guard finished else { return }
         try? recents.remove(book)
         connection(book.source)?.continueReading.removeAll { $0.id == book }

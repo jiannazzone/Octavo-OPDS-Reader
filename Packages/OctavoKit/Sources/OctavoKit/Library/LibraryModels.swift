@@ -102,13 +102,20 @@ public struct LibraryFeed: Hashable, Codable, Sendable {
     public var total: Int?
     /// The next page; `nil` on the last one.
     public var next: LibraryLink?
+    /// Set when the source stopped reading the list before its end (to
+    /// filter it on the iPhone): how many books it read.
+    public var loadedOnly: Int?
 
-    public init(title: String? = nil, entries: [LibraryEntry] = [], books: [LibraryBook] = [], total: Int? = nil, next: LibraryLink? = nil) {
+    public init(
+        title: String? = nil, entries: [LibraryEntry] = [], books: [LibraryBook] = [], total: Int? = nil, next: LibraryLink? = nil,
+        loadedOnly: Int? = nil
+    ) {
         self.title = title
         self.entries = entries
         self.books = books
         self.total = total
         self.next = next
+        self.loadedOnly = loadedOnly
     }
 }
 

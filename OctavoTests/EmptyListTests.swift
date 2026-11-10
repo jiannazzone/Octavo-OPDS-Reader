@@ -36,6 +36,7 @@ struct EmptyListTests {
         #expect(EmptyListWording(filter: .unread) == EmptyListWording(title: "No unread books", message: "Books you haven’t started show here."))
         #expect(EmptyListWording(filter: .reading) == EmptyListWording(title: "No books in progress", message: "Books you’re reading show here."))
         #expect(EmptyListWording(filter: .finished) == EmptyListWording(title: "No finished books", message: "Books you finish show here."))
+        #expect(EmptyListWording(filter: .all) == nil)
     }
 
     // The right page's heading matches the shelf's.

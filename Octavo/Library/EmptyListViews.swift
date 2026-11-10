@@ -31,10 +31,12 @@ nonisolated struct EmptyListWording: Equatable {
         self.message = message
     }
 
-    /// A list filtered to nothing (#131).
-    init(filter: LibraryFilter) {
+    /// A list filtered to nothing (#131). `nil` for one that isn't filtered.
+    init?(filter: LibraryFilter) {
         switch filter {
-        case .all, .unread:
+        case .all:
+            return nil
+        case .unread:
             title = "No unread books"
             message = "Books you haven’t started show here."
         case .reading:
@@ -64,8 +66,7 @@ struct EmptyFeed: View {
             if feed.state == .failed, library.connection(feed.source)?.problem == nil {
                 FeedFailedInvitation(feed: feed)
                     .scrollingOnItsPage()
-            } else if filter != .all {
-                let wording = EmptyListWording(filter: filter)
+            } else if let wording = EmptyListWording(filter: filter) {
                 EmptyInvitation(
                     symbol: "books.vertical", title: wording.title, message: wording.message, actionTitle: "Show All Books", action: showAll
                 )
