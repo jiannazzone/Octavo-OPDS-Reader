@@ -5,10 +5,42 @@ import SwiftUI
 // file is on this iPhone, downloaded or imported. The same book as on its
 // server's shelves, not a copy.
 
-/// On iPhone, opened from its shelf or by an import.
+/// On iPhone, opened from its shelf or by an import, with Sort and Filter
+/// (#131).
 struct OnIPhoneScreen: View {
+    @AppStorage(OnIPhoneOrder.sortKey) private var sort = LibrarySort.title
+    @State private var filter = LibraryFilter.all
+    @Environment(ShellModel.self) private var shell
+
     var body: some View {
-        OnIPhoneContent()
+        let order = OnIPhoneOrder.order(sort, filter)
+        OnIPhoneContent(order: order) { filter = .all }
+            .modifier(FilteredTitle(filter: filter))
+            .toolbar {
+                if !shell.onIPhoneBooks().isEmpty {
+                    ListOrderButtons(order: order) { sort, filter in
+                        if let sort { self.sort = sort }
+                        self.filter = filter
+                    }
+                }
+            }
+    }
+}
+
+extension ShellModel {
+    /// Where `book` stands by Octavo's own record (#131): finished if
+    /// marked, reading once it has a place, else unread. What another
+    /// reader did shows only once its place syncs here.
+    func status(of book: SourcedBook) -> LibraryFilter {
+        if library.isFinished(book) { return .finished }
+        return places.progress(of: book) == nil ? .unread : .reading
+    }
+
+    /// The books on the iPhone in `sort` order, showing `filter`.
+    func onIPhoneBooks(sortedBy sort: LibrarySort, showing filter: LibraryFilter) -> [SourcedBook] {
+        _ = library.importedBooks
+        let books = OnIPhoneOrder.sorted(downloads().filter { library.source(for: $0.book.source) != nil }, by: sort).map(\.book)
+        return filter == .all ? books : books.filter { status(of: $0) == filter }
     }
 }
 
@@ -18,12 +50,23 @@ struct OnIPhoneScreen: View {
 struct OnIPhoneContent: View {
     /// No server yet: the card that offers one.
     var offersServer = false
+    /// Sorted and filtered (On iPhone's screen). `nil`: newest first.
+    var order: LibraryListOrder?
+    var showAll: () -> Void = {}
     @Environment(LibraryModel.self) private var library
     @Environment(ShellModel.self) private var shell
 
     var body: some View {
-        let books = shell.onIPhoneBooks()
-        if books.isEmpty {
+        let filter = order?.filter ?? .all
+        let books = order.map { shell.onIPhoneBooks(sortedBy: $0.sort ?? .title, showing: $0.filter) } ?? shell.onIPhoneBooks()
+        if books.isEmpty, let wording = EmptyListWording(filter: filter) {
+            EmptyPages(server: library.server?.id) {
+                EmptyInvitation(
+                    symbol: "books.vertical", title: wording.title, message: wording.message, actionTitle: "Show All Books", action: showAll
+                )
+                .scrollingOnItsPage()
+            }
+        } else if books.isEmpty {
             EmptyPages(server: library.server?.id) {
                 VStack(spacing: 14) {
                     ImportFailureBanner()
@@ -43,7 +86,9 @@ struct OnIPhoneContent: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text(books.count == 1 ? "1 book" : "\(books.count) books")
+                        // Filtered, the list's name comes first, as on a
+                        // server's lists ("On iPhone · 3 books").
+                        Text((filter == .all ? "" : "On \(ThisDevice.name) · ") + (books.count == 1 ? "1 book" : "\(books.count) books"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         ImportFailureBanner()

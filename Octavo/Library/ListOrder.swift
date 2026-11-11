@@ -13,6 +13,7 @@ extension LibrarySort {
         case .title: "Title"
         case .author: "Author"
         case .recentlyAdded: "Recently added"
+        case .recentlyDownloaded: "Recently downloaded"
         }
     }
 }
@@ -105,5 +106,44 @@ struct ListOrderButtons: ToolbarContent {
             Label("Filter", systemImage: "line.3.horizontal.decrease")
         }
         .accessibilityValue(order.filter.title)
+    }
+}
+
+/// While a list is filtered, its title is what's shown ("Unread"; Adam,
+/// 2026-11-09). Otherwise the route's.
+struct FilteredTitle: ViewModifier {
+    let filter: LibraryFilter?
+
+    func body(content: Content) -> some View {
+        if let filter, filter != .all {
+            content.navigationTitle(filter.title)
+        } else {
+            content
+        }
+    }
+}
+
+/// On iPhone's Sort and Filter (#131): Title, Author or Recently downloaded
+/// (Books on iPhone's own orders), remembered on the iPhone, and each
+/// book's status from Octavo's own record (`ShellModel.status(of:)`).
+nonisolated enum OnIPhoneOrder {
+    static let sortKey = "library.onIPhone.sort"
+    static let sorts: [LibrarySort] = [.title, .author, .recentlyDownloaded]
+
+    static func order(_ sort: LibrarySort, _ filter: LibraryFilter) -> LibraryListOrder {
+        LibraryListOrder(
+            sorts: sorts, filters: LibraryFilter.allCases, sort: sorts.contains(sort) ? sort : .title, filter: filter,
+            takesRememberedSort: false
+        )
+    }
+
+    /// Books on iPhone's own orders (`DownloadOrder`).
+    static func sorted(_ books: [DownloadedBook], by sort: LibrarySort) -> [DownloadedBook] {
+        let order: DownloadOrder = switch sort {
+        case .author: .author
+        case .recentlyDownloaded: .downloaded
+        case .title, .readingOrder, .recentlyAdded: .title
+        }
+        return order.sorted(books)
     }
 }

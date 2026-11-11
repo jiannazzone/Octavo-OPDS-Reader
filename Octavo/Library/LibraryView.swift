@@ -347,20 +347,6 @@ struct FeedScreen: View {
     }
 }
 
-/// While a list is filtered, its title is what's shown ("Unread"; Adam,
-/// 2026-11-09). Otherwise the route's.
-private struct FilteredTitle: ViewModifier {
-    let filter: LibraryFilter?
-
-    func body(content: Content) -> some View {
-        if let filter, filter != .all {
-            content.navigationTitle(filter.title)
-        } else {
-            content
-        }
-    }
-}
-
 /// One list from a library across the spread: entries flowing down the left
 /// page and on down the right (authors under their letters), books as a
 /// grid across both pages, or both when an OPDS feed mixes them. `header`

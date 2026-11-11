@@ -61,7 +61,8 @@ struct ListOrderTests {
     }
 
     @MainActor @Test func theMenusSayWhatEachChoiceIs() {
-        #expect([LibrarySort.readingOrder, .title, .author, .recentlyAdded].map(\.title) == ["Reading order", "Title", "Author", "Recently added"])
+        #expect([LibrarySort.readingOrder, .title, .author, .recentlyAdded, .recentlyDownloaded].map(\.title)
+            == ["Reading order", "Title", "Author", "Recently added", "Recently downloaded"])
         #expect(LibraryFilter.allCases.map(\.title) == ["All books", "Unread", "Reading", "Finished"])
     }
 
@@ -72,5 +73,43 @@ struct ListOrderTests {
         let opens = LibraryView.opens(root)
         #expect(opens == [unread: LibraryEntry(kind: .feed, title: "All", link: unread)])
         #expect(LibraryView.sections(root).first { $0.link == unread }?.title == "Unread")
+    }
+}
+
+/// On iPhone's Sort and Filter (#131): Books on iPhone's orders, and each
+/// book's status from Octavo's own record.
+@MainActor @Suite(.temporaryFiles)
+struct OnIPhoneOrderTests {
+    @Test func offersTitleAuthorAndRecentlyDownloaded() {
+        let order = OnIPhoneOrder.order(.author, .unread)
+        #expect(order.sorts == [.title, .author, .recentlyDownloaded])
+        #expect(order.filters == LibraryFilter.allCases)
+        #expect(order.sort == .author)
+        #expect(order.filter == .unread)
+        // A sort it doesn't offer (a server's) is its own.
+        #expect(OnIPhoneOrder.order(.recentlyAdded, .all).sort == .title)
+    }
+
+    @Test(arguments: [
+        (LibrarySort.title, ["Moby-Dick", "Pride and Prejudice", "The Time Machine"]),
+        (.author, ["Pride and Prejudice", "Moby-Dick", "The Time Machine"]),
+        (.recentlyDownloaded, ["Moby-Dick", "The Time Machine", "Pride and Prejudice"]),
+    ])
+    func sortsAsBooksOnIPhoneDoes(sort: LibrarySort, titles: [String]) {
+        #expect(OnIPhoneOrder.sorted(DownloadOrderTests.books, by: sort).map(\.book.book.title) == titles)
+    }
+
+    // No place is unread, a place is reading, a Finished mark is finished.
+    @Test func eachBooksStatusIsOctavosRecord() {
+        let shell = makeShell()
+        func book(progress: Double? = nil, finished: Bool? = nil) -> SourcedBook {
+            SourcedBook(source: .files, book: LibraryBook(
+                id: LibraryBookID(rawValue: UUID().uuidString), title: "Book", progress: progress, isFinished: finished
+            ))
+        }
+        #expect(shell.status(of: book()) == .unread)
+        #expect(shell.status(of: book(progress: 0.3)) == .reading)
+        #expect(shell.status(of: book(progress: 0.3, finished: true)) == .finished)
+        #expect(shell.status(of: book(finished: true)) == .finished)
     }
 }
