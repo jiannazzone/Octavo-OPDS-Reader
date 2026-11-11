@@ -22,6 +22,14 @@ The first of the three pull requests, approved from simulator screenshots:
 - **Empty:** "No unread books" / "Books you haven’t started show here.", "No books in progress" / "Books you’re reading show here.", "No finished books" / "Books you finish show here.", each with Show All Books.
 - The Library's All shelf stays in title order whatever sort is remembered.
 
+## Built for On iPhone (Adam, 2026-11-11)
+
+The second pull request, approved from simulator screenshots:
+
+- **Sort:** Title (the default), Author, Recently downloaded: Books on iPhone's own orders (`DownloadOrder`), remembered on the iPhone apart from any server's. "Recently downloaded", not "Recently added", because it's when the file came onto the iPhone (downloaded or imported), not when the server got the book. Octavo's records don't keep a server's added date, Calibre-Web sends none, and imported books have none.
+- **Filter:** each book's status from Octavo's own record (`ShellModel.status(of:)`): a Finished mark is Finished, a place (the iPhone's, or the server's once Octavo knows it) is Reading, else Unread.
+- The Library's On iPhone shelf keeps newest first. With no server, the Library lists the books itself and has no Sort or Filter.
+
 ## What each library can do
 
 Measured against the local servers (`dev/bookorbit/`, `dev/opds/`). Timing used throwaway copies with **2,000 books**: a calibre library made with `calibredb` and served by separate COPS and Calibre-Web containers, and 2,000 tiny EPUBs in 200 folders for Komga. All times are on this Mac with no Wi-Fi in the way, so they show the server's own speed.

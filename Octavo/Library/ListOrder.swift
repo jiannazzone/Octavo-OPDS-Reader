@@ -17,6 +17,13 @@ extension LibrarySort {
     }
 }
 
+/// A list's count under its title: "5 books", or with `list` first ("All ·
+/// 65 books", "Series · 3 books"), as a filtered list names what it's from.
+nonisolated func booksLine(_ count: Int, in list: String? = nil) -> String {
+    let books = count == 1 ? "1 book" : "\(count) books"
+    return list.map { "\($0) · \(books)" } ?? books
+}
+
 extension LibraryFilter {
     /// In the menu.
     var title: String {
@@ -66,6 +73,8 @@ nonisolated enum SavedSorts {
 /// elsewhere. Only Filter fills, while it hides books.
 struct ListOrderButtons: ToolbarContent {
     let order: LibraryListOrder
+    /// What each sort is called on this list.
+    var sortTitle: (LibrarySort) -> String = \.title
     let pick: (LibrarySort?, LibraryFilter) -> Void
 
     var body: some ToolbarContent {
@@ -73,13 +82,13 @@ struct ListOrderButtons: ToolbarContent {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Picker("Sort by", selection: Binding { order.sort } set: { pick($0, order.filter) }) {
-                        ForEach(order.sorts, id: \.self) { Text($0.title).tag(Optional($0)) }
+                        ForEach(order.sorts, id: \.self) { Text(sortTitle($0)).tag(Optional($0)) }
                     }
                     .pickerStyle(.inline)
                 } label: {
                     Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
-                .accessibilityValue(order.sort?.title ?? "")
+                .accessibilityValue(order.sort.map(sortTitle) ?? "")
             }
         }
         if !order.filters.isEmpty {
@@ -105,5 +114,51 @@ struct ListOrderButtons: ToolbarContent {
             Label("Filter", systemImage: "line.3.horizontal.decrease")
         }
         .accessibilityValue(order.filter.title)
+    }
+}
+
+/// While a list is filtered, its title is what's shown ("Unread"; Adam,
+/// 2026-11-09). Otherwise the route's.
+struct FilteredTitle: ViewModifier {
+    let filter: LibraryFilter?
+
+    func body(content: Content) -> some View {
+        if let filter, filter != .all {
+            content.navigationTitle(filter.title)
+        } else {
+            content
+        }
+    }
+}
+
+/// On iPhone's Sort and Filter (#131): Title, Author or Recently downloaded
+/// (Books on iPhone's own orders), remembered on the iPhone, and each
+/// book's status from Octavo's own record (`ShellModel.status(of:)`).
+nonisolated enum OnIPhoneOrder {
+    static let sortKey = "library.onIPhone.sort"
+    /// `recentlyAdded` is when the file came onto the iPhone here.
+    static let sorts: [LibrarySort] = [.title, .author, .recentlyAdded]
+
+    /// "Recently downloaded", not "Recently added": it's the iPhone's date,
+    /// not the server's (Adam, 2026-11-11).
+    @MainActor static func title(_ sort: LibrarySort) -> String {
+        sort == .recentlyAdded ? "Recently downloaded" : sort.title
+    }
+
+    static func order(_ sort: LibrarySort, _ filter: LibraryFilter) -> LibraryListOrder {
+        LibraryListOrder(
+            sorts: sorts, filters: LibraryFilter.allCases, sort: sorts.contains(sort) ? sort : .title, filter: filter,
+            takesRememberedSort: false
+        )
+    }
+
+    /// Books on iPhone's own orders (`DownloadOrder`).
+    static func sorted(_ books: [DownloadedBook], by sort: LibrarySort) -> [DownloadedBook] {
+        let order: DownloadOrder = switch sort {
+        case .author: .author
+        case .recentlyAdded: .downloaded
+        case .title, .readingOrder: .title
+        }
+        return order.sorted(books)
     }
 }

@@ -341,23 +341,8 @@ struct FeedScreen: View {
     /// for lists of lists.
     private func summary(_ feed: FeedModel, filtered: Bool) -> String? {
         guard feed.entries.isEmpty, let count = feed.total ?? (filtered ? nil : entry.count) else { return nil }
-        let books = count == 1 ? "1 book" : "\(count) books"
-        if filtered { return "\(ShellRoute.feed(entry, from: source).title ?? entry.title) · \(books)" }
-        return entry.kind == .series ? "Series · \(books)" : books
-    }
-}
-
-/// While a list is filtered, its title is what's shown ("Unread"; Adam,
-/// 2026-11-09). Otherwise the route's.
-private struct FilteredTitle: ViewModifier {
-    let filter: LibraryFilter?
-
-    func body(content: Content) -> some View {
-        if let filter, filter != .all {
-            content.navigationTitle(filter.title)
-        } else {
-            content
-        }
+        if filtered { return booksLine(count, in: ShellRoute.feed(entry, from: source).title ?? entry.title) }
+        return booksLine(count, in: entry.kind == .series ? "Series" : nil)
     }
 }
 
