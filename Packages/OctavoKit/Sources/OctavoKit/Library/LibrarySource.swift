@@ -48,6 +48,10 @@ public protocol LibrarySource: Sendable {
     /// The list at `link` sorted by `sort` and showing `filter`, as
     /// `order(of:)` offers them.
     func link(_ link: LibraryLink, sortedBy sort: LibrarySort?, showing filter: LibraryFilter) -> LibraryLink
+
+    /// The list at `link` in pages as large as the server allows, up to
+    /// `count` items, for loading it whole to sort or filter on the iPhone.
+    func wholeList(_ link: LibraryLink, upTo count: Int) -> LibraryLink
 }
 
 extension LibrarySource {
@@ -58,6 +62,8 @@ extension LibrarySource {
     public func order(of link: LibraryLink) -> LibraryListOrder? { nil }
 
     public func link(_ link: LibraryLink, sortedBy sort: LibrarySort?, showing filter: LibraryFilter) -> LibraryLink { link }
+
+    public func wholeList(_ link: LibraryLink, upTo count: Int) -> LibraryLink { link }
 
     @discardableResult
     public func download(_ file: LibraryFile, to destination: URL) async throws -> URL {

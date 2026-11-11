@@ -101,6 +101,23 @@ final class FeedModel {
         }
     }
 
+    /// Every page until `maxBooks` books, for a list sorted or filtered on
+    /// the iPhone (#131). `hasMore` afterwards: it stopped at the cap.
+    func loadAll(maxBooks: Int) async {
+        await load()
+        while state == .loaded, hasMore, books.count < maxBooks, !Task.isCancelled {
+            let before = books.count
+            await loadMore()
+            // A page with no books on it: the server's paging went wrong.
+            if books.count == before { break }
+        }
+    }
+
+    /// The most books a list sorted or filtered on the iPhone loads (Adam,
+    /// 2026-11-09). From 0.4 to 5 s on this Mac at 2,000
+    /// (`docs/notes/library-filters.md`).
+    static let maxBooksToArrange = 2_000
+
     private func run(reset: Bool, _ page: LibraryLink) async {
         state = .loading
         let task = Task {

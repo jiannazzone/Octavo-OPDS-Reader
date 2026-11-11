@@ -178,6 +178,37 @@ struct FeedModelTests {
         #expect(feed.hasMore)
     }
 
+    // A list sorted or filtered on the iPhone (#131): every page up to the
+    // cap, and `hasMore` says it stopped there.
+    @Test func loadingAWholeListStopsAtItsCap() async throws {
+        var pages: [String: LibraryFeed] = [:]
+        for page in 0..<10 {
+            pages["p\(page)"] = LibraryFeed(books: [book("\(page)a"), book("\(page)b")], next: page < 9 ? link("p\(page + 1)") : nil)
+        }
+        let library = await connected(PagedSource(pages: pages))
+        let capped = try #require(library.feed(link("p0"), from: server))
+        await capped.loadAll(maxBooks: 7)
+        #expect(capped.books.count == 8)
+        #expect(capped.hasMore)
+
+        let whole = try #require(library.feed(link("p5"), from: server))
+        await whole.loadAll(maxBooks: 100)
+        #expect(whole.books.count == 10)
+        #expect(!whole.hasMore)
+    }
+
+    // A page with no books on it ends the load rather than looping on.
+    @Test func aWholeListStopsAtAnEmptyPage() async throws {
+        let library = await connected(PagedSource(pages: [
+            "q0": LibraryFeed(books: [book("1")], next: link("q1")),
+            "q1": LibraryFeed(next: link("q2")),
+            "q2": LibraryFeed(books: [book("2")]),
+        ]))
+        let feed = try #require(library.feed(link("q0"), from: server))
+        await feed.loadAll(maxBooks: 100)
+        #expect(feed.books.map(\.title) == ["1"])
+    }
+
     @Test func keepsOneModelPerList() async throws {
         let library = await connected(PagedSource(pages: Self.pages))
         let feed = try #require(library.feed(link("a"), from: server))

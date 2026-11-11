@@ -129,3 +129,42 @@ struct OnIPhoneOrderTests {
         #expect(booksLine(65, in: "All") == "All · 65 books")
     }
 }
+
+/// An OPDS list sorted on the iPhone (#131): title, or author then title,
+/// filed as the Authors list is.
+struct BookOrderTests {
+    private static func book(_ title: String, by author: String) -> LibraryBook {
+        LibraryBook(id: LibraryBookID(rawValue: title), title: title, authors: [author])
+    }
+
+    static let books = [
+        book("The Time Machine", by: "H. G. Wells"),
+        book("Pride and Prejudice", by: "Jane Austen"),
+        book("Emma", by: "Jane Austen"),
+        book("Moby-Dick", by: "Herman Melville"),
+    ]
+
+    @Test(arguments: [
+        (LibrarySort.listOrder, ["The Time Machine", "Pride and Prejudice", "Emma", "Moby-Dick"]),
+        (.title, ["Emma", "Moby-Dick", "Pride and Prejudice", "The Time Machine"]),
+        (.author, ["Emma", "Pride and Prejudice", "Moby-Dick", "The Time Machine"]),
+    ])
+    func sortsByTitleOrAuthor(sort: LibrarySort, titles: [String]) {
+        #expect(BookOrder.sorted(Self.books, by: sort).map(\.title) == titles)
+    }
+
+    @Test func anOPDSListOpensInTheCatalogsOrder() {
+        #expect(!LocalOrder().isOn)
+        #expect(LocalOrder(sort: .title).isOn)
+        #expect(LocalOrder(filter: .unread).isOn)
+        #expect(LocalOrder.sorts == [.listOrder, .title, .author])
+    }
+
+    @MainActor @Test func defaultIsTheCatalogsOrder() {
+        #expect(LibrarySort.listOrder.title == "Default")
+    }
+
+    @Test func countsReadWithSeparators() {
+        #expect(booksLine(2_000) == "2,000 books")
+    }
+}

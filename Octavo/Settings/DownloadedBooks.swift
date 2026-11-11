@@ -38,10 +38,10 @@ nonisolated enum DownloadOrder: String, CaseIterable, Identifiable, Sendable {
             case .size:
                 if a.size != b.size { return a.size > b.size }
             case .title:
-                let order = a.book.book.title.localizedStandardCompare(b.book.book.title)
+                let order = BookOrder.title(a.book.book).localizedStandardCompare(BookOrder.title(b.book.book))
                 if order != .orderedSame { return order == .orderedAscending }
             case .author:
-                let order = Self.authorKey(a).localizedStandardCompare(Self.authorKey(b))
+                let order = BookOrder.author(a.book.book).localizedStandardCompare(BookOrder.author(b.book.book))
                 if order != .orderedSame { return order == .orderedAscending }
             case .downloaded:
                 if a.downloadedAt != b.downloadedAt { return a.downloadedAt > b.downloadedAt }
@@ -49,10 +49,36 @@ nonisolated enum DownloadOrder: String, CaseIterable, Identifiable, Sendable {
             return a.book.book.title.localizedStandardCompare(b.book.book.title) == .orderedAscending
         }
     }
+}
+
+/// Title and author order for books sorted on the iPhone: Books on iPhone's
+/// and On iPhone's, and an OPDS list's (#131).
+nonisolated enum BookOrder {
+    static func title(_ book: LibraryBook) -> String {
+        book.title
+    }
 
     /// Filed by last name, as the Authors list is.
-    private static func authorKey(_ book: DownloadedBook) -> String {
-        book.book.book.authors.first.map(AuthorIndex.sortKey(name:)) ?? ""
+    static func author(_ book: LibraryBook) -> String {
+        book.authors.first.map(AuthorIndex.sortKey(name:)) ?? ""
+    }
+
+    /// `books` by title, or by author then title. Any other sort leaves them
+    /// in the list's order.
+    static func sorted(_ books: [LibraryBook], by sort: LibrarySort) -> [LibraryBook] {
+        let key: (LibraryBook) -> String
+        switch sort {
+        case .title: key = title
+        case .author: key = author
+        case .listOrder, .readingOrder, .recentlyAdded: return books
+        }
+        // Each key once: 2,000 books compare about 22,000 times.
+        return books.map { (key: key($0), title: $0.title, book: $0) }
+            .sorted { a, b in
+                let order = a.key.localizedStandardCompare(b.key)
+                return order == .orderedSame ? a.title.localizedStandardCompare(b.title) == .orderedAscending : order == .orderedAscending
+            }
+            .map(\.book)
     }
 }
 
