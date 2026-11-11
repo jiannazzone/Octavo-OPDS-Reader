@@ -30,6 +30,17 @@ The second pull request, approved from simulator screenshots:
 - **Filter:** each book's status from Octavo's own record (`ShellModel.status(of:)`): a Finished mark is Finished, a place (the iPhone's, or the server's once Octavo knows it) is Reading, else Unread.
 - The Library's On iPhone shelf keeps newest first. With no server, the Library lists the books itself and has no Sort or Filter.
 
+## Built for OPDS (Adam, 2026-11-11)
+
+The third pull request:
+
+- **When:** an OPDS link doesn't say whether it lists books, so the buttons appear once a list's first page shows books and no other lists. COPS's "All books" is a list of letters, so only each letter's list has them.
+- **Sort:** Default (the catalog's order), Title, Author, sorted on the iPhone (`BookOrder`). COPS sorts on the server instead (`OPDSSource.order(of:)`, `?sort=title|author|timestamp desc`), and adds Recently added; it's known by its root's ID, `cops:catalog`.
+- **Filter:** Octavo's own record, as On iPhone (`ShellModel.status(of:)`).
+- **Loading:** a sort or filter done on the iPhone loads the whole list first (`FeedModel.loadAll(maxBooks:)`, `ArrangedFeed`): "Loading books…" over "600 of 2,000", or "600 books" without a server total, then the list at once. It stops at 2,000 books and says so ("Only the first 2,000 books were loaded."). On a throwaway 2,000-book Calibre-Web it took about 5 s, as measured in the table below.
+- **Komga** loads a whole list in one request (`OPDSSource.wholeList`, `page=0&size=2000`), recognised by its catalog path `/opds/v1.2/catalog`.
+- **Not remembered:** every OPDS list opens in the catalog's order, so opening one never starts a long load; COPS's server sort isn't remembered either.
+
 ## What each library can do
 
 Measured against the local servers (`dev/bookorbit/`, `dev/opds/`). Timing used throwaway copies with **2,000 books**: a calibre library made with `calibredb` and served by separate COPS and Calibre-Web containers, and 2,000 tiny EPUBs in 200 folders for Komga. All times are on this Mac with no Wi-Fi in the way, so they show the server's own speed.

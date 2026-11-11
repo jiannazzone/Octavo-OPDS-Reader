@@ -288,17 +288,23 @@ struct FeedScreen: View {
     /// The list as shown: as it opened (in the remembered sort), then as
     /// sorted and filtered here. `nil` until it appears.
     @State private var picked: LibraryLink?
+    /// An OPDS list's sort and filter, done here (`ArrangedFeed`).
+    @State private var local = LocalOrder()
 
     var body: some View {
         if let books = library.source(for: source) {
             let link = picked ?? SavedSorts.opening(entry.link, from: books, server: source)
-            let order = books.order(of: link)
             if let feed = library.feed(link, from: source) {
+                let server = books.order(of: link)
+                let order = offered(server, feed)
                 Group {
                     if feed.cameBackEmpty {
                         EmptyFeed(entry: entry, feed: feed, filter: order?.filter ?? .all) {
                             show(books.link(link, sortedBy: order?.sort, showing: .all), after: link)
                         }
+                    } else if local.isOn,
+                              let whole = library.wholeFeed(books.wholeList(link, upTo: FeedModel.maxBooksToArrange), of: link, from: source) {
+                        ArrangedFeed(feed: whole, list: listTitle, sort: local.sort, filter: local.filter) { local.filter = .all }
                     } else {
                         FeedContent(feed: feed, numbered: entry.kind == .series) {
                             if let summary = summary(feed, filtered: order.map { $0.filter != .all } ?? false) {
@@ -316,8 +322,17 @@ struct FeedScreen: View {
                 .toolbar {
                     if let order {
                         ListOrderButtons(order: order) { sort, filter in
-                            if let sort, sort != order.sort, order.takesRememberedSort { SavedSorts.remember(sort, for: source) }
-                            show(books.link(link, sortedBy: sort, showing: filter), after: link)
+                            switch Arranging(server) {
+                            case .onServer:
+                                if let sort, sort != order.sort, order.takesRememberedSort { SavedSorts.remember(sort, for: source) }
+                                show(books.link(link, sortedBy: sort, showing: filter), after: link)
+                            case .sortedOnServer:
+                                show(books.link(link, sortedBy: sort, showing: .all), after: link)
+                                local.filter = filter
+                            case .here:
+                                local = LocalOrder(sort: sort ?? .listOrder, filter: filter)
+                            }
+                            if !local.isOn { library.dropWholeFeed(from: source) }
                         }
                     }
                 }
@@ -328,6 +343,23 @@ struct FeedScreen: View {
         } else {
             LibraryNotConnected()
         }
+    }
+
+    /// What the buttons offer. A server that filters (BookOrbit) does it
+    /// all. On the rest (OPDS), once a list shows it holds books: the
+    /// server's sorts if it has any (COPS), else Default, Title and Author,
+    /// and the filter from Octavo's own record, done here.
+    private func offered(_ server: LibraryListOrder?, _ feed: FeedModel) -> LibraryListOrder? {
+        if Arranging(server) == .onServer { return server }
+        guard local.isOn || (feed.entries.isEmpty && !feed.books.isEmpty) else { return nil }
+        return LibraryListOrder(
+            sorts: server?.sorts ?? LocalOrder.sorts, filters: LibraryFilter.allCases, sort: server?.sort ?? local.sort, filter: local.filter,
+            takesRememberedSort: false
+        )
+    }
+
+    private var listTitle: String {
+        ShellRoute.feed(entry, from: source).title ?? entry.title
     }
 
     private func show(_ next: LibraryLink, after shown: LibraryLink) {
@@ -341,7 +373,7 @@ struct FeedScreen: View {
     /// for lists of lists.
     private func summary(_ feed: FeedModel, filtered: Bool) -> String? {
         guard feed.entries.isEmpty, let count = feed.total ?? (filtered ? nil : entry.count) else { return nil }
-        if filtered { return booksLine(count, in: ShellRoute.feed(entry, from: source).title ?? entry.title) }
+        if filtered { return booksLine(count, in: listTitle) }
         return booksLine(count, in: entry.kind == .series ? "Series" : nil)
     }
 }

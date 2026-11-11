@@ -9,6 +9,7 @@ import SwiftUI
 extension LibrarySort {
     var title: String {
         switch self {
+        case .listOrder: "Default"
         case .readingOrder: "Reading order"
         case .title: "Title"
         case .author: "Author"
@@ -20,7 +21,7 @@ extension LibrarySort {
 /// A list's count under its title: "5 books", or with `list` first ("All ·
 /// 65 books", "Series · 3 books"), as a filtered list names what it's from.
 nonisolated func booksLine(_ count: Int, in list: String? = nil) -> String {
-    let books = count == 1 ? "1 book" : "\(count) books"
+    let books = count == 1 ? "1 book" : "\(count.formatted()) books"
     return list.map { "\($0) · \(books)" } ?? books
 }
 
@@ -157,7 +158,7 @@ nonisolated enum OnIPhoneOrder {
         let order: DownloadOrder = switch sort {
         case .author: .author
         case .recentlyAdded: .downloaded
-        case .title, .readingOrder: .title
+        case .title, .readingOrder, .listOrder: .title
         }
         return order.sorted(books)
     }

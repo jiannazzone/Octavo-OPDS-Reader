@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// An OPDS 1.2 (Atom) or 2.0 (JSON) catalog as a `LibrarySource`.
 ///
@@ -14,6 +15,7 @@ public struct OPDSSource: LibrarySource {
     let client: OPDSClient
     let secret: OPDSURLSecret?
     private let state = State()
+    private let kind = CatalogKind()
 
     /// - Parameters:
     ///   - catalogURL: the root feed, e.g. `…/opds` (Calibre-Web),
@@ -57,6 +59,7 @@ public struct OPDSSource: LibrarySource {
     public func root() async throws -> LibraryRoot {
         let feed = try await client.feed(at: catalogURL)
         await state.setRoot(feed)
+        kind.isCOPS.withLock { $0 = feed.identifier == "cops:catalog" }
         let mapped = mapFeed(feed, at: catalogURL)
         await state.remember(mapped.publications)
         var chips = mapped.feed.entries
@@ -81,6 +84,59 @@ public struct OPDSSource: LibrarySource {
         let mapped = mapFeed(feed, at: url)
         await state.remember(mapped.publications)
         return mapped.feed
+    }
+
+    /// COPS sorts any list of books on the server (`?sort=`; #131 step 2,
+    /// `docs/notes/library-filters.md`), once `root()` has shown it's COPS.
+    /// Other catalogs can't, so the app sorts and filters their lists itself.
+    /// The filter is always the app's: OPDS has no read status.
+    public func order(of link: LibraryLink) -> LibraryListOrder? {
+        guard kind.isCOPS.withLock({ $0 }), let url = try? resolve(link.rawValue),
+              OPDSClient.origin(of: url) == OPDSClient.origin(of: catalogURL) else { return nil }
+        let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "sort" }?.value
+        return LibraryListOrder(
+            sorts: Self.copsSorts, filters: [], sort: Self.copsSorts.first { Self.copsValue($0) == value } ?? .listOrder, filter: .all,
+            takesRememberedSort: false
+        )
+    }
+
+    /// The list from the top in `sort`'s order. COPS answers an unknown sort
+    /// with a 404, so only `copsSorts`.
+    public func link(_ link: LibraryLink, sortedBy sort: LibrarySort?, showing filter: LibraryFilter) -> LibraryLink {
+        guard order(of: link) != nil, let url = try? resolve(link.rawValue),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return link }
+        var items = (components.queryItems ?? []).filter { $0.name != "sort" && $0.name != "n" }
+        if let value = sort.flatMap(Self.copsValue) { items.append(URLQueryItem(name: "sort", value: value)) }
+        components.queryItems = items.isEmpty ? nil : items
+        return components.url.map(self.link) ?? link
+    }
+
+    static let copsSorts: [LibrarySort] = [.listOrder, .title, .author, .recentlyAdded]
+
+    /// Komga's OPDS 1.2 feeds take `size=` up to 2,000, so a whole list is
+    /// one request (2,000 books in 0.4 s, against 100 pages of 20). Its
+    /// `next` links drop the size, so the address is built here.
+    public func wholeList(_ link: LibraryLink, upTo count: Int) -> LibraryLink {
+        guard catalogURL.path().hasSuffix(Self.komgaCatalogPath), let url = try? resolve(link.rawValue),
+              OPDSClient.origin(of: url) == OPDSClient.origin(of: catalogURL), url.path().contains("/opds/v1.2/"),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return link }
+        var items = (components.queryItems ?? []).filter { $0.name != "page" && $0.name != "size" }
+        items += [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: String(min(count, 2_000)))]
+        components.queryItems = items
+        return components.url.map(self.link) ?? link
+    }
+
+    static let komgaCatalogPath = "/opds/v1.2/catalog"
+
+    /// Measured against COPS 4.6.1: `title` and `author` by their sort
+    /// names, `timestamp desc` newest first.
+    static func copsValue(_ sort: LibrarySort) -> String? {
+        switch sort {
+        case .title: "title"
+        case .author: "author"
+        case .recentlyAdded: "timestamp desc"
+        case .listOrder, .readingOrder: nil
+        }
     }
 
     public func search(_ query: String) async throws -> LibrarySearchResults {
@@ -414,6 +470,12 @@ struct CoverImages: Codable, Hashable {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return LibraryCover(rawValue: String(decoding: (try? encoder.encode(self)) ?? Data(), as: UTF8.self))
     }
+}
+
+/// What kind of catalog this is, as its root says: read without waiting
+/// (`order(of:)`).
+private final class CatalogKind: Sendable {
+    let isCOPS = Mutex(false)
 }
 
 /// What the source keeps between calls: the root feed, the search template,

@@ -7,6 +7,8 @@ import Foundation
 
 /// How a list of books is sorted.
 public enum LibrarySort: String, Hashable, Codable, Sendable {
+    /// The list as the server sends it: an OPDS catalog's own order.
+    case listOrder
     /// A series' own order.
     case readingOrder
     case title

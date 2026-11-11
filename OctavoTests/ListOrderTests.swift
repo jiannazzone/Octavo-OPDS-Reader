@@ -124,8 +124,73 @@ struct OnIPhoneOrderTests {
         #expect(shell.status(of: book) == .reading)
     }
 
+    // Listing the saved places once gives what reading each would.
+    @Test func filteringManyBooksAgreesWithEachBooksStatus() throws {
+        let shell = makeShell()
+        func book(_ id: String, progress: Double? = nil, finished: Bool? = nil) -> SourcedBook {
+            SourcedBook(source: .files, book: LibraryBook(
+                id: LibraryBookID(rawValue: id), title: id,
+                files: [LibraryFile(id: LibraryFileID(rawValue: "\(id).epub"), format: "epub", sizeBytes: 1, isPrimary: true)],
+                progress: progress, isFinished: finished
+            ))
+        }
+        let books = [book("new"), book("listed", progress: 0.4), book("done", finished: true), book("here")]
+        try shell.places.store.save(ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.2), forBook: try #require(books[3].storageKey))
+        for filter in LibraryFilter.allCases {
+            #expect(shell.books(books, showing: filter) == books.filter { filter == .all || shell.status(of: $0) == filter })
+        }
+        #expect(shell.books(books, showing: .reading).map(\.book.title) == ["listed", "here"])
+    }
+
     @Test func aListsCountNamesItWhenFiltered() {
         #expect(booksLine(1) == "1 book")
         #expect(booksLine(65, in: "All") == "All · 65 books")
+    }
+}
+
+/// An OPDS list sorted on the iPhone (#131): title, or author then title,
+/// filed as the Authors list is.
+struct BookOrderTests {
+    private static func book(_ title: String, by author: String) -> LibraryBook {
+        LibraryBook(id: LibraryBookID(rawValue: title), title: title, authors: [author])
+    }
+
+    static let books = [
+        book("The Time Machine", by: "H. G. Wells"),
+        book("Pride and Prejudice", by: "Jane Austen"),
+        book("Emma", by: "Jane Austen"),
+        book("Moby-Dick", by: "Herman Melville"),
+    ]
+
+    @Test(arguments: [
+        (LibrarySort.listOrder, ["The Time Machine", "Pride and Prejudice", "Emma", "Moby-Dick"]),
+        (.title, ["Emma", "Moby-Dick", "Pride and Prejudice", "The Time Machine"]),
+        (.author, ["Emma", "Pride and Prejudice", "Moby-Dick", "The Time Machine"]),
+    ])
+    func sortsByTitleOrAuthor(sort: LibrarySort, titles: [String]) {
+        #expect(BookOrder.sorted(Self.books, by: sort).map(\.title) == titles)
+    }
+
+    @Test func eachListIsArrangedInOnePlace() {
+        let bookOrbit = LibraryListOrder(sorts: [.title], filters: LibraryFilter.allCases, sort: .title, filter: .all, takesRememberedSort: true)
+        let cops = LibraryListOrder(sorts: [.listOrder, .title], filters: [], sort: .listOrder, filter: .all, takesRememberedSort: false)
+        #expect(Arranging(bookOrbit) == .onServer)
+        #expect(Arranging(cops) == .sortedOnServer)
+        #expect(Arranging(nil) == .here)
+    }
+
+    @Test func anOPDSListOpensInTheCatalogsOrder() {
+        #expect(!LocalOrder().isOn)
+        #expect(LocalOrder(sort: .title).isOn)
+        #expect(LocalOrder(filter: .unread).isOn)
+        #expect(LocalOrder.sorts == [.listOrder, .title, .author])
+    }
+
+    @MainActor @Test func defaultIsTheCatalogsOrder() {
+        #expect(LibrarySort.listOrder.title == "Default")
+    }
+
+    @Test func countsReadWithSeparators() {
+        #expect(booksLine(2_000) == "2,000 books")
     }
 }

@@ -145,6 +145,8 @@ final class LibraryModel {
     private(set) var importedBooks: [SourcedBook] = []
     @ObservationIgnored private var feeds: [FeedKey: FeedModel] = [:]
     @ObservationIgnored private var previews: [FeedKey: FeedModel] = [:]
+    /// The whole list kept for each server (`wholeFeed`).
+    @ObservationIgnored private var wholeLists: [LibrarySourceID: LibraryLink] = [:]
 
     /// The book you're reading and the others in progress Home shows.
     static let continueReadingLimit = 8
@@ -308,6 +310,23 @@ final class LibraryModel {
         }
         feeds[key] = feed
         return feed
+    }
+
+    /// A list loaded whole in pages of its own (Komga's `size=2000`, #131):
+    /// `feed(_:from:)`, keeping only the latest per server, so up to 2,000
+    /// books aren't held for every list that was ever sorted.
+    func wholeFeed(_ link: LibraryLink, of shown: LibraryLink, from source: LibrarySourceID) -> FeedModel? {
+        if link != shown {
+            if let last = wholeLists[source], last != link { feeds[FeedKey(source: source, link: last)] = nil }
+            wholeLists[source] = link
+        }
+        return feed(link, from: source)
+    }
+
+    /// Back to the catalog's order: its whole list goes.
+    func dropWholeFeed(from source: LibrarySourceID) {
+        guard let last = wholeLists.removeValue(forKey: source) else { return }
+        feeds[FeedKey(source: source, link: last)] = nil
     }
 
     /// Lists filtered by read status (#131), which a new mark changes.

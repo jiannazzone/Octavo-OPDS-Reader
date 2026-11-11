@@ -508,6 +508,8 @@ extension LibrarySort {
         case .title: .title
         case .author: .author
         case .recentlyAdded: .newest
+        // Not offered on BookOrbit's lists (`BookList.sorts`).
+        case .listOrder: .title
         }
     }
 }

@@ -836,3 +836,63 @@ private actor SlowPasswordStore: PasswordStore {
         waiting = []
     }
 }
+
+/// Sort on the server where the catalog can (COPS, #131 step 2); the app
+/// sorts and filters every other catalog's lists itself.
+struct OPDSListOrderTests {
+    private static func root(id: String) -> String {
+        #"<feed xmlns="http://www.w3.org/2005/Atom"><id>\#(id)</id><title>Catalog</title></feed>"#
+    }
+
+    @Test func copsSortsOnTheServer() async throws {
+        let server = StubServer { _ in .atom(Self.root(id: "cops:catalog")) }
+        let source = source(server, path: "/feed")
+        let recent = LibraryLink(rawValue: server.baseURL.appending(path: "/feed/recent").absoluteString + "?n=2")
+        #expect(source.order(of: recent) == nil)
+
+        _ = try await source.root()
+
+        #expect(source.order(of: recent) == LibraryListOrder(
+            sorts: [.listOrder, .title, .author, .recentlyAdded], filters: [], sort: .listOrder, filter: .all, takesRememberedSort: false
+        ))
+        // From the top, in the sort's order; Default takes the sort off.
+        let newest = source.link(recent, sortedBy: .recentlyAdded, showing: .all)
+        #expect(newest.rawValue == server.baseURL.appending(path: "/feed/recent").absoluteString + "?sort=timestamp%20desc")
+        #expect(source.order(of: newest)?.sort == .recentlyAdded)
+        #expect(source.link(newest, sortedBy: .listOrder, showing: .all).rawValue == server.baseURL.appending(path: "/feed/recent").absoluteString)
+        // Another server's link isn't COPS's to sort.
+        #expect(source.order(of: LibraryLink(rawValue: "https://example.com/feed/recent")) == nil)
+    }
+
+    @Test func otherCatalogsLeaveItToTheApp() async throws {
+        let server = StubServer { _ in .atom(Self.root(id: "urn:calibre-web")) }
+        let source = source(server, path: "/opds")
+        _ = try await source.root()
+        let new = LibraryLink(rawValue: server.baseURL.appending(path: "/opds/new").absoluteString)
+        #expect(source.order(of: new) == nil)
+        #expect(source.link(new, sortedBy: .title, showing: .unread) == new)
+    }
+}
+
+/// A whole list in one request where the server allows it (Komga, #131).
+struct OPDSWholeListTests {
+    @Test func komgaListsArePagedBigOnTheServer() throws {
+        let server = StubServer { _ in .notFound }
+        let source = source(server, path: "/opds/v1.2/catalog")
+        let latest = LibraryLink(rawValue: server.baseURL.appending(path: "/opds/v1.2/books/latest").absoluteString + "?page=3&size=20")
+        let whole = source.wholeList(latest, upTo: 2_000)
+        let items = try #require(URLComponents(string: whole.rawValue)?.queryItems)
+        #expect(Set(items) == [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "2000")])
+        // Never past Komga's limit, and never another server's link.
+        #expect(source.wholeList(latest, upTo: 5_000).rawValue.hasSuffix("size=2000"))
+        let elsewhere = LibraryLink(rawValue: "https://example.com/opds/v1.2/books/latest")
+        #expect(source.wholeList(elsewhere, upTo: 2_000) == elsewhere)
+    }
+
+    @Test func otherCatalogsFollowTheirPages() {
+        let server = StubServer { _ in .notFound }
+        let source = source(server, path: "/opds")
+        let new = LibraryLink(rawValue: server.baseURL.appending(path: "/opds/new").absoluteString)
+        #expect(source.wholeList(new, upTo: 2_000) == new)
+    }
+}
