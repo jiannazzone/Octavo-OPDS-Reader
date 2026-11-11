@@ -61,8 +61,7 @@ struct ListOrderTests {
     }
 
     @MainActor @Test func theMenusSayWhatEachChoiceIs() {
-        #expect([LibrarySort.readingOrder, .title, .author, .recentlyAdded, .recentlyDownloaded].map(\.title)
-            == ["Reading order", "Title", "Author", "Recently added", "Recently downloaded"])
+        #expect([LibrarySort.readingOrder, .title, .author, .recentlyAdded].map(\.title) == ["Reading order", "Title", "Author", "Recently added"])
         #expect(LibraryFilter.allCases.map(\.title) == ["All books", "Unread", "Reading", "Finished"])
     }
 
@@ -82,18 +81,18 @@ struct ListOrderTests {
 struct OnIPhoneOrderTests {
     @Test func offersTitleAuthorAndRecentlyDownloaded() {
         let order = OnIPhoneOrder.order(.author, .unread)
-        #expect(order.sorts == [.title, .author, .recentlyDownloaded])
+        #expect(order.sorts.map(OnIPhoneOrder.title) == ["Title", "Author", "Recently downloaded"])
         #expect(order.filters == LibraryFilter.allCases)
         #expect(order.sort == .author)
         #expect(order.filter == .unread)
-        // A sort it doesn't offer (a server's) is its own.
-        #expect(OnIPhoneOrder.order(.recentlyAdded, .all).sort == .title)
+        // A sort it doesn't offer (a series') is its own.
+        #expect(OnIPhoneOrder.order(.readingOrder, .all).sort == .title)
     }
 
     @Test(arguments: [
         (LibrarySort.title, ["Moby-Dick", "Pride and Prejudice", "The Time Machine"]),
         (.author, ["Pride and Prejudice", "Moby-Dick", "The Time Machine"]),
-        (.recentlyDownloaded, ["Moby-Dick", "The Time Machine", "Pride and Prejudice"]),
+        (.recentlyAdded, ["Moby-Dick", "The Time Machine", "Pride and Prejudice"]),
     ])
     func sortsAsBooksOnIPhoneDoes(sort: LibrarySort, titles: [String]) {
         #expect(OnIPhoneOrder.sorted(DownloadOrderTests.books, by: sort).map(\.book.book.title) == titles)
@@ -111,5 +110,22 @@ struct OnIPhoneOrderTests {
         #expect(shell.status(of: book(progress: 0.3)) == .reading)
         #expect(shell.status(of: book(progress: 0.3, finished: true)) == .finished)
         #expect(shell.status(of: book(finished: true)) == .finished)
+    }
+
+    // The usual way: a book read on this iPhone, which the server hasn't heard of.
+    @Test func aPlaceSavedHereIsReading() throws {
+        let shell = makeShell()
+        let book = SourcedBook(source: .files, book: LibraryBook(
+            id: LibraryBookID(rawValue: "local"), title: "Book",
+            files: [LibraryFile(id: LibraryFileID(rawValue: "local.epub"), format: "epub", sizeBytes: 1, isPrimary: true)]
+        ))
+        #expect(shell.status(of: book) == .unread)
+        try shell.places.store.save(ReadingPosition(cfi: "epubcfi(/6/8!/4/2)", fraction: 0.2), forBook: try #require(book.storageKey))
+        #expect(shell.status(of: book) == .reading)
+    }
+
+    @Test func aListsCountNamesItWhenFiltered() {
+        #expect(booksLine(1) == "1 book")
+        #expect(booksLine(65, in: "All") == "All · 65 books")
     }
 }

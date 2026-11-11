@@ -12,11 +12,8 @@ public enum LibrarySort: String, Hashable, Codable, Sendable {
     case title
     /// By the first author's sort name.
     case author
-    /// Newest to the library first.
+    /// Newest first.
     case recentlyAdded
-    /// Newest to the iPhone first, downloaded or imported: On iPhone's, so
-    /// it isn't mistaken for the server's date (Adam, 2026-11-11).
-    case recentlyDownloaded
 }
 
 /// Which books a list shows.

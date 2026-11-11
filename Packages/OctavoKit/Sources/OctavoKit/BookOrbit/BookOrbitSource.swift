@@ -507,7 +507,7 @@ extension LibrarySort {
         case .readingOrder: .readingOrder
         case .title: .title
         case .author: .author
-        case .recentlyAdded, .recentlyDownloaded: .newest
+        case .recentlyAdded: .newest
         }
     }
 }

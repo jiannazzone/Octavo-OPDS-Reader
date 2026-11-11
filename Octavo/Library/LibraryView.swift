@@ -341,9 +341,8 @@ struct FeedScreen: View {
     /// for lists of lists.
     private func summary(_ feed: FeedModel, filtered: Bool) -> String? {
         guard feed.entries.isEmpty, let count = feed.total ?? (filtered ? nil : entry.count) else { return nil }
-        let books = count == 1 ? "1 book" : "\(count) books"
-        if filtered { return "\(ShellRoute.feed(entry, from: source).title ?? entry.title) · \(books)" }
-        return entry.kind == .series ? "Series · \(books)" : books
+        if filtered { return booksLine(count, in: ShellRoute.feed(entry, from: source).title ?? entry.title) }
+        return booksLine(count, in: entry.kind == .series ? "Series" : nil)
     }
 }
 
