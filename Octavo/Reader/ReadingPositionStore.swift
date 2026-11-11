@@ -98,6 +98,12 @@ nonisolated struct ReadingPositionStore: Sendable {
 
     /// Book IDs can be file names or server IDs; percent-encode anything that
     /// isn't safe in a file name.
+    /// Every book with a saved place, by its file's name: one directory
+    /// listing, for checking many books at once.
+    func savedFiles() -> Set<String> {
+        Set((try? FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))) ?? [])
+    }
+
     func fileURL(forBook bookID: String) -> URL {
         Self.fileURL(forBook: bookID, in: directory)
     }

@@ -295,13 +295,15 @@ struct FeedScreen: View {
         if let books = library.source(for: source) {
             let link = picked ?? SavedSorts.opening(entry.link, from: books, server: source)
             if let feed = library.feed(link, from: source) {
-                let order = offered(books.order(of: link), feed)
+                let server = books.order(of: link)
+                let order = offered(server, feed)
                 Group {
                     if feed.cameBackEmpty {
                         EmptyFeed(entry: entry, feed: feed, filter: order?.filter ?? .all) {
                             show(books.link(link, sortedBy: order?.sort, showing: .all), after: link)
                         }
-                    } else if local.isOn, let whole = library.feed(books.wholeList(link, upTo: FeedModel.maxBooksToArrange), from: source) {
+                    } else if local.isOn,
+                              let whole = library.wholeFeed(books.wholeList(link, upTo: FeedModel.maxBooksToArrange), of: link, from: source) {
                         ArrangedFeed(feed: whole, list: listTitle, sort: local.sort, filter: local.filter) { local.filter = .all }
                     } else {
                         FeedContent(feed: feed, numbered: entry.kind == .series) {
@@ -320,16 +322,17 @@ struct FeedScreen: View {
                 .toolbar {
                     if let order {
                         ListOrderButtons(order: order) { sort, filter in
-                            if let server = books.order(of: link), !server.filters.isEmpty {
+                            switch Arranging(server) {
+                            case .onServer:
                                 if let sort, sort != order.sort, order.takesRememberedSort { SavedSorts.remember(sort, for: source) }
                                 show(books.link(link, sortedBy: sort, showing: filter), after: link)
-                            } else if books.order(of: link) != nil {
-                                // COPS: sorted on the server, filtered here.
+                            case .sortedOnServer:
                                 show(books.link(link, sortedBy: sort, showing: .all), after: link)
                                 local.filter = filter
-                            } else {
+                            case .here:
                                 local = LocalOrder(sort: sort ?? .listOrder, filter: filter)
                             }
+                            if !local.isOn { library.dropWholeFeed(from: source) }
                         }
                     }
                 }
@@ -347,7 +350,7 @@ struct FeedScreen: View {
     /// server's sorts if it has any (COPS), else Default, Title and Author,
     /// and the filter from Octavo's own record, done here.
     private func offered(_ server: LibraryListOrder?, _ feed: FeedModel) -> LibraryListOrder? {
-        if let server, !server.filters.isEmpty { return server }
+        if Arranging(server) == .onServer { return server }
         guard local.isOn || (feed.entries.isEmpty && !feed.books.isEmpty) else { return nil }
         return LibraryListOrder(
             sorts: server?.sorts ?? LocalOrder.sorts, filters: LibraryFilter.allCases, sort: server?.sort ?? local.sort, filter: local.filter,

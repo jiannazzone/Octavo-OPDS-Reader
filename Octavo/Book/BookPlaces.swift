@@ -88,6 +88,14 @@ final class BookPlaces {
         opening(of: book).position?.fraction
     }
 
+    /// `progress(of:)` for many books, `saved` being `store.savedFiles()`: a
+    /// book with no saved place and no server place isn't read from disk.
+    func progress(of book: SourcedBook, saved: Set<String>) -> Double? {
+        guard let key = book.storageKey,
+              !saved.contains(store.fileURL(forBook: key).lastPathComponent), remotes[key] == nil else { return progress(of: book) }
+        return OpeningPosition.choose(local: nil, remote: Self.listed(book.book)).position?.fraction
+    }
+
     /// The trip `book` reopens on (decision 33), while its place is still
     /// where the rule opens. Another reader moving it ends the trip when the
     /// book opens; here the place line just shows the new place.

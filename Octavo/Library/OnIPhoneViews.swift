@@ -16,7 +16,7 @@ struct OnIPhoneScreen: View {
         let order = OnIPhoneOrder.order(sort, filter)
         // Once per redraw: listing reads every file, and a status every place.
         let all = shell.onIPhoneBooks(sortedBy: order.sort ?? .title)
-        OnIPhoneContent(listed: filter == .all ? all : all.filter { shell.status(of: $0) == filter }, filter: filter) { filter = .all }
+        OnIPhoneContent(listed: shell.books(all, showing: filter), filter: filter) { filter = .all }
             .modifier(FilteredTitle(filter: filter))
             .toolbar {
                 if !all.isEmpty {
@@ -34,8 +34,21 @@ extension ShellModel {
     /// marked, reading once it has a place, else unread. What another
     /// reader did shows only once its place syncs here.
     func status(of book: SourcedBook) -> LibraryFilter {
+        status(of: book, saved: nil)
+    }
+
+    /// `books` that `filter` shows, listing the saved places once rather
+    /// than reading one for each book.
+    func books(_ books: [SourcedBook], showing filter: LibraryFilter) -> [SourcedBook] {
+        guard filter != .all else { return books }
+        let saved = places.store.savedFiles()
+        return books.filter { status(of: $0, saved: saved) == filter }
+    }
+
+    private func status(of book: SourcedBook, saved: Set<String>?) -> LibraryFilter {
         if library.isFinished(book) { return .finished }
-        return places.progress(of: book) == nil ? .unread : .reading
+        let progress = saved.map { places.progress(of: book, saved: $0) } ?? places.progress(of: book)
+        return progress == nil ? .unread : .reading
     }
 
     /// The books on the iPhone in `sort` order (`OnIPhoneOrder`).

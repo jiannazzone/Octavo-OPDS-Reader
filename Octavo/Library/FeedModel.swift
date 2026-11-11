@@ -113,6 +113,17 @@ final class FeedModel {
         }
     }
 
+    /// Whether `loadAll(maxBooks:)` stopped at its cap with more to come, not
+    /// at a page that went wrong.
+    func isCapped(at maxBooks: Int) -> Bool {
+        hasMore && books.count >= maxBooks
+    }
+
+    /// Every page has loaded, or as many as `loadAll(maxBooks:)` takes.
+    func isWhole(upTo maxBooks: Int) -> Bool {
+        state == .loaded && (!hasMore || books.count >= maxBooks)
+    }
+
     /// The most books a list sorted or filtered on the iPhone loads (Adam,
     /// 2026-11-09). From 0.4 to 5 s on this Mac at 2,000
     /// (`docs/notes/library-filters.md`).

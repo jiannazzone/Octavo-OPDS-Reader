@@ -18,6 +18,22 @@ nonisolated struct LocalOrder: Equatable {
     var isOn: Bool { sort != .listOrder || filter != .all }
 }
 
+/// Where a list's sort and filter are done, from what its source offers
+/// (`LibrarySource.order(of:)`).
+nonisolated enum Arranging: Equatable {
+    /// Both on the server (BookOrbit).
+    case onServer
+    /// Sorted on the server, filtered here (COPS).
+    case sortedOnServer
+    /// Both here, after loading the whole list (other OPDS catalogs).
+    case here
+
+    init(_ server: LibraryListOrder?) {
+        guard let server else { self = .here; return }
+        self = server.filters.isEmpty ? .sortedOnServer : .onServer
+    }
+}
+
 /// The whole list, up to `FeedModel.maxBooksToArrange` books: "Loading
 /// books…" until every page is in, then all of them at once, sorted and
 /// filtered (Adam, 2026-11-09).
@@ -36,14 +52,24 @@ struct ArrangedFeed: View {
     var body: some View {
         content
             .task(id: Arrangement(feed: ObjectIdentifier(feed), sort: sort, filter: filter, attempt: attempt)) {
-                arranged = nil
-                if feed.state == .failed { await feed.retry() }
-                await feed.loadAll(maxBooks: FeedModel.maxBooksToArrange)
+                // Already loaded: arranged again at once, without the
+                // loading screen in between.
+                if !feed.isWhole(upTo: FeedModel.maxBooksToArrange) {
+                    arranged = nil
+                    if feed.state == .failed { await feed.retry() }
+                    await feed.loadAll(maxBooks: FeedModel.maxBooksToArrange)
+                }
                 guard !Task.isCancelled, feed.state == .loaded else { return }
                 arranged = arrange()
             }
             // Back from a book's screen, whose Finished mark may have moved it.
             .onAppear { if arranged != nil { arranged = arrange() } }
+            // What's shown stays until the list is in again.
+            .refreshable {
+                await feed.reload()
+                await feed.loadAll(maxBooks: FeedModel.maxBooksToArrange)
+                if feed.state == .loaded { arranged = arrange() }
+            }
     }
 
     @ViewBuilder
@@ -67,7 +93,7 @@ struct ArrangedFeed: View {
                         SpreadGrid(items: arranged) { book in
                             BookGridCell(book: book)
                         }
-                        if feed.hasMore {
+                        if feed.isCapped(at: FeedModel.maxBooksToArrange) {
                             Text("Only the first \(FeedModel.maxBooksToArrange.formatted()) books were loaded.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -113,8 +139,7 @@ struct ArrangedFeed: View {
 
     private func arrange() -> [SourcedBook] {
         let sorted = BookOrder.sorted(Array(feed.books.prefix(FeedModel.maxBooksToArrange)), by: sort)
-        let books = sorted.map { SourcedBook(source: feed.source, book: $0) }
-        return filter == .all ? books : books.filter { shell.status(of: $0) == filter }
+        return shell.books(sorted.map { SourcedBook(source: feed.source, book: $0) }, showing: filter)
     }
 
     private struct Arrangement: Equatable {

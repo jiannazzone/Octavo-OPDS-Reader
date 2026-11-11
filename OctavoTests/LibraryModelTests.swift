@@ -207,6 +207,45 @@ struct FeedModelTests {
         let feed = try #require(library.feed(link("q0"), from: server))
         await feed.loadAll(maxBooks: 100)
         #expect(feed.books.map(\.title) == ["1"])
+        // Not the cap, so the list doesn't say it stopped at one.
+        #expect(!feed.isCapped(at: 100))
+        #expect(!feed.isWhole(upTo: 100))
+    }
+
+    @Test func onlyAListThatReachedTheCapSaysSo() async throws {
+        var pages: [String: LibraryFeed] = [:]
+        for page in 0..<5 {
+            pages["c\(page)"] = LibraryFeed(books: [book("\(page)a"), book("\(page)b")], next: page < 4 ? link("c\(page + 1)") : nil)
+        }
+        let library = await connected(PagedSource(pages: pages))
+        let capped = try #require(library.feed(link("c0"), from: server))
+        await capped.loadAll(maxBooks: 4)
+        #expect(capped.isCapped(at: 4))
+        #expect(capped.isWhole(upTo: 4))
+
+        let whole = try #require(library.feed(link("c3"), from: server))
+        await whole.loadAll(maxBooks: 4)
+        #expect(!whole.isCapped(at: 4))
+        #expect(whole.isWhole(upTo: 4))
+    }
+
+    // Komga's whole lists (#131): only the latest is kept per server.
+    @Test func keepsOneWholeListPerServer() async throws {
+        let library = await connected(PagedSource(pages: Self.pages))
+        let first = try #require(library.wholeFeed(link("a?size=2000"), of: link("a"), from: server))
+        #expect(library.wholeFeed(link("a?size=2000"), of: link("a"), from: server) === first)
+        _ = library.wholeFeed(link("b?size=2000"), of: link("b"), from: server)
+        #expect(library.feed(link("a?size=2000"), from: server) !== first)
+
+        let second = try #require(library.feed(link("b?size=2000"), from: server))
+        library.dropWholeFeed(from: server)
+        #expect(library.feed(link("b?size=2000"), from: server) !== second)
+
+        // A list loaded whole in its own pages is the list itself, and stays.
+        let shown = try #require(library.feed(link("a"), from: server))
+        #expect(library.wholeFeed(link("a"), of: link("a"), from: server) === shown)
+        library.dropWholeFeed(from: server)
+        #expect(library.feed(link("a"), from: server) === shown)
     }
 
     @Test func keepsOneModelPerList() async throws {
