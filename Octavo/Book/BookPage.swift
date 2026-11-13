@@ -29,6 +29,18 @@ final class BookPage {
     private(set) var markedStatus: LibraryReadStatus?
     /// Setting the status didn't reach the server.
     private(set) var statusFailed = false
+    /// Your rating as last set here, over what the server sent (#120):
+    /// `.some(nil)` once cleared here.
+    private(set) var markedRating: Int??
+    /// Setting the rating didn't reach the server.
+    private(set) var ratingFailed = false
+    /// "Rate it": the book was just marked Finished, Skimmed or Abandoned
+    /// here and isn't rated (Adam, 2026-11-13).
+    private(set) var asksRating = false
+    /// Ratings sent from here, so only the latest puts things back.
+    @ObservationIgnored private var ratingRequests = 0
+    /// The rating the server last took from here, over what it sent.
+    @ObservationIgnored private var savedRating: Int??
     /// Where this iPhone keeps the mark for a server that doesn't.
     @ObservationIgnored private var finishedOnIPhone: (books: FinishedBooks, id: SourcedBook.ID)?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -76,16 +88,19 @@ final class BookPage {
 
     var readStatus: LibraryReadStatus? { markedStatus ?? current.readStatus }
 
+    /// Your rating, 1 to 5 whole stars (BookOrbit's). `nil`: not rated.
+    var rating: Int? { markedRating ?? current.rating }
+
     /// Marks the book finished, or not: on the server if it keeps the mark
     /// (BookOrbit), else on this iPhone. Shows the change at once and puts
     /// it back if the server refuses.
     func setFinished(_ finished: Bool, from source: any LibrarySource) async {
-        let before = (markedFinished, markedStatus)
+        let before = (markedFinished, markedStatus, asksRating)
         markedFinished = finished
         // Not finished is BookOrbit's `reading` (`BookOrbitSource.setFinished`).
         if source.tracksReadStatus { markedStatus = finished ? .read : .reading }
-        finishedFailed = false
-        statusFailed = false
+        asksRating = finished && shouldAskRating(after: .read, from: source)
+        clearProblems()
         do {
             if source.tracksFinished {
                 try await source.setFinished(finished, for: current)
@@ -93,7 +108,7 @@ final class BookPage {
                 try finishedOnIPhone.books.set(finished, for: finishedOnIPhone.id)
             }
         } catch {
-            (markedFinished, markedStatus) = before
+            (markedFinished, markedStatus, asksRating) = before
             finishedFailed = !(error is CancellationError)
         }
     }
@@ -101,17 +116,71 @@ final class BookPage {
     /// Sets the book's read status on the server (BookOrbit's), as
     /// `setFinished` does.
     func setStatus(_ status: LibraryReadStatus, from source: any LibrarySource) async {
-        let before = (markedFinished, markedStatus)
+        let before = (markedFinished, markedStatus, asksRating)
         markedStatus = status
         markedFinished = status == .read
-        finishedFailed = false
-        statusFailed = false
+        asksRating = shouldAskRating(after: status, from: source)
+        clearProblems()
         do {
             try await source.setReadStatus(status, for: current)
         } catch {
-            (markedFinished, markedStatus) = before
+            (markedFinished, markedStatus, asksRating) = before
             statusFailed = !(error is CancellationError)
         }
+    }
+
+    /// The statuses that end a reading, after which "Rate it" asks.
+    static func endsAReading(_ status: LibraryReadStatus) -> Bool {
+        switch status {
+        case .read, .skimmed, .abandoned: true
+        case .unread, .wantToRead, .reading, .onHold, .rereading, .other: false
+        }
+    }
+
+    /// Whether "Rate it" asks once the book is marked `status`: a reading
+    /// ended, on a server that keeps ratings, and not rated. Before the
+    /// details arrive the rating is the list's, which can be older than
+    /// the server's, so it doesn't ask then.
+    private func shouldAskRating(after status: LibraryReadStatus, from source: any LibrarySource) -> Bool {
+        guard Self.endsAReading(status), source.tracksRating else { return false }
+        return (markedRating != nil || details != nil) && rating == nil
+    }
+
+    /// Rates the book on the server (BookOrbit's), 1 to 5 whole stars, or
+    /// clears it with `nil`, as `setStatus` does. Answers "Rate it". Only
+    /// the latest of several quick choices puts things back if refused.
+    func setRating(_ rating: Int?, from source: any LibrarySource) async {
+        ratingRequests += 1
+        let request = ratingRequests
+        let asked = asksRating
+        markedRating = .some(rating)
+        asksRating = false
+        clearProblems()
+        do {
+            try await source.setRating(rating, for: current)
+            savedRating = .some(rating)
+            // An earlier choice that lands after the latest was refused:
+            // the server has this one now.
+            if request != ratingRequests, ratingFailed { markedRating = savedRating }
+        } catch {
+            guard request == ratingRequests else { return }
+            markedRating = savedRating
+            asksRating = asked
+            ratingFailed = !(error is CancellationError)
+        }
+    }
+
+    /// A new change starts with no problem showing.
+    private func clearProblems() {
+        finishedFailed = false
+        statusFailed = false
+        ratingFailed = false
+    }
+
+    /// ✕ on "Rate it", or leaving the screen: asks again only when the book
+    /// is marked again.
+    func dismissRatingPrompt() {
+        asksRating = false
     }
 
     func retryDetails(from source: any LibrarySource) async {

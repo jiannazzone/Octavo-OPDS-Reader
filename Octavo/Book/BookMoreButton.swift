@@ -23,12 +23,9 @@ struct BookMoreButton: View {
         } label: {
             Label("More", systemImage: "ellipsis")
                 .labelStyle(.iconOnly)
-                .frame(minWidth: 22, minHeight: 22)
-                .frame(maxHeight: fillsHeight ? .infinity : nil)
+                .bookRoundLabel(fillsHeight: fillsHeight)
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .fixedSize(horizontal: true, vertical: false)
+        .bookRoundButton()
     }
 
     private var status: Binding<LibraryReadStatus?> {
@@ -44,6 +41,22 @@ struct BookMoreButton: View {
                 }
             }
         }
+    }
+}
+
+extension View {
+    /// The label of a round button on a book's screen ("…", ☆): as tall as
+    /// the row's other buttons where `fillsHeight`.
+    func bookRoundLabel(fillsHeight: Bool) -> some View {
+        frame(minWidth: 22, minHeight: 22)
+            .frame(maxHeight: fillsHeight ? .infinity : nil)
+    }
+
+    /// Its glass: a circle around a glyph, `.capsule` around more.
+    func bookRoundButton(_ shape: ButtonBorderShape = .circle) -> some View {
+        buttonStyle(.glass)
+            .buttonBorderShape(shape)
+            .fixedSize(horizontal: true, vertical: false)
     }
 }
 

@@ -524,6 +524,28 @@ public actor BookOrbitClient {
         _ = try await send(request)
     }
 
+    // MARK: - Rating
+
+    /// `POST books/bulk-set-rating {bookIds, rating}`: whole stars, 1 to 5,
+    /// the signed-in user's own. `nil` sends `null`, which clears it.
+    public func setRating(_ rating: Int?, bookIDs: [Int]) async throws {
+        struct Body: Encodable {
+            var bookIds: [Int]
+            var rating: Int?
+
+            private enum CodingKeys: String, CodingKey { case bookIds, rating }
+
+            // `null`, not left out, so clearing reads as clearing.
+            func encode(to encoder: any Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(bookIds, forKey: .bookIds)
+                try c.encode(rating, forKey: .rating)
+            }
+        }
+        let request = try jsonRequest("books/bulk-set-rating", method: "POST", body: Body(bookIds: bookIDs, rating: rating))
+        _ = try await send(request)
+    }
+
     // MARK: - Plumbing
 
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = [], as type: T.Type = T.self) async throws -> T {

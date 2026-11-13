@@ -120,6 +120,18 @@ public struct BookOrbitSource: LibrarySource {
         try await client.setReadStatus(status.rawValue, bookID: id)
     }
 
+    public var tracksRating: Bool { true }
+
+    /// Whole stars only: refused here as the server would refuse it (a
+    /// 400 for 0, 6 or 4.5).
+    public func setRating(_ rating: Int?, for book: LibraryBook) async throws {
+        guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
+        guard rating.map((1...5).contains) ?? true else {
+            throw LibraryError.server(status: 400, message: "A rating is 1 to 5 whole stars.")
+        }
+        try await client.setRating(rating, bookIDs: [id])
+    }
+
     public func details(for book: LibraryBook) async throws -> LibraryBookDetails {
         guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
         let detail = try await mappingErrors { try await client.book(id: id) }
@@ -270,7 +282,8 @@ public struct BookOrbitSource: LibrarySource {
             progress: book.readingFraction,
             lastReadAt: book.readStatusUpdatedAt,
             isFinished: book.readStatus.map { $0 == "read" },
-            readStatus: book.status
+            readStatus: book.status,
+            rating: book.rating
         )
     }
 

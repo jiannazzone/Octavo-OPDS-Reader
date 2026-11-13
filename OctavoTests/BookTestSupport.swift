@@ -59,6 +59,8 @@ nonisolated struct StubLibrarySource: LibrarySource {
 
     /// With `finishedMarks`: it keeps a read status too, as BookOrbit does.
     var keepsStatus = false
+    /// With `finishedMarks`: it keeps your rating too, as BookOrbit does.
+    var keepsRating = false
 
     var tracksFinished: Bool { finishedMarks != nil }
 
@@ -74,6 +76,18 @@ nonisolated struct StubLibrarySource: LibrarySource {
         guard let finishedMarks, keepsStatus else { return }
         if finishedMarks.refuses { throw LibraryError.notFound }
         finishedMarks.statuses.append(status)
+    }
+
+    var tracksRating: Bool { keepsRating && finishedMarks != nil }
+
+    func setRating(_ rating: Int?, for book: LibraryBook) async throws {
+        guard let finishedMarks, keepsRating else { return }
+        if finishedMarks.holdsRatings {
+            try await withCheckedThrowingContinuation { finishedMarks.hold(rating, $0) }
+        } else if finishedMarks.refuses {
+            throw LibraryError.notFound
+        }
+        finishedMarks.ratings.append(rating)
     }
 
     func root() async throws -> LibraryRoot {
@@ -122,7 +136,28 @@ nonisolated struct StubLibrarySource: LibrarySource {
 nonisolated final class FinishedMarks: @unchecked Sendable {
     var sent: [Bool] = []
     var statuses: [LibraryReadStatus] = []
+    var ratings: [Int?] = []
     var refuses = false
+    /// Ratings wait for `release(_:refusing:)`, to answer them out of order.
+    var holdsRatings = false
+    private let held = Mutex<[Int?: CheckedContinuation<Void, any Error>]>([:])
+
+    func hold(_ rating: Int?, _ continuation: CheckedContinuation<Void, any Error>) {
+        held.withLock { $0[rating] = continuation }
+    }
+
+    func isHolding(_ rating: Int?) -> Bool {
+        held.withLock { $0[rating] != nil }
+    }
+
+    func release(_ rating: Int?, refusing: Bool) {
+        let continuation = held.withLock { $0.removeValue(forKey: rating) }
+        if refusing {
+            continuation?.resume(throwing: LibraryError.notFound)
+        } else {
+            continuation?.resume()
+        }
+    }
 }
 
 /// `StoredBookFiles` in a temporary directory of its own.

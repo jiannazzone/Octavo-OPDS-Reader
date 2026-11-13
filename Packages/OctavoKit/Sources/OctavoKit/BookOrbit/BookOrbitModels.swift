@@ -286,6 +286,9 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     /// `readStatus.status`: `unread`, `want_to_read`, `reading`, `on_hold`,
     /// `rereading`, `read`, `skimmed` or `abandoned` (v3.6.0).
     public var readStatus: String?
+    /// The signed-in user's rating, 1 to 5 (`rating`; per user, whole
+    /// stars). `nil`: not rated.
+    public var rating: Int?
 
     /// `readStatus` as Octavo knows it: `nil` for none, `other` for one a
     /// newer server added.
@@ -301,7 +304,7 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     private enum CodingKeys: String, CodingKey {
         case id, libraryId, title, subtitle, authors, files, seriesId, seriesName, seriesIndex, seriesMemberships
         case collections, language, publisher, publishedDate, publishedYear, description, addedAt
-        case hasCover, coverVersion, readingProgress, readStatus
+        case hasCover, coverVersion, readingProgress, readStatus, rating
     }
 
     private struct ReadStatus: Decodable {
@@ -336,6 +339,8 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
         let status = c.lenient(ReadStatus.self, .readStatus)
         readStatusUpdatedAt = status?.updatedAt
         readStatus = status?.status
+        // In range before it becomes an Int: `Int(1e300)` traps.
+        rating = c.lenient(Double.self, .rating).map { $0.rounded() }.flatMap { (1...5).contains($0) ? Int($0) : nil }
     }
 }
 

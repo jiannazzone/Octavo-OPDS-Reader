@@ -193,6 +193,38 @@ struct BookOrbitSourceTests {
         #expect(server.requests.first?.json as? [String: String] == ["status": status.rawValue])
     }
 
+    // Measured on v3.6.0 (`docs/notes/bookorbit-api.md`): your own rating,
+    // whole stars, and `null` clears it.
+    @Test(arguments: [4, 1, 5, nil] as [Int?])
+    func setsRating(rating: Int?) async throws {
+        let server = StubServer { _ in StubServer.Response(status: 204, headers: [:], body: Data()) }
+        let source = source(server)
+        #expect(source.tracksRating)
+
+        try await source.setRating(rating, for: LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House"))
+
+        #expect(server.requests.map(\.method) == ["POST"])
+        #expect(server.requests.map(\.path) == ["/api/v1/books/bulk-set-rating"])
+        let body = try #require(server.requests.first?.json)
+        // The server rejects fields it doesn't know.
+        #expect(Set(body.keys) == ["bookIds", "rating"])
+        #expect(body["bookIds"] as? [Int] == [33])
+        if let rating {
+            #expect(body["rating"] as? Int == rating)
+        } else {
+            #expect(body["rating"] is NSNull)
+        }
+    }
+
+    @Test(arguments: [0, 6, -1])
+    func refusesRatingOutsideWholeStars(rating: Int) async throws {
+        let server = StubServer { _ in StubServer.Response(status: 204, headers: [:], body: Data()) }
+        await #expect(throws: LibraryError.server(status: 400, message: "A rating is 1 to 5 whole stars.")) {
+            try await source(server).setRating(rating, for: LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House"))
+        }
+        #expect(server.requests.isEmpty)
+    }
+
     @Test func mapsBooksForTheGrid() async throws {
         let server = StubServer { _ in .json(201, #"{"items":[\#(alice),\#(frankenstein),\#(study)],"total":3}"#) }
         let books = try await source(server, pageSize: 3).feed(link(.books(page: 0))).books

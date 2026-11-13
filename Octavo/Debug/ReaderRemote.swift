@@ -60,6 +60,9 @@ enum ReaderRemote {
         var id: Int
         var cmd: String
         var fileID: Int?
+        /// `detail`: the sheet pulled up, where scripted drags don't reach
+        /// it folded.
+        var expanded: Bool?
         var fraction: Double?
         var cfi: String?
         var shape: String?
@@ -179,7 +182,7 @@ enum ReaderRemote {
         case "importLocal":
             return await importLocal(command.name, shell: shell)
         case "detail":
-            return await openBookOrbit(command.fileID, shell: shell, cover: true)
+            return await openBookOrbit(command.fileID, shell: shell, cover: true, expanded: command.expanded)
         case "close":
             shell.reader.close()
             return nil
@@ -273,7 +276,7 @@ enum ReaderRemote {
 
     /// A file on the local BookOrbit: in the reader, or its cover page. Its
     /// place syncs as any BookOrbit book's does (`ShellModel.progressSync`).
-    private static func openBookOrbit(_ fileID: Int?, shell: ShellModel, cover: Bool) async -> String? {
+    private static func openBookOrbit(_ fileID: Int?, shell: ShellModel, cover: Bool, expanded: Bool? = nil) async -> String? {
         guard let fileID else { return "needs fileID" }
         // The Library may show another server.
         guard let server = shell.library.connections.map(\.server).first(where: { $0.source is BookOrbitSource }),
@@ -290,6 +293,7 @@ enum ReaderRemote {
         let sourced = SourcedBook(source: server.id, book: book)
         shell.reader.reading = nil
         if cover {
+            if let expanded { shell.pages.page(for: sourced).isExpanded = expanded }
             shell.select(.library)
             shell[path: .library].replace([.cover(sourced)])
         } else {
