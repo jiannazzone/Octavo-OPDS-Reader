@@ -1,24 +1,27 @@
 # Edge margin: text in the side column (#136)
 
-Investigation only, 2026-11-12, on the iPhone Duo iOS 27.1 simulator ('Octavo Edge Duo', 3FFAC972-…; 'Octavo Edge Duo 2', DD28AEF1-FA13-4D31-97EA-7572B8C09538; both deleted). Nothing here is designed or approved, and the probe code wasn't committed. Moby-Dick at 30%, Medium margins, opened through the DEBUG remote (`openLocal`, `goto`, `controls`). Frames are in `edge-margin/`. The simulator doesn't draw the camera, so no frame shows it.
+Investigation only, 2026-11-12, on the iPhone Duo iOS 27.1 simulator ('Octavo Edge Duo', 3FFAC972-…; 'Octavo Edge Duo 2', DD28AEF1-…; 'Octavo Edge Duo 3', 9661F7B7-0B13-4B73-901F-6EB74F87ACB9; all deleted). Nothing here is designed or approved, and the probe code wasn't committed. Moby-Dick at 30%, opened through the DEBUG remote (`openLocal`, `goto`, `controls`). Frames are in `edge-margin/`.
 
 ## Summary
 
-- **Hiding the status bar alone doesn't clear the column.** The clock and battery go, but Back and ⋯ stay in their glass (frames 02, 06).
-- **Hiding the reader's toolbar as well clears it** (frames 03, 07): `.statusBarHidden(true)` plus `.toolbarVisibility(.hidden, for: .navigationBar)` while the controls are hidden. Showing the controls brings the toolbar back on glass, and hiding them takes it away again (frames 04, 08, 09).
-- **Unfolded and half open, that is already an Edge layout.** The right inset drops from 84 to 0, and today's `ReaderLayout` centres the spread on the whole screen. With Medium the text runs 67–442 | 509–884 instead of 139.5–448.8 | 503.6–813. The controls come and go without moving the text, because the toolbar isn't part of the measured safe area. Back and the group sit on the right page's top right corner, over the text, while they show.
-- **Folded, the column empties but the text doesn't move.** The safe area keeps its 84 pt with both hidden: the camera is in the column. So the text still ends at 382 pt (frame 03). Folded Edge needs its own layout that ignores that inset and clears the camera. No frame shows that yet.
-- **The camera** (folded) is 37×37 pt at x 399.7–436.7, y 29.3–66.3. foliate's columns are rectangles, so clearing it brings the whole page's top down about 18–34 pt (one or two lines).
-- **For the design:** Back and ⋯ are on screen while reading today, and in Edge they'd have to hide. The controls then need another way to come up, because today they come up only from ⋯ (Adam, 2026-11-02). Always show controls and book mode's side-column tap (#5) hit the same question.
+- **Recommendation: a top bar instead of an Edge step.** iOS 27.1 has a supported switch, `toolbarVerticalBehavior(.disabled)` (UIKit `preferredVerticalBarBehavior`). It moves the clock, Back and ⋯ out of the side column into a horizontal band at the top, in every posture, and the column's inset goes away (section 5).
+  - With foliate's top margin overlapping the band, folded Narrow holds about 13% more text a page than with the column. Hiding the column (Edge) gets about 17%.
+  - Nothing is hidden: the clock, Back and ⋯ keep their tap, and Always show controls and book mode work as before.
+  - Apple's header asks for it to be "a stable choice", so it fits as a setting: buttons on the side or on top (Adam, 2026-11-12).
+- **Edge, the issue's idea, works but costs UX** (sections 1–4).
+  - Hiding the status bar alone leaves Back and ⋯ in the column. With the toolbar hidden as well, the column clears.
+  - Unfolded, the layout then spreads across the whole screen by itself. Folded, the 84 pt inset stays because of the camera, so Edge needs its own layout.
+  - Edge rendered folded: text 18–448 pt, below the camera.
+  - The controls need a new way up. Adam ruled out a middle tap (ambiguous). A ⋯ at the end of the footer worked.
+- **The camera** (folded) is 37×37 pt at x 399.7–436.7, y 29.3–66.3. Edge's first line, at about 73 pt, clears it. In top-bar mode the camera sits in the band.
 
 ## 1. Hiding the status bar and the toolbar
 
 The probe, in `ReaderView`:
-- `.statusBarHidden(UserDefaults.standard.bool(forKey: "probeHideStatusBar"))` after the outer `.ignoresSafeArea()`.
-- `.toolbarVisibility(probeHideToolbar && !controls.buttonsVisible ? .hidden : .automatic, for: .navigationBar)` after `.toolbar { buttons }`.
-- Launched with `-probeHideStatusBar` and `-probeHideToolbar` set to `YES` or `NO`.
+- `.statusBarHidden(…)` after the outer `.ignoresSafeArea()`.
+- `.toolbarVisibility(hide && !controls.buttonsVisible ? .hidden : .automatic, for: .navigationBar)` after `.toolbar { buttons }`.
 
-The safe area comes from the remote's state file (`ReaderGeometry.safeArea`, via `model.safeAreaChanged`), and the regions from `DebugEvents` (`spike-events.jsonl`).
+The safe area comes from the remote's state file (`ReaderGeometry.safeArea`, via `model.safeAreaChanged`), and the regions from `DebugEvents` (`spike-events.jsonl`). Medium margins.
 
 | Posture | Hidden | Safe area (top, left, bottom, right) | `ReaderLayout` insets (left, right) | Occlusion regions | Column on screen |
 |---|---|---|---|---|---|
@@ -31,33 +34,56 @@ The safe area comes from the remote's state file (`ReaderGeometry.safeArea`, via
 | Half open | both | 0, 0, 34, **0** | 0, 0 | as above; the hinge's division active | empty; controls in 09 |
 
 - **The second occlusion is the status bar's own area:** 84×174 folded and 84×124 unfolded while it shows. With the bar hidden, folded keeps an 84×82 block around the camera, and unfolded loses it.
-- **The safe area follows the status bar, not the toolbar.** It's measured outside the reader's `NavigationStack`, so the toolbar coming and going changes nothing. In this run the controls went on and off in every posture with the insets unchanged.
-- **Controls with both hidden** (04, 08, 09): Back and the group come back in their glass, and the progress bar comes up as usual (split at the hinge half open). Folded they sit in the empty column. Unfolded they sit over the right page's top right: Back at about x 879–927, y 24–71, and the group at x 879–927, y 85–285, where the text runs to 884. Hiding them again leaves the page as it was.
-- **Showing the status bar again unfolded would re-paginate**, because it brings back the 84 pt inset. So in Edge the status bar stays hidden the whole time, even while the controls show. Today's five steps can't hide it without reflowing.
+- **The safe area follows the status bar, not the toolbar.** It's measured outside the reader's `NavigationStack`, so the toolbar coming and going changes nothing.
+- **Controls with both hidden** (04, 08, 09): Back and the group come back in their glass. Unfolded they sit over the right page's top right, where the text runs to 884. Hiding them again leaves the page as it was.
+- **Showing the status bar again unfolded re-paginates**, because the 84 pt inset comes back. So Edge would keep the status bar hidden the whole time.
 
 ## 2. The camera
 
-- **Folded:** a 37×37 pt `occlusion` at x 399.7–436.7, y 29.3–66.3, with no margins. Hidden or not, iOS reports the 84×82 block around it (x 382–466, y 0–82) and keeps the 84 pt safe area.
-- foliate's text starts at the view's top inset plus its 48 px margin, so about y 48–51 today. To clear the camera, the page's top inset would be about 18–22 pt (text from ≈ 70 pt). To clear the reported block, 34 pt or more (text from ≈ 86 pt). A line is about 20 pt at the default size, so folded Edge costs one or two lines a page. That's applied to the whole page, because foliate's columns are rectangles and the float workaround is out.
-- **Unfolded:** the inner camera is reported *inactive* (58×37 at x 677–735, y 21–58, over the right page). The right page's first line already starts at about y 58, so nothing changes there. Whether "inactive" means the panel draws there on a real Duo is unchecked.
-- **Unfolded sideways** wasn't checked. The bar lies along the top there (safe area top 82).
+- **Folded:** a 37×37 pt `occlusion` at x 399.7–436.7, y 29.3–66.3, with no margins. iOS reports the 84×82 block around it (x 382–466, y 0–82) and keeps the 84 pt safe area with the status bar hidden. The simulator tool (`mcp__Claude_Code_iOS_Simulator__control` screenshot) draws the camera, and `simctl`/`hinge` screenshots don't (frame 11 against 10).
+- **Unfolded:** the inner camera is reported *inactive* (58×37 at x 677–735, y 21–58, over the right page). Whether that means the panel draws there on a real Duo is unchecked.
 
-## 3. How `ReaderLayout` could do Edge (a sketch, not a design)
+## 3. Edge folded, rendered (frames 10, 11)
 
-- **Unfolded and half open:** today's `spread` already does it, once the safe area is 0 (frame 07). Edge could hide both bars and leave the layout alone. Or, more robustly, it could set the right inset to 0 itself, so the layout never depends on when the status bar goes.
-- **Folded:** its own case. The safe area keeps 84 pt, so `ReaderMargins.underColumn` can't reach far enough. The view would be the screen's width (466), the margin `gap`% of it each side, the top inset taken from the camera's occlusion (section 2), and the bottom inset the home indicator's 34. `ReaderGeometry` would carry the occlusion regions (it has only divisions today), and `ReaderLayoutTests` would get Edge's frames.
-- **Status bar:** hidden for as long as an Edge reader is open. Other steps keep it, unchanged.
-- **Toolbar:** hidden while the controls are hidden. That includes Back and ⋯, which show today whenever the reader is open.
-- **Footer:** follows `textColumns`, so it moves out with the text by itself (07).
-- **Progress bar:** `barSpans` keeps 12 pt inside the safe area. Unfolded with the bar hidden that's the whole width (08), and folded it's the column's edge as today (04). Decision 7 lined the bar up with panels, not the text, so nothing has to follow Edge's margins.
-- **Panels:** `ReaderPanelFrame` takes `safe.right`, which is right folded and is 0 unfolded. They'd need checking against the buttons in the corner unfolded.
-- **Showing the controls:** with ⋯ hidden, they need another way up. Today they come only from ⋯ (no middle tap). **A UX decision.**
-- **Always show controls:** it keeps the buttons up, on the text in Edge (08). Either Edge turns it off or the other way round. **A UX decision.**
-- **Book mode (#5):** half open, a tap in the side column shows the controls. With the column gone, that tap lands on the right page's margin and turns the page. Edge needs the same answer as the controls.
-- **The bookmark ribbon** (`safe.right − 30`) sits at the column's edge folded and at the screen's edge unfolded, beside Back in the corner.
+The probe was a `ReaderLayout.single` case: the view the screen's width, Narrow's 18 pt margin, and a top inset of 22 pt, so text starts about 70 pt down. The status bar and toolbar were hidden while the controls were, and a ⋯ sat at the end of the footer line in the bottom margin, with the numbers moved 24 pt left.
+
+- Text runs 18–448 pt, against Narrow's 18–364. The first line, at about 73 pt, clears the camera. That's about 26 lines of ~67 characters, against Narrow's 27 of ~55: roughly 17% more text a page.
+- A real tap on the footer ⋯ brought the controls up (frame 11), and they hide again cleanly.
+- With the controls up, Back and the group sit over the right end of the top lines. The progress bar still stops at the column's edge, because the safe area keeps 84 pt there.
+- **UX costs** (Adam, 2026-11-12):
+  - Back and ⋯ hidden while reading.
+  - A new way up for the controls. A middle tap is out as ambiguous, and edge swipes all belong to the system. A long press belongs to text selection.
+  - Always show controls and book mode's column tap (#5) need answers.
+
+## 4. Edge layout sketch (if it's ever picked)
+
+- Unfolded and half open: today's `spread` already does it once the safe area is 0 (frame 07). Better to set the right inset to 0 itself, so the layout never depends on when the status bar goes.
+- Folded: its own case, as in section 3, with `ReaderGeometry` carrying the occlusion regions (it has only divisions today).
+- The footer follows `textColumns`. `barSpans` and `ReaderPanelFrame` take `safe.right`, so they'd need Edge's width folded.
+
+## 5. Top bar: `toolbarVerticalBehavior(.disabled)` (frames 12–15)
+
+The SwiftUI modifier (`ToolbarVerticalBehavior`, iOS 27.1) and UIKit's `preferredVerticalBarBehavior` return `.disabled` to opt out of the vertical bar. Apple's header says bar content then falls back to the horizontal top and bottom bars, the status bar turns horizontal, and the column's safe-area inset goes. It asks for "a stable choice", not one toggled as you navigate or with a view's state. The probe put it on the reader's stack content (after `.toolbar { buttons }`), Narrow margins.
+
+- **Safe area:** top 82, left 0, bottom 34, right 0, folded, unfolded and half open, with the controls up or not. `ReaderLayout` copes as it is, because that's the shape it already handles sideways. The text runs full width, 18–448 pt folded, and the spread is centred on the fold unfolded.
+- **The band:** the clock and the indicators on the right, and Back and ⋯ (or the whole group with the controls up) to their left, ending near y 72. Unfolded, they sit over the right page.
+- **The gap below the band** (frame 12): the 82 pt band plus foliate's own 48 pt top margin, so text started near 130 pt. Overlapping that margin with the band (top inset 82 − 46 = 36 pt) brings the first line to about 90 pt, some 16 pt below the buttons (frames 13, 15). That's the same idea as Narrow's margin under the column.
+- **Folded, with the margin overlapped:** about 25 lines of ~67 characters, about 13% more text a page than Narrow with the column (frame 13).
+- **Unfolded and half open:** the spread runs full width, and the group stays clear above the first line (frame 14). The bar splits at the hinge as usual.
+- **Not checked:**
+  - Opening and closing a book: the shell keeps its column, and the system animates the change between the two layouts.
+  - The tour, whose cards point at the column's buttons.
+  - Sideways, where the band is already at the top.
+  - A real Duo.
+
+## How a top-bar setting could be built (a sketch, not a design)
+
+- A setting such as "Buttons: Side / Top" in Customize. The reader's stack takes `.toolbarVerticalBehavior(top ? .disabled : .automatic)`, and only the reader, so the shell keeps its column.
+- `ReaderLayout` lets foliate's 48 pt top margin overlap the top safe area by what the band leaves empty below the buttons. That needs the band's height (82) and where the buttons end, measured, not fixed numbers.
+- The footer, the bar's spans (`barSpans`, from the safe area) and the panels (`ReaderPanelFrame`) follow the safe area, which has no right inset in this mode. The panels' anchor moves from the column's buttons to the band's.
+- The bookmark ribbon (`safe.right − 30`) would sit at the screen's edge, under the band's buttons. It needs a look.
 
 ## Open
 
-- **No frame shows folded text under the column.** It needs a probe of the folded Edge layout, with the camera clearance picked.
-- **A real Duo:** do the status bar and the toolbar hide in the side column there, does the folded safe area stay 84 pt, and where is the camera? The simulator can't answer what the hardware does.
-- The UX questions above, for Adam, with mockups.
+- Adam's call on the top-bar setting, with mockups or the probe in the live panel.
+- A real Duo: does the top bar behave the same, and where does the camera sit in the band?
