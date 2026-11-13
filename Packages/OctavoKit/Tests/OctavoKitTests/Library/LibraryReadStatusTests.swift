@@ -30,6 +30,16 @@ struct LibraryReadStatusTests {
         (.abandoned, 0, nil),
     ]
 
+    @Test func keepsAStatusItDoesntKnowApart() throws {
+        #expect(LibraryReadStatus(server: "shelved") == .other)
+        #expect(LibraryReadStatus(server: "octavo.other") == .other)
+        #expect(LibraryReadStatus(server: "on_hold") == .onHold)
+        // An older Octavo reading a newer one's record.
+        #expect(try JSONDecoder().decode([LibraryReadStatus].self, from: Data(#"["shelved","read"]"#.utf8)) == [.other, .read])
+        #expect(!LibraryReadStatus.allCases.contains(.other))
+        #expect(LibraryFilter.showing(.other, progress: nil) == nil)
+    }
+
     @Test(arguments: shelves)
     func showsUnderTheFilterBookOrbitDoes(status: LibraryReadStatus?, progress: Double?, filter: LibraryFilter?) {
         #expect(LibraryFilter.showing(status, progress: progress) == filter)

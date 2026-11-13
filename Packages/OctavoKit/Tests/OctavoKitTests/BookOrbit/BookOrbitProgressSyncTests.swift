@@ -13,10 +13,13 @@ struct BookOrbitProgressSyncTests {
         return BookOrbitProgressSync(client: client, fileID: fileID, unstarted: bookID, started: started)
     }
 
-    /// A server whose book 33 has `status`; progress posts answer 201.
-    private func server(status: String?, failsStatus: Bool = false) -> StubServer {
+    /// A server whose book 33 has `status` and file 34 `progress` (none:
+    /// never opened); progress posts answer 201.
+    private func server(status: String?, progress: String? = nil, failsStatus: Bool = false) -> StubServer {
         StubServer { request in
             switch (request.method, request.path) {
+            case ("GET", "/api/v1/books/files/34/progress"):
+                return .json(progress ?? #"{"cfi":null,"pageNumber":null,"percentage":0,"textUpdatedAt":null}"#)
             case ("GET", "/api/v1/books/33"):
                 let status = status.map { #"{"status":"\#($0)","source":"manual"}"# } ?? "null"
                 return .json(#"{"id":33,"title":"A Doll’s House","readStatus":\#(status)}"#)
@@ -69,10 +72,11 @@ struct BookOrbitProgressSyncTests {
         try await sync.push(ReadingPosition(cfi: "epubcfi(/6/8!/4/4/1:0)", fraction: 0.03))
 
         #expect(server.requests.map { "\($0.method) \($0.path)" } == [
-            "POST /api/v1/books/files/34/progress", "GET /api/v1/books/33", "PATCH /api/v1/books/33/status",
+            "GET /api/v1/books/files/34/progress", "POST /api/v1/books/files/34/progress",
+            "GET /api/v1/books/33", "PATCH /api/v1/books/33/status",
             "POST /api/v1/books/files/34/progress",
         ])
-        #expect(server.requests[2].json as? [String: String] == ["status": "reading"])
+        #expect(server.requests[3].json as? [String: String] == ["status": "reading"])
         #expect(told.statuses == [.reading])
     }
 
@@ -84,8 +88,22 @@ struct BookOrbitProgressSyncTests {
 
         try await sync(server, fileID: 34, unstarted: 33) { told.append($0) }.push(ReadingPosition(cfi: "epubcfi(/6/8!/4/2/1:0)", fraction: 0.02))
 
-        #expect(server.requests.map(\.method) == ["POST", "GET"])
+        #expect(server.requests.map(\.method) == ["GET", "POST", "GET"])
         #expect(told.statuses.isEmpty)
+    }
+
+    // BookOrbit's own reader leaves a hand-set status alone on a book that's
+    // been started, here or elsewhere; the list's copy may not know.
+    @Test func aBookTheServerHasAPlaceForKeepsItsStatus() async throws {
+        let server = server(status: "want_to_read", progress: #"{"cfi":"epubcfi(/6/8!/4/2/1:0)","percentage":20,"textUpdatedAt":"2026-11-01T00:00:00.000Z"}"#)
+        let sync = sync(server, fileID: 34, unstarted: 33)
+
+        try await sync.push(ReadingPosition(cfi: "epubcfi(/6/8!/4/4/1:0)", fraction: 0.21))
+        try await sync.push(ReadingPosition(cfi: "epubcfi(/6/8!/4/6/1:0)", fraction: 0.22))
+
+        #expect(server.requests.map { "\($0.method) \($0.path)" } == [
+            "GET /api/v1/books/files/34/progress", "POST /api/v1/books/files/34/progress", "POST /api/v1/books/files/34/progress",
+        ])
     }
 
     @Test(arguments: [0, 1.0])
@@ -104,7 +122,8 @@ struct BookOrbitProgressSyncTests {
         try await sync.push(ReadingPosition(cfi: "epubcfi(/6/8!/4/2/1:0)", fraction: 0.02))
         try await sync.push(ReadingPosition(cfi: "epubcfi(/6/8!/4/4/1:0)", fraction: 0.03))
 
-        #expect(server.requests.map(\.method) == ["POST", "GET", "PATCH", "POST", "GET", "PATCH"])
+        // The server's place is read once: after the first push it's this one.
+        #expect(server.requests.map(\.method) == ["GET", "POST", "GET", "PATCH", "POST", "GET", "PATCH"])
     }
 
     @Test func aStartedBookPushesOnly() async throws {

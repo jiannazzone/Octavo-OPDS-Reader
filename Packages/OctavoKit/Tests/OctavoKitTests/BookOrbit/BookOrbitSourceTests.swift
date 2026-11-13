@@ -400,7 +400,8 @@ struct BookOrbitSourceTests {
         (#"{"status":"skimmed"}"#, "30", false, false, false),
         (#"{"status":"abandoned"}"#, "30", false, false, false),
         (#"{"status":"read"}"#, "40", false, false, true),
-        (#"{"status":"shelved"}"#, "null", true, false, false),
+        // One a newer BookOrbit added: only under All books, as on the server.
+        (#"{"status":"shelved"}"#, "null", false, false, false),
     ])
     func matchesBooksAsTheServerDoes(status: String, progress: String, unread: Bool, reading: Bool, finished: Bool) throws {
         let json = #"{"id":1,"title":"Book","readStatus":\#(status),"readingProgress":\#(progress)}"#

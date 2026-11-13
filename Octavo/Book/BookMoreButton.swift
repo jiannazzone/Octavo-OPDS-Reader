@@ -61,6 +61,8 @@ extension LibraryReadStatus {
         case .read: "Finished"
         case .skimmed: "Skimmed"
         case .abandoned: "Abandoned"
+        // Never shown: not in the menu, and it has no place word.
+        case .other: "Other"
         }
     }
 
@@ -75,6 +77,7 @@ extension LibraryReadStatus {
         case .read: "checkmark"
         case .skimmed: "forward"
         case .abandoned: "xmark"
+        case .other: "questionmark"
         }
     }
 
@@ -83,17 +86,17 @@ extension LibraryReadStatus {
     var placeWord: String? {
         switch self {
         case .wantToRead, .onHold, .skimmed, .abandoned: title
-        case .unread, .reading, .rereading, .read: nil
+        case .unread, .reading, .rereading, .read, .other: nil
         }
     }
 
     /// The status More ticks for a book with `status`: Rereading is Reading,
-    /// none is Unread, and Finished ticks nothing.
+    /// none is Unread, and Finished or one Octavo doesn't know ticks nothing.
     static func ticked(_ status: LibraryReadStatus?) -> LibraryReadStatus? {
         switch status {
         case nil: .unread
         case .rereading: .reading
-        case .read: nil
+        case .read, .other: nil
         case let status?: status
         }
     }

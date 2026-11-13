@@ -287,10 +287,10 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     /// `rereading`, `read`, `skimmed` or `abandoned` (v3.6.0).
     public var readStatus: String?
 
-    /// `readStatus` as Octavo knows it. `nil` for none, or one a newer
-    /// server added.
+    /// `readStatus` as Octavo knows it: `nil` for none, `other` for one a
+    /// newer server added.
     public var status: LibraryReadStatus? {
-        readStatus.flatMap(LibraryReadStatus.init(rawValue:))
+        readStatus.map(LibraryReadStatus.init(server:))
     }
 
     /// The file BookOrbit marks primary, else the first one.

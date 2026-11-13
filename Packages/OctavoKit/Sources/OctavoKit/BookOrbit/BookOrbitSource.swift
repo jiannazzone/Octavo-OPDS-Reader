@@ -116,7 +116,7 @@ public struct BookOrbitSource: LibrarySource {
 
     /// `reading` on a book that's been read is stored as `rereading`.
     public func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws {
-        guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
+        guard let id = Int(book.id.rawValue), status != .other else { throw LibraryError.invalidLink }
         try await client.setReadStatus(status.rawValue, bookID: id)
     }
 
