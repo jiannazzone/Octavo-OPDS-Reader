@@ -42,13 +42,6 @@ public enum LibraryReadStatus: String, Hashable, Codable, Sendable, CaseIterable
         case .unread, .read, .skimmed, .abandoned, .other: false
         }
     }
-
-    /// What starting the book makes it, as BookOrbit's own reader does:
-    /// Unread and Want to read become Reading. `nil`: it stays. (On hold
-    /// becomes Reading too, but the server does that for any progress.)
-    public var whenStarted: LibraryReadStatus? {
-        self == .unread || self == .wantToRead ? .reading : nil
-    }
 }
 
 extension LibraryFilter {

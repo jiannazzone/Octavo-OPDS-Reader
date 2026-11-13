@@ -460,8 +460,8 @@ final class LibraryModel {
         marked(book, leavesHome: finished)
     }
 
-    /// A read status set on the book's screen, or by starting the book
-    /// (#120). As on BookOrbit's own Continue Reading, a book skimmed,
+    /// A read status set on the book's screen (#120). As on BookOrbit's own
+    /// Continue Reading, a book skimmed,
     /// abandoned, finished or unread leaves Home.
     func markedStatus(_ book: SourcedBook.ID, _ status: LibraryReadStatus) {
         keepMarks([book: ReadMark(status)])

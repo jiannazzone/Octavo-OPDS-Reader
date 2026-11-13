@@ -24,8 +24,8 @@ final class BookPage {
     private(set) var markedFinished: Bool?
     /// Setting finished didn't reach the server.
     private(set) var finishedFailed = false
-    /// The read status as last set here or by starting the book, over what
-    /// the server sent (BookOrbit's, #120).
+    /// The read status as last set here, over what the server sent
+    /// (BookOrbit's, #120).
     private(set) var markedStatus: LibraryReadStatus?
     /// Setting the status didn't reach the server.
     private(set) var statusFailed = false
@@ -102,7 +102,8 @@ final class BookPage {
     /// `setFinished` does.
     func setStatus(_ status: LibraryReadStatus, from source: any LibrarySource) async {
         let before = (markedFinished, markedStatus)
-        statusChanged(status)
+        markedStatus = status
+        markedFinished = status == .read
         finishedFailed = false
         statusFailed = false
         do {
@@ -111,12 +112,6 @@ final class BookPage {
             (markedFinished, markedStatus) = before
             statusFailed = !(error is CancellationError)
         }
-    }
-
-    /// The server's status changed: set here, or by starting the book.
-    func statusChanged(_ status: LibraryReadStatus) {
-        markedStatus = status
-        markedFinished = status == .read
     }
 
     func retryDetails(from source: any LibrarySource) async {

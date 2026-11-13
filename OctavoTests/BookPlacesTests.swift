@@ -455,35 +455,6 @@ struct BookPlacesTests {
 
     // MARK: Which books sync
 
-    // Starting an Unread or Want to read book makes it Reading, as
-    // BookOrbit's own reader does (#120): only for a book not started, and
-    // with a status set since the list's copy.
-    @Test func aBookNotStartedGetsTheStartingRule() throws {
-        let shell = makeShell()
-        let id = LibrarySourceID(rawValue: "bookorbit")
-        // Nothing here makes a request.
-        let client = BookOrbitClient(baseURL: URL(string: "http://localhost:3300")!)
-        shell.library.add(LibraryServer(id: id, name: "BookOrbit", source: BookOrbitSource(client: client), syncsProgress: true))
-        func unstartedBookID(_ book: SourcedBook) throws -> Int? {
-            let shared = try #require(shell.places.readerSync(for: book) as? SharedProgressSync)
-            let backend = (shared.backend as? DebugProgressSync)?.wrapping ?? shared.backend
-            return try #require(backend as? BookOrbitProgressSync).unstartedBookID
-        }
-        var listed = Self.book.book
-        listed.progress = nil
-        let book = SourcedBook(source: id, book: listed)
-        #expect(try unstartedBookID(book) == nil)
-
-        shell.library.markedStatus(book.id, .wantToRead)
-        #expect(try unstartedBookID(book) == 3)
-
-        var started = listed
-        started.progress = 0.3
-        #expect(try unstartedBookID(SourcedBook(source: id, book: started)) == nil)
-        shell.library.markedStatus(book.id, .onHold)
-        #expect(try unstartedBookID(book) == nil)
-    }
-
     @Test func onlyABookOrbitServerSetToSyncSyncs() {
         let client = BookOrbitClient(baseURL: URL(string: "http://localhost:3300")!)
         let id = LibrarySourceID(rawValue: "server")

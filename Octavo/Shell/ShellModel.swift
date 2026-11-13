@@ -29,7 +29,7 @@ final class ShellModel {
     /// Downloads books and opens them in the reader.
     let opener: BookOpener
     /// The book screens' state, kept across folds.
-    let pages: BookPages
+    let pages = BookPages()
     /// Where each book opens, and whether its place has synced (step 13).
     let places: BookPlaces
     /// The KOReader sync account, for books from catalogs and Files.
@@ -109,18 +109,10 @@ final class ShellModel {
         self.servers = servers
         self.bookmarks = bookmarks
         self.removedServers = removedServers
-        let pages = BookPages()
-        self.pages = pages
         places = BookPlaces(store: positions) { [library, opener, koreader] book in
             let server = library.server(book.source)
-            // With a status set since the list's copy.
-            let sync = ShellModel.progressSync(for: book.withMarks(from: library.readMarks), on: server) { status in
-                Task { @MainActor in
-                    library.markedStatus(book.id, status)
-                    pages.existingPage(for: book.id)?.statusChanged(status)
-                }
-            }
-            return sync ?? ShellModel.koreaderSync(for: book, on: server, account: koreader.account) { opener.localFile(for: book) }
+            return ShellModel.progressSync(for: book, on: server)
+                ?? ShellModel.koreaderSync(for: book, on: server, account: koreader.account) { opener.localFile(for: book) }
         }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
@@ -516,20 +508,13 @@ final class ShellModel {
 
     /// Where `book`'s place syncs: its BookOrbit server, if setup chose to
     /// sync there. Books from an OPDS catalog or Files keep their place on
-    /// the iPhone. Starting a book listed as Unread or Want to read makes it
-    /// Reading, as BookOrbit's own reader does, and tells `started` (#120).
-    static func progressSync(
-        for book: SourcedBook, on server: LibraryServer?,
-        started: @escaping @Sendable (LibraryReadStatus) -> Void = { _ in }
-    ) -> (any ProgressSync)? {
+    /// the iPhone.
+    static func progressSync(for book: SourcedBook, on server: LibraryServer?) -> (any ProgressSync)? {
         guard let server, server.id == book.source, server.syncsProgress,
               let source = server.source as? BookOrbitSource,
               let file = book.book.readableFile, let fileID = BookOrbitSource.fileID(of: file)
         else { return nil }
-        let unstarted = (book.book.progress ?? 0) == 0 && book.book.readStatus?.whenStarted != nil
-        let sync = BookOrbitProgressSync(
-            client: source.client, fileID: fileID, unstarted: unstarted ? Int(book.book.id.rawValue) : nil, started: started
-        )
+        let sync = BookOrbitProgressSync(client: source.client, fileID: fileID)
         #if DEBUG
         let defaults = UserDefaults.standard
         let pullDelay = defaults.double(forKey: "syncPullDelay")

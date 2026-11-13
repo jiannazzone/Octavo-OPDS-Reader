@@ -9,11 +9,6 @@ struct LibraryReadStatusTests {
         #expect(stays == [.wantToRead, .reading, .onHold, .rereading])
     }
 
-    @Test func startingMovesOnlyUnreadAndWantToRead() {
-        #expect(LibraryReadStatus.allCases.filter { $0.whenStarted != nil } == [.unread, .wantToRead])
-        #expect(LibraryReadStatus.wantToRead.whenStarted == .reading)
-    }
-
     /// (status, progress, the filter that shows it)
     static let shelves: [(LibraryReadStatus?, Double?, LibraryFilter?)] = [
         (nil, nil, .unread),

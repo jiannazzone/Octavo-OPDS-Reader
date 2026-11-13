@@ -11,25 +11,25 @@ Every BookOrbit read status on a book's screen, and the filters and Home that fo
 - **Match BookOrbit.** Home's Keep Reading and the Filter follow BookOrbit's own rules:
   - **Keep Reading** is BookOrbit's Continue Reading: started books that are Reading, Rereading, On hold or Want to read. Setting Skimmed, Abandoned, Unread or Finished takes a book off this iPhone's list too, as Mark finished did (`LibraryModel.markedStatus`).
   - **Filter:** Unread is no progress and no status, Unread or Want to read. Reading is Reading or Rereading, or On hold or Want to read once started (0 < progress < 100%). Finished is Read. Skimmed and Abandoned show only under All books. On the server (`BookOrbitBookFilter`), on a series' or an author's books, and on On iPhone (`LibraryFilter.showing`), the rule is the same.
-  - **Octavo sets no status itself, except where BookOrbit's own reader would.** Starting a book whose status is Unread or Want to read makes it Reading, as BookOrbit's web reader does (below).
+  - **Octavo sets no status itself.** Reading a Want to read or Unread book makes it Reading on the server, through Octavo's progress request as through BookOrbit's web reader (checked end to end below).
 
 ## How it's built
 
-- `LibraryReadStatus` (OctavoKit) holds BookOrbit's eight values, BookOrbit's Continue Reading rule (`staysInContinueReading`) and what starting a book does (`whenStarted`). `LibraryFilter.showing(_:progress:)` is the filter rule, used wherever books are filtered on the iPhone. `LibraryBook.readStatus` carries it from lists and the details.
+- `LibraryReadStatus` (OctavoKit) holds BookOrbit's eight values, BookOrbit's Continue Reading rule (`staysInContinueReading`), and `other` for a value a newer BookOrbit adds. `LibraryFilter.showing(_:progress:)` is the filter rule, used wherever books are filtered on the iPhone. `LibraryBook.readStatus` carries it from lists and the details.
 - `LibrarySource.setReadStatus` (`PATCH books/{id}/status`). `tracksReadStatus` says which sources show "…".
 - The finished mark became a **read mark** (`ReadMark`: finished, and the status where the server keeps one). `LibraryModel.readMarks`, the iPhone's records (`BooksOnIPhone`, `RecentBooks`) and a list's newer word work as the finished marks did, so a cover, a filter and Home agree whatever copy of the book they hold.
 - `BookPage.setStatus` shows the change at once and puts it back if the server refuses ("Couldn't change the status. Check your connection."). Mark finished sets the status too (Read, or Reading when taken off).
-- **Starting a book:** `BookOrbitProgressSync` takes the book's id when its copy (with any status set since) shows it not started with a status that starting changes. Before the first push between 0 and 100% it reads the server's place: if the server has one, the book was started (here or elsewhere) and its status stays, as BookOrbit's reader leaves it. If not, after the push it reads the status again (the copy may be old), sets Reading if it's still Unread or Want to read, and tells the app (`ShellModel.progressSync(for:on:started:)`), which marks the library and an open book screen. A failure is tried again with the next push.
 - **A status Octavo doesn't know** (a newer BookOrbit's) is kept as `other`: only under All books, as on the server, with nothing ticked in "…" and never sent. Records an older Octavo reads decode it the same way.
 
-## Why the starting rule
+## No starting rule
 
-BookOrbit's web reader writes progress through `PUT reading-progress`; Octavo writes through `POST books/files/{id}/progress`. Starting a book, the first moves Unread, Want to read and On hold to Reading; the second leaves Unread and Want to read alone. Without the rule, a Want to read book read in Octavo stayed "Want to read · 60%" on every device. Switching Octavo's progress path was ruled out: it's the sync core, measured 31/31 against BookOrbit, and the batched endpoint has semantics of its own.
+Built first, then taken out (2026-11-13): Octavo set Reading itself when it started a Want to read or Unread book, because the first measurement said its progress request left them and BookOrbit's web reader didn't. Testing it end to end against the local server showed the server had already done it ("reading", `auto`). Measured again on books without the earlier tests' history, both requests do the same: Unread and Want to read become Reading unless the book has been finished before, and then both leave them (`bookorbit-api.md`). So the rule was redundant where BookOrbit acts, and wrong where it doesn't.
 
 ## Checked
 
-- OctavoKit: every status sent as BookOrbit's own value, the filter rules against each status and progress, the starting rule (Want to read starts, Abandoned stays, 0% and 100% don't start, a failure is tried again).
+- OctavoKit: every status sent as BookOrbit's own value, the filter rules against each status and progress, a status Octavo doesn't know.
 - App: the page's status and its refusal, Mark finished setting the status, the place lines, the folded line, the menu's tick, marks reaching the iPhone's records and surviving a relaunch, a list's newer status, Home dropping Abandoned and keeping On hold, On iPhone's filter for BookOrbit books.
+- End to end against the local BookOrbit: statuses set on the server showing on the book's screen and on covers, Want to read under the server's Unread filter, and reading a Want to read book in the app making it Reading on the server.
 - Simulator (iPhone Duo #120, iOS 27.1): the button folded and unfolded in both versions, On hold folded and unfolded. Scripted taps didn't reach the menu, so opening it is checked by hand.
 
 ## Not done
