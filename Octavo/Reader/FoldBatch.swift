@@ -41,6 +41,8 @@ nonisolated struct FoldBatch: Equatable, Sendable {
     private(set) var pageResized = false
     /// The page has reported a new size since the batch started.
     private(set) var pageEverResized = false
+    /// Lays out no sooner than this (`settling`).
+    private var earliest: Instant?
 
     /// The hinge moved across, to `folded`.
     init(folded: Bool, at now: Instant) {
@@ -48,6 +50,20 @@ nonisolated struct FoldBatch: Equatable, Sendable {
         lastInputAt = now
         wasFolded = !folded
         isFolded = folded
+    }
+
+    /// Buttons on Top switched (#136): the page keeps its size, and the safe
+    /// area changes a moment later as the system moves its bar, so there's no
+    /// resize to wait for, only the inputs going quiet, and no sooner than
+    /// `minimum`.
+    init(settlingAt now: Instant, minimum: Duration = .milliseconds(300)) {
+        startedAt = now
+        lastInputAt = now
+        wasFolded = false
+        isFolded = false
+        pageResized = true
+        pageEverResized = true
+        earliest = now.advanced(by: minimum)
     }
 
     /// The hinge moved across again before the batch ended: wait for this
@@ -77,7 +93,8 @@ nonisolated struct FoldBatch: Equatable, Sendable {
         if !pageEverResized, isFolded == wasFolded { return startedAt }
         let latest = startedAt.advanced(by: timing.maxWait)
         guard pageResized else { return latest }
-        return min(lastInputAt.advanced(by: timing.quiet), latest)
+        let quiet = min(lastInputAt.advanced(by: timing.quiet), latest)
+        return earliest.map { max($0, quiet) } ?? quiet
     }
 }
 

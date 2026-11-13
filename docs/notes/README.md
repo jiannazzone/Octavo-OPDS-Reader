@@ -43,6 +43,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `ui-audit.md` | 2026-11-07 | Is the UI layer sound or a house of cards: the verdict, 23 findings by area (shell, screens, reader chrome) with severity, evidence and fix size, files that keep getting patched, and a recommended order |
 | `koreader-sync-plan.md` | 2026-11-06 | Its implementation plan: the test on real KOReader (done, go), then the protocol, positions, the opening rule, wiring, Settings and review, with the questions for Adam |
 | `library-filters.md` | 2026-11-09 | Scoping sort and filter beyond BookOrbit's All screen (#131 step 2): what BookOrbit, COPS, Calibre-Web, Komga and Kavita can do on the server, timings for 2,000-book catalogs, a plan for OPDS and On iPhone, open questions |
-| `edge-margin.md` (+ `edge-margin/`) | #136, 2026-11-12 | Text in the side column: hiding the status bar and toolbar, the folded camera, a rendered folded Edge page with a footer ⋯, and the recommendation: the system's top bar (`toolbarVerticalBehavior(.disabled)`) as a setting, with foliate's top margin overlapping the band |
+| `edge-margin.md` (+ `edge-margin/`) | #136, 2026-11-12 | Text in the side column: hiding the status bar and toolbar, the folded camera, a rendered folded Edge page with a footer ⋯, and what was built: Buttons on Top, the system's top bar while reading (`toolbarVerticalBehavior(.disabled)`), with foliate's top margin overlapping the band |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.

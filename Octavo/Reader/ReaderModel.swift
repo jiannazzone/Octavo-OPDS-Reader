@@ -74,6 +74,17 @@ final class ReaderModel {
     var margins = ReaderMargins.standard {
         didSet { if margins != oldValue { relayout() } }
     }
+    /// Buttons on Top (#136): the clock and the buttons in a band along the
+    /// top instead of the side column. Switched with a book open, the page
+    /// holds under a snapshot until the system's bar has moved, then lays out
+    /// once, as for a fold: laid out as they came, the setting and the safe
+    /// area each moved the text.
+    var buttonsOnTop = false {
+        didSet {
+            guard buttonsOnTop != oldValue else { return }
+            if phase == .open { beginBarSwitch() } else { relayout() }
+        }
+    }
     /// iOS lays a backgrounded app out again for its snapshots, turned sideways
     /// and back. Nobody reads that page, and laying out for it moves the place,
     /// so size and hinge changes wait until the app is back
@@ -90,6 +101,9 @@ final class ReaderModel {
     /// The narrower margins reach the page under the side column, which only
     /// suits margins that aren't drawn.
     private var layoutMargins: ReaderMargins { isFixedLayout ? .standard : margins }
+    /// Fixed-layout pages have no top margin of foliate's to overlap the
+    /// band with: theirs would go under the buttons.
+    private var layoutButtonsOnTop: Bool { buttonsOnTop && !isFixedLayout }
     /// The controls cover the page, so a tap anywhere hides them.
     var coversPage = false {
         didSet { if coversPage != oldValue { sendTapMode() } }
@@ -417,7 +431,7 @@ final class ReaderModel {
             scheduleFoldEnd()
             return
         }
-        apply(ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins))
+        apply(ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins, buttonsOnTop: layoutButtonsOnTop))
     }
 
     // MARK: Folding
@@ -452,10 +466,26 @@ final class ReaderModel {
             scheduleFoldEnd()
             return
         }
-        foldBatch = FoldBatch(folded: folded, at: now)
+        hold(FoldBatch(folded: folded, at: now), endTurn: endTurn)
+    }
+
+    /// Buttons on Top switched with a book open (`buttonsOnTop`).
+    private func beginBarSwitch() {
+        let endTurn = finishTurnForFold() ?? ""
+        if foldBatch != nil {
+            foldBatch?.input(at: .now)
+            scheduleFoldEnd()
+            return
+        }
+        hold(FoldBatch(settlingAt: .now), endTurn: endTurn)
+    }
+
+    /// Holds the page under a snapshot of itself until `batch` ends.
+    private func hold(_ batch: FoldBatch, endTurn: String) {
+        foldBatch = batch
         lastFold = FoldReport()
         call(endTurn + "return await window.octavo.hold()")
-        captureCover(startedAt: now)
+        captureCover(startedAt: batch.startedAt)
         scheduleFoldEnd()
     }
 
@@ -499,7 +529,7 @@ final class ReaderModel {
         }
         lastClosedCover = max(lastClosedCover, cover)
         guard phase == .open else { return }
-        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins)
+        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins, buttonsOnTop: layoutButtonsOnTop)
         self.layout = layout
         sentLayout = layout
         bookModeMayHaveChanged()

@@ -123,12 +123,15 @@ struct ReaderTextPanel: View {
     let darkMode: Bool
     /// Room for everything at once (a spread).
     let showsAll: Bool
+    /// The iPhone has a side column to move the buttons out of (the Duo).
+    var offersButtonsOnTop = false
     let close: () -> Void
     @State private var customizing = false
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
     @AppStorage(ReaderPageTurn.key) private var pageTurn = ReaderPageTurn.standard
     @AppStorage(ReaderSettings.bookModeShadowKey) private var bookModeShadow = ReaderSettings.bookModeShadowDefault
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
+    @AppStorage(ReaderSettings.buttonsOnTopKey) private var buttonsOnTop = ReaderSettings.buttonsOnTopDefault
     @Environment(\.dynamicTypeSize) private var size
 
     var body: some View {
@@ -277,6 +280,9 @@ struct ReaderTextPanel: View {
             Toggle("Match Dark Mode", isOn: $appearance.matchDarkMode)
             Toggle("Book-Mode Shadow", isOn: $bookModeShadow)
             Toggle("Always Show Controls", isOn: $alwaysShowControls)
+            if offersButtonsOnTop {
+                Toggle("Buttons on Top", isOn: $buttonsOnTop)
+            }
         }
         .labeledContentStyle(StackedAtLargerText())
     }

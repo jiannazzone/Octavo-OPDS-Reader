@@ -100,6 +100,7 @@ private struct ReaderScreen: View {
     @Environment(ShellModel.self) private var shell
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
+    @AppStorage(ReaderSettings.buttonsOnTopKey) private var buttonsOnTop = ReaderSettings.buttonsOnTopDefault
     @AppStorage(ReaderAppearance.key) private var appearance = ReaderAppearance()
     @AppStorage(ReaderPageTurn.key) private var pageTurn = ReaderPageTurn.standard
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -160,7 +161,11 @@ private struct ReaderScreen: View {
                 .overlay(alignment: .topLeading) {
                     if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
                         ReaderRibbon()
-                            .offset(x: geometry.size.width - geometry.safeArea.right - 30)
+                            // With Buttons on Top, top left (Adam), clear of the
+                            // clock and the camera on the right: over the text's
+                            // left edge, or folded, where Back starts about 40 pt
+                            // in, 20 pt in, out of the display's rounded corner.
+                            .offset(x: model.buttonsOnTop ? ribbonLeft(in: geometry) : geometry.size.width - geometry.safeArea.right - 30)
                             .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     }
                 }
@@ -193,7 +198,7 @@ private struct ReaderScreen: View {
                             Group {
                                 switch panel {
                                 case .textAndTheme:
-                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil, close: closePanel)
+                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil, offersButtonsOnTop: shell.hasHinge, close: closePanel)
                                 case .contents:
                                     contentsPanel
                                 case .search:
@@ -261,6 +266,11 @@ private struct ReaderScreen: View {
         }
         .onChange(of: margins, initial: true) { _, margins in
             model.margins = margins
+        }
+        // Only where there's a side column to leave: elsewhere the buttons are
+        // on top already, under the status bar, and the text keeps clear of them.
+        .onChange(of: buttonsOnTop && shell.hasHinge, initial: true) { _, onTop in
+            model.buttonsOnTop = onTop
         }
         .onChange(of: pageTurn, initial: true) { _, pageTurn in
             model.pageTurn = pageTurn
@@ -386,6 +396,12 @@ private struct ReaderScreen: View {
     /// land on the fold half open). The rest of the column turns the page.
     /// With Always show controls it sits after the buttons and brings up
     /// the bar. Not while a panel is open: the bar would run under it.
+    /// The ribbon's left edge with Buttons on Top.
+    private func ribbonLeft(in geometry: ReaderGeometry) -> Double {
+        let textLeft = model.layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height))?.first?.lowerBound
+        return model.posture == .closed ? 20 : textLeft ?? 20
+    }
+
     private var showsControlsButton: Bool {
         model.phase == .open && !controls.showsBar && panel == nil
     }
