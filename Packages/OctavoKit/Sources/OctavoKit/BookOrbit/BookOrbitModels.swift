@@ -198,20 +198,30 @@ public indirect enum BookOrbitBookFilter: Encodable, Hashable, Sendable {
     /// answers a single string there with a 500.
     case rule(field: String, operator: String, values: [String]? = nil)
 
-    /// Status `unread` or none, and no progress (#131). Posting progress sets
-    /// the status to `reading`, so a book opened and turned once isn't
-    /// unread, even at 0%. `includesAny ["unread"]` matches no status too in
-    /// v3.6.0; `isEmpty` keeps it so if that changes.
+    /// Status `unread`, `want_to_read` or none, and no progress (#131,
+    /// #120). Posting progress sets the status to `reading`, so a book
+    /// opened and turned once isn't unread, even at 0%. `includesAny
+    /// ["unread"]` matches no status too in v3.6.0; `isEmpty` keeps it so if
+    /// that changes.
     public static let unread = all([
         .rule(field: "readProgress", operator: "isUnread"),
         .any([
             .rule(field: "readStatus", operator: "isEmpty"),
-            .rule(field: "readStatus", operator: "includesAny", values: ["unread"]),
+            .rule(field: "readStatus", operator: "includesAny", values: ["unread", "want_to_read"]),
         ]),
     ])
 
-    /// Status `reading` or `rereading`, whatever the progress.
-    public static let reading = all([.rule(field: "readStatus", operator: "includesAny", values: ["reading", "rereading"])])
+    /// Status `reading` or `rereading`, whatever the progress, or `on_hold`
+    /// or `want_to_read` once started: the books BookOrbit's Continue
+    /// Reading keeps (#120). `isInProgress` is more than 0% and less than
+    /// 100%.
+    public static let reading = any([
+        .rule(field: "readStatus", operator: "includesAny", values: ["reading", "rereading"]),
+        .all([
+            .rule(field: "readStatus", operator: "includesAny", values: ["on_hold", "want_to_read"]),
+            .rule(field: "readProgress", operator: "isInProgress"),
+        ]),
+    ])
 
     /// Status `read`, which Mark as Finished sets.
     public static let finished = all([.rule(field: "readStatus", operator: "includesAny", values: ["read"])])
@@ -276,6 +286,12 @@ public struct BookOrbitBook: Decodable, Hashable, Sendable, Identifiable {
     /// `readStatus.status`: `unread`, `want_to_read`, `reading`, `on_hold`,
     /// `rereading`, `read`, `skimmed` or `abandoned` (v3.6.0).
     public var readStatus: String?
+
+    /// `readStatus` as Octavo knows it: `nil` for none, `other` for one a
+    /// newer server added.
+    public var status: LibraryReadStatus? {
+        readStatus.map(LibraryReadStatus.init(server:))
+    }
 
     /// The file BookOrbit marks primary, else the first one.
     public var primaryFile: BookOrbitFile? {

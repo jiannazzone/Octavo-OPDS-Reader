@@ -71,6 +71,28 @@ Checked live against v3.6.0, plus BookOrbit's request DTOs for parameter names (
 - **Download progress:** `serve` sends `Content-Length`. URLSession's async `download(for:delegate:)` never calls `didWriteData` on the task delegate; `didCreateTask` plus observing `task.progress` works (370 updates for a 25 MB book).
 - **Smart scopes for tests:** `POST smart-scopes {name, icon, filter: {type: "group", join: "AND", rules: [{type: "rule", field, operator, value}]}, defaultSort: [{field, dir}]}`; `DELETE smart-scopes/{id}`.
 
+## Read status, rating and collections (#120, measured 2026-11-12)
+
+Measured as `octavo` on one book with no status, and on 2026-11-13 on four more with no history, then put back: the rows the runs made (reading attempts, the status, the rating) were deleted from the database afterwards. How Octavo uses this is in `book-status.md`.
+
+- **Status:** `PATCH books/{id}/status {status}` answers 200 with `{status, source: "manual", startedAt, finishedAt, updatedAt}` for each of `unread, want_to_read, reading, on_hold, rereading, read, skimmed, abandoned`. Any other value, `null` or an unknown field (`source`) is a 400; `{}` is a 400 that names `status`, `startedAt` and `finishedAt`, so the body can set the dates too. There's no way back to no status: `unread` is the nearest. `POST books/bulk-set-status {bookIds, status}` takes the same values.
+  - `reading` on a book that's been read is stored as `rereading`.
+  - `reading`, `on_hold` and `rereading` keep a start date and `read` adds a finish date; `want_to_read`, `skimmed`, `abandoned` and `unread` have neither.
+  - **`read`, `skimmed` and `abandoned` each end a reading attempt** in `GET reading-history` (outcome `completed`, `skimmed`, `abandoned`), and so does setting `want_to_read` or `unread` on a book being read (outcome `abandoned`). Changing a status back and forth leaves entries behind; Mark finished on and off already did.
+  - **A status never moves progress:** `unread` or `read` on a book at 40% leaves it at 40% with its CFI.
+- **Progress changes some statuses**, the same through `POST books/files/{id}/progress` (Octavo's) and `PUT reading-progress` (BookOrbit's web reader: `{writes: [{fileId, percentage, text: {cfi}}]}`, up to 25 writes, answering `{results: [{fileId, status: "saved", progress}]}`):
+  - Any progress makes no status, `reading`, `rereading` and `on_hold` into `reading` (`rereading` if read before), `source: "auto"`.
+  - **`unread` and `want_to_read` become `reading` too, unless the book has been finished before** (a `completed` attempt in its history): then a hand-set one stays at any progress. Measured 2026-11-13 on books with no history, with a finished one and with an abandoned one, through both requests. The first measurement (2026-11-12) ran on a book these tests had already finished, so it looked as if Octavo's request left them and the web reader's didn't; it doesn't.
+  - `read`, `skimmed` and `abandoned` set by hand stay.
+  - 100% makes `reading`, `rereading` and `on_hold` `read` (`auto`). Measured on a book read before only.
+- **Continue reading** (`dashboard/scrollers/continue-reading`) lists books with progress whose status is `reading`, `rereading`, `on_hold` or `want_to_read`. `read`, `skimmed`, `abandoned` and `unread` leave it, and no book without progress is listed. The other scrollers (`dashboard/scrollers/{type}`): `recently-added, continue-listening, want-to-read, up-next-in-series, random, smart-scope`.
+- **Filtering on it:** `readProgress isInProgress` is more than 0% and less than 100%, `isUnread` none or 0%, `isFinished` 100%, whatever the status. Groups nest: `{join: "OR", rules: [status in [reading, rereading], {join: "AND", rules: [status in [on_hold, want_to_read], isInProgress]}]}` works.
+- **Rating:** per user (table `user_book_ratings`); lists and the detail show the user's own as `rating`. `POST books/bulk-set-rating {bookIds, rating}` answers 204. `rating` is a whole number from 1 to 5 (4.5, 0 and 6 are 400s); `null`, or no `rating`, clears it. One unknown book makes the whole request a 404, an unknown field a 400. `communityRatings` are the metadata providers' ratings. A reading attempt has a rating of its own (`PATCH reading-history/{attemptId}/rating`), not measured.
+- **Collections:**
+  - `GET collections?bookIds=33` lists every collection with `memberCount`, how many of those books it holds; `POST collections/membership {bookIds}` answers the same with 201. One request is enough for a checklist.
+  - `POST collections/{id}/books {bookIds}` adds (201, the collection with its new `bookCount`); adding again changes nothing. `DELETE collections/{id}/books {bookIds}` removes (200), also safe to repeat. An unknown book or collection is a 404, an unknown field a 400. The book's detail lists the change at once.
+  - `isOwner` marks the user's own collections. Adding to another user's shared collection isn't measured (no second account with a known password). A list can hold `mediaType: "podcasts"` collections.
+
 ## Seeding (used by `dev/bookorbit/seed.sh`)
 
 `POST auth/setup` (header `x-setup-token`), `POST libraries {name, icon, folders}`, `POST libraries/{id}/upload` (multipart `file`; 409 `UPLOAD_DESTINATION_CONFLICT` on a duplicate), `POST collections {name, icon}`, `POST collections/{id}/books {bookIds}` (idempotent).

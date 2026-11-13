@@ -126,8 +126,9 @@ Learned by reading `bookorbit/bookorbit` (server) and `deranjer/bookorbit-androi
   - Progress: `GET/POST books/files/{fileId}/progress` with body `{cfi, percentage, pageNumber}`. `percentage` is **0–100**, and a POST without `cfi` clears the stored CFI. BookOrbit's web reader writes the same row through `PUT reading-progress`.
   - Sessions: `POST books/files/{fileId}/sessions` with fields `sessionId, startedAt, endedAt, durationSeconds, progressDelta, endProgress, sessionType, source`
   - Annotations/bookmarks: `books/{bookId}/annotations`, `books/{bookId}/bookmarks` (keyed by CFI)
-  - Status: `PATCH books/{id}/status`; rating via `books/bulk-set-rating`
+  - Status: `PATCH books/{id}/status`, with what progress does to each value in `docs/notes/bookorbit-api.md`; rating via `books/bulk-set-rating`
   - Sign out: `POST auth/logout {refreshToken}` ends the session (the access token alone ends nothing)
+- **Read status** (#120, `docs/notes/book-status.md`): "…" beside Mark finished sets any of BookOrbit's statuses. Keep Reading and the Filter follow BookOrbit's own rules (`LibraryReadStatus`, `LibraryFilter.showing`). Octavo sets no status when you read: the server does, the same for Octavo's progress request as for its web reader.
 - **Fixed-layout books** (`docs/notes/fixed-layout.md`): the web reader opens them by its stored percentage alone, ignoring the CFI, and that percentage (a section's end, in a Postgres `real`) can land it a page late. Octavo opens by the CFI, which is exact, and pushes a percentage just inside the page, so the web reader opens on Octavo's page. The numbers are measured against v3.6.0.
 - The API shapes change. The Android client mirrors them by hand. Expect breakage between server versions and handle missing fields tolerantly.
 - **CFI compatibility, confirmed by the spike:** BookOrbit v3.6.0's web reader runs foliate-js at the commit we pin, with an identical `epubcfi.js`. Positions matched 31/31 in both directions across four books.

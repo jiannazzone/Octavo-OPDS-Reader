@@ -137,6 +137,83 @@ struct BookPageTests {
         #expect(!books.contains(Self.id))
     }
 
+    // MARK: Read status (#120)
+
+    @Test func aStatusGoesToTheServer() async {
+        let marks = FinishedMarks()
+        var book = Self.book
+        book.readStatus = .read
+        book.isFinished = true
+        let page = BookPage(book: book)
+
+        await page.setStatus(.onHold, from: StubLibrarySource(finishedMarks: marks, keepsStatus: true))
+        #expect(marks.statuses == [.onHold])
+        #expect(page.readStatus == .onHold)
+        #expect(!page.isFinished)
+    }
+
+    @Test func aStatusTheServerRefusesIsTakenBack() async {
+        let marks = FinishedMarks()
+        marks.refuses = true
+        var book = Self.book
+        book.readStatus = .reading
+        let page = BookPage(book: book)
+
+        await page.setStatus(.abandoned, from: StubLibrarySource(finishedMarks: marks, keepsStatus: true))
+        #expect(page.readStatus == .reading)
+        #expect(page.statusFailed)
+        #expect(BookPlace.problem(.download, finishedFailed: false, statusFailed: true) == "Couldn’t change the status. Check your connection.")
+    }
+
+    // BookOrbit's not finished is `reading`.
+    @Test func markingFinishedSetsTheStatusToo() async {
+        let marks = FinishedMarks()
+        var book = Self.book
+        book.readStatus = .onHold
+        let page = BookPage(book: book)
+        let source = StubLibrarySource(finishedMarks: marks, keepsStatus: true)
+
+        await page.setFinished(true, from: source)
+        #expect(page.readStatus == .read)
+        await page.setFinished(false, from: source)
+        #expect(page.readStatus == .reading)
+        #expect(marks.sent == [true, false])
+    }
+
+    /// (status, progress, the place line)
+    nonisolated static let placeLines: [(LibraryReadStatus?, Double?, String)] = [
+        (nil, 0.3, "30%"),
+        (.reading, 0.3, "30%"),
+        (.unread, nil, "Not started"),
+        (.wantToRead, nil, "Want to read"),
+        (.wantToRead, 0.12, "Want to read · 12%"),
+        (.onHold, 0.5, "On hold · 50%"),
+        (.onHold, 0, "On hold"),
+        (.skimmed, 0.5, "Skimmed · 50%"),
+        (.abandoned, 0.5, "Abandoned · 50%"),
+    ]
+
+    @Test(arguments: placeLines)
+    func thePlaceLineNamesAStatusThePlaceWouldMisstate(status: LibraryReadStatus?, progress: Double?, line: String) {
+        #expect(BookPlace(progress: progress, problem: nil, status: nil, finished: false, readStatus: status).text == line)
+    }
+
+    // Folded, a status takes the sync's room (Adam, 2026-11-13).
+    @Test func theFoldedLineDropsTheSyncForAStatus() {
+        let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let synced = BookPlaces.Status.synced(now)
+        #expect(BookPlace(progress: 0.5, problem: nil, status: synced, finished: false, readStatus: .onHold).line(now: now) == "On hold · 50%")
+        #expect(BookPlace(progress: 0.5, problem: nil, status: synced, finished: false, readStatus: .reading).line(now: now) == "50% · Synced just now")
+        #expect(BookPlace(progress: 0.5, problem: nil, status: .notSynced, finished: false, readStatus: .onHold).line(now: now) == "On hold · 50% · Not synced yet, will retry")
+    }
+
+    @Test func moreTicksTheStatusAsTheMenuNamesIt() {
+        #expect(LibraryReadStatus.ticked(nil) == .unread)
+        #expect(LibraryReadStatus.ticked(.rereading) == .reading)
+        #expect(LibraryReadStatus.ticked(.read) == nil)
+        #expect(LibraryReadStatus.menu.map(\.title) == ["Reading", "Want to read", "On hold", "Skimmed", "Abandoned", "Unread"])
+    }
+
     @Test func aMarkTheServerRefusesIsTakenBack() async {
         let marks = FinishedMarks()
         marks.refuses = true

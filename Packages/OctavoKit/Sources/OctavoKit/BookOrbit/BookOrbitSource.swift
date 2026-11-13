@@ -112,6 +112,14 @@ public struct BookOrbitSource: LibrarySource {
         try await client.setReadStatus(finished ? "read" : "reading", bookID: id)
     }
 
+    public var tracksReadStatus: Bool { true }
+
+    /// `reading` on a book that's been read is stored as `rereading`.
+    public func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws {
+        guard let id = Int(book.id.rawValue), status != .other else { throw LibraryError.invalidLink }
+        try await client.setReadStatus(status.rawValue, bookID: id)
+    }
+
     public func details(for book: LibraryBook) async throws -> LibraryBookDetails {
         guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
         let detail = try await mappingErrors { try await client.book(id: id) }
@@ -261,7 +269,8 @@ public struct BookOrbitSource: LibrarySource {
             },
             progress: book.readingFraction,
             lastReadAt: book.readStatusUpdatedAt,
-            isFinished: book.readStatus.map { $0 == "read" }
+            isFinished: book.readStatus.map { $0 == "read" },
+            readStatus: book.status
         )
     }
 
@@ -527,11 +536,6 @@ extension LibraryFilter {
 
     /// Whether `book` passes, as `bookOrbit` would on the server.
     func matches(_ book: BookOrbitBook) -> Bool {
-        switch self {
-        case .all: true
-        case .unread: (book.readingFraction ?? 0) == 0 && (book.readStatus == nil || book.readStatus == "unread")
-        case .reading: book.readStatus == "reading" || book.readStatus == "rereading"
-        case .finished: book.readStatus == "read"
-        }
+        self == .all || Self.showing(book.status, progress: book.readingFraction) == self
     }
 }
