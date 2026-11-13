@@ -11,6 +11,11 @@ nonisolated enum ReaderSettings {
     /// while reading. Off by default.
     static let alwaysShowControlsKey = "reader.alwaysShowControls"
     static let alwaysShowControlsDefault = false
+    /// "Buttons on Top" (#136): while a book is open, the clock and the
+    /// reader's buttons sit in a band along the top instead of the side
+    /// column, and the text runs the full width (`AppShell`). Off by default.
+    static let buttonsOnTopKey = "reader.buttonsOnTop"
+    static let buttonsOnTopDefault = false
     /// "Margins" (decision 8): `ReaderMargins.key`.
     /// "Page Turn" (decision 27): `ReaderPageTurn.key`.
     /// "Keep screen on", in Settings: `ReaderScreenOn.key`.

@@ -185,7 +185,10 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
     ///   enough on the Duo's inner display, so a hinge report that comes
     ///   late (or, after a cold launch, not at all until the hinge moves; seen
     ///   once in #4) never puts text on the fold.
-    init(posture: ReaderPosture, geometry: ReaderGeometry?, margins: ReaderMargins = .standard) {
+    ///
+    /// `buttonsOnTop`: the clock and the buttons are in a band along the top
+    /// (`ReaderSettings.buttonsOnTopKey`), which foliate's top margin overlaps.
+    init(posture: ReaderPosture, geometry: ReaderGeometry?, margins: ReaderMargins = .standard, buttonsOnTop: Bool = false) {
         let geometry = geometry ?? ReaderGeometry(size: .zero)
         let width = Double(geometry.size.width)
         let size = geometry.size
@@ -210,7 +213,16 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
                 columns = nil
             }
         }
+        if buttonsOnTop {
+            topInset = max(0, topInset - Self.topBarOverlap)
+        }
     }
+
+    /// How far foliate's 48 pt top margin reaches into the band of buttons
+    /// along the top. The band is 82 pt and its buttons end near 72 pt, so
+    /// the first line starts about 16 pt below them (#136,
+    /// `docs/notes/edge-margin.md`), not 60.
+    static let topBarOverlap = 46.0
 
     /// A division region that runs top to bottom through the reader with room
     /// for a page on each side. Active regions first.

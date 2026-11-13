@@ -1,6 +1,22 @@
 # Edge margin: text in the side column (#136)
 
-Investigation only, 2026-11-12, on the iPhone Duo iOS 27.1 simulator ('Octavo Edge Duo', 3FFAC972-…; 'Octavo Edge Duo 2', DD28AEF1-…; 'Octavo Edge Duo 3', 9661F7B7-0B13-4B73-901F-6EB74F87ACB9; all deleted). Nothing here is designed or approved, and the probe code wasn't committed. Moby-Dick at 30%, opened through the DEBUG remote (`openLocal`, `goto`, `controls`). Frames are in `edge-margin/`.
+Investigation, 2026-11-12, on the iPhone Duo iOS 27.1 simulator ('Octavo Edge Duo', 3FFAC972-…; 'Octavo Edge Duo 2', DD28AEF1-…; 'Octavo Edge Duo 3', 9661F7B7-0B13-4B73-901F-6EB74F87ACB9; all deleted). Nothing here is designed or approved, and the probe code wasn't committed. Moby-Dick at 30%, opened through the DEBUG remote (`openLocal`, `goto`, `controls`). Frames are in `edge-margin/`.
+
+## Built: Buttons on Top (2026-11-12)
+
+Adam picked the top bar, reader only, and checked it on his Duo; the system animates the bar between the column and the top.
+
+- **The setting:** "Buttons on Top" in Customize, under Always Show Controls, off by default (`ReaderSettings.buttonsOnTopKey`). It's offered only where there's a side column to leave (`ShellModel.hasHinge`). Elsewhere the buttons are on top already, and the text keeps clear of them.
+- **Where it's set:** `AppShell` applies `toolbarVerticalBehavior(.disabled)` while a book is open. iOS applies it to the whole window, so on the reader alone it stayed on for the tabs after the book closed. With a book opening, the tabs underneath move to the bottom as the reader fades in.
+- **Layout:** `ReaderLayout(…, buttonsOnTop:)` lets foliate's 48 pt top margin overlap the 82 pt band by `topBarOverlap` (46 pt), so the first line starts about 16 pt below the buttons. It's not done for fixed-layout books, which have no such margin.
+- **Switching while reading:** the page holds under a snapshot until the bar has moved, lays out once, and fades, as for a fold (`FoldBatch(settlingAt:)`, at least 300 ms). Laid out as they came, the setting and the safe area each moved the text. Adam liked the fade.
+- **The bookmark ribbon** moves to the top left: over the left page's text edge when open, 20 pt in when folded (Back starts about 40 pt in). The right of the band holds the clock and the camera, and 12 pt in was too close to the display's rounded corner (Adam).
+- **Folded,** the band is narrow, so the system tucks Search and Bookmark into a ⋯ menu.
+- **"Close book when folded"** (on by default) is why folding during a check went back to Home. It isn't a bug.
+- **Not done:**
+  - The overlap is a fixed 46 pt, because the system doesn't report where its buttons end.
+  - Sideways with the setting on wasn't checked.
+  - The leaves of an unfold on a cover still draw their lines for the column layout.
 
 ## Summary
 
