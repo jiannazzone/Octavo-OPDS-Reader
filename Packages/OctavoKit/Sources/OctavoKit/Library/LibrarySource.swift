@@ -48,6 +48,12 @@ public protocol LibrarySource: Sendable {
     /// Sets `book`'s read status on the server.
     func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws
 
+    /// Whether the server keeps your rating of each book (BookOrbit's).
+    var tracksRating: Bool { get }
+
+    /// Rates `book` 1 to 5 whole stars on the server; `nil` clears it.
+    func setRating(_ rating: Int?, for book: LibraryBook) async throws
+
     /// What the list at `link` can be sorted and filtered by, and how it is
     /// now. `nil`: neither (lists of series or authors, search).
     func order(of link: LibraryLink) -> LibraryListOrder?
@@ -69,6 +75,10 @@ extension LibrarySource {
     public var tracksReadStatus: Bool { false }
 
     public func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws {}
+
+    public var tracksRating: Bool { false }
+
+    public func setRating(_ rating: Int?, for book: LibraryBook) async throws {}
 
     public func order(of link: LibraryLink) -> LibraryListOrder? { nil }
 

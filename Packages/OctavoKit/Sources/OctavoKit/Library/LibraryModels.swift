@@ -192,6 +192,9 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
     /// The server's read status (BookOrbit's). `nil` if it has none for the
     /// book, or keeps none (`LibrarySource.tracksReadStatus`).
     public var readStatus: LibraryReadStatus?
+    /// Your rating on the server, 1 to 5 whole stars (BookOrbit's). `nil` if
+    /// it has none, or keeps none (`LibrarySource.tracksRating`).
+    public var rating: Int?
 
     public init(
         id: LibraryBookID,
@@ -203,7 +206,8 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         progress: Double? = nil,
         lastReadAt: Date? = nil,
         isFinished: Bool? = nil,
-        readStatus: LibraryReadStatus? = nil
+        readStatus: LibraryReadStatus? = nil,
+        rating: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -215,6 +219,7 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         self.lastReadAt = lastReadAt
         self.isFinished = isFinished
         self.readStatus = readStatus
+        self.rating = rating
     }
 
     /// The file the server marks primary, else the first one.

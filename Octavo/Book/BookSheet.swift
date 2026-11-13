@@ -15,6 +15,7 @@ struct BookSheet: View {
     let source: any LibrarySource
     let sourceID: LibrarySourceID
     @Environment(ShellModel.self) private var shell
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @GestureState private var drag: CGFloat = 0
 
     /// With Reduce Motion, no bounce.
@@ -92,12 +93,15 @@ struct BookSheet: View {
             BookAuthorLink(page: page)
             HStack(spacing: 10) {
                 BookFinishedButton(page: page, source: source)
+                if source.tracksRating { BookRateButton(page: page, source: source, fillsHeight: true) }
                 if source.tracksReadStatus { BookMoreButton(page: page, source: source, fillsHeight: true) }
             }
             // As tall as Mark finished.
             .fixedSize(horizontal: false, vertical: true)
+            if page.asksRating { BookRatingPrompt(page: page, source: source).transition(.opacity) }
             BookDetails(page: page, source: source, sourceID: sourceID)
         }
+        .animation(reduceMotion ? nil : BookSheet.animation, value: page.asksRating)
         .padding(16)
     }
 }
@@ -155,6 +159,7 @@ struct BookSummary: View {
     var titleFont: Font = .title3.weight(.semibold)
     var titleLines = 2
     @Environment(ShellModel.self) private var shell
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -168,6 +173,7 @@ struct BookSummary: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 // Beside the title: Mark finished and Open fill the row.
+                if source.tracksRating { BookRateButton(page: page, source: source) }
                 if source.tracksReadStatus { BookMoreButton(page: page, source: source) }
             }
             if !BookPlace(page: page, sourceID: sourceID, shell: shell).isHidden { place }
@@ -175,7 +181,9 @@ struct BookSummary: View {
                 BookFinishedButton(page: page, source: source)
                 BookOpenButton(page: page, source: source, sourceID: sourceID)
             }
+            if page.asksRating { BookRatingPrompt(page: page, source: source).transition(.opacity) }
         }
+        .animation(reduceMotion ? nil : BookSheet.animation, value: page.asksRating)
     }
 
     /// "30%", "Finished", or a problem, over the progress bar. Beside the
@@ -255,7 +263,7 @@ struct BookPlace {
         let book = SourcedBook(source: sourceID, book: page.current)
         self.init(
             progress: shell.places.progress(of: book),
-            problem: Self.problem(BookOpenButton.state(of: book, in: shell), finishedFailed: page.finishedFailed, statusFailed: page.statusFailed),
+            problem: Self.problem(BookOpenButton.state(of: book, in: shell), finishedFailed: page.finishedFailed, statusFailed: page.statusFailed, ratingFailed: page.ratingFailed),
             status: shell.places.status(of: book),
             trip: shell.places.trip(of: book),
             finished: page.isFinished,
@@ -279,7 +287,7 @@ struct BookPlace {
         isHidden = waitsForDownload && problem == nil && !finished
     }
 
-    static func problem(_ state: BookOpenButton.State, finishedFailed: Bool, statusFailed: Bool = false) -> String? {
+    static func problem(_ state: BookOpenButton.State, finishedFailed: Bool, statusFailed: Bool = false, ratingFailed: Bool = false) -> String? {
         switch state {
         case .failed(offline: true): return "Needs a connection to download."
         case .failed(offline: false): return "Couldn’t download. Check your connection."
@@ -289,6 +297,7 @@ struct BookPlace {
         }
         if finishedFailed { return "Couldn’t mark it finished. Check your connection." }
         if statusFailed { return "Couldn’t change the status. Check your connection." }
+        if ratingFailed { return "Couldn’t change the rating. Check your connection." }
         return nil
     }
 
