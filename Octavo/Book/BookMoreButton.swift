@@ -16,7 +16,7 @@ struct BookMoreButton: View {
         Menu {
             Picker("Status", selection: status) {
                 ForEach(LibraryReadStatus.menu, id: \.self) { status in
-                    Text(status.title).tag(Optional(status))
+                    Label(status.title, systemImage: status.symbol).tag(Optional(status))
                 }
             }
             .pickerStyle(.inline)
@@ -61,6 +61,20 @@ extension LibraryReadStatus {
         case .read: "Finished"
         case .skimmed: "Skimmed"
         case .abandoned: "Abandoned"
+        }
+    }
+
+    /// Its glyph in the menu and, for one the place line names, on a cover
+    /// in the finished check's place (Adam, 2026-11-13).
+    var symbol: String {
+        switch self {
+        case .unread: "book.closed"
+        case .wantToRead: "bookmark"
+        case .reading, .rereading: "book"
+        case .onHold: "pause"
+        case .read: "checkmark"
+        case .skimmed: "forward"
+        case .abandoned: "xmark"
         }
     }
 

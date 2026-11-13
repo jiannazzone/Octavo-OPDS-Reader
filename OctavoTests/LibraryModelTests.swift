@@ -625,6 +625,17 @@ struct CoverMarksTests {
         #expect(marks.accessibilityValue == "Finished, downloaded")
     }
 
+    // A status the place line names takes the check's place (#120).
+    @Test func aStatusTakesTheChecksPlace() {
+        let onHold = CoverMarks(finished: false, readStatus: .onHold, status: .downloaded)
+        #expect(onHold.shownStatus == .onHold)
+        #expect(onHold.accessibilityValue == "On hold, downloaded")
+        #expect(CoverMarks(finished: false, readStatus: .abandoned, status: .notDownloaded).accessibilityValue == "Abandoned")
+        #expect(CoverMarks(finished: false, readStatus: .reading, status: .notDownloaded).isEmpty)
+        #expect(CoverMarks(finished: true, readStatus: .read, status: .notDownloaded).shownStatus == .read)
+        #expect(LibraryReadStatus.allCases.filter { $0.placeWord != nil }.map(\.symbol) == ["bookmark", "pause", "forward", "xmark"])
+    }
+
     @Test func theRingTakesTheArrowsPlace() {
         let marks = CoverMarks(finished: false, status: Self.downloading)
         #expect(marks.download == .downloading(0.4))

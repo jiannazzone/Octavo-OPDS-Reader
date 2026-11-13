@@ -7,6 +7,7 @@ Every BookOrbit read status on a book's screen, and the filters and Home that fo
 - **Where:** BookOrbit books keep Mark finished, one tap as before, and gain **"…"** (More), a glass circle. Folded it sits beside Mark finished in the pulled-up sheet; unfolded, beside the title, because next to Mark finished and Download it squeezed the label to "Mark fini…". OPDS and Files books keep Mark finished alone. A labelled "… More" was tried and not chosen.
 - **The menu:** Reading, Want to read, On hold, Skimmed, Abandoned, Unread, with a tick on the book's. Finished is its own button. Rereading ticks Reading, and a book with no status ticks Unread (BookOrbit's filters treat none as unread). Rate and Add to Collection are to join it.
 - **Place line:** a status the place alone would misstate comes first: "On hold · 50%", "Skimmed · 50%", "Abandoned · 50%", "Want to read" (or "Want to read · 12%" once started); with no progress, the status alone. Reading, Rereading and Unread show the place as before, and Finished stays "Finished". Folded, the status takes the sync time's room ("On hold · 50%", not "On hold · 50% · Synced just now"); a place not sent yet still says so.
+- **Glyphs** (Adam, 2026-11-13): a status the place line names takes the finished check's place on a cover's badge: Want to read `bookmark`, On hold `pause`, Skimmed `forward`, Abandoned `xmark`, in outline and one image scale smaller than Finished's `checkmark` (at the check's size they looked larger than it and the download arrow); the check as before; Reading and Unread show none. The cover's VoiceOver value says it ("On hold, downloaded"). The menu shows each status's glyph beside its name, Reading as `book` and Unread as `book.closed`. The bookmark is also the reader's ribbon; `clock` was the alternative.
 - **Match BookOrbit.** Home's Keep Reading and the Filter follow BookOrbit's own rules:
   - **Keep Reading** is BookOrbit's Continue Reading: started books that are Reading, Rereading, On hold or Want to read. Setting Skimmed, Abandoned, Unread or Finished takes a book off this iPhone's list too, as Mark finished did (`LibraryModel.markedStatus`).
   - **Filter:** Unread is no progress and no status, Unread or Want to read. Reading is Reading or Rereading, or On hold or Want to read once started (0 < progress < 100%). Finished is Read. Skimmed and Abandoned show only under All books. On the server (`BookOrbitBookFilter`), on a series' or an author's books, and on On iPhone (`LibraryFilter.showing`), the rule is the same.
@@ -33,5 +34,5 @@ BookOrbit's web reader writes progress through `PUT reading-progress`; Octavo wr
 ## Not done
 
 - Rating and collections (measured, `bookorbit-api.md`).
-- Status on Home's and Search's rows, and on covers. Only the book's screen names it.
+- Status on Home's and Search's rows in words. Covers show its glyph.
 - Status from the reader or a long press on a cover.
