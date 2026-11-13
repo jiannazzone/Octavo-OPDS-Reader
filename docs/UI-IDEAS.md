@@ -176,3 +176,9 @@ Once, the reader's Aa button (Text and Theme) didn't respond. Adam can't reprodu
 ## ~~Home's left page as the cover, full screen~~ (Adam, 2026-11-07)
 
 Decided and built the same day: decision 37 in `docs/design/direction.md`, with the strip over the cover's foot as on the folded book's screen.
+
+## Buttons on the side or on top (Adam, 2026-11-12)
+
+From #136 (more room for text past Narrow). A reader setting: the clock and the reader's buttons in the side column as today, or in a band along the top, through the system's `toolbarVerticalBehavior(.disabled)` (iOS 27.1). With the band, the text runs the full width. Folded and with foliate's top margin overlapping the band, that's about 13% more text a page than Narrow with the column. The clock, Back and ⋯ stay as they are. Unfolded, the left strip that mirrors the column goes too. Measured and pictured in `docs/notes/edge-margin.md` (section 5). Not designed: the setting's name and place, where the panels grow from, the tour's cards, and how opening a book looks when the shell keeps its column.
+
+Not chosen: an Edge margin step that hides the column while reading. It needed Back and ⋯ hidden and a new way to bring up the controls. Adam found a middle tap too ambiguous; a ⋯ at the end of the footer worked in a probe.
