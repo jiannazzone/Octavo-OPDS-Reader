@@ -85,12 +85,17 @@ struct BookSheet: View {
         return toward / 4
     }
 
-    /// Pulled up: the author and Mark finished, which the resting summary
-    /// leaves out, then the details.
+    /// Pulled up: the author and Mark finished (with "…" on a BookOrbit
+    /// book, #120), which the resting summary leaves out, then the details.
     private var details: some View {
         VStack(alignment: .leading, spacing: 16) {
             BookAuthorLink(page: page)
-            BookFinishedButton(page: page, source: source)
+            HStack(spacing: 10) {
+                BookFinishedButton(page: page, source: source)
+                if source.tracksReadStatus { BookMoreButton(page: page, source: source, fillsHeight: true) }
+            }
+            // As tall as Mark finished.
+            .fixedSize(horizontal: false, vertical: true)
             BookDetails(page: page, source: source, sourceID: sourceID)
         }
         .padding(16)
@@ -138,10 +143,11 @@ struct BookSheetSummary: View {
     }
 }
 
-/// The top of a book's right page unfolded: the title and author, the
-/// place (with when it last synced) over the progress bar, then Mark
-/// finished and Open. Until the book is on the iPhone, Open is Download; a
-/// download's progress and problems show in its place (decision 22).
+/// The top of a book's right page unfolded: the title and author (with
+/// "…" beside them on a BookOrbit book, #120), the place (with when it last
+/// synced) over the progress bar, then Mark finished and Open. Until the
+/// book is on the iPhone, Open is Download; a download's progress and
+/// problems show in its place (decision 22).
 struct BookSummary: View {
     let page: BookPage
     let source: any LibrarySource
@@ -152,12 +158,17 @@ struct BookSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(page.current.title.isEmpty ? "Untitled" : page.current.title)
-                    .font(titleFont)
-                    .lineLimit(untilLargerText: titleLines)
-                    .accessibilityAddTraits(.isHeader)
-                BookAuthorLink(page: page)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(page.current.title.isEmpty ? "Untitled" : page.current.title)
+                        .font(titleFont)
+                        .lineLimit(untilLargerText: titleLines)
+                        .accessibilityAddTraits(.isHeader)
+                    BookAuthorLink(page: page)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // Beside the title: Mark finished and Open fill the row.
+                if source.tracksReadStatus { BookMoreButton(page: page, source: source) }
             }
             if !BookPlace(page: page, sourceID: sourceID, shell: shell).isHidden { place }
             LargerTextStack(spacing: 10) {
@@ -227,12 +238,15 @@ private struct BookPlaceLine: View {
 struct BookPlace {
     /// How far through, for the progress bar.
     let progress: Double?
-    /// A download or Mark finished that went wrong, in the place's stead.
+    /// A download, Mark finished or a status that went wrong, in the place's
+    /// stead.
     let problem: String?
     let status: BookPlaces.Status?
     /// Away from your place, the book reopens where you were looking (decision 33).
     let trip: ReaderTrip?
     private let finished: Bool
+    /// The server's read status (BookOrbit's, #120).
+    private let readStatus: LibraryReadStatus?
     /// No place and no bar: KOReader's comes once the book is downloaded
     /// (`ShellModel.waitsForDownload`). A problem or Finished still shows.
     let isHidden: Bool
@@ -241,10 +255,11 @@ struct BookPlace {
         let book = SourcedBook(source: sourceID, book: page.current)
         self.init(
             progress: shell.places.progress(of: book),
-            problem: Self.problem(BookOpenButton.state(of: book, in: shell), finishedFailed: page.finishedFailed),
+            problem: Self.problem(BookOpenButton.state(of: book, in: shell), finishedFailed: page.finishedFailed, statusFailed: page.statusFailed),
             status: shell.places.status(of: book),
             trip: shell.places.trip(of: book),
             finished: page.isFinished,
+            readStatus: page.readStatus,
             waitsForDownload: shell.waitsForDownload(book)
         )
     }
@@ -253,17 +268,18 @@ struct BookPlace {
     /// sync.
     init(
         progress: Double?, problem: String?, status: BookPlaces.Status?, trip: ReaderTrip? = nil, finished: Bool,
-        waitsForDownload: Bool = false
+        readStatus: LibraryReadStatus? = nil, waitsForDownload: Bool = false
     ) {
         self.progress = finished ? 1 : progress
         self.problem = problem
         self.status = problem == nil && !finished ? status : nil
         self.trip = problem == nil && !finished ? trip : nil
         self.finished = finished
+        self.readStatus = readStatus
         isHidden = waitsForDownload && problem == nil && !finished
     }
 
-    static func problem(_ state: BookOpenButton.State, finishedFailed: Bool) -> String? {
+    static func problem(_ state: BookOpenButton.State, finishedFailed: Bool, statusFailed: Bool = false) -> String? {
         switch state {
         case .failed(offline: true): return "Needs a connection to download."
         case .failed(offline: false): return "Couldn’t download. Check your connection."
@@ -272,6 +288,7 @@ struct BookPlace {
         default: break
         }
         if finishedFailed { return "Couldn’t mark it finished. Check your connection." }
+        if statusFailed { return "Couldn’t change the status. Check your connection." }
         return nil
     }
 
@@ -285,16 +302,19 @@ struct BookPlace {
         return "Octavo can’t open \(format.uppercased()) files."
     }
 
-    /// The place alone: "30%", "Not started", "Finished", or the problem.
+    /// The place alone: "30%", "Not started", "On hold · 30%", "Finished",
+    /// or the problem.
     var text: String {
-        problem ?? (finished ? "Finished" : BookPage.placeLine(progress: progress))
+        problem ?? (finished ? "Finished" : BookPage.placeLine(progress: progress, readStatus: readStatus))
     }
 
     /// The place and when it last synced on one line, as the folded sheet
-    /// shows it: "48% · Synced just now".
+    /// shows it: "48% · Synced just now". A status takes a sync's room:
+    /// "On hold · 48%" (Adam, 2026-11-13); a place not sent still says so.
     func line(now: Date) -> String {
         if let trip { return "\(text) · \(trip.opensAtLabel)" }
         guard let status else { return text }
+        if case .synced = status, readStatus?.placeWord != nil { return text }
         return "\(text) · \(status.text(now: now))"
     }
 }

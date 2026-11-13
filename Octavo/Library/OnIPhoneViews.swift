@@ -32,8 +32,10 @@ struct OnIPhoneScreen: View {
 extension ShellModel {
     /// Where `book` stands by Octavo's own record (#131): finished if
     /// marked, reading once it has a place, else unread. What another
-    /// reader did shows only once its place syncs here.
-    func status(of book: SourcedBook) -> LibraryFilter {
+    /// reader did shows only once its place syncs here. A BookOrbit book
+    /// with a status goes where BookOrbit's own filters put it (#120), and
+    /// `nil` is only under All books (skimmed, abandoned).
+    func status(of book: SourcedBook) -> LibraryFilter? {
         status(of: book, saved: nil)
     }
 
@@ -45,9 +47,14 @@ extension ShellModel {
         return books.filter { status(of: $0, saved: saved) == filter }
     }
 
-    private func status(of book: SourcedBook, saved: Set<String>?) -> LibraryFilter {
+    private func status(of book: SourcedBook, saved: Set<String>?) -> LibraryFilter? {
         if library.isFinished(book) { return .finished }
         let progress = saved.map { places.progress(of: book, saved: $0) } ?? places.progress(of: book)
+        // A copy without a status may be older than reading it here, which
+        // gives it one on the server.
+        if library.source(for: book.source)?.tracksReadStatus == true, let status = library.readStatus(of: book) {
+            return .showing(status, progress: progress)
+        }
         return progress == nil ? .unread : .reading
     }
 

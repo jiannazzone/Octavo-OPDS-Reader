@@ -120,7 +120,7 @@ struct BookOrbitSourceTests {
         #expect(body["sort"] as? [[String: String]] == [["field": "title", "dir": "asc"]])
         // Measured against v3.6.0 (`docs/notes/bookorbit-api.md`, "Filtering").
         let filter = try JSONSerialization.data(withJSONObject: try #require(body["filter"]), options: .sortedKeys)
-        #expect(String(decoding: filter, as: UTF8.self) == #"{"join":"AND","rules":[{"field":"readProgress","operator":"isUnread","type":"rule"},{"join":"OR","rules":[{"field":"readStatus","operator":"isEmpty","type":"rule"},{"field":"readStatus","operator":"includesAny","type":"rule","value":["unread"]}],"type":"group"}],"type":"group"}"#)
+        #expect(String(decoding: filter, as: UTF8.self) == #"{"join":"AND","rules":[{"field":"readProgress","operator":"isUnread","type":"rule"},{"join":"OR","rules":[{"field":"readStatus","operator":"isEmpty","type":"rule"},{"field":"readStatus","operator":"includesAny","type":"rule","value":["unread","want_to_read"]}],"type":"group"}],"type":"group"}"#)
 
         let second = try await source.feed(try #require(first.next))
         #expect(second.books.map(\.title) == ["Alice's Adventures in Wonderland"])
@@ -143,6 +143,8 @@ struct BookOrbitSourceTests {
         #expect(feed.books[1].lastReadAt == nil)
         #expect(feed.books[0].isFinished == false)
         #expect(feed.books[1].isFinished == nil)
+        #expect(feed.books[0].readStatus == .reading)
+        #expect(feed.books[1].readStatus == nil)
         #expect(feed.next == nil)
     }
 
@@ -174,6 +176,21 @@ struct BookOrbitSourceTests {
         #expect(server.requests.map(\.path) == ["/api/v1/books/4/status", "/api/v1/books/4/status"])
         // The server rejects fields it doesn't know, so only the status goes.
         #expect(server.requests.map { $0.json as? [String: String] } == [["status": "read"], ["status": "reading"]])
+    }
+
+    // Measured on v3.6.0 (`docs/notes/book-status.md`): each value is
+    // BookOrbit's own, and the body takes nothing else.
+    @Test(arguments: LibraryReadStatus.allCases)
+    func setsEachReadStatus(status: LibraryReadStatus) async throws {
+        let server = StubServer { _ in .json(#"{"status":"\#(status.rawValue)"}"#) }
+        let source = source(server)
+        #expect(source.tracksReadStatus)
+
+        try await source.setReadStatus(status, for: LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House"))
+
+        #expect(server.requests.map(\.method) == ["PATCH"])
+        #expect(server.requests.map(\.path) == ["/api/v1/books/33/status"])
+        #expect(server.requests.first?.json as? [String: String] == ["status": status.rawValue])
     }
 
     @Test func mapsBooksForTheGrid() async throws {
@@ -274,7 +291,8 @@ struct BookOrbitSourceTests {
     }
 
     @Test(arguments: [
-        (LibraryFilter.reading, #"{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["reading","rereading"]}],"type":"group"}"#),
+        // Measured against v3.6.0 (`docs/notes/book-status.md`).
+        (LibraryFilter.reading, #"{"join":"OR","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["reading","rereading"]},{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["on_hold","want_to_read"]},{"field":"readProgress","operator":"isInProgress","type":"rule"}],"type":"group"}],"type":"group"}"#),
         (.finished, #"{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["read"]}],"type":"group"}"#),
     ])
     func filtersOnTheServersStatus(filter: LibraryFilter, json: String) async throws {
@@ -343,8 +361,8 @@ struct BookOrbitSourceTests {
 
         let feed = try await source(server).feed(route.link)
 
-        #expect(feed.books.map(\.id.rawValue) == (3...101).map(String.init))
-        #expect(feed.total == 99)
+        #expect(feed.books.map(\.id.rawValue) == (3...101).map(String.init) + ["103"])
+        #expect(feed.total == 100)
         #expect(feed.next == nil)
         #expect(feed.loadedOnly == nil)
         #expect(server.requests.map(\.path) == [path, path])
@@ -374,7 +392,15 @@ struct BookOrbitSourceTests {
         (#"{"status":"reading"}"#, "0", false, true, false),
         (#"{"status":"rereading"}"#, "50", false, true, false),
         (#"{"status":"read"}"#, "100", false, false, true),
-        (#"{"status":"want_to_read"}"#, "null", false, false, false),
+        (#"{"status":"want_to_read"}"#, "null", true, false, false),
+        (#"{"status":"want_to_read"}"#, "30", false, true, false),
+        (#"{"status":"want_to_read"}"#, "100", false, false, false),
+        (#"{"status":"on_hold"}"#, "30", false, true, false),
+        (#"{"status":"on_hold"}"#, "null", false, false, false),
+        (#"{"status":"skimmed"}"#, "30", false, false, false),
+        (#"{"status":"abandoned"}"#, "30", false, false, false),
+        (#"{"status":"read"}"#, "40", false, false, true),
+        (#"{"status":"shelved"}"#, "null", true, false, false),
     ])
     func matchesBooksAsTheServerDoes(status: String, progress: String, unread: Bool, reading: Bool, finished: Bool) throws {
         let json = #"{"id":1,"title":"Book","readStatus":\#(status),"readingProgress":\#(progress)}"#

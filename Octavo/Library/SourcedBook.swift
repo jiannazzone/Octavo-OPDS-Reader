@@ -29,10 +29,35 @@ nonisolated struct SourcedBook: Hashable, Codable, Sendable, Identifiable {
     var id: ID { ID(source: source, book: book.id) }
 
     /// This book with the mark in `marks`, if there's one for it.
-    func withFinished(from marks: [ID: Bool]) -> SourcedBook {
-        guard let finished = marks[id] else { return self }
+    func withMarks(from marks: [ID: ReadMark]) -> SourcedBook {
+        guard let mark = marks[id] else { return self }
         var marked = self
-        marked.book.isFinished = finished
+        marked.book.isFinished = mark.finished
+        marked.book.readStatus = mark.status
         return marked
+    }
+}
+
+/// A server's word on a book: finished, and its read status where the server
+/// keeps one (BookOrbit's, #120).
+nonisolated struct ReadMark: Hashable, Sendable {
+    var finished: Bool
+    var status: LibraryReadStatus?
+
+    init(finished: Bool, status: LibraryReadStatus? = nil) {
+        self.finished = finished
+        self.status = status
+    }
+
+    /// The status, which says whether it's finished.
+    init(_ status: LibraryReadStatus) {
+        self.init(finished: status == .read, status: status)
+    }
+}
+
+extension LibraryBook {
+    /// What the server says, if it keeps a finished mark.
+    nonisolated var readMark: ReadMark? {
+        isFinished.map { ReadMark(finished: $0, status: readStatus) }
     }
 }

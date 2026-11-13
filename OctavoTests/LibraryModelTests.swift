@@ -22,6 +22,7 @@ private nonisolated struct PagedSource: LibrarySource {
     var faults = Faults()
     var rootChips = [LibraryEntry(kind: .feed, title: "All", link: LibraryLink(rawValue: "all"))]
     var tracksFinished = false
+    var tracksReadStatus = false
 
     func root() async throws -> LibraryRoot {
         LibraryRoot(chips: rootChips, search: .unavailable, recentlyAdded: LibraryLink(rawValue: "recent"),
@@ -370,6 +371,22 @@ struct LibraryModelTests {
         #expect(recents.records().isEmpty)
     }
 
+    // As on BookOrbit's own Continue Reading (#120): on hold stays, abandoned
+    // leaves.
+    @Test func aStatusThatContinueReadingDropsLeavesHome() async throws {
+        let recents = temporaryRecents()
+        try recents.record(sourced(book("paused")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        try recents.record(sourced(book("given-up")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        let source = PagedSource(tracksFinished: true, tracksReadStatus: true)
+        let library = await connected(source, recents: recents)
+
+        library.markedStatus(sourced(book("paused")).id, .onHold)
+        library.markedStatus(sourced(book("given-up")).id, .abandoned)
+
+        #expect(library.continueReading.map(\.book.title) == ["paused"])
+        #expect(recents.records().map(\.book.book.readStatus) == [.onHold])
+    }
+
     @Test func aFailedHomeKeepsWhatItShowed() async {
         let faults = Faults()
         let library = await connected(PagedSource(pages: ["reading": LibraryFeed(books: [book("1")])], faults: faults))
@@ -525,6 +542,37 @@ struct FinishedCoverTests {
         library.bookDownloading(stale)
         #expect(library.recents.records().map(\.book.book.isFinished) == [false])
         #expect(library.onIPhone.books().map(\.book.isFinished) == [false])
+    }
+
+    @Test func aStatusReachesTheIPhonesRecords() async throws {
+        let library = await connected(PagedSource(tracksFinished: true, tracksReadStatus: true))
+        var finished = Self.finished("1", true)
+        finished.readStatus = .read
+        let book = sourced(finished)
+        try library.onIPhone.record(book)
+
+        library.markedStatus(book.id, .skimmed)
+        #expect(!library.isFinished(book))
+        #expect(library.readStatus(of: book) == .skimmed)
+        #expect(library.onIPhone.books().map(\.book.readStatus) == [.skimmed])
+        #expect(relaunched(library).onIPhone.books().map(\.book.isFinished) == [false])
+
+        // BookOrbit's not finished is `reading`.
+        library.markedFinished(book.id, false)
+        #expect(library.readStatus(of: book) == .reading)
+    }
+
+    @Test func aListUpdatesAStatus() async throws {
+        var listed = Self.finished("1", false)
+        listed.readStatus = .onHold
+        let source = PagedSource(pages: ["a": LibraryFeed(books: [listed])], tracksFinished: true, tracksReadStatus: true)
+        let library = await connected(source)
+        var older = Self.finished("1", false)
+        older.readStatus = .reading
+        try library.onIPhone.record(sourced(older))
+
+        await library.feed(link("a"), from: server)?.load()
+        #expect(library.onIPhone.books().map(\.book.readStatus) == [.onHold])
     }
 
     @Test func removingAServerForgetsItsMarks() async throws {

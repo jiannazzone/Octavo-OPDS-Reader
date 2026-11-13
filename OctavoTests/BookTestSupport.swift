@@ -57,12 +57,23 @@ nonisolated struct StubLibrarySource: LibrarySource {
     /// Its covers. Without it, it hasn't got any.
     var coverSupply: CoverSupply?
 
+    /// With `finishedMarks`: it keeps a read status too, as BookOrbit does.
+    var keepsStatus = false
+
     var tracksFinished: Bool { finishedMarks != nil }
 
     func setFinished(_ finished: Bool, for book: LibraryBook) async throws {
         guard let finishedMarks else { return }
         if finishedMarks.refuses { throw LibraryError.notFound }
         finishedMarks.sent.append(finished)
+    }
+
+    var tracksReadStatus: Bool { keepsStatus && finishedMarks != nil }
+
+    func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws {
+        guard let finishedMarks, keepsStatus else { return }
+        if finishedMarks.refuses { throw LibraryError.notFound }
+        finishedMarks.statuses.append(status)
     }
 
     func root() async throws -> LibraryRoot {
@@ -110,6 +121,7 @@ nonisolated struct StubLibrarySource: LibrarySource {
 /// What a stub server was sent for Mark finished.
 nonisolated final class FinishedMarks: @unchecked Sendable {
     var sent: [Bool] = []
+    var statuses: [LibraryReadStatus] = []
     var refuses = false
 }
 

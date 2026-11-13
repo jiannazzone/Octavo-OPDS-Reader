@@ -39,9 +39,9 @@ nonisolated struct RecentBooks: Sendable {
 
     /// Brings the records in `marks` up to date, so a cover shows them after
     /// the next launch too.
-    func update(finished marks: [SourcedBook.ID: Bool]) throws {
+    func update(marks: [SourcedBook.ID: ReadMark]) throws {
         let records = records()
-        let updated = records.map { Record(book: $0.book.withFinished(from: marks), openedAt: $0.openedAt) }
+        let updated = records.map { Record(book: $0.book.withMarks(from: marks), openedAt: $0.openedAt) }
         guard updated != records else { return }
         try JSONEncoder().encode(updated).write(to: fileURL, options: .atomic)
     }

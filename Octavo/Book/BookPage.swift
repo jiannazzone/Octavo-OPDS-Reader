@@ -24,6 +24,11 @@ final class BookPage {
     private(set) var markedFinished: Bool?
     /// Setting finished didn't reach the server.
     private(set) var finishedFailed = false
+    /// The read status as last set here or by starting the book, over what
+    /// the server sent (BookOrbit's, #120).
+    private(set) var markedStatus: LibraryReadStatus?
+    /// Setting the status didn't reach the server.
+    private(set) var statusFailed = false
     /// Where this iPhone keeps the mark for a server that doesn't.
     @ObservationIgnored private var finishedOnIPhone: (books: FinishedBooks, id: SourcedBook.ID)?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -69,13 +74,18 @@ final class BookPage {
         return finishedOnIPhone.books.contains(finishedOnIPhone.id)
     }
 
+    var readStatus: LibraryReadStatus? { markedStatus ?? current.readStatus }
+
     /// Marks the book finished, or not: on the server if it keeps the mark
     /// (BookOrbit), else on this iPhone. Shows the change at once and puts
     /// it back if the server refuses.
     func setFinished(_ finished: Bool, from source: any LibrarySource) async {
-        let before = markedFinished
+        let before = (markedFinished, markedStatus)
         markedFinished = finished
+        // Not finished is BookOrbit's `reading` (`BookOrbitSource.setFinished`).
+        if source.tracksReadStatus { markedStatus = finished ? .read : .reading }
         finishedFailed = false
+        statusFailed = false
         do {
             if source.tracksFinished {
                 try await source.setFinished(finished, for: current)
@@ -83,9 +93,30 @@ final class BookPage {
                 try finishedOnIPhone.books.set(finished, for: finishedOnIPhone.id)
             }
         } catch {
-            markedFinished = before
+            (markedFinished, markedStatus) = before
             finishedFailed = !(error is CancellationError)
         }
+    }
+
+    /// Sets the book's read status on the server (BookOrbit's), as
+    /// `setFinished` does.
+    func setStatus(_ status: LibraryReadStatus, from source: any LibrarySource) async {
+        let before = (markedFinished, markedStatus)
+        statusChanged(status)
+        finishedFailed = false
+        statusFailed = false
+        do {
+            try await source.setReadStatus(status, for: current)
+        } catch {
+            (markedFinished, markedStatus) = before
+            statusFailed = !(error is CancellationError)
+        }
+    }
+
+    /// The server's status changed: set here, or by starting the book.
+    func statusChanged(_ status: LibraryReadStatus) {
+        markedStatus = status
+        markedFinished = status == .read
     }
 
     func retryDetails(from source: any LibrarySource) async {
@@ -121,6 +152,14 @@ final class BookPage {
     static func placeLine(progress: Double?) -> String {
         guard let progress, progress > 0 else { return "Not started" }
         return progress.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    /// "On hold · 30%", or "On hold" before it's started: a status the place
+    /// alone would misstate (#120, Adam 2026-11-12).
+    static func placeLine(progress: Double?, readStatus: LibraryReadStatus?) -> String {
+        guard let word = readStatus?.placeWord else { return placeLine(progress: progress) }
+        guard let progress, progress > 0 else { return word }
+        return "\(word) · \(placeLine(progress: progress))"
     }
 
     /// "14% · BookOrbit": Home's, with several servers (decision 36).
