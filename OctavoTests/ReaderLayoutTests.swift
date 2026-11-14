@@ -394,4 +394,27 @@ struct ReaderLayoutTests {
         #expect(layout.barSpans(in: geometry, bookMode: false) == [12...928])
         #expect(ReaderLayout.barBottom(in: geometry) == 756)
     }
+
+    // Buttons on Top (#136), as measured on the Duo simulator: the band is a
+    // top safe area of 82 pt with no side column, and foliate's top margin
+    // overlaps it, folded and unfolded. The text runs the full width.
+    @Test(arguments: [ReaderPosture.closed, .open, .halfOpen])
+    func buttonsOnTopOverlapsTheBand(posture: ReaderPosture) {
+        let size = posture == .closed ? CGSize(width: 466, height: 678) : CGSize(width: 951, height: 669)
+        let divisions: [ReaderGeometry.Region] = posture == .closed ? [] : [.init(frame: CGRect(x: 455.5, y: 0, width: 40, height: 669), isActive: posture == .halfOpen)]
+        let geometry = ReaderGeometry(size: size, divisions: divisions, safeArea: ReaderInsets(top: 82, left: 0, bottom: 34, right: 0))
+        let onTop = ReaderLayout(posture: posture, geometry: geometry, margins: .narrow, buttonsOnTop: true)
+        let off = ReaderLayout(posture: posture, geometry: geometry, margins: .narrow)
+        #expect(onTop.topInset == 36)
+        #expect(off.topInset == 82)
+        #expect(onTop.leftInset == off.leftInset)
+        #expect(onTop.rightInset == 0)
+        #expect(onTop.bottomInset == 34)
+    }
+
+    // No band, nothing to overlap.
+    @Test func buttonsOnTopNeedsABand() {
+        let geometry = ReaderGeometry(size: CGSize(width: 466, height: 678), safeArea: ReaderInsets(top: 0, left: 0, bottom: 34, right: 84))
+        #expect(ReaderLayout(posture: .closed, geometry: geometry, buttonsOnTop: true).topInset == 0)
+    }
 }

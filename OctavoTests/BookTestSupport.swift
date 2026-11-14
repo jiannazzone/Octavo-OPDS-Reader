@@ -57,12 +57,60 @@ nonisolated struct StubLibrarySource: LibrarySource {
     /// Its covers. Without it, it hasn't got any.
     var coverSupply: CoverSupply?
 
+    /// With `finishedMarks`: it keeps a read status too, as BookOrbit does.
+    var keepsStatus = false
+    /// With `finishedMarks`: it keeps your rating too, as BookOrbit does.
+    var keepsRating = false
+    /// Your collections on the server, as BookOrbit keeps them.
+    var shelf: CollectionShelf?
+
     var tracksFinished: Bool { finishedMarks != nil }
 
     func setFinished(_ finished: Bool, for book: LibraryBook) async throws {
         guard let finishedMarks else { return }
         if finishedMarks.refuses { throw LibraryError.notFound }
         finishedMarks.sent.append(finished)
+    }
+
+    var tracksReadStatus: Bool { keepsStatus && finishedMarks != nil }
+
+    func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws {
+        guard let finishedMarks, keepsStatus else { return }
+        if finishedMarks.refuses { throw LibraryError.notFound }
+        finishedMarks.statuses.append(status)
+    }
+
+    var tracksRating: Bool { keepsRating && finishedMarks != nil }
+
+    func setRating(_ rating: Int?, for book: LibraryBook) async throws {
+        guard let finishedMarks, keepsRating else { return }
+        if finishedMarks.holdsRatings {
+            try await withCheckedThrowingContinuation { finishedMarks.hold(rating, $0) }
+        } else if finishedMarks.refuses {
+            throw LibraryError.notFound
+        }
+        finishedMarks.ratings.append(rating)
+    }
+
+    var tracksCollections: Bool { shelf != nil }
+
+    func collections(of book: LibraryBook) async throws -> [LibraryBookCollection] {
+        guard let shelf else { return [] }
+        if shelf.refuses { throw LibraryError.notFound }
+        return shelf.collections
+    }
+
+    func setCollection(_ collection: LibraryBookCollection, contains: Bool, for book: LibraryBook) async throws {
+        guard let shelf else { return }
+        if shelf.refuses { throw LibraryError.notFound }
+        shelf.sent.append("\(contains ? "+" : "-")\(collection.entry.title)")
+    }
+
+    func newCollection(named name: String, with book: LibraryBook) async throws -> LibraryBookCollection {
+        guard let shelf else { throw LibraryError.invalidLink }
+        if let refusal = shelf.refusesNew { throw refusal }
+        shelf.sent.append("new \(name)")
+        return LibraryBookCollection(entry: CollectionShelf.entry(name), contains: !shelf.addFails)
     }
 
     func root() async throws -> LibraryRoot {
@@ -85,7 +133,7 @@ nonisolated struct StubLibrarySource: LibrarySource {
             description: description,
             addedAt: Date(timeIntervalSince1970: 1_793_404_800),
             series: [LibrarySeriesPosition(name: "Sea Stories", position: 3)],
-            collections: [
+            collections: shelf?.listed ?? [
                 LibraryEntry(kind: .collection, title: "Classics", link: LibraryLink(rawValue: "c/1")),
                 LibraryEntry(kind: .collection, title: "Spike", link: LibraryLink(rawValue: "c/2")),
             ]
@@ -110,7 +158,49 @@ nonisolated struct StubLibrarySource: LibrarySource {
 /// What a stub server was sent for Mark finished.
 nonisolated final class FinishedMarks: @unchecked Sendable {
     var sent: [Bool] = []
+    var statuses: [LibraryReadStatus] = []
+    var ratings: [Int?] = []
     var refuses = false
+    /// Ratings wait for `release(_:refusing:)`, to answer them out of order.
+    var holdsRatings = false
+    private let held = Mutex<[Int?: CheckedContinuation<Void, any Error>]>([:])
+
+    func hold(_ rating: Int?, _ continuation: CheckedContinuation<Void, any Error>) {
+        held.withLock { $0[rating] = continuation }
+    }
+
+    func isHolding(_ rating: Int?) -> Bool {
+        held.withLock { $0[rating] != nil }
+    }
+
+    func release(_ rating: Int?, refusing: Bool) {
+        let continuation = held.withLock { $0.removeValue(forKey: rating) }
+        if refusing {
+            continuation?.resume(throwing: LibraryError.notFound)
+        } else {
+            continuation?.resume()
+        }
+    }
+}
+
+/// A stub server's collections, and what it was sent.
+nonisolated final class CollectionShelf: @unchecked Sendable {
+    var collections: [LibraryBookCollection]
+    var sent: [String] = []
+    var refuses = false
+    var refusesNew: LibraryError?
+    /// A new collection is made, but the book doesn't go in.
+    var addFails = false
+    /// The book's details' collections, others' shared ones too.
+    var listed: [LibraryEntry]?
+
+    init(_ names: [(String, Bool)]) {
+        collections = names.map { LibraryBookCollection(entry: Self.entry($0.0), contains: $0.1) }
+    }
+
+    static func entry(_ name: String) -> LibraryEntry {
+        LibraryEntry(kind: .collection, title: name, link: LibraryLink(rawValue: "c/\(name)"))
+    }
 }
 
 /// `StoredBookFiles` in a temporary directory of its own.

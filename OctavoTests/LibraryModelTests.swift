@@ -22,6 +22,7 @@ private nonisolated struct PagedSource: LibrarySource {
     var faults = Faults()
     var rootChips = [LibraryEntry(kind: .feed, title: "All", link: LibraryLink(rawValue: "all"))]
     var tracksFinished = false
+    var tracksReadStatus = false
 
     func root() async throws -> LibraryRoot {
         LibraryRoot(chips: rootChips, search: .unavailable, recentlyAdded: LibraryLink(rawValue: "recent"),
@@ -370,6 +371,22 @@ struct LibraryModelTests {
         #expect(recents.records().isEmpty)
     }
 
+    // As on BookOrbit's own Continue Reading (#120): on hold stays, abandoned
+    // leaves.
+    @Test func aStatusThatContinueReadingDropsLeavesHome() async throws {
+        let recents = temporaryRecents()
+        try recents.record(sourced(book("paused")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        try recents.record(sourced(book("given-up")), at: Date(timeIntervalSinceReferenceDate: 1_000_000))
+        let source = PagedSource(tracksFinished: true, tracksReadStatus: true)
+        let library = await connected(source, recents: recents)
+
+        library.markedStatus(sourced(book("paused")).id, .onHold)
+        library.markedStatus(sourced(book("given-up")).id, .abandoned)
+
+        #expect(library.continueReading.map(\.book.title) == ["paused"])
+        #expect(recents.records().map(\.book.book.readStatus) == [.onHold])
+    }
+
     @Test func aFailedHomeKeepsWhatItShowed() async {
         let faults = Faults()
         let library = await connected(PagedSource(pages: ["reading": LibraryFeed(books: [book("1")])], faults: faults))
@@ -527,6 +544,37 @@ struct FinishedCoverTests {
         #expect(library.onIPhone.books().map(\.book.isFinished) == [false])
     }
 
+    @Test func aStatusReachesTheIPhonesRecords() async throws {
+        let library = await connected(PagedSource(tracksFinished: true, tracksReadStatus: true))
+        var finished = Self.finished("1", true)
+        finished.readStatus = .read
+        let book = sourced(finished)
+        try library.onIPhone.record(book)
+
+        library.markedStatus(book.id, .skimmed)
+        #expect(!library.isFinished(book))
+        #expect(library.readStatus(of: book) == .skimmed)
+        #expect(library.onIPhone.books().map(\.book.readStatus) == [.skimmed])
+        #expect(relaunched(library).onIPhone.books().map(\.book.isFinished) == [false])
+
+        // BookOrbit's not finished is `reading`.
+        library.markedFinished(book.id, false)
+        #expect(library.readStatus(of: book) == .reading)
+    }
+
+    @Test func aListUpdatesAStatus() async throws {
+        var listed = Self.finished("1", false)
+        listed.readStatus = .onHold
+        let source = PagedSource(pages: ["a": LibraryFeed(books: [listed])], tracksFinished: true, tracksReadStatus: true)
+        let library = await connected(source)
+        var older = Self.finished("1", false)
+        older.readStatus = .reading
+        try library.onIPhone.record(sourced(older))
+
+        await library.feed(link("a"), from: server)?.load()
+        #expect(library.onIPhone.books().map(\.book.readStatus) == [.onHold])
+    }
+
     @Test func removingAServerForgetsItsMarks() async throws {
         let library = await connected(PagedSource())
         let kept = sourced(book("1"))
@@ -575,6 +623,17 @@ struct CoverMarksTests {
         #expect(marks.finished)
         #expect(marks.download == .downloaded)
         #expect(marks.accessibilityValue == "Finished, downloaded")
+    }
+
+    // A status the place line names takes the check's place (#120).
+    @Test func aStatusTakesTheChecksPlace() {
+        let onHold = CoverMarks(finished: false, readStatus: .onHold, status: .downloaded)
+        #expect(onHold.shownStatus == .onHold)
+        #expect(onHold.accessibilityValue == "On hold, downloaded")
+        #expect(CoverMarks(finished: false, readStatus: .abandoned, status: .notDownloaded).accessibilityValue == "Abandoned")
+        #expect(CoverMarks(finished: false, readStatus: .reading, status: .notDownloaded).isEmpty)
+        #expect(CoverMarks(finished: true, readStatus: .read, status: .notDownloaded).shownStatus == .read)
+        #expect(LibraryReadStatus.allCases.filter { $0.placeWord != nil }.map(\.symbol) == ["bookmark", "pause", "forward", "xmark"])
     }
 
     @Test func theRingTakesTheArrowsPlace() {

@@ -55,10 +55,12 @@ struct BookCoverPage: View {
             shell.opener.clearFailure(sourced)
             shell.places.refresh(sourced)
         }
+        // "Rate it" asks again only when the book is marked again.
+        .onDisappear { page.dismissRatingPrompt() }
 
         .onChange(of: page.details?.book) { _, book in
             // A mark set before they arrived is newer than they are.
-            guard let book, page.markedFinished == nil else { return }
+            guard let book, page.markedFinished == nil, page.markedStatus == nil else { return }
             shell.library.detailsLoaded(SourcedBook(source: sourceID, book: book))
         }
         // Downloaded: its place can come from KOReader now (question 4).

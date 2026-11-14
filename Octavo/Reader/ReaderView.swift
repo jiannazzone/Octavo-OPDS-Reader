@@ -71,7 +71,7 @@ struct ReaderView: View {
             #endif
             model = ReaderModel(
                 book: book.reader, store: replay?.positions ?? ReadingPositionStore(), sync: progressSync, fallback: listedPlace,
-                bookmarks: bookmarks, cfiShape: cfiShape
+                bookmarks: bookmarks, cfiShape: cfiShape, paceStore: .shared
             )
         }
         .onDisappear {
@@ -100,6 +100,7 @@ private struct ReaderScreen: View {
     @Environment(ShellModel.self) private var shell
     @AppStorage(ReaderSettings.alwaysShowControlsKey) private var alwaysShowControls = ReaderSettings.alwaysShowControlsDefault
     @AppStorage(ReaderMargins.key) private var margins = ReaderMargins.standard
+    @AppStorage(ReaderSettings.buttonsOnTopKey) private var buttonsOnTop = ReaderSettings.buttonsOnTopDefault
     @AppStorage(ReaderAppearance.key) private var appearance = ReaderAppearance()
     @AppStorage(ReaderPageTurn.key) private var pageTurn = ReaderPageTurn.standard
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -172,7 +173,7 @@ private struct ReaderScreen: View {
                 .overlay(alignment: .topLeading) {
                     if model.bookmarks.pageIsBookmarked, model.phase == .open, let geometry = model.geometry {
                         ReaderRibbon()
-                            .offset(x: geometry.size.width - geometry.safeArea.right - 30)
+                            .offset(ribbonOffset(in: geometry))
                             .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                     }
                 }
@@ -205,7 +206,7 @@ private struct ReaderScreen: View {
                             Group {
                                 switch panel {
                                 case .textAndTheme:
-                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil, close: closePanel)
+                                    ReaderTextPanel(appearance: $appearance, darkMode: darkMode, showsAll: fold != nil, offersButtonsOnTop: shell.hasHinge, close: closePanel)
                                 case .contents:
                                     contentsPanel
                                 case .search:
@@ -270,6 +271,11 @@ private struct ReaderScreen: View {
         }
         .onChange(of: margins, initial: true) { _, margins in
             model.margins = margins
+        }
+        // Only where there's a side column to leave: elsewhere the buttons are
+        // on top already, under the status bar, and the text keeps clear of them.
+        .onChange(of: buttonsOnTop && shell.hasHinge, initial: true) { _, onTop in
+            model.buttonsOnTop = onTop
         }
         .onChange(of: pageTurn, initial: true) { _, pageTurn in
             model.pageTurn = pageTurn
@@ -395,6 +401,26 @@ private struct ReaderScreen: View {
     /// land on the fold half open). The rest of the column turns the page.
     /// With Always show controls it sits after the buttons and brings up
     /// the bar. Not while a panel is open: the bar would run under it.
+    /// Where the bookmark ribbon hangs. Beside the side column on the Duo;
+    /// wherever the buttons run along the top instead, top left over the
+    /// text's edge (Adam, 2026-11-12), clear of the clock, the battery, the
+    /// camera and the display's rounded corner on the right.
+    private func ribbonOffset(in geometry: ReaderGeometry) -> CGSize {
+        let safe = geometry.safeArea
+        if shell.hasHinge, safe.right > 0 {
+            return CGSize(width: geometry.size.width - safe.right - 30, height: 0)
+        }
+        let textLeft = model.layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height))?.first?.lowerBound ?? 20
+        // Buttons on Top: the band's left end is empty, up to Back, which
+        // starts about 40 pt in folded.
+        if model.buttonsOnTop {
+            return CGSize(width: model.posture == .closed ? 20 : textLeft, height: 0)
+        }
+        // An iPhone, an iPad, the Duo turned sideways: under the status bar,
+        // whose clock is on the left.
+        return CGSize(width: textLeft, height: safe.top)
+    }
+
     private var showsControlsButton: Bool {
         model.phase == .open && !controls.showsBar && panel == nil
     }
@@ -769,46 +795,114 @@ private struct ReaderProgressBar: View {
 
 /// The chapter and page in each page's bottom margin, outside the text
 /// (decision 7). Under the fold's cross-fade; hidden while a page turns,
-/// whose pictures carry each page's own (`ReaderTurn`).
+/// whose pictures carry each page's own (`ReaderTurn`). Its numbers take a
+/// tap, for the next readout (#124).
 struct ReaderFooter: View {
     let model: ReaderModel
     var hidesChapter = false
+    @AppStorage(ReaderFooterReadout.key) private var readout = ReaderFooterReadout.standard
 
     var body: some View {
         if model.phase == .open, let geometry = model.geometry {
-            ReaderFooterLines(
-                place: ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction),
-                layout: model.layout, geometry: geometry, hidesChapter: hidesChapter
-            )
+            let place = ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction)
+            ReaderFooterLines(place: place, layout: model.layout, geometry: geometry, hidesChapter: hidesChapter) {
+                readout = ReaderFooterNumbers(readout: readout, timeLeft: model.timeLeft).next(at: place)
+            }
+        }
+    }
+}
+
+/// What the footer's numbers show, for every footer line (the page's and
+/// the turns' pictures of it), from `ReaderWebView`.
+struct ReaderFooterNumbers: Equatable {
+    var readout = ReaderFooterReadout.standard
+    var timeLeft: ReaderTimeLeft?
+
+    /// Seconds left in the chapter and the book from `place`, if there's
+    /// a pace and the book's characters are counted.
+    private func times(at place: ReaderPlace) -> (chapter: Double, book: Double)? {
+        guard let timeLeft, let chapter = timeLeft.chapter(from: place.fraction), let book = timeLeft.book(from: place.fraction) else { return nil }
+        return (chapter, book)
+    }
+
+    /// The readout a tap goes to from `place`.
+    func next(at place: ReaderPlace) -> ReaderFooterReadout {
+        let hasTime = times(at: place) != nil, hasPages = place.total != nil
+        return readout.shown(hasTime: hasTime, hasPages: hasPages).next(hasTime: hasTime, hasPages: hasPages)
+    }
+
+    /// The numbers, and the same for VoiceOver.
+    func text(at place: ReaderPlace, spread: Bool) -> (shown: String, spoken: String) {
+        let times = times(at: place)
+        switch readout.shown(hasTime: times != nil, hasPages: place.total != nil) {
+        case .chapterTime:
+            if let times {
+                let time = ReadingTimeLeft(seconds: times.chapter)
+                return (ReaderTimeLeftText.short(time, .chapter), ReaderTimeLeftText.spoken(time, .chapter))
+            }
+        case .bookTime:
+            if let times {
+                let time = ReadingTimeLeft(seconds: times.book)
+                return (ReaderTimeLeftText.short(time, .book), ReaderTimeLeftText.spoken(time, .book))
+            }
+        case .page:
+            if let pages = place.pages(spread: spread) {
+                return (pages, place.pageLine(spread: spread) ?? pages)
+            }
+        case .percent:
+            break
+        }
+        return (place.percent, place.percent)
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var readerFooterNumbers = ReaderFooterNumbers()
+}
+
+/// Hides a view from VoiceOver, or leaves it as it is: a false
+/// `accessibilityHidden` shows what's hidden inside.
+private struct HiddenFromVoiceOver: ViewModifier {
+    let isHidden: Bool
+
+    func body(content: Content) -> some View {
+        if isHidden {
+            content.accessibilityHidden(true)
+        } else {
+            content
         }
     }
 }
 
 /// Each page's footer line for `place`: one line per page, the chapter on
 /// the first and the numbers on the last, so a spread splits at the gutter.
-/// Ignores touches.
+/// Ignores touches, but for the numbers when `onTapNumbers` is given.
 struct ReaderFooterLines: View {
     let place: ReaderPlace
     let layout: ReaderLayout
     let geometry: ReaderGeometry
     /// The way back sits in the chapter's place (decision 33).
     var hidesChapter = false
+    /// The numbers' tap: the page's own footer, not a turn's picture of it.
+    var onTapNumbers: (() -> Void)?
     @Environment(\.dynamicTypeSize) private var size
+    @Environment(\.readerFooterNumbers) private var numbers
 
     var body: some View {
         if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height)),
            let first = columns.first, let last = columns.last {
             let spread = columns.count > 1
             let centre = ReaderChromeLayout.footerLineCentre(in: geometry, layout: layout)
+            let text = numbers.text(at: place, spread: spread)
             Group {
                 if spread {
                     line(chapter: hidesChapter ? nil : place.chapter, numbers: nil, in: first, centre: centre)
-                    line(chapter: nil, numbers: place.footer(spread: true), in: last, centre: centre)
+                    line(chapter: nil, numbers: text, in: last, centre: centre)
                 } else {
                     // At these sizes the chapter would be a letter or two, and
                     // the way back reaches the numbers.
                     let large = size.isAccessibilitySize
-                    line(chapter: hidesChapter || large ? nil : place.chapter, numbers: hidesChapter && large ? nil : place.footer(spread: false), in: first, centre: centre)
+                    line(chapter: hidesChapter || large ? nil : place.chapter, numbers: hidesChapter && large ? nil : text, in: first, centre: centre)
                 }
             }
             .font(.caption2)
@@ -816,22 +910,55 @@ struct ReaderFooterLines: View {
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .monospacedDigit()
             .foregroundStyle(.secondary)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            // A turn's picture of the footer says nothing. Not
+            // `accessibilityHidden(false)` for the page's own: that shows the
+            // words hidden inside it, which the button says.
+            .modifier(HiddenFromVoiceOver(isHidden: onTapNumbers == nil))
         }
     }
 
-    private func line(chapter: String?, numbers: String?, in column: ClosedRange<Double>, centre: Double) -> some View {
+    /// The numbers' touch area: 44 pt tall, and at least this wide, so a
+    /// short readout ("30%") is as easy to hit as a long one (Adam).
+    private static let touchSize = CGSize(width: 120, height: 44)
+    /// How far it reaches past the numbers' ends.
+    private static let touchMargin = 10.0
+
+    private func line(chapter: String?, numbers: (shown: String, spoken: String)?, in column: ClosedRange<Double>, centre: Double) -> some View {
         HStack(spacing: 12) {
             if let chapter {
                 Text(chapter)
                     .lineLimit(1)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             Spacer(minLength: 0)
             if let numbers {
-                Text(numbers)
-                    .lineLimit(1)
-                    .layoutPriority(1)
+                if let onTapNumbers {
+                    Text(numbers.shown)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                        .accessibilityHidden(true)
+                        // The touch area, over the numbers and reaching left
+                        // from them, without moving them.
+                        .overlay(alignment: .trailing) {
+                            Button(action: onTapNumbers) {
+                                Color.clear
+                                    .frame(minWidth: Self.touchSize.width, maxWidth: .infinity)
+                                    .frame(height: Self.touchSize.height)
+                                    .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, -Self.touchMargin)
+                            .accessibilityLabel(Text("Reading Progress", comment: "VoiceOver: the reader footer's numbers, a button that cycles them"))
+                            .accessibilityValue(numbers.spoken)
+                            .accessibilityHint(Text("Shows the next readout.", comment: "VoiceOver hint: the reader footer's numbers"))
+                        }
+                } else {
+                    Text(numbers.shown)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                        .allowsHitTesting(false)
+                }
             }
         }
         .frame(width: column.upperBound - column.lowerBound, height: ReaderChromeLayout.footerLineHeight)

@@ -41,6 +41,34 @@ public protocol LibrarySource: Sendable {
     /// Marks `book` finished, or not, on the server.
     func setFinished(_ finished: Bool, for book: LibraryBook) async throws
 
+    /// Whether the server keeps a read status for each book (BookOrbit's),
+    /// beyond finished.
+    var tracksReadStatus: Bool { get }
+
+    /// Sets `book`'s read status on the server.
+    func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws
+
+    /// Whether the server keeps your rating of each book (BookOrbit's).
+    var tracksRating: Bool { get }
+
+    /// Rates `book` 1 to 5 whole stars on the server; `nil` clears it.
+    func setRating(_ rating: Int?, for book: LibraryBook) async throws
+
+    /// Whether you can put books into collections of your own on the
+    /// server (BookOrbit's).
+    var tracksCollections: Bool { get }
+
+    /// Your collections, in the server's order, each saying whether `book`
+    /// is in it.
+    func collections(of book: LibraryBook) async throws -> [LibraryBookCollection]
+
+    /// Puts `book` into `collection`, or takes it out.
+    func setCollection(_ collection: LibraryBookCollection, contains: Bool, for book: LibraryBook) async throws
+
+    /// Makes a collection of yours called `name`, with `book` in it. Made
+    /// but the book not added: `contains` is false, so it can be ticked.
+    func newCollection(named name: String, with book: LibraryBook) async throws -> LibraryBookCollection
+
     /// What the list at `link` can be sorted and filtered by, and how it is
     /// now. `nil`: neither (lists of series or authors, search).
     func order(of link: LibraryLink) -> LibraryListOrder?
@@ -58,6 +86,24 @@ extension LibrarySource {
     public var tracksFinished: Bool { false }
 
     public func setFinished(_ finished: Bool, for book: LibraryBook) async throws {}
+
+    public var tracksReadStatus: Bool { false }
+
+    public func setReadStatus(_ status: LibraryReadStatus, for book: LibraryBook) async throws {}
+
+    public var tracksRating: Bool { false }
+
+    public func setRating(_ rating: Int?, for book: LibraryBook) async throws {}
+
+    public var tracksCollections: Bool { false }
+
+    public func collections(of book: LibraryBook) async throws -> [LibraryBookCollection] { [] }
+
+    public func setCollection(_ collection: LibraryBookCollection, contains: Bool, for book: LibraryBook) async throws {}
+
+    public func newCollection(named name: String, with book: LibraryBook) async throws -> LibraryBookCollection {
+        throw LibraryError.invalidLink
+    }
 
     public func order(of link: LibraryLink) -> LibraryListOrder? { nil }
 

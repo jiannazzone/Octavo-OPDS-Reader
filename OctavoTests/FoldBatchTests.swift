@@ -13,6 +13,16 @@ struct FoldBatchTests {
         start.advanced(by: .milliseconds(milliseconds))
     }
 
+    // Buttons on Top switched (#136): no resize comes, so it waits for the
+    // inputs to go quiet, and at least its minimum for the system's bar.
+    @Test func barSwitchWaitsForQuietAndItsMinimum() {
+        var batch = FoldBatch(settlingAt: start, minimum: .milliseconds(300))
+        #expect(batch.deadline(timing) == at(300))
+        // The safe area moving as the bar does.
+        batch.input(at: at(250))
+        #expect(batch.deadline(timing) == at(370))
+    }
+
     @Test func waitsForThePageToResize() {
         var batch = FoldBatch(folded: false, at: start)
         // The hinge, the reader's size and the fold region, but no resize yet.

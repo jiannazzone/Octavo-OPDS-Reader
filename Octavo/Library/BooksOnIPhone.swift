@@ -26,9 +26,9 @@ nonisolated struct BooksOnIPhone: Sendable {
 
     /// Brings the records in `marks` up to date, so a cover shows them after
     /// the next launch too.
-    func update(finished marks: [SourcedBook.ID: Bool]) throws {
+    func update(marks: [SourcedBook.ID: ReadMark]) throws {
         let books = books()
-        let updated = books.map { $0.withFinished(from: marks) }
+        let updated = books.map { $0.withMarks(from: marks) }
         guard updated != books else { return }
         try write(updated)
     }

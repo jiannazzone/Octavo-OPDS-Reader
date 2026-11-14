@@ -24,6 +24,35 @@ final class BookPage {
     private(set) var markedFinished: Bool?
     /// Setting finished didn't reach the server.
     private(set) var finishedFailed = false
+    /// The read status as last set here, over what the server sent
+    /// (BookOrbit's, #120).
+    private(set) var markedStatus: LibraryReadStatus?
+    /// Setting the status didn't reach the server.
+    private(set) var statusFailed = false
+    /// Your rating as last set here, over what the server sent (#120):
+    /// `.some(nil)` once cleared here.
+    private(set) var markedRating: Int??
+    /// Setting the rating didn't reach the server.
+    private(set) var ratingFailed = false
+    /// "Rate it": the book was just marked Finished, Skimmed or Abandoned
+    /// here and isn't rated (Adam, 2026-11-13).
+    private(set) var asksRating = false
+    /// Ratings sent from here, so only the latest puts things back.
+    @ObservationIgnored private var ratingRequests = 0
+    /// The rating the server last took from here, over what it sent.
+    @ObservationIgnored private var savedRating: Int??
+    /// Your collections, each saying whether the book is in it, once its
+    /// Collections screen has loaded them (#120).
+    private(set) var collectionChoices: [LibraryBookCollection]?
+    /// Your collections as last loaded or changed here, laid over the
+    /// details' list, which also names others' shared collections the book
+    /// is in.
+    private(set) var collectionMarks: [LibraryBookCollection] = []
+    /// Loading them didn't reach the server.
+    private(set) var collectionsFailed = false
+    /// What went wrong changing them, under the list.
+    private(set) var collectionsProblem: String?
+    @ObservationIgnored private var collectionsPending: Set<LibraryLink> = []
     /// Where this iPhone keeps the mark for a server that doesn't.
     @ObservationIgnored private var finishedOnIPhone: (books: FinishedBooks, id: SourcedBook.ID)?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -69,13 +98,21 @@ final class BookPage {
         return finishedOnIPhone.books.contains(finishedOnIPhone.id)
     }
 
+    var readStatus: LibraryReadStatus? { markedStatus ?? current.readStatus }
+
+    /// Your rating, 1 to 5 whole stars (BookOrbit's). `nil`: not rated.
+    var rating: Int? { markedRating ?? current.rating }
+
     /// Marks the book finished, or not: on the server if it keeps the mark
     /// (BookOrbit), else on this iPhone. Shows the change at once and puts
     /// it back if the server refuses.
     func setFinished(_ finished: Bool, from source: any LibrarySource) async {
-        let before = markedFinished
+        let before = (markedFinished, markedStatus, asksRating)
         markedFinished = finished
-        finishedFailed = false
+        // Not finished is BookOrbit's `reading` (`BookOrbitSource.setFinished`).
+        if source.tracksReadStatus { markedStatus = finished ? .read : .reading }
+        asksRating = finished && shouldAskRating(after: .read, from: source)
+        clearProblems()
         do {
             if source.tracksFinished {
                 try await source.setFinished(finished, for: current)
@@ -83,9 +120,79 @@ final class BookPage {
                 try finishedOnIPhone.books.set(finished, for: finishedOnIPhone.id)
             }
         } catch {
-            markedFinished = before
+            (markedFinished, markedStatus, asksRating) = before
             finishedFailed = !(error is CancellationError)
         }
+    }
+
+    /// Sets the book's read status on the server (BookOrbit's), as
+    /// `setFinished` does.
+    func setStatus(_ status: LibraryReadStatus, from source: any LibrarySource) async {
+        let before = (markedFinished, markedStatus, asksRating)
+        markedStatus = status
+        markedFinished = status == .read
+        asksRating = shouldAskRating(after: status, from: source)
+        clearProblems()
+        do {
+            try await source.setReadStatus(status, for: current)
+        } catch {
+            (markedFinished, markedStatus, asksRating) = before
+            statusFailed = !(error is CancellationError)
+        }
+    }
+
+    /// The statuses that end a reading, after which "Rate it" asks.
+    static func endsAReading(_ status: LibraryReadStatus) -> Bool {
+        switch status {
+        case .read, .skimmed, .abandoned: true
+        case .unread, .wantToRead, .reading, .onHold, .rereading, .other: false
+        }
+    }
+
+    /// Whether "Rate it" asks once the book is marked `status`: a reading
+    /// ended, on a server that keeps ratings, and not rated. Before the
+    /// details arrive the rating is the list's, which can be older than
+    /// the server's, so it doesn't ask then.
+    private func shouldAskRating(after status: LibraryReadStatus, from source: any LibrarySource) -> Bool {
+        guard Self.endsAReading(status), source.tracksRating else { return false }
+        return (markedRating != nil || details != nil) && rating == nil
+    }
+
+    /// Rates the book on the server (BookOrbit's), 1 to 5 whole stars, or
+    /// clears it with `nil`, as `setStatus` does. Answers "Rate it". Only
+    /// the latest of several quick choices puts things back if refused.
+    func setRating(_ rating: Int?, from source: any LibrarySource) async {
+        ratingRequests += 1
+        let request = ratingRequests
+        let asked = asksRating
+        markedRating = .some(rating)
+        asksRating = false
+        clearProblems()
+        do {
+            try await source.setRating(rating, for: current)
+            savedRating = .some(rating)
+            // An earlier choice that lands after the latest was refused:
+            // the server has this one now.
+            if request != ratingRequests, ratingFailed { markedRating = savedRating }
+        } catch {
+            guard request == ratingRequests else { return }
+            markedRating = savedRating
+            asksRating = asked
+            ratingFailed = !(error is CancellationError)
+        }
+    }
+
+    /// A new change starts with no problem showing.
+    private func clearProblems() {
+        finishedFailed = false
+        statusFailed = false
+        ratingFailed = false
+    }
+
+    /// ✕ on "Rate it", or leaving the screen: asks again only when the book
+    /// is marked again.
+    func dismissRatingPrompt() {
+        asksRating = false
     }
 
     func retryDetails(from source: any LibrarySource) async {
@@ -123,6 +230,14 @@ final class BookPage {
         return progress.formatted(.percent.precision(.fractionLength(0)))
     }
 
+    /// "On hold · 30%", or "On hold" before it's started: a status the place
+    /// alone would misstate (#120, Adam 2026-11-12).
+    static func placeLine(progress: Double?, readStatus: LibraryReadStatus?) -> String {
+        guard let word = readStatus?.placeWord else { return placeLine(progress: progress) }
+        guard let progress, progress > 0 else { return word }
+        return "\(word) · \(placeLine(progress: progress))"
+    }
+
     /// "14% · BookOrbit": Home's, with several servers (decision 36).
     static func placeLine(progress: Double?, server: String?) -> String {
         let place = placeLine(progress: progress)
@@ -149,9 +264,91 @@ final class BookPage {
         return "\(series.name) · \(position.formatted(.number.precision(.fractionLength(0...1))))"
     }
 
+    /// The collections the book is in: the details' list, in its order,
+    /// with yours as last loaded or changed here laid over it: one taken
+    /// out goes, one put in joins at the end.
+    var collections: [LibraryEntry]? {
+        let listed = details?.collections
+        guard listed != nil || !collectionMarks.isEmpty else { return nil }
+        let marks = Dictionary(collectionMarks.map { ($0.id, $0.contains) }, uniquingKeysWith: { $1 })
+        let kept = (listed ?? []).filter { marks[$0.link] ?? true }
+        let known = Set((listed ?? []).map(\.link))
+        return kept + collectionMarks.filter { $0.contains && !known.contains($0.id) }.map(\.entry)
+    }
+
     var collectionsLine: String? {
-        guard let collections = details?.collections, !collections.isEmpty else { return nil }
+        guard let collections, !collections.isEmpty else { return nil }
         return collections.map(\.title).joined(separator: " · ")
+    }
+
+    /// Loads your collections for the Collections screen.
+    func loadCollections(from source: any LibrarySource) async {
+        collectionsFailed = false
+        do {
+            let loaded = try await source.collections(of: current)
+            collectionChoices = loaded
+            loaded.forEach(remember)
+        } catch {
+            collectionsFailed = collectionChoices == nil && !(error is CancellationError)
+        }
+    }
+
+    /// Puts the book into `collection` or takes it out, shown at once and
+    /// put back if the server refuses. A tap while the last is on its way
+    /// does nothing.
+    func setCollection(_ collection: LibraryBookCollection, contains: Bool, from source: any LibrarySource) async {
+        guard !collectionsPending.contains(collection.id) else { return }
+        collectionsPending.insert(collection.id)
+        defer { collectionsPending.remove(collection.id) }
+        mark(collection, contains: contains)
+        collectionsProblem = nil
+        do {
+            try await source.setCollection(collection, contains: contains, for: current)
+        } catch {
+            mark(collection, contains: !contains)
+            if !(error is CancellationError) { collectionsProblem = "Couldn’t change the collections. Check your connection." }
+        }
+    }
+
+    /// Makes a collection called `name` with the book in it, or ticks the
+    /// one you have by that name. `false`: it couldn't, so keep the name.
+    func newCollection(named name: String, from source: any LibrarySource) async -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return true }
+        if let existing = collectionChoices?.first(where: { $0.entry.title.compare(name, options: .caseInsensitive) == .orderedSame }) {
+            if !existing.contains { await setCollection(existing, contains: true, from: source) }
+            return true
+        }
+        collectionsProblem = nil
+        do {
+            let made = try await source.newCollection(named: name, with: current)
+            collectionChoices = (collectionChoices ?? []) + [made]
+            remember(made)
+            // Made, but the book didn't go in: it's there to tick.
+            if !made.contains { collectionsProblem = "Couldn’t add it to “\(made.entry.title)”. Check your connection." }
+            return true
+        } catch LibraryError.server(status: 409, _) {
+            collectionsProblem = "You already have a collection called “\(name)”."
+        } catch {
+            if !(error is CancellationError) { collectionsProblem = "Couldn’t make the collection. Check your connection." }
+        }
+        return false
+    }
+
+    private func mark(_ collection: LibraryBookCollection, contains: Bool) {
+        var marked = collection
+        marked.contains = contains
+        remember(marked)
+        guard let index = collectionChoices?.firstIndex(where: { $0.id == collection.id }) else { return }
+        collectionChoices?[index].contains = contains
+    }
+
+    private func remember(_ collection: LibraryBookCollection) {
+        if let index = collectionMarks.firstIndex(where: { $0.id == collection.id }) {
+            collectionMarks[index] = collection
+        } else {
+            collectionMarks.append(collection)
+        }
     }
 
     /// "EPUB · 1.2 MB": the file the reader would open, else the primary.

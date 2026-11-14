@@ -17,6 +17,7 @@ import SwiftUI
 struct AppShell: View {
     @State private var model = ShellModel()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(ReaderSettings.buttonsOnTopKey) private var buttonsOnTop = ReaderSettings.buttonsOnTopDefault
 
     var body: some View {
         ZStack {
@@ -60,6 +61,11 @@ struct AppShell: View {
                     .transition(.identity)
             }
         }
+        // Buttons on Top (#136): the system's band along the top while a book
+        // is open. iOS applies it to the whole window, so it's set here, where
+        // closing the book turns it off again; on the reader alone it stayed
+        // on for the tabs after the book closed.
+        .toolbarVerticalBehavior(buttonsOnTop && model.hasHinge && model.reader.reading != nil ? .disabled : .automatic)
         // Import from Files and the Library's +: the system's picker, no
         // screen of our own (decision 6).
         .fileImporter(

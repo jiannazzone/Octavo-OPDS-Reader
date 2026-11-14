@@ -58,6 +58,17 @@ struct BookOrbitDecodingTests {
         #expect(book.seriesIndex == index)
     }
 
+    // Your own rating, whole stars 1 to 5 (#120, measured on v3.6.0);
+    // anything else reads as not rated.
+    @Test(arguments: [
+        ("4", 4), ("4.0", 4), ("1", 1), ("5", 5), ("null", nil), ("0", nil), ("6", nil), (#""4""#, nil), ("{}", nil), ("1e300", nil), ("-1e300", nil),
+    ] as [(String, Int?)])
+    func decodesRating(json: String, rating: Int?) throws {
+        let book = try decoder.decode(BookOrbitBook.self, from: Data(#"{"id":1,"title":"T","rating":\#(json)}"#.utf8))
+        #expect(book.rating == rating)
+        #expect(BookOrbitSource.book(book).rating == rating)
+    }
+
     @Test func decodesNullTitleAsEmpty() throws {
         let book = try decoder.decode(BookOrbitBook.self, from: Data(#"{"id":1,"title":null}"#.utf8))
         #expect(book.title == "")

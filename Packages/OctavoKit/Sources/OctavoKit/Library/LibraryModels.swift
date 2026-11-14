@@ -171,6 +171,22 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
+/// One of your collections, and whether a book is in it (#120,
+/// `docs/notes/book-collections.md`).
+public struct LibraryBookCollection: Hashable, Sendable, Identifiable {
+    /// The collection as the book's details list it: its name, and the
+    /// link that opens it.
+    public var entry: LibraryEntry
+    public var contains: Bool
+
+    public init(entry: LibraryEntry, contains: Bool) {
+        self.entry = entry
+        self.contains = contains
+    }
+
+    public var id: LibraryLink { entry.link }
+}
+
 /// A book as lists show it.
 public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
     public var id: LibraryBookID
@@ -189,6 +205,12 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
     /// Whether the server has the book marked finished. `nil` if it doesn't
     /// keep such a mark (OPDS); the app keeps one on the iPhone instead.
     public var isFinished: Bool?
+    /// The server's read status (BookOrbit's). `nil` if it has none for the
+    /// book, or keeps none (`LibrarySource.tracksReadStatus`).
+    public var readStatus: LibraryReadStatus?
+    /// Your rating on the server, 1 to 5 whole stars (BookOrbit's). `nil` if
+    /// it has none, or keeps none (`LibrarySource.tracksRating`).
+    public var rating: Int?
 
     public init(
         id: LibraryBookID,
@@ -199,7 +221,9 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         files: [LibraryFile] = [],
         progress: Double? = nil,
         lastReadAt: Date? = nil,
-        isFinished: Bool? = nil
+        isFinished: Bool? = nil,
+        readStatus: LibraryReadStatus? = nil,
+        rating: Int? = nil
     ) {
         self.id = id
         self.title = title
@@ -210,6 +234,8 @@ public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
         self.progress = progress
         self.lastReadAt = lastReadAt
         self.isFinished = isFinished
+        self.readStatus = readStatus
+        self.rating = rating
     }
 
     /// The file the server marks primary, else the first one.

@@ -147,6 +147,52 @@ const pageWordsOf = range => {
     return lines.length ? lines.join('\n') : null
 }
 
+// Characters of text, with each run of white space counted as one, the same
+// on a page and in a section, for reading speed and time left (#124,
+// `docs/notes/time-left.md`).
+const countCharacters = text => (text ?? '').replace(/\s+/g, ' ').trim().length
+
+// The characters on the page (both pages of a spread). `null` on fixed
+// layout, whose pages are pictures more often than text.
+const pageCharacters = range => {
+    if (view.isFixedLayout || !range) return null
+    try {
+        return countCharacters(range.toString())
+    } catch {
+        return null
+    }
+}
+
+// Each section's characters, in reading order, for turning a place in the
+// book into characters before it. Sections foliate leaves out of its
+// fractions (not linear, or empty) count none, as they take no share of the
+// book. Each section is read once, a pause between them so the page stays
+// quick; `null` for one that can't be read.
+// `known`: counts `refineContents` already made, by section index.
+const sectionCharacters = async (known = new Map()) => {
+    const v = requireView()
+    const counts = []
+    for (const [index, section] of v.book.sections.entries()) {
+        if (section.linear === 'no' || !(section.size > 0)) {
+            counts.push(0)
+            continue
+        }
+        if (known.has(index)) {
+            counts.push(known.get(index))
+            continue
+        }
+        try {
+            const doc = await section.createDocument()
+            const body = doc.body ?? doc.documentElement
+            counts.push(countCharacters(body?.textContent))
+        } catch {
+            counts.push(null)
+        }
+        await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    return counts
+}
+
 // Where a fixed-layout page sits in the book, to save and sync. foliate
 // reports the section's end, which is the next section's start: going back by
 // it lands a page late, and BookOrbit's web reader only goes by this number on
@@ -254,6 +300,7 @@ const onRelocate = ({ detail }) => {
             : null,
         ...(view.isFixedLayout ? fixedPlace(detail) : {}),
         ...turnsFrom(view.renderer),
+        characters: pageCharacters(detail.range),
     }
     message.words = pageWordsOf(detail.range)
     message.startCFI = startOf(message.cfi)
@@ -974,8 +1021,9 @@ const bookFraction = (index, within) => {
 // the section's start. Entries in the section on screen are placed by its
 // layout, so they match the footer; the rest by characters, each section
 // read once and counted in one pass (`parse`; without it they're left as
-// they are).
-const refineContents = async (entries, parse = true) => {
+// they are). `counts`, if given, gets each parsed section's characters, for
+// `sectionCharacters`.
+const refineContents = async (entries, parse = true, counts = null) => {
     const v = requireView()
     const bySection = new Map()
     entries.forEach((entry, i) => {
@@ -1011,6 +1059,7 @@ const refineContents = async (entries, parse = true) => {
             continue
         }
         const body = doc.body ?? doc.documentElement
+        counts?.set(index, countCharacters(body?.textContent))
         const targets = new Map()
         for (const [i, anchor] of items) {
             let node = null
@@ -1877,9 +1926,15 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
         toc: tocFractions(),
     }
     post('opened', result)
-    refineContents(result.toc)
+    const opened = view
+    const counted = new Map()
+    refineContents(result.toc, true, counted)
         .then(toc => post('contents', { toc }))
         .catch(e => post('error', { phase: 'contents', ...describe(e) }))
+        // Not for a book that has closed since.
+        .then(() => view !== opened || view.isFixedLayout ? null : sectionCharacters(counted))
+        .then(sections => { if (sections && view === opened) post('textMap', { sections, fractions: view.getSectionFractions() }) })
+        .catch(e => post('error', { phase: 'textMap', ...describe(e) }))
     return result
 }
 

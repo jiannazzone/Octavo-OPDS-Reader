@@ -97,10 +97,14 @@ struct CoverMarks: Equatable {
     }
 
     var finished: Bool
+    /// The server's read status (BookOrbit's, #120). One the place line names
+    /// takes the check's place.
+    var readStatus: LibraryReadStatus?
     var download: Download?
 
-    init(finished: Bool, status: BookOpener.Status) {
+    init(finished: Bool, readStatus: LibraryReadStatus? = nil, status: BookOpener.Status) {
         self.finished = finished
+        self.readStatus = readStatus
         switch status {
         case .downloaded: download = .downloaded
         case .downloading(let fraction, _): download = .downloading(fraction)
@@ -108,27 +112,36 @@ struct CoverMarks: Equatable {
         }
     }
 
-    var isEmpty: Bool { !finished && download == nil }
+    /// The status the badge shows: finished, or a status the place line
+    /// names (Adam, 2026-11-13). Reading and unread show none.
+    var shownStatus: LibraryReadStatus? {
+        finished ? .read : readStatus.flatMap { $0.placeWord == nil ? nil : $0 }
+    }
 
-    /// For the cover's own label: "Finished, downloaded", "Downloading, 40%".
+    var isEmpty: Bool { shownStatus == nil && download == nil }
+
+    /// For the cover's own label: "Finished, downloaded", "On hold",
+    /// "Downloading, 40%".
     var accessibilityValue: String {
+        let status = shownStatus?.title
         let download: String? = switch self.download {
-        case .downloaded: finished ? "downloaded" : "Downloaded"
+        case .downloaded: status == nil ? "Downloaded" : "downloaded"
         case .downloading(let fraction):
-            "\(finished ? "downloading" : "Downloading"), \(fraction.formatted(.percent.precision(.fractionLength(0))))"
+            "\(status == nil ? "Downloading" : "downloading"), \(fraction.formatted(.percent.precision(.fractionLength(0))))"
         case nil: nil
         }
-        return [finished ? "Finished" : nil, download].compactMap(\.self).joined(separator: ", ")
+        return [status, download].compactMap(\.self).joined(separator: ", ")
     }
 }
 
 extension ShellModel {
     func marks(of book: SourcedBook) -> CoverMarks {
-        CoverMarks(finished: library.isFinished(book), status: opener.status(of: book))
+        CoverMarks(finished: library.isFinished(book), readStatus: library.readStatus(of: book), status: opener.status(of: book))
     }
 }
 
-/// On a cover: a check on a finished book, then an arrow once it's on the
+/// On a cover: a check on a finished book (or a BookOrbit status's glyph:
+/// a bookmark, pause, forward or cross, #120), then an arrow once it's on the
 /// iPhone or a ring while it downloads, nothing otherwise. A dark capsule, so
 /// it reads on any cover; with one mark it's a disc.
 struct CoverBadge: View {
@@ -141,7 +154,7 @@ struct CoverBadge: View {
         let marks = shell.marks(of: book)
         if !marks.isEmpty {
             HStack(spacing: size * 0.08) {
-                if marks.finished { symbol("checkmark") }
+                if let status = marks.shownStatus { symbol(status.symbol, small: status != .read) }
                 switch marks.download {
                 case .downloaded: symbol("arrow.down.to.line.compact")
                 case .downloading(let fraction): ring(fraction)
@@ -157,9 +170,12 @@ struct CoverBadge: View {
         }
     }
 
-    private func symbol(_ name: String) -> some View {
+    /// `small`: a status's glyph, which at the check's size looks larger
+    /// than the check and the arrow (Adam, 2026-11-13).
+    private func symbol(_ name: String, small: Bool = false) -> some View {
         Image(systemName: name)
             .font(.system(size: size * 0.5, weight: .bold))
+            .imageScale(small ? .small : .medium)
             .foregroundStyle(.white)
             .frame(width: size * 3 / 5, height: size * 3 / 5)
     }

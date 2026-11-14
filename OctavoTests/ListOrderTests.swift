@@ -124,6 +124,24 @@ struct OnIPhoneOrderTests {
         #expect(shell.status(of: book) == .reading)
     }
 
+    // A BookOrbit book goes where BookOrbit's own filters put it (#120).
+    @Test func aBookOrbitBooksStatusIsTheServers() async {
+        let shell = makeShell()
+        let id = LibrarySourceID(rawValue: "bookorbit")
+        await shell.library.connect(LibraryServer(id: id, name: "BookOrbit", source: StubLibrarySource(finishedMarks: FinishedMarks(), keepsStatus: true)))
+        func book(_ status: LibraryReadStatus?, progress: Double? = nil) -> SourcedBook {
+            SourcedBook(source: id, book: LibraryBook(
+                id: LibraryBookID(rawValue: UUID().uuidString), title: "Book", progress: progress,
+                isFinished: status.map { $0 == .read }, readStatus: status
+            ))
+        }
+        #expect(shell.status(of: book(.wantToRead)) == .unread)
+        #expect(shell.status(of: book(.onHold, progress: 0.3)) == .reading)
+        #expect(shell.status(of: book(.abandoned, progress: 0.3)) == nil)
+        // A copy from before it was read here, which gave it a status.
+        #expect(shell.status(of: book(nil, progress: 0.3)) == .reading)
+    }
+
     // Listing the saved places once gives what reading each would.
     @Test func filteringManyBooksAgreesWithEachBooksStatus() throws {
         let shell = makeShell()

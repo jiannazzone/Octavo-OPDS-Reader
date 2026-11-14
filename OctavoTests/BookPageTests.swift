@@ -137,6 +137,392 @@ struct BookPageTests {
         #expect(!books.contains(Self.id))
     }
 
+    // MARK: Read status (#120)
+
+    @Test func aStatusGoesToTheServer() async {
+        let marks = FinishedMarks()
+        var book = Self.book
+        book.readStatus = .read
+        book.isFinished = true
+        let page = BookPage(book: book)
+
+        await page.setStatus(.onHold, from: StubLibrarySource(finishedMarks: marks, keepsStatus: true))
+        #expect(marks.statuses == [.onHold])
+        #expect(page.readStatus == .onHold)
+        #expect(!page.isFinished)
+    }
+
+    @Test func aStatusTheServerRefusesIsTakenBack() async {
+        let marks = FinishedMarks()
+        marks.refuses = true
+        var book = Self.book
+        book.readStatus = .reading
+        let page = BookPage(book: book)
+
+        await page.setStatus(.abandoned, from: StubLibrarySource(finishedMarks: marks, keepsStatus: true))
+        #expect(page.readStatus == .reading)
+        #expect(page.statusFailed)
+        #expect(BookPlace.problem(.download, finishedFailed: false, statusFailed: true) == "Couldn’t change the status. Check your connection.")
+    }
+
+    // BookOrbit's not finished is `reading`.
+    @Test func markingFinishedSetsTheStatusToo() async {
+        let marks = FinishedMarks()
+        var book = Self.book
+        book.readStatus = .onHold
+        let page = BookPage(book: book)
+        let source = StubLibrarySource(finishedMarks: marks, keepsStatus: true)
+
+        await page.setFinished(true, from: source)
+        #expect(page.readStatus == .read)
+        await page.setFinished(false, from: source)
+        #expect(page.readStatus == .reading)
+        #expect(marks.sent == [true, false])
+    }
+
+    /// (status, progress, the place line)
+    nonisolated static let placeLines: [(LibraryReadStatus?, Double?, String)] = [
+        (nil, 0.3, "30%"),
+        (.reading, 0.3, "30%"),
+        (.unread, nil, "Not started"),
+        (.wantToRead, nil, "Want to read"),
+        (.wantToRead, 0.12, "Want to read · 12%"),
+        (.onHold, 0.5, "On hold · 50%"),
+        (.onHold, 0, "On hold"),
+        (.skimmed, 0.5, "Skimmed · 50%"),
+        (.abandoned, 0.5, "Abandoned · 50%"),
+    ]
+
+    @Test(arguments: placeLines)
+    func thePlaceLineNamesAStatusThePlaceWouldMisstate(status: LibraryReadStatus?, progress: Double?, line: String) {
+        #expect(BookPlace(progress: progress, problem: nil, status: nil, finished: false, readStatus: status).text == line)
+    }
+
+    // Folded, a status takes the sync's room (Adam, 2026-11-13).
+    @Test func theFoldedLineDropsTheSyncForAStatus() {
+        let now = Date(timeIntervalSinceReferenceDate: 1_000_000)
+        let synced = BookPlaces.Status.synced(now)
+        #expect(BookPlace(progress: 0.5, problem: nil, status: synced, finished: false, readStatus: .onHold).line(now: now) == "On hold · 50%")
+        #expect(BookPlace(progress: 0.5, problem: nil, status: synced, finished: false, readStatus: .reading).line(now: now) == "50% · Synced just now")
+        #expect(BookPlace(progress: 0.5, problem: nil, status: .notSynced, finished: false, readStatus: .onHold).line(now: now) == "On hold · 50% · Not synced yet, will retry")
+    }
+
+    @Test func moreTicksTheStatusAsTheMenuNamesIt() {
+        #expect(LibraryReadStatus.ticked(nil) == .unread)
+        #expect(LibraryReadStatus.ticked(.rereading) == .reading)
+        #expect(LibraryReadStatus.ticked(.read) == nil)
+        #expect(LibraryReadStatus.menu.map(\.title) == ["Reading", "Want to read", "On hold", "Skimmed", "Abandoned", "Unread"])
+    }
+
+    // MARK: Rating (#120)
+
+    /// A page on a server that keeps ratings, its details in, so "Rate it"
+    /// can ask.
+    private func ratingPage(rating: Int? = nil, marks: FinishedMarks, keepsRating: Bool = true) async -> (BookPage, StubLibrarySource) {
+        var book = Self.book
+        book.rating = rating
+        let source = StubLibrarySource(finishedMarks: marks, keepsStatus: true, keepsRating: keepsRating)
+        let page = BookPage(book: book)
+        page.load(from: source)
+        _ = await eventually { page.details != nil }
+        return (page, source)
+    }
+
+    @Test func aRatingGoesToTheServer() async {
+        let marks = FinishedMarks()
+        let (page, source) = await ratingPage(marks: marks)
+
+        await page.setRating(4, from: source)
+        #expect(marks.ratings == [4])
+        #expect(page.rating == 4)
+        await page.setRating(nil, from: source)
+        #expect(marks.ratings == [4, nil])
+        #expect(page.rating == nil)
+    }
+
+    @Test func aRatingTheServerRefusesIsTakenBack() async {
+        let marks = FinishedMarks()
+        let (page, source) = await ratingPage(rating: 2, marks: marks)
+        marks.refuses = true
+
+        await page.setRating(5, from: source)
+        #expect(page.rating == 2)
+        #expect(page.ratingFailed)
+        #expect(BookPlace.problem(.download, finishedFailed: false, ratingFailed: true) == "Couldn’t change the rating. Check your connection.")
+    }
+
+    @Test func anotherChangeClearsARatingProblem() async {
+        let marks = FinishedMarks()
+        let (page, source) = await ratingPage(marks: marks)
+        marks.refuses = true
+        await page.setRating(5, from: source)
+        marks.refuses = false
+
+        await page.setStatus(.onHold, from: source)
+        #expect(!page.ratingFailed)
+    }
+
+    // Tap 5, then 3: the server took 3, and 5 being refused afterwards
+    // doesn't put the book back to unrated.
+    @Test func onlyTheLatestRatingPutsThingsBack() async {
+        let marks = FinishedMarks()
+        let (page, source) = await ratingPage(marks: marks)
+        marks.holdsRatings = true
+
+        let five = Task { await page.setRating(5, from: source) }
+        #expect(await eventually { marks.isHolding(5) })
+        let three = Task { await page.setRating(3, from: source) }
+        #expect(await eventually { marks.isHolding(3) })
+        marks.release(3, refusing: false)
+        await three.value
+        marks.release(5, refusing: true)
+        await five.value
+
+        #expect(page.rating == 3)
+        #expect(!page.ratingFailed)
+    }
+
+    // Tap 5, then 3: 3 is refused, then 5 lands, so the server has 5.
+    @Test func anEarlierRatingThatLandsLaterShows() async {
+        let marks = FinishedMarks()
+        let (page, source) = await ratingPage(marks: marks)
+        marks.holdsRatings = true
+
+        let five = Task { await page.setRating(5, from: source) }
+        #expect(await eventually { marks.isHolding(5) })
+        let three = Task { await page.setRating(3, from: source) }
+        #expect(await eventually { marks.isHolding(3) })
+        marks.release(3, refusing: true)
+        await three.value
+        #expect(page.rating == nil)
+        marks.release(5, refusing: false)
+        await five.value
+
+        #expect(page.rating == 5)
+        #expect(page.ratingFailed)
+    }
+
+    /// (the status set, whether "Rate it" asks)
+    nonisolated static let asksAfter: [(LibraryReadStatus, Bool)] = [
+        (.read, true), (.skimmed, true), (.abandoned, true),
+        (.reading, false), (.onHold, false), (.wantToRead, false), (.unread, false),
+    ]
+
+    @Test(arguments: asksAfter)
+    func rateItAsksWhenAReadingEnds(status: LibraryReadStatus, asks: Bool) async {
+        let (page, source) = await ratingPage(marks: FinishedMarks())
+        await page.setStatus(status, from: source)
+        #expect(page.asksRating == asks)
+    }
+
+    @Test func markingFinishedAsksAndAStarAnswers() async {
+        let (page, source) = await ratingPage(marks: FinishedMarks())
+
+        await page.setFinished(true, from: source)
+        #expect(page.asksRating)
+        await page.setRating(4, from: source)
+        #expect(!page.asksRating)
+        #expect(page.rating == 4)
+    }
+
+    @Test func takingFinishedBackStopsAsking() async {
+        let (page, source) = await ratingPage(marks: FinishedMarks())
+        await page.setFinished(true, from: source)
+        await page.setFinished(false, from: source)
+        #expect(!page.asksRating)
+    }
+
+    @Test func notNowStopsAsking() async {
+        let (page, source) = await ratingPage(marks: FinishedMarks())
+        await page.setFinished(true, from: source)
+        page.dismissRatingPrompt()
+        #expect(!page.asksRating)
+    }
+
+    @Test func aRefusedAnswerAsksAgain() async {
+        let marks = FinishedMarks()
+        let (page, source) = await ratingPage(marks: marks)
+        await page.setFinished(true, from: source)
+        marks.refuses = true
+
+        await page.setRating(4, from: source)
+        #expect(page.asksRating)
+        #expect(page.ratingFailed)
+    }
+
+    @Test func rateItDoesntAskForARatedBook() async {
+        let (page, source) = await ratingPage(rating: 3, marks: FinishedMarks())
+        await page.setFinished(true, from: source)
+        #expect(!page.asksRating)
+    }
+
+    // The list's rating can be older than the server's.
+    @Test func rateItWaitsForTheDetails() async {
+        let page = BookPage(book: Self.book)
+        await page.setFinished(true, from: StubLibrarySource(finishedMarks: FinishedMarks(), keepsStatus: true, keepsRating: true))
+        #expect(!page.asksRating)
+    }
+
+    @Test func rateItAsksOnlyWhereRatingsAreKept() async {
+        let (page, source) = await ratingPage(marks: FinishedMarks(), keepsRating: false)
+        await page.setFinished(true, from: source)
+        #expect(!page.asksRating)
+    }
+
+    @Test func starsAreSpokenAsCounts() {
+        #expect(BookRateButton.choices == [5, 4, 3, 2, 1])
+        #expect(BookRateButton.stars(4) == "★★★★")
+        #expect(BookRateButton.spoken(1) == "1 star")
+        #expect(BookRateButton.spoken(4) == "4 stars")
+    }
+
+    // MARK: Collections (#120)
+
+    private func collectionsPage(_ shelf: CollectionShelf) async -> (BookPage, StubLibrarySource) {
+        let source = StubLibrarySource(shelf: shelf)
+        let page = BookPage(book: Self.book)
+        await page.loadCollections(from: source)
+        return (page, source)
+    }
+
+    @Test func loadsYourCollections() async {
+        let (page, _) = await collectionsPage(CollectionShelf([("Classics", true), ("Summer", false)]))
+        #expect(page.collectionChoices?.map(\.entry.title) == ["Classics", "Summer"])
+        #expect(page.collectionsLine == "Classics")
+    }
+
+    @Test func collectionsThatDontLoadSaySo() async {
+        let shelf = CollectionShelf([("Classics", true)])
+        shelf.refuses = true
+        let (page, _) = await collectionsPage(shelf)
+        #expect(page.collectionChoices == nil)
+        #expect(page.collectionsFailed)
+    }
+
+    @Test func aTickPutsTheBookInAndTakesItOut() async throws {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+        let classics = try #require(page.collectionChoices?.first)
+
+        await page.setCollection(classics, contains: true, from: source)
+        #expect(page.collectionsLine == "Classics")
+        await page.setCollection(classics, contains: false, from: source)
+        #expect(page.collectionsLine == nil)
+        #expect(shelf.sent == ["+Classics", "-Classics"])
+    }
+
+    @Test func aChangeTheServerRefusesIsTakenBack() async throws {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+        shelf.refuses = true
+
+        await page.setCollection(try #require(page.collectionChoices?.first), contains: true, from: source)
+        #expect(page.collectionChoices?.first?.contains == false)
+        #expect(page.collectionsProblem == "Couldn’t change the collections. Check your connection.")
+    }
+
+    @Test func aNewCollectionHasTheBookInIt() async {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "  Book club ", from: source))
+        #expect(shelf.sent == ["new Book club"])
+        #expect(page.collectionChoices?.map(\.entry.title) == ["Classics", "Book club"])
+        #expect(page.collectionsLine == "Book club")
+    }
+
+    // Case aside, a name you have ticks that collection instead.
+    @Test func aNameYouHaveTicksThatOne() async {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "classics", from: source))
+        #expect(shelf.sent == ["+Classics"])
+        #expect(page.collectionsLine == "Classics")
+    }
+
+    @Test func anEmptyNameMakesNothing() async {
+        let shelf = CollectionShelf([])
+        let (page, source) = await collectionsPage(shelf)
+        #expect(await page.newCollection(named: "   ", from: source))
+        #expect(shelf.sent.isEmpty)
+    }
+
+    @Test func aNameTheServerHasIsSaid() async {
+        let shelf = CollectionShelf([])
+        shelf.refusesNew = .server(status: 409, message: "A collection with this name already exists")
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "Spike", from: source) == false)
+        #expect(page.collectionsProblem == "You already have a collection called “Spike”.")
+    }
+
+    @Test func aNewCollectionTheServerRefusesSaysSo() async {
+        let shelf = CollectionShelf([])
+        shelf.refusesNew = .notFound
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "Book club", from: source) == false)
+        #expect(page.collectionsProblem == "Couldn’t make the collection. Check your connection.")
+    }
+
+    /// A page with its details in (`listed`), then your collections.
+    private func detailedCollectionsPage(_ shelf: CollectionShelf) async -> (BookPage, StubLibrarySource) {
+        let source = StubLibrarySource(shelf: shelf)
+        let page = BookPage(book: Self.book)
+        page.load(from: source)
+        _ = await eventually { page.details != nil }
+        await page.loadCollections(from: source)
+        return (page, source)
+    }
+
+    // The details also name others' shared collections, which your list
+    // doesn't: they stay in the row, and in the details' order.
+    @Test func theRowKeepsTheDetailsListAndOrder() async {
+        let shelf = CollectionShelf([("Spike", true), ("Book club", true)])
+        shelf.listed = [CollectionShelf.entry("Book club"), CollectionShelf.entry("Staff picks"), CollectionShelf.entry("Spike")]
+        let (page, _) = await detailedCollectionsPage(shelf)
+        #expect(page.collectionsLine == "Book club · Staff picks · Spike")
+    }
+
+    @Test func changesHereAreLaidOverTheDetails() async throws {
+        let shelf = CollectionShelf([("Spike", true), ("Summer", false)])
+        shelf.listed = [CollectionShelf.entry("Staff picks"), CollectionShelf.entry("Spike")]
+        let (page, source) = await detailedCollectionsPage(shelf)
+
+        await page.setCollection(try #require(page.collectionChoices?.first), contains: false, from: source)
+        await page.setCollection(try #require(page.collectionChoices?.last), contains: true, from: source)
+        #expect(page.collectionsLine == "Staff picks · Summer")
+    }
+
+    // Your list, loaded later than the details, is newer for yours.
+    @Test func yourListCorrectsTheDetails() async {
+        let shelf = CollectionShelf([("Spike", false), ("Summer", true)])
+        shelf.listed = [CollectionShelf.entry("Spike")]
+        let (page, _) = await detailedCollectionsPage(shelf)
+        #expect(page.collectionsLine == "Summer")
+    }
+
+    // Made, but the book didn't go in: it's there to tick.
+    @Test func aCollectionMadeWithoutTheBookIsListed() async {
+        let shelf = CollectionShelf([])
+        shelf.addFails = true
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "Book club", from: source))
+        #expect(page.collectionChoices?.map(\.entry.title) == ["Book club"])
+        #expect(page.collectionChoices?.first?.contains == false)
+        #expect(page.collectionsProblem == "Couldn’t add it to “Book club”. Check your connection.")
+        #expect(page.collectionsLine == nil)
+    }
+
+    @Test func theRowShowsNamesThenACount() {
+        let names = ["Classics", "Spike", "Summer reading", "To lend", "Book club"]
+        #expect(BookCollectionNames.line(names, showing: 5) == "Classics · Spike · Summer reading · To lend · Book club")
+        #expect(BookCollectionNames.line(names, showing: 2) == "Classics · Spike +3")
+        #expect(BookCollectionNames.line(["Classics"], showing: 1) == "Classics")
+    }
+
     @Test func aMarkTheServerRefusesIsTakenBack() async {
         let marks = FinishedMarks()
         marks.refuses = true

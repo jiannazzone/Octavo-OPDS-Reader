@@ -14,6 +14,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The contents again, each entry placed to the character (sent after
     /// `opened`, which places them by section).
     case contents([TOCEntry])
+    /// Each section's characters, for reading time left (#124; sent after
+    /// `contents`, not on fixed layout).
+    case textMap(TextMap)
     /// Matches for a search in the book, a section at a time.
     case searchResults(SearchBatch)
     /// The visible page changed.
@@ -56,6 +59,13 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         /// The table of contents, flattened in reading order, each entry with
         /// where its section starts in the book. `nil` from an older bridge.
         var toc: [TOCEntry]?
+    }
+
+    nonisolated struct TextMap: Codable, Equatable, Sendable {
+        /// Each section's characters; `nil` for one that couldn't be read.
+        var sections: [Int?]
+        /// Where each section starts in the book, and its end.
+        var fractions: [Double]
     }
 
     nonisolated struct SearchBatch: Codable, Equatable, Sendable {
@@ -135,6 +145,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         /// bridge.
         var turnsLeft: Bool?
         var turnsRight: Bool?
+        /// The characters on the page (both pages of a spread), for reading
+        /// speed (#124). `nil` on fixed layout, or from an older bridge.
+        var characters: Int?
 
         /// Whether there's a page to `side`; unknown counts as yes.
         func turns(_ side: ReaderTurnSide) -> Bool {
@@ -208,6 +221,8 @@ nonisolated extension ReaderMessage: Decodable {
             self = .relocate(try Relocation(from: decoder))
         case "contents":
             self = .contents(try container.decode([TOCEntry].self, forKey: .toc))
+        case "textMap":
+            self = .textMap(try TextMap(from: decoder))
         case "searchResults":
             self = .searchResults(try SearchBatch(from: decoder))
         case "tap":

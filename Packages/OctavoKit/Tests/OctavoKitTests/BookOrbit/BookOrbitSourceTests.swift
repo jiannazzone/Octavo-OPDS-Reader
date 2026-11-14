@@ -120,7 +120,7 @@ struct BookOrbitSourceTests {
         #expect(body["sort"] as? [[String: String]] == [["field": "title", "dir": "asc"]])
         // Measured against v3.6.0 (`docs/notes/bookorbit-api.md`, "Filtering").
         let filter = try JSONSerialization.data(withJSONObject: try #require(body["filter"]), options: .sortedKeys)
-        #expect(String(decoding: filter, as: UTF8.self) == #"{"join":"AND","rules":[{"field":"readProgress","operator":"isUnread","type":"rule"},{"join":"OR","rules":[{"field":"readStatus","operator":"isEmpty","type":"rule"},{"field":"readStatus","operator":"includesAny","type":"rule","value":["unread"]}],"type":"group"}],"type":"group"}"#)
+        #expect(String(decoding: filter, as: UTF8.self) == #"{"join":"AND","rules":[{"field":"readProgress","operator":"isUnread","type":"rule"},{"join":"OR","rules":[{"field":"readStatus","operator":"isEmpty","type":"rule"},{"field":"readStatus","operator":"includesAny","type":"rule","value":["unread","want_to_read"]}],"type":"group"}],"type":"group"}"#)
 
         let second = try await source.feed(try #require(first.next))
         #expect(second.books.map(\.title) == ["Alice's Adventures in Wonderland"])
@@ -143,6 +143,8 @@ struct BookOrbitSourceTests {
         #expect(feed.books[1].lastReadAt == nil)
         #expect(feed.books[0].isFinished == false)
         #expect(feed.books[1].isFinished == nil)
+        #expect(feed.books[0].readStatus == .reading)
+        #expect(feed.books[1].readStatus == nil)
         #expect(feed.next == nil)
     }
 
@@ -174,6 +176,131 @@ struct BookOrbitSourceTests {
         #expect(server.requests.map(\.path) == ["/api/v1/books/4/status", "/api/v1/books/4/status"])
         // The server rejects fields it doesn't know, so only the status goes.
         #expect(server.requests.map { $0.json as? [String: String] } == [["status": "read"], ["status": "reading"]])
+    }
+
+    // Measured on v3.6.0 (`docs/notes/book-status.md`): each value is
+    // BookOrbit's own, and the body takes nothing else.
+    @Test(arguments: LibraryReadStatus.allCases)
+    func setsEachReadStatus(status: LibraryReadStatus) async throws {
+        let server = StubServer { _ in .json(#"{"status":"\#(status.rawValue)"}"#) }
+        let source = source(server)
+        #expect(source.tracksReadStatus)
+
+        try await source.setReadStatus(status, for: LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House"))
+
+        #expect(server.requests.map(\.method) == ["PATCH"])
+        #expect(server.requests.map(\.path) == ["/api/v1/books/33/status"])
+        #expect(server.requests.first?.json as? [String: String] == ["status": status.rawValue])
+    }
+
+    // Measured on v3.6.0 (`docs/notes/bookorbit-api.md`): your own rating,
+    // whole stars, and `null` clears it.
+    @Test(arguments: [4, 1, 5, nil] as [Int?])
+    func setsRating(rating: Int?) async throws {
+        let server = StubServer { _ in StubServer.Response(status: 204, headers: [:], body: Data()) }
+        let source = source(server)
+        #expect(source.tracksRating)
+
+        try await source.setRating(rating, for: LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House"))
+
+        #expect(server.requests.map(\.method) == ["POST"])
+        #expect(server.requests.map(\.path) == ["/api/v1/books/bulk-set-rating"])
+        let body = try #require(server.requests.first?.json)
+        // The server rejects fields it doesn't know.
+        #expect(Set(body.keys) == ["bookIds", "rating"])
+        #expect(body["bookIds"] as? [Int] == [33])
+        if let rating {
+            #expect(body["rating"] as? Int == rating)
+        } else {
+            #expect(body["rating"] is NSNull)
+        }
+    }
+
+    @Test(arguments: [0, 6, -1])
+    func refusesRatingOutsideWholeStars(rating: Int) async throws {
+        let server = StubServer { _ in StubServer.Response(status: 204, headers: [:], body: Data()) }
+        await #expect(throws: LibraryError.server(status: 400, message: "A rating is 1 to 5 whole stars.")) {
+            try await source(server).setRating(rating, for: LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House"))
+        }
+        #expect(server.requests.isEmpty)
+    }
+
+    // MARK: Collections (#120)
+
+    private static let doll = LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House")
+
+    // Measured on v3.6.0 (`docs/notes/bookorbit-api.md`): one request
+    // says which collections hold the book.
+    @Test func listsYourOwnBookCollections() async throws {
+        let server = StubServer { _ in
+            .json(#"""
+            [{"id":1,"name":"Spike","mediaType":"books","isOwner":true,"memberCount":1},
+             {"id":2,"name":"Summer","mediaType":"books","isOwner":true,"memberCount":0},
+             {"id":3,"name":"Shared","mediaType":"books","isOwner":false,"memberCount":0},
+             {"id":4,"name":"Shows","mediaType":"podcasts","isOwner":true,"memberCount":0}]
+            """#)
+        }
+        let source = source(server)
+        #expect(source.tracksCollections)
+
+        let collections = try await source.collections(of: Self.doll)
+
+        #expect(server.requests.map(\.path) == ["/api/v1/collections"])
+        #expect(server.requests.first?.query == ["bookIds": "33"])
+        #expect(collections.map(\.entry.title) == ["Spike", "Summer"])
+        #expect(collections.map(\.contains) == [true, false])
+        #expect(collections.first?.entry.link == link(.collection(id: 1, page: 0)))
+    }
+
+    @Test(arguments: [true, false])
+    func putsABookInACollectionOrTakesItOut(contains: Bool) async throws {
+        let server = StubServer { _ in .json(201, #"{"id":1,"name":"Spike","bookCount":6}"#) }
+        let spike = LibraryBookCollection(entry: BookOrbitSource.entry(collection: 1, named: "Spike"), contains: !contains)
+
+        try await source(server).setCollection(spike, contains: contains, for: Self.doll)
+
+        #expect(server.requests.map(\.method) == [contains ? "POST" : "DELETE"])
+        #expect(server.requests.map(\.path) == ["/api/v1/collections/1/books"])
+        // The server rejects fields it doesn't know.
+        #expect(server.requests.first?.json as? [String: [Int]] == ["bookIds": [33]])
+    }
+
+    // BookOrbit wants an icon; the web app makes you pick one.
+    @Test func makesACollectionWithTheBookInIt() async throws {
+        let server = StubServer { request in
+            request.path == "/api/v1/collections"
+                ? .json(201, #"{"id":9,"name":"Book club","icon":"Library","isOwner":true,"bookCount":0}"#)
+                : .json(201, #"{"id":9,"name":"Book club","bookCount":1}"#)
+        }
+
+        let made = try await source(server).newCollection(named: "Book club", with: Self.doll)
+
+        #expect(server.requests.map(\.method) == ["POST", "POST"])
+        #expect(server.requests.map(\.path) == ["/api/v1/collections", "/api/v1/collections/9/books"])
+        #expect(server.requests.first?.json as? [String: String] == ["name": "Book club", "icon": "Library"])
+        #expect(server.requests.last?.json as? [String: [Int]] == ["bookIds": [33]])
+        #expect(made == LibraryBookCollection(entry: BookOrbitSource.entry(collection: 9, named: "Book club"), contains: true))
+    }
+
+    // Made, but adding the book failed: still yours, to tick.
+    @Test func aCollectionMadeWithoutTheBookSaysSo() async throws {
+        let server = StubServer { request in
+            request.path == "/api/v1/collections"
+                ? .json(201, #"{"id":9,"name":"Book club","icon":"Library","isOwner":true,"bookCount":0}"#)
+                : .json(500, #"{"statusCode":500,"message":"Internal server error"}"#)
+        }
+
+        let made = try await source(server).newCollection(named: "Book club", with: Self.doll)
+
+        #expect(made == LibraryBookCollection(entry: BookOrbitSource.entry(collection: 9, named: "Book club"), contains: false))
+    }
+
+    @Test func aNameYouHaveIsRefused() async throws {
+        let server = StubServer { _ in .json(409, #"{"statusCode":409,"message":"A collection with this name already exists"}"#) }
+        await #expect(throws: LibraryError.server(status: 409, message: "A collection with this name already exists")) {
+            try await source(server).newCollection(named: "Spike", with: Self.doll)
+        }
+        #expect(server.requests.count == 1)
     }
 
     @Test func mapsBooksForTheGrid() async throws {
@@ -274,7 +401,8 @@ struct BookOrbitSourceTests {
     }
 
     @Test(arguments: [
-        (LibraryFilter.reading, #"{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["reading","rereading"]}],"type":"group"}"#),
+        // Measured against v3.6.0 (`docs/notes/book-status.md`).
+        (LibraryFilter.reading, #"{"join":"OR","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["reading","rereading"]},{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["on_hold","want_to_read"]},{"field":"readProgress","operator":"isInProgress","type":"rule"}],"type":"group"}],"type":"group"}"#),
         (.finished, #"{"join":"AND","rules":[{"field":"readStatus","operator":"includesAny","type":"rule","value":["read"]}],"type":"group"}"#),
     ])
     func filtersOnTheServersStatus(filter: LibraryFilter, json: String) async throws {
@@ -343,8 +471,8 @@ struct BookOrbitSourceTests {
 
         let feed = try await source(server).feed(route.link)
 
-        #expect(feed.books.map(\.id.rawValue) == (3...101).map(String.init))
-        #expect(feed.total == 99)
+        #expect(feed.books.map(\.id.rawValue) == (3...101).map(String.init) + ["103"])
+        #expect(feed.total == 100)
         #expect(feed.next == nil)
         #expect(feed.loadedOnly == nil)
         #expect(server.requests.map(\.path) == [path, path])
@@ -374,7 +502,16 @@ struct BookOrbitSourceTests {
         (#"{"status":"reading"}"#, "0", false, true, false),
         (#"{"status":"rereading"}"#, "50", false, true, false),
         (#"{"status":"read"}"#, "100", false, false, true),
-        (#"{"status":"want_to_read"}"#, "null", false, false, false),
+        (#"{"status":"want_to_read"}"#, "null", true, false, false),
+        (#"{"status":"want_to_read"}"#, "30", false, true, false),
+        (#"{"status":"want_to_read"}"#, "100", false, false, false),
+        (#"{"status":"on_hold"}"#, "30", false, true, false),
+        (#"{"status":"on_hold"}"#, "null", false, false, false),
+        (#"{"status":"skimmed"}"#, "30", false, false, false),
+        (#"{"status":"abandoned"}"#, "30", false, false, false),
+        (#"{"status":"read"}"#, "40", false, false, true),
+        // One a newer BookOrbit added: only under All books, as on the server.
+        (#"{"status":"shelved"}"#, "null", false, false, false),
     ])
     func matchesBooksAsTheServerDoes(status: String, progress: String, unread: Bool, reading: Bool, finished: Bool) throws {
         let json = #"{"id":1,"title":"Book","readStatus":\#(status),"readingProgress":\#(progress)}"#

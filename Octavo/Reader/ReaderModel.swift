@@ -77,13 +77,32 @@ final class ReaderModel {
     var margins = ReaderMargins.standard {
         didSet { if margins != oldValue { relayout() } }
     }
+    /// Buttons on Top (#136): the clock and the buttons in a band along the
+    /// top instead of the side column. Switched with a book open, the page
+    /// holds under a snapshot until the system's bar has moved, then lays out
+    /// once, as for a fold: laid out as they came, the setting and the safe
+    /// area each moved the text.
+    var buttonsOnTop = false {
+        didSet {
+            guard buttonsOnTop != oldValue else { return }
+            if phase == .open { beginBarSwitch() } else { relayout() }
+        }
+    }
     /// iOS lays a backgrounded app out again for its snapshots, turned sideways
     /// and back. Nobody reads that page, and laying out for it moves the place,
     /// so size and hinge changes wait until the app is back
     /// (`docs/notes/reader-background.md`).
     var isInBackground = false {
         didSet {
-            guard isInBackground != oldValue, !isInBackground else { return }
+            guard isInBackground != oldValue else { return }
+            // Time away isn't reading (#124).
+            if isInBackground {
+                paceClock.stop()
+                paceStore.save()
+            } else {
+                paceClock.restart(at: .now)
+            }
+            guard !isInBackground else { return }
             if let lastGeometry { updateGeometry(lastGeometry) }
             relayout()
         }
@@ -95,9 +114,18 @@ final class ReaderModel {
     /// The narrower margins reach the page under the side column, which only
     /// suits margins that aren't drawn.
     private var layoutMargins: ReaderMargins { isFixedLayout ? .standard : margins }
+    /// Fixed-layout pages have no top margin of foliate's to overlap the
+    /// band with: theirs would go under the buttons.
+    private var layoutButtonsOnTop: Bool { buttonsOnTop && !isFixedLayout }
     /// The controls cover the page, so a tap anywhere hides them.
     var coversPage = false {
-        didSet { if coversPage != oldValue { sendTapMode() } }
+        didSet {
+            guard coversPage != oldValue else { return }
+            sendTapMode()
+            // Time with a panel, the bar or a note up isn't reading the
+            // page (#124).
+            paceClock.restart(at: .now)
+        }
     }
     /// The Text and theme choices, as the bridge applies them (decision 13).
     var appearance = ReaderAppearance().script(darkMode: false) {
@@ -181,6 +209,11 @@ final class ReaderModel {
     let search = ReaderSearch()
 
     @ObservationIgnored private let store: ReadingPositionStore
+    // Reading time left (#124, `docs/notes/time-left.md`).
+    @ObservationIgnored let paceStore: ReadingPaceStore
+    @ObservationIgnored private var paceClock = ReaderPaceClock()
+    /// Each section's characters, once the bridge has counted them.
+    private(set) var textMap: BookTextMap?
     @ObservationIgnored private let sync: (any ProgressSync)?
     /// The backend's position as the library list gave it (a percentage),
     /// for when there's no pull: the book's screen showed it, so the book
@@ -248,10 +281,12 @@ final class ReaderModel {
         fallback: SyncedPosition? = nil,
         bookmarks: ReaderBookmarks? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
-        pushDelay: Duration = .seconds(2)
+        pushDelay: Duration = .seconds(2),
+        paceStore: ReadingPaceStore = ReadingPaceStore(fileURL: nil)
     ) {
         self.book = book
         self.store = store
+        self.paceStore = paceStore
         self.sync = sync
         self.fallback = fallback
         self.bookmarks = bookmarks ?? ReaderBookmarks(bookID: book.id)
@@ -425,7 +460,7 @@ final class ReaderModel {
             scheduleFoldEnd()
             return
         }
-        apply(ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins))
+        apply(ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins, buttonsOnTop: layoutButtonsOnTop))
     }
 
     // MARK: Folding
@@ -460,10 +495,26 @@ final class ReaderModel {
             scheduleFoldEnd()
             return
         }
-        foldBatch = FoldBatch(folded: folded, at: now)
+        hold(FoldBatch(folded: folded, at: now), endTurn: endTurn)
+    }
+
+    /// Buttons on Top switched with a book open (`buttonsOnTop`).
+    private func beginBarSwitch() {
+        let endTurn = finishTurnForFold() ?? ""
+        if foldBatch != nil {
+            foldBatch?.input(at: .now)
+            scheduleFoldEnd()
+            return
+        }
+        hold(FoldBatch(settlingAt: .now), endTurn: endTurn)
+    }
+
+    /// Holds the page under a snapshot of itself until `batch` ends.
+    private func hold(_ batch: FoldBatch, endTurn: String) {
+        foldBatch = batch
         lastFold = FoldReport()
         call(endTurn + "return await window.octavo.hold()")
-        captureCover(startedAt: now)
+        captureCover(startedAt: batch.startedAt)
         scheduleFoldEnd()
     }
 
@@ -507,7 +558,7 @@ final class ReaderModel {
         }
         lastClosedCover = max(lastClosedCover, cover)
         guard phase == .open else { return }
-        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins)
+        let layout = ReaderLayout(posture: posture, geometry: geometry, margins: layoutMargins, buttonsOnTop: layoutButtonsOnTop)
         self.layout = layout
         sentLayout = layout
         bookModeMayHaveChanged()
@@ -579,6 +630,8 @@ final class ReaderModel {
     func close() async {
         await jumpsLanded()
         phase = .closed
+        paceClock.stop()
+        paceStore.save()
         followTurnFrames(false)
         foldTask?.cancel()
         foldBatch = nil
@@ -648,6 +701,8 @@ final class ReaderModel {
             contentsPlaced(entries)
         case .searchResults(let batch):
             search.receive(batch)
+        case .textMap(let map):
+            textMap = BookTextMap(sections: map.sections, starts: map.fractions)
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             let previous = self.relocation
@@ -663,6 +718,7 @@ final class ReaderModel {
             let isMove = relocation.position(cfiShape) != previous?.position(cfiShape)
             if isMove {
                 moveCount += 1
+                timePage(relocation)
                 announceVoiceOverTurn(relocation)
             }
             if !isRestoring, isMove {
@@ -851,6 +907,25 @@ final class ReaderModel {
             hasMoved = true
         }
         saveAndSend(position)
+    }
+
+    /// Times each page for reading speed (#124): a page turn forward counts
+    /// the page left, and anything else (a jump, a fold, going back,
+    /// opening) starts the clock again.
+    private func timePage(_ relocation: ReaderMessage.Relocation) {
+        let turned = !isRestoring && relocation.isPageTurn && foldBatch == nil && jumpsUnderWay == 0 && !isGoingBack && !isInBackground
+        guard let span = paceClock.arrived(
+            fraction: relocation.shownFraction, characters: isFixedLayout ? nil : relocation.characters, turnedForward: turned, at: .now
+        ) else { return }
+        let verdict = paceStore.record(span, book: book.id)
+        log.debug("page read: \(span.characters) characters in \(span.seconds, format: .fixed(precision: 1)) s, \(String(describing: verdict), privacy: .public)")
+    }
+
+    /// Time left to read, once the book's characters are counted and
+    /// there's a pace (#124). Never on fixed layout.
+    var timeLeft: ReaderTimeLeft? {
+        guard !isFixedLayout, let textMap, let speed = paceStore.pace.speed(forBook: book.id) else { return nil }
+        return ReaderTimeLeft(map: textMap, toc: toc, speed: speed)
     }
 
     private func saveAndSend(_ position: ReadingPosition) {
