@@ -381,6 +381,8 @@ struct BookFinishedButton: View {
         .buttonStyle(.glass)
         .accessibilityLabel("Finished")
         .accessibilityValue(finished ? "On" : "Off")
+        // Voice Control goes by the words on it.
+        .accessibilityInputLabels([Text(finished ? "Finished" : "Mark finished")])
     }
 }
 

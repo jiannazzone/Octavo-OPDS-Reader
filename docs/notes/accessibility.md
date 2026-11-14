@@ -90,6 +90,20 @@ The cost: inside a page, VoiceOver can't jump by heading or link, and a footnote
 
 **What the walker can't show:** what VoiceOver says aloud, including the page it announces after a turn (`.pageScrolled`), and VoiceOver's own order where SwiftUI leaves it to geometry. Those need VoiceOver on a device.
 
+## Voice Control
+
+Apple's criteria (#75, read 2026-11-14 through a summary of the page, so not word for word): every common task by voice alone. Every control can be tapped by its name or number ("Show names", "Show numbers"), and the name matches the words on it. Swipes, long presses and anything hidden behind a gesture have a spoken way, such as "Swipe left" or a custom action ("Show actions for 4"). Typing is "Type …", "Select …", "Delete that", which the system's fields do. No timer hides or moves anything, so there's nothing to extend.
+
+**Names** (`accessibilityInputLabels`, which Voice Control uses in place of the VoiceOver label):
+
+- **A row says its book or list alone,** so it can be said: "Pride and Prejudice", not "Pride and Prejudice, Jane Austen, 29%". `OpenButton` names every book row, cover, series, author and collection from its route, and a Library shelf's heading is its name without the count. The same book twice gets numbers to pick between.
+- **A name that differs from the words on screen** gets those words: Mark finished (VoiceOver: "Finished, Off"), Go on the server's place (VoiceOver: "Go to BookOrbit: 62%"), Clear under Recent, a server's row in setup, Books on iPhone's sort menu.
+- **The reader's page is "Page",** not its words.
+
+**Turning pages:** Voice Control's "Swipe left" and "Swipe right" are a finger's swipe, which turns the page (`ReaderSwipeRecognizer`). "Tap Page" taps its middle, which shows the controls. The grid ("Show grid", "Tap 3") taps a side to turn, or a footnote's mark: the book's own text is hidden from accessibility, so its links and marks get no names or numbers.
+
+**Seen with the walker,** folded: the names on Home, the Library, Search and its results, a book's screen and the reader with its controls. Nobody has spoken to it: Voice Control needs a person on a device.
+
 ## Reduced Motion
 
 What each motion does with the setting on:

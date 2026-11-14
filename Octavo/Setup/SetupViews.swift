@@ -176,6 +176,7 @@ private struct SuggestionRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityInputLabels([name])
         .accessibilityHint("Opens \(site.host() ?? "its site") in Safari")
     }
 }

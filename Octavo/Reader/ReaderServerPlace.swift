@@ -58,6 +58,7 @@ struct ReaderServerPlaceBar: View {
                 .controlSize(.small)
                 .fixedSize()
                 .accessibilityLabel(Text("Go to \(place.label(server: server))", comment: "VoiceOver: go to the server's place, e.g. Go to BookOrbit: 62%"))
+                .accessibilityInputLabels([Text("Go")])
             Button("Stay Here", systemImage: "xmark", action: stay)
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)

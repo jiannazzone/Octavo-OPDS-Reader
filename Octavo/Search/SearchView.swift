@@ -147,6 +147,7 @@ private struct SearchStart: View {
                 Spacer()
                 Button("Clear") { search.clearRecentSearches() }
                     .accessibilityLabel("Clear recent searches")
+                    .accessibilityInputLabels([Text("Clear")])
             }
             ForEach(search.recentSearches, id: \.self) { text in
                 Button {
@@ -561,8 +562,9 @@ private struct AllBooksLink: View {
     let source: LibrarySourceID
 
     var body: some View {
-        OpenButton(route: .feed(entry, from: source), fillsRow: true) {
-            Text(entry.count.map { "All \($0) books" } ?? "All books")
+        let title = entry.count.map { "All \($0) books" } ?? "All books"
+        OpenButton(route: .feed(entry, from: source), fillsRow: true, name: title) {
+            Text(title)
                 .foregroundStyle(.tint)
                 .padding(.vertical, 10)
         }

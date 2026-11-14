@@ -213,6 +213,8 @@ struct LibraryShelf: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel(feed))
+        // Its name, without the count.
+        .accessibilityInputLabels([entry.title])
         .accessibilityAddTraits(.isHeader)
     }
 
