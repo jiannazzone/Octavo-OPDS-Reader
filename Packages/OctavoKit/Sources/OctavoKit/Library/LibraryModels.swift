@@ -171,6 +171,22 @@ public struct LibraryEntry: Hashable, Codable, Sendable, Identifiable {
     }
 }
 
+/// One of your collections, and whether a book is in it (#120,
+/// `docs/notes/book-collections.md`).
+public struct LibraryBookCollection: Hashable, Sendable, Identifiable {
+    /// The collection as the book's details list it: its name, and the
+    /// link that opens it.
+    public var entry: LibraryEntry
+    public var contains: Bool
+
+    public init(entry: LibraryEntry, contains: Bool) {
+        self.entry = entry
+        self.contains = contains
+    }
+
+    public var id: LibraryLink { entry.link }
+}
+
 /// A book as lists show it.
 public struct LibraryBook: Hashable, Codable, Sendable, Identifiable {
     public var id: LibraryBookID

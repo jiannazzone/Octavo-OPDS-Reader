@@ -92,6 +92,7 @@ Measured as `octavo` on one book with no status, and on 2026-11-13 on four more 
 - **Collections:**
   - `GET collections?bookIds=33` lists every collection with `memberCount`, how many of those books it holds; `POST collections/membership {bookIds}` answers the same with 201. One request is enough for a checklist.
   - `POST collections/{id}/books {bookIds}` adds (201, the collection with its new `bookCount`); adding again changes nothing. `DELETE collections/{id}/books {bookIds}` removes (200), also safe to repeat. An unknown book or collection is a 404, an unknown field a 400. The book's detail lists the change at once.
+  - **Making one** (measured 2026-11-14, `book-collections.md`): `POST collections {name, icon}` answers 201 with the collection (`mediaType: "books"`, `isPublic: false`, `bookCount: 0`). `icon` is required, a Lucide icon's name that BookOrbit's web app makes you pick (any string is taken: `NotAnIcon` was). An empty name is a 400, `bookIds` an unknown field (400), and a name the user already has a 409, "A collection with this name already exists". `DELETE collections/{id}` answers 204.
   - `isOwner` marks the user's own collections. Adding to another user's shared collection isn't measured (no second account with a known password). A list can hold `mediaType: "podcasts"` collections.
 
 ## Seeding (used by `dev/bookorbit/seed.sh`)

@@ -122,6 +122,49 @@ public struct BookOrbitSource: LibrarySource {
 
     public var tracksRating: Bool { true }
 
+    public var tracksCollections: Bool { true }
+
+    /// Your own book collections: not other users' shared ones, nor
+    /// podcast collections.
+    public func collections(of book: LibraryBook) async throws -> [LibraryBookCollection] {
+        guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
+        return try await mappingErrors { try await client.collections(containing: [id]) }
+            .filter { $0.isOwner == true && ($0.mediaType ?? "books") == "books" }
+            .map { LibraryBookCollection(entry: Self.entry(collection: $0.id, named: $0.name), contains: ($0.memberCount ?? 0) > 0) }
+    }
+
+    public func setCollection(_ collection: LibraryBookCollection, contains: Bool, for book: LibraryBook) async throws {
+        guard let id = Int(book.id.rawValue),
+              case .list(.collection(let collectionID), _, _, _)? = BookOrbitRoute(collection.entry.link)
+        else { throw LibraryError.invalidLink }
+        try await mappingErrors {
+            if contains {
+                try await client.addBooks([id], toCollection: collectionID)
+            } else {
+                try await client.removeBooks([id], fromCollection: collectionID)
+            }
+        }
+    }
+
+    /// BookOrbit wants an icon, which only its web app shows: `Library`,
+    /// books on a shelf.
+    public func newCollection(named name: String, with book: LibraryBook) async throws -> LibraryBookCollection {
+        guard let id = Int(book.id.rawValue) else { throw LibraryError.invalidLink }
+        let made = try await mappingErrors { try await client.createCollection(name: name, icon: "Library") }
+        let entry = Self.entry(collection: made.id, named: made.name)
+        do {
+            try await client.addBooks([id], toCollection: made.id)
+        } catch {
+            return LibraryBookCollection(entry: entry, contains: false)
+        }
+        return LibraryBookCollection(entry: entry, contains: true)
+    }
+
+    /// A collection as the book's details list it.
+    static func entry(collection id: Int, named name: String) -> LibraryEntry {
+        LibraryEntry(kind: .collection, title: name, link: BookOrbitRoute.collection(id: id, page: 0).link)
+    }
+
     /// Whole stars only: refused here as the server would refuse it (a
     /// 400 for 0, 6 or 4.5).
     public func setRating(_ rating: Int?, for book: LibraryBook) async throws {
@@ -160,9 +203,7 @@ public struct BookOrbitSource: LibrarySource {
             addedAt: detail.addedAt,
             authors: authors,
             series: series,
-            collections: detail.collections.map {
-                LibraryEntry(kind: .collection, title: $0.name, link: BookOrbitRoute.collection(id: $0.id, page: 0).link)
-            }
+            collections: detail.collections.map { Self.entry(collection: $0.id, named: $0.name) }
         )
     }
 

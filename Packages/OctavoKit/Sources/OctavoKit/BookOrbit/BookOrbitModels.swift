@@ -33,6 +33,8 @@ public struct BookOrbitCollection: Decodable, Hashable, Sendable, Identifiable {
     public var bookCount: Int?
     public var isPublic: Bool?
     public var isOwner: Bool?
+    /// With `collections?bookIds=`: how many of those books it holds.
+    public var memberCount: Int?
 }
 
 /// A saved filter over the user's books (BookOrbit's "smart scope"), listed

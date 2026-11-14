@@ -546,6 +546,33 @@ public actor BookOrbitClient {
         _ = try await send(request)
     }
 
+    // MARK: - Collections
+
+    /// `GET collections?bookIds=`: every collection, each with
+    /// `memberCount`, how many of `bookIDs` it holds.
+    public func collections(containing bookIDs: [Int]) async throws -> [BookOrbitCollection] {
+        let ids = bookIDs.map(String.init).joined(separator: ",")
+        return try await get("collections", query: [URLQueryItem(name: "bookIds", value: ids)], as: LossyArray<BookOrbitCollection>.self).elements
+    }
+
+    /// `POST collections/{id}/books {bookIds}`; adding again changes nothing.
+    public func addBooks(_ bookIDs: [Int], toCollection id: Int) async throws {
+        _ = try await send(try jsonRequest("collections/\(id)/books", method: "POST", body: ["bookIds": bookIDs]))
+    }
+
+    /// `DELETE collections/{id}/books {bookIds}`; safe to repeat.
+    public func removeBooks(_ bookIDs: [Int], fromCollection id: Int) async throws {
+        _ = try await send(try jsonRequest("collections/\(id)/books", method: "DELETE", body: ["bookIds": bookIDs]))
+    }
+
+    /// `POST collections {name, icon}`. The icon, required, is a Lucide
+    /// icon's name, which BookOrbit's web app shows. A name the user
+    /// already has is a 409.
+    public func createCollection(name: String, icon: String) async throws -> BookOrbitCollection {
+        let data = try await send(try jsonRequest("collections", method: "POST", body: ["name": name, "icon": icon]))
+        return try decode(BookOrbitCollection.self, from: data)
+    }
+
     // MARK: - Plumbing
 
     private func get<T: Decodable>(_ path: String, query: [URLQueryItem] = [], as type: T.Type = T.self) async throws -> T {

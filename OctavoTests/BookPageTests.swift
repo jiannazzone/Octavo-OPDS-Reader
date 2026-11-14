@@ -376,6 +376,153 @@ struct BookPageTests {
         #expect(BookRateButton.spoken(4) == "4 stars")
     }
 
+    // MARK: Collections (#120)
+
+    private func collectionsPage(_ shelf: CollectionShelf) async -> (BookPage, StubLibrarySource) {
+        let source = StubLibrarySource(shelf: shelf)
+        let page = BookPage(book: Self.book)
+        await page.loadCollections(from: source)
+        return (page, source)
+    }
+
+    @Test func loadsYourCollections() async {
+        let (page, _) = await collectionsPage(CollectionShelf([("Classics", true), ("Summer", false)]))
+        #expect(page.collectionChoices?.map(\.entry.title) == ["Classics", "Summer"])
+        #expect(page.collectionsLine == "Classics")
+    }
+
+    @Test func collectionsThatDontLoadSaySo() async {
+        let shelf = CollectionShelf([("Classics", true)])
+        shelf.refuses = true
+        let (page, _) = await collectionsPage(shelf)
+        #expect(page.collectionChoices == nil)
+        #expect(page.collectionsFailed)
+    }
+
+    @Test func aTickPutsTheBookInAndTakesItOut() async throws {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+        let classics = try #require(page.collectionChoices?.first)
+
+        await page.setCollection(classics, contains: true, from: source)
+        #expect(page.collectionsLine == "Classics")
+        await page.setCollection(classics, contains: false, from: source)
+        #expect(page.collectionsLine == nil)
+        #expect(shelf.sent == ["+Classics", "-Classics"])
+    }
+
+    @Test func aChangeTheServerRefusesIsTakenBack() async throws {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+        shelf.refuses = true
+
+        await page.setCollection(try #require(page.collectionChoices?.first), contains: true, from: source)
+        #expect(page.collectionChoices?.first?.contains == false)
+        #expect(page.collectionsProblem == "Couldn’t change the collections. Check your connection.")
+    }
+
+    @Test func aNewCollectionHasTheBookInIt() async {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "  Book club ", from: source))
+        #expect(shelf.sent == ["new Book club"])
+        #expect(page.collectionChoices?.map(\.entry.title) == ["Classics", "Book club"])
+        #expect(page.collectionsLine == "Book club")
+    }
+
+    // Case aside, a name you have ticks that collection instead.
+    @Test func aNameYouHaveTicksThatOne() async {
+        let shelf = CollectionShelf([("Classics", false)])
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "classics", from: source))
+        #expect(shelf.sent == ["+Classics"])
+        #expect(page.collectionsLine == "Classics")
+    }
+
+    @Test func anEmptyNameMakesNothing() async {
+        let shelf = CollectionShelf([])
+        let (page, source) = await collectionsPage(shelf)
+        #expect(await page.newCollection(named: "   ", from: source))
+        #expect(shelf.sent.isEmpty)
+    }
+
+    @Test func aNameTheServerHasIsSaid() async {
+        let shelf = CollectionShelf([])
+        shelf.refusesNew = .server(status: 409, message: "A collection with this name already exists")
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "Spike", from: source) == false)
+        #expect(page.collectionsProblem == "You already have a collection called “Spike”.")
+    }
+
+    @Test func aNewCollectionTheServerRefusesSaysSo() async {
+        let shelf = CollectionShelf([])
+        shelf.refusesNew = .notFound
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "Book club", from: source) == false)
+        #expect(page.collectionsProblem == "Couldn’t make the collection. Check your connection.")
+    }
+
+    /// A page with its details in (`listed`), then your collections.
+    private func detailedCollectionsPage(_ shelf: CollectionShelf) async -> (BookPage, StubLibrarySource) {
+        let source = StubLibrarySource(shelf: shelf)
+        let page = BookPage(book: Self.book)
+        page.load(from: source)
+        _ = await eventually { page.details != nil }
+        await page.loadCollections(from: source)
+        return (page, source)
+    }
+
+    // The details also name others' shared collections, which your list
+    // doesn't: they stay in the row, and in the details' order.
+    @Test func theRowKeepsTheDetailsListAndOrder() async {
+        let shelf = CollectionShelf([("Spike", true), ("Book club", true)])
+        shelf.listed = [CollectionShelf.entry("Book club"), CollectionShelf.entry("Staff picks"), CollectionShelf.entry("Spike")]
+        let (page, _) = await detailedCollectionsPage(shelf)
+        #expect(page.collectionsLine == "Book club · Staff picks · Spike")
+    }
+
+    @Test func changesHereAreLaidOverTheDetails() async throws {
+        let shelf = CollectionShelf([("Spike", true), ("Summer", false)])
+        shelf.listed = [CollectionShelf.entry("Staff picks"), CollectionShelf.entry("Spike")]
+        let (page, source) = await detailedCollectionsPage(shelf)
+
+        await page.setCollection(try #require(page.collectionChoices?.first), contains: false, from: source)
+        await page.setCollection(try #require(page.collectionChoices?.last), contains: true, from: source)
+        #expect(page.collectionsLine == "Staff picks · Summer")
+    }
+
+    // Your list, loaded later than the details, is newer for yours.
+    @Test func yourListCorrectsTheDetails() async {
+        let shelf = CollectionShelf([("Spike", false), ("Summer", true)])
+        shelf.listed = [CollectionShelf.entry("Spike")]
+        let (page, _) = await detailedCollectionsPage(shelf)
+        #expect(page.collectionsLine == "Summer")
+    }
+
+    // Made, but the book didn't go in: it's there to tick.
+    @Test func aCollectionMadeWithoutTheBookIsListed() async {
+        let shelf = CollectionShelf([])
+        shelf.addFails = true
+        let (page, source) = await collectionsPage(shelf)
+
+        #expect(await page.newCollection(named: "Book club", from: source))
+        #expect(page.collectionChoices?.map(\.entry.title) == ["Book club"])
+        #expect(page.collectionChoices?.first?.contains == false)
+        #expect(page.collectionsProblem == "Couldn’t add it to “Book club”. Check your connection.")
+        #expect(page.collectionsLine == nil)
+    }
+
+    @Test func theRowShowsNamesThenACount() {
+        let names = ["Classics", "Spike", "Summer reading", "To lend", "Book club"]
+        #expect(BookCollectionNames.line(names, showing: 5) == "Classics · Spike · Summer reading · To lend · Book club")
+        #expect(BookCollectionNames.line(names, showing: 2) == "Classics · Spike +3")
+        #expect(BookCollectionNames.line(["Classics"], showing: 1) == "Classics")
+    }
+
     @Test func aMarkTheServerRefusesIsTakenBack() async {
         let marks = FinishedMarks()
         marks.refuses = true

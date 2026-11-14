@@ -519,7 +519,11 @@ struct BookDetails: View {
             VStack(spacing: 0) {
                 row("Series", page.seriesLine)
                 Divider()
-                row("Collections", page.collectionsLine)
+                if source.tracksCollections {
+                    BookCollectionsRow(page: page, book: SourcedBook(source: sourceID, book: page.current))
+                } else {
+                    row("Collections", page.collectionsLine)
+                }
                 Divider()
                 row("File", page.fileLine)
                 Divider()
@@ -568,12 +572,33 @@ struct BookDetails: View {
     }
 
     private func row(_ label: String, _ value: String?) -> some View {
-        LabeledContent(label) {
+        BookDetailsRow(label) {
             Text(value ?? "—")
                 .multilineTextAlignment(.trailing)
         }
-        .padding(.vertical, 11)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// A row of a book's details: its label, its value on the right, and the
+/// label over the value at the accessibility text sizes.
+struct BookDetailsRow<Value: View>: View {
+    let label: String
+    @ViewBuilder let value: Value
+
+    init(_ label: String, @ViewBuilder value: () -> Value) {
+        self.label = label
+        self.value = value()
+    }
+
+    var body: some View {
+        LabeledContent {
+            value
+        } label: {
+            Text(label)
+        }
+        .labeledContentStyle(StackedAtLargerText())
+        .padding(.vertical, 11)
     }
 }
 

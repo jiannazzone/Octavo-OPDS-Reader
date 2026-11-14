@@ -41,6 +41,18 @@ final class BookPage {
     @ObservationIgnored private var ratingRequests = 0
     /// The rating the server last took from here, over what it sent.
     @ObservationIgnored private var savedRating: Int??
+    /// Your collections, each saying whether the book is in it, once its
+    /// Collections screen has loaded them (#120).
+    private(set) var collectionChoices: [LibraryBookCollection]?
+    /// Your collections as last loaded or changed here, laid over the
+    /// details' list, which also names others' shared collections the book
+    /// is in.
+    private(set) var collectionMarks: [LibraryBookCollection] = []
+    /// Loading them didn't reach the server.
+    private(set) var collectionsFailed = false
+    /// What went wrong changing them, under the list.
+    private(set) var collectionsProblem: String?
+    @ObservationIgnored private var collectionsPending: Set<LibraryLink> = []
     /// Where this iPhone keeps the mark for a server that doesn't.
     @ObservationIgnored private var finishedOnIPhone: (books: FinishedBooks, id: SourcedBook.ID)?
     @ObservationIgnored private var loadTask: Task<Void, Never>?
@@ -252,9 +264,91 @@ final class BookPage {
         return "\(series.name) · \(position.formatted(.number.precision(.fractionLength(0...1))))"
     }
 
+    /// The collections the book is in: the details' list, in its order,
+    /// with yours as last loaded or changed here laid over it: one taken
+    /// out goes, one put in joins at the end.
+    var collections: [LibraryEntry]? {
+        let listed = details?.collections
+        guard listed != nil || !collectionMarks.isEmpty else { return nil }
+        let marks = Dictionary(collectionMarks.map { ($0.id, $0.contains) }, uniquingKeysWith: { $1 })
+        let kept = (listed ?? []).filter { marks[$0.link] ?? true }
+        let known = Set((listed ?? []).map(\.link))
+        return kept + collectionMarks.filter { $0.contains && !known.contains($0.id) }.map(\.entry)
+    }
+
     var collectionsLine: String? {
-        guard let collections = details?.collections, !collections.isEmpty else { return nil }
+        guard let collections, !collections.isEmpty else { return nil }
         return collections.map(\.title).joined(separator: " · ")
+    }
+
+    /// Loads your collections for the Collections screen.
+    func loadCollections(from source: any LibrarySource) async {
+        collectionsFailed = false
+        do {
+            let loaded = try await source.collections(of: current)
+            collectionChoices = loaded
+            loaded.forEach(remember)
+        } catch {
+            collectionsFailed = collectionChoices == nil && !(error is CancellationError)
+        }
+    }
+
+    /// Puts the book into `collection` or takes it out, shown at once and
+    /// put back if the server refuses. A tap while the last is on its way
+    /// does nothing.
+    func setCollection(_ collection: LibraryBookCollection, contains: Bool, from source: any LibrarySource) async {
+        guard !collectionsPending.contains(collection.id) else { return }
+        collectionsPending.insert(collection.id)
+        defer { collectionsPending.remove(collection.id) }
+        mark(collection, contains: contains)
+        collectionsProblem = nil
+        do {
+            try await source.setCollection(collection, contains: contains, for: current)
+        } catch {
+            mark(collection, contains: !contains)
+            if !(error is CancellationError) { collectionsProblem = "Couldn’t change the collections. Check your connection." }
+        }
+    }
+
+    /// Makes a collection called `name` with the book in it, or ticks the
+    /// one you have by that name. `false`: it couldn't, so keep the name.
+    func newCollection(named name: String, from source: any LibrarySource) async -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return true }
+        if let existing = collectionChoices?.first(where: { $0.entry.title.compare(name, options: .caseInsensitive) == .orderedSame }) {
+            if !existing.contains { await setCollection(existing, contains: true, from: source) }
+            return true
+        }
+        collectionsProblem = nil
+        do {
+            let made = try await source.newCollection(named: name, with: current)
+            collectionChoices = (collectionChoices ?? []) + [made]
+            remember(made)
+            // Made, but the book didn't go in: it's there to tick.
+            if !made.contains { collectionsProblem = "Couldn’t add it to “\(made.entry.title)”. Check your connection." }
+            return true
+        } catch LibraryError.server(status: 409, _) {
+            collectionsProblem = "You already have a collection called “\(name)”."
+        } catch {
+            if !(error is CancellationError) { collectionsProblem = "Couldn’t make the collection. Check your connection." }
+        }
+        return false
+    }
+
+    private func mark(_ collection: LibraryBookCollection, contains: Bool) {
+        var marked = collection
+        marked.contains = contains
+        remember(marked)
+        guard let index = collectionChoices?.firstIndex(where: { $0.id == collection.id }) else { return }
+        collectionChoices?[index].contains = contains
+    }
+
+    private func remember(_ collection: LibraryBookCollection) {
+        if let index = collectionMarks.firstIndex(where: { $0.id == collection.id }) {
+            collectionMarks[index] = collection
+        } else {
+            collectionMarks.append(collection)
+        }
     }
 
     /// "EPUB · 1.2 MB": the file the reader would open, else the primary.
