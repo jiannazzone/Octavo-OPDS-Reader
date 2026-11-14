@@ -61,6 +61,8 @@ nonisolated struct StubLibrarySource: LibrarySource {
     var keepsStatus = false
     /// With `finishedMarks`: it keeps your rating too, as BookOrbit does.
     var keepsRating = false
+    /// Your collections on the server, as BookOrbit keeps them.
+    var shelf: CollectionShelf?
 
     var tracksFinished: Bool { finishedMarks != nil }
 
@@ -90,6 +92,27 @@ nonisolated struct StubLibrarySource: LibrarySource {
         finishedMarks.ratings.append(rating)
     }
 
+    var tracksCollections: Bool { shelf != nil }
+
+    func collections(of book: LibraryBook) async throws -> [LibraryBookCollection] {
+        guard let shelf else { return [] }
+        if shelf.refuses { throw LibraryError.notFound }
+        return shelf.collections
+    }
+
+    func setCollection(_ collection: LibraryBookCollection, contains: Bool, for book: LibraryBook) async throws {
+        guard let shelf else { return }
+        if shelf.refuses { throw LibraryError.notFound }
+        shelf.sent.append("\(contains ? "+" : "-")\(collection.entry.title)")
+    }
+
+    func newCollection(named name: String, with book: LibraryBook) async throws -> LibraryBookCollection {
+        guard let shelf else { throw LibraryError.invalidLink }
+        if let refusal = shelf.refusesNew { throw refusal }
+        shelf.sent.append("new \(name)")
+        return LibraryBookCollection(entry: CollectionShelf.entry(name), contains: !shelf.addFails)
+    }
+
     func root() async throws -> LibraryRoot {
         LibraryRoot(title: "Stub server", chips: [], search: .unavailable)
     }
@@ -110,7 +133,7 @@ nonisolated struct StubLibrarySource: LibrarySource {
             description: description,
             addedAt: Date(timeIntervalSince1970: 1_793_404_800),
             series: [LibrarySeriesPosition(name: "Sea Stories", position: 3)],
-            collections: [
+            collections: shelf?.listed ?? [
                 LibraryEntry(kind: .collection, title: "Classics", link: LibraryLink(rawValue: "c/1")),
                 LibraryEntry(kind: .collection, title: "Spike", link: LibraryLink(rawValue: "c/2")),
             ]
@@ -157,6 +180,26 @@ nonisolated final class FinishedMarks: @unchecked Sendable {
         } else {
             continuation?.resume()
         }
+    }
+}
+
+/// A stub server's collections, and what it was sent.
+nonisolated final class CollectionShelf: @unchecked Sendable {
+    var collections: [LibraryBookCollection]
+    var sent: [String] = []
+    var refuses = false
+    var refusesNew: LibraryError?
+    /// A new collection is made, but the book doesn't go in.
+    var addFails = false
+    /// The book's details' collections, others' shared ones too.
+    var listed: [LibraryEntry]?
+
+    init(_ names: [(String, Bool)]) {
+        collections = names.map { LibraryBookCollection(entry: Self.entry($0.0), contains: $0.1) }
+    }
+
+    static func entry(_ name: String) -> LibraryEntry {
+        LibraryEntry(kind: .collection, title: name, link: LibraryLink(rawValue: "c/\(name)"))
     }
 }
 

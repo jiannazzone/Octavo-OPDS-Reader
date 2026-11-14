@@ -25,6 +25,9 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     case settingsPage(SettingsPage)
     /// A book's screen. Unfolding on it opens the book if it's on the iPhone.
     case cover(SourcedBook)
+    /// The collections of yours a book is in, from its Collections row
+    /// (#120).
+    case bookCollections(SourcedBook)
     /// A step in adding the server.
     case setup(SetupStep)
     /// Every book on the iPhone (`ShellModel.onIPhoneBooks`): the Library's
@@ -33,12 +36,13 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     /// A server signed you out (or its password changed): sign in again.
     case signInAgain(LibrarySourceID)
 
-    /// The screen's large title. `nil` for a book's screen, and for a page of
-    /// Settings, which names itself.
+    /// The screen's large title. `nil` for a book's screen and its
+    /// Collections, and for a page of Settings, which name themselves.
     @MainActor var title: String? {
         switch self {
         case .feed(let entry, _): entry.kind == .author ? AuthorIndex.displayName(entry) : entry.title
-        case .settingsPage, .cover: nil
+        // Collections names itself on its right page, beside the cover.
+        case .settingsPage, .cover, .bookCollections: nil
         case .onIPhone: "On \(ThisDevice.name)"
         case .setup(.choose): "Add a server"
         case .setup(.bookOrbit): "Sign in to BookOrbit"
@@ -53,7 +57,7 @@ nonisolated enum ShellRoute: Hashable, Sendable {
     func belongs(to library: LibrarySourceID) -> Bool {
         switch self {
         case .feed(_, let source): source == library
-        case .cover(let book): book.source == library
+        case .cover(let book), .bookCollections(let book): book.source == library
         case .settingsPage(.server(let id)), .signInAgain(let id): id == library
         case .settingsPage, .setup, .onIPhone: false
         }

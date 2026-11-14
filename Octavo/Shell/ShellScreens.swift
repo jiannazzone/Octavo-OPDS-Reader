@@ -13,6 +13,7 @@ struct ShellScreen: View {
         case .feed(let entry, let source): FeedScreen(entry: entry, source: source)
         case .settingsPage(let page): SettingsPageView(page: page)
         case .cover(let book): CoverScreen(book: book).twoPagesWhenWide()
+        case .bookCollections(let book): BookCollectionsScreen(book: book).twoPagesWhenWide()
         case .setup(let step): SetupScreen(step: step)
         case .signInAgain(let id): SignInAgainScreen(server: id)
         case .onIPhone: OnIPhoneScreen()

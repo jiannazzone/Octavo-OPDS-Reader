@@ -225,6 +225,84 @@ struct BookOrbitSourceTests {
         #expect(server.requests.isEmpty)
     }
 
+    // MARK: Collections (#120)
+
+    private static let doll = LibraryBook(id: LibraryBookID(rawValue: "33"), title: "A Doll’s House")
+
+    // Measured on v3.6.0 (`docs/notes/bookorbit-api.md`): one request
+    // says which collections hold the book.
+    @Test func listsYourOwnBookCollections() async throws {
+        let server = StubServer { _ in
+            .json(#"""
+            [{"id":1,"name":"Spike","mediaType":"books","isOwner":true,"memberCount":1},
+             {"id":2,"name":"Summer","mediaType":"books","isOwner":true,"memberCount":0},
+             {"id":3,"name":"Shared","mediaType":"books","isOwner":false,"memberCount":0},
+             {"id":4,"name":"Shows","mediaType":"podcasts","isOwner":true,"memberCount":0}]
+            """#)
+        }
+        let source = source(server)
+        #expect(source.tracksCollections)
+
+        let collections = try await source.collections(of: Self.doll)
+
+        #expect(server.requests.map(\.path) == ["/api/v1/collections"])
+        #expect(server.requests.first?.query == ["bookIds": "33"])
+        #expect(collections.map(\.entry.title) == ["Spike", "Summer"])
+        #expect(collections.map(\.contains) == [true, false])
+        #expect(collections.first?.entry.link == link(.collection(id: 1, page: 0)))
+    }
+
+    @Test(arguments: [true, false])
+    func putsABookInACollectionOrTakesItOut(contains: Bool) async throws {
+        let server = StubServer { _ in .json(201, #"{"id":1,"name":"Spike","bookCount":6}"#) }
+        let spike = LibraryBookCollection(entry: BookOrbitSource.entry(collection: 1, named: "Spike"), contains: !contains)
+
+        try await source(server).setCollection(spike, contains: contains, for: Self.doll)
+
+        #expect(server.requests.map(\.method) == [contains ? "POST" : "DELETE"])
+        #expect(server.requests.map(\.path) == ["/api/v1/collections/1/books"])
+        // The server rejects fields it doesn't know.
+        #expect(server.requests.first?.json as? [String: [Int]] == ["bookIds": [33]])
+    }
+
+    // BookOrbit wants an icon; the web app makes you pick one.
+    @Test func makesACollectionWithTheBookInIt() async throws {
+        let server = StubServer { request in
+            request.path == "/api/v1/collections"
+                ? .json(201, #"{"id":9,"name":"Book club","icon":"Library","isOwner":true,"bookCount":0}"#)
+                : .json(201, #"{"id":9,"name":"Book club","bookCount":1}"#)
+        }
+
+        let made = try await source(server).newCollection(named: "Book club", with: Self.doll)
+
+        #expect(server.requests.map(\.method) == ["POST", "POST"])
+        #expect(server.requests.map(\.path) == ["/api/v1/collections", "/api/v1/collections/9/books"])
+        #expect(server.requests.first?.json as? [String: String] == ["name": "Book club", "icon": "Library"])
+        #expect(server.requests.last?.json as? [String: [Int]] == ["bookIds": [33]])
+        #expect(made == LibraryBookCollection(entry: BookOrbitSource.entry(collection: 9, named: "Book club"), contains: true))
+    }
+
+    // Made, but adding the book failed: still yours, to tick.
+    @Test func aCollectionMadeWithoutTheBookSaysSo() async throws {
+        let server = StubServer { request in
+            request.path == "/api/v1/collections"
+                ? .json(201, #"{"id":9,"name":"Book club","icon":"Library","isOwner":true,"bookCount":0}"#)
+                : .json(500, #"{"statusCode":500,"message":"Internal server error"}"#)
+        }
+
+        let made = try await source(server).newCollection(named: "Book club", with: Self.doll)
+
+        #expect(made == LibraryBookCollection(entry: BookOrbitSource.entry(collection: 9, named: "Book club"), contains: false))
+    }
+
+    @Test func aNameYouHaveIsRefused() async throws {
+        let server = StubServer { _ in .json(409, #"{"statusCode":409,"message":"A collection with this name already exists"}"#) }
+        await #expect(throws: LibraryError.server(status: 409, message: "A collection with this name already exists")) {
+            try await source(server).newCollection(named: "Spike", with: Self.doll)
+        }
+        #expect(server.requests.count == 1)
+    }
+
     @Test func mapsBooksForTheGrid() async throws {
         let server = StubServer { _ in .json(201, #"{"items":[\#(alice),\#(frankenstein),\#(study)],"total":3}"#) }
         let books = try await source(server, pageSize: 3).feed(link(.books(page: 0))).books
