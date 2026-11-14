@@ -321,7 +321,7 @@ struct ReaderFixedLayoutTests {
         let model = try await open()
         try await size(model, width: 300, height: 600)
         await go(model, toPage: 5)
-        #expect(place(model).footer(spread: false) == "6 of 12 · 50%")
+        #expect(place(model).pages(spread: false) == "6 of 12")
         #expect(place(model).barLine(spread: false) == "Page 6 of 12 · 50%")
         // What's saved still suits BookOrbit: this page's share of the bytes.
         let saved = try #require(model.position?.fraction)
@@ -339,7 +339,7 @@ struct ReaderFixedLayoutTests {
         try await size(model, width: 800, height: 500)
         try await setLayout(model, layout)
         #expect(await eventually { model.relocationCount > count })
-        #expect(place(model).footer(spread: true) == "6–7 of 12 · 58%")
+        #expect(place(model).pages(spread: true) == "6–7 of 12")
         #expect(model.position?.cfi == Self.cfi(5))
     }
 

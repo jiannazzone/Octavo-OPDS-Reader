@@ -26,6 +26,7 @@ struct ReaderWebView: View {
     /// The way back has the chapter's place in the footer (decision 33).
     var hidesFooterChapter = false
     @AppStorage(ReaderSettings.bookModeShadowKey) private var showsSpineShadow = ReaderSettings.bookModeShadowDefault
+    @AppStorage(ReaderFooterReadout.key) private var footerReadout = ReaderFooterReadout.standard
 
     var body: some View {
         WebView(model.page)
@@ -83,6 +84,8 @@ struct ReaderWebView: View {
                     ReaderFoldCoverView(cover: cover, pageSize: model.geometry?.size)
                 }
             }
+            // The footer's numbers, on the page and in the turns' pictures.
+            .environment(\.readerFooterNumbers, ReaderFooterNumbers(readout: footerReadout, timeLeft: model.timeLeft))
     }
 }
 

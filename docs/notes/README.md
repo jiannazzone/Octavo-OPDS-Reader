@@ -47,5 +47,6 @@ Write-ups from the first spike (2026-10-31). The tracker with phases, results an
 | `book-status.md` | #120 | Every BookOrbit read status on a book's screen: "…" beside Mark finished, the place line's words, Keep Reading and the Filter matching BookOrbit's own rules, the read mark, and why starting a Want to read book makes it Reading |
 | `library-filters.md` | 2026-11-09 | Scoping sort and filter beyond BookOrbit's All screen (#131 step 2): what BookOrbit, COPS, Calibre-Web, Komga and Kavita can do on the server, timings for 2,000-book catalogs, a plan for OPDS and On iPhone, open questions |
 | `edge-margin.md` (+ `edge-margin/`) | #136, 2026-11-12 | Text in the side column: hiding the status bar and toolbar, the folded camera, a rendered folded Edge page with a footer ⋯, and what was built: Buttons on Top, the system's top bar while reading (`toolbarVerticalBehavior(.disabled)`), with foliate's top margin overlapping the band |
+| `time-left.md` | #124, 2026-11-14 | Reading time left in the footer: characters per page and section from the bridge, what counts as reading, the pace model and its starting thresholds, the footer's tap cycle and touch area, VoiceOver |
 
 The sessions' raw run logs and screenshots weren't all committed. What's here is enough to re-run each check.
