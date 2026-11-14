@@ -72,9 +72,9 @@ nonisolated struct ReaderPlace: Equatable, Sendable {
 }
 
 /// What the progress bar's right-hand piece shows in book mode, under the
-/// right page (Adam, 2026-11-03). One readout at a time: time left in the
-/// chapter joins once Octavo measures reading speed, and choosing which
-/// shows is for later (`docs/UI-IDEAS.md`).
+/// right page (Adam, 2026-11-03). One readout at a time. Time left stays in
+/// the footer (#124, `docs/notes/time-left.md`); offering it here, and
+/// choosing which shows, are parked in `docs/UI-IDEAS.md`.
 nonisolated enum ReaderBarReadout: Sendable {
     /// Pages left in the chapter, over a line through it.
     case chapter

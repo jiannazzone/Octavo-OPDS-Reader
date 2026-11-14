@@ -71,7 +71,7 @@ struct ReaderView: View {
             #endif
             model = ReaderModel(
                 book: book.reader, store: replay?.positions ?? ReadingPositionStore(), sync: progressSync, fallback: listedPlace,
-                bookmarks: bookmarks, cfiShape: cfiShape
+                bookmarks: bookmarks, cfiShape: cfiShape, paceStore: .shared
             )
         }
         .onDisappear {
@@ -793,8 +793,7 @@ struct ReaderFooter: View {
         if model.phase == .open, let geometry = model.geometry {
             let place = ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction)
             ReaderFooterLines(place: place, layout: model.layout, geometry: geometry, hidesChapter: hidesChapter) {
-                let numbers = ReaderFooterNumbers(readout: readout, timeLeft: model.timeLeft)
-                readout = numbers.shown(at: place).next(hasTime: numbers.hasTime(at: place), hasPages: place.total != nil)
+                readout = ReaderFooterNumbers(readout: readout, timeLeft: model.timeLeft).next(at: place)
             }
         }
     }
@@ -806,26 +805,31 @@ struct ReaderFooterNumbers: Equatable {
     var readout = ReaderFooterReadout.standard
     var timeLeft: ReaderTimeLeft?
 
-    func hasTime(at place: ReaderPlace) -> Bool {
-        timeLeft?.chapter(from: place.fraction) != nil && timeLeft?.book(from: place.fraction) != nil
+    /// Seconds left in the chapter and the book from `place`, if there's
+    /// a pace and the book's characters are counted.
+    private func times(at place: ReaderPlace) -> (chapter: Double, book: Double)? {
+        guard let timeLeft, let chapter = timeLeft.chapter(from: place.fraction), let book = timeLeft.book(from: place.fraction) else { return nil }
+        return (chapter, book)
     }
 
-    /// The readout showing at `place`.
-    func shown(at place: ReaderPlace) -> ReaderFooterReadout {
-        readout.shown(hasTime: hasTime(at: place), hasPages: place.total != nil)
+    /// The readout a tap goes to from `place`.
+    func next(at place: ReaderPlace) -> ReaderFooterReadout {
+        let hasTime = times(at: place) != nil, hasPages = place.total != nil
+        return readout.shown(hasTime: hasTime, hasPages: hasPages).next(hasTime: hasTime, hasPages: hasPages)
     }
 
     /// The numbers, and the same for VoiceOver.
     func text(at place: ReaderPlace, spread: Bool) -> (shown: String, spoken: String) {
-        switch shown(at: place) {
+        let times = times(at: place)
+        switch readout.shown(hasTime: times != nil, hasPages: place.total != nil) {
         case .chapterTime:
-            if let seconds = timeLeft?.chapter(from: place.fraction) {
-                let time = ReadingTimeLeft(seconds: seconds)
+            if let times {
+                let time = ReadingTimeLeft(seconds: times.chapter)
                 return (ReaderTimeLeftText.short(time, .chapter), ReaderTimeLeftText.spoken(time, .chapter))
             }
         case .bookTime:
-            if let seconds = timeLeft?.book(from: place.fraction) {
-                let time = ReadingTimeLeft(seconds: seconds)
+            if let times {
+                let time = ReadingTimeLeft(seconds: times.book)
                 return (ReaderTimeLeftText.short(time, .book), ReaderTimeLeftText.spoken(time, .book))
             }
         case .page:

@@ -129,12 +129,17 @@ const pageCharacters = range => {
 // fractions (not linear, or empty) count none, as they take no share of the
 // book. Each section is read once, a pause between them so the page stays
 // quick; `null` for one that can't be read.
-const sectionCharacters = async () => {
+// `known`: counts `refineContents` already made, by section index.
+const sectionCharacters = async (known = new Map()) => {
     const v = requireView()
     const counts = []
-    for (const section of v.book.sections) {
+    for (const [index, section] of v.book.sections.entries()) {
         if (section.linear === 'no' || !(section.size > 0)) {
             counts.push(0)
+            continue
+        }
+        if (known.has(index)) {
+            counts.push(known.get(index))
             continue
         }
         try {
@@ -976,8 +981,9 @@ const bookFraction = (index, within) => {
 // the section's start. Entries in the section on screen are placed by its
 // layout, so they match the footer; the rest by characters, each section
 // read once and counted in one pass (`parse`; without it they're left as
-// they are).
-const refineContents = async (entries, parse = true) => {
+// they are). `counts`, if given, gets each parsed section's characters, for
+// `sectionCharacters`.
+const refineContents = async (entries, parse = true, counts = null) => {
     const v = requireView()
     const bySection = new Map()
     entries.forEach((entry, i) => {
@@ -1013,6 +1019,7 @@ const refineContents = async (entries, parse = true) => {
             continue
         }
         const body = doc.body ?? doc.documentElement
+        counts?.set(index, countCharacters(body?.textContent))
         const targets = new Map()
         for (const [i, anchor] of items) {
             let node = null
@@ -1879,11 +1886,12 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
     }
     post('opened', result)
     const opened = view
-    refineContents(result.toc)
+    const counted = new Map()
+    refineContents(result.toc, true, counted)
         .then(toc => post('contents', { toc }))
         .catch(e => post('error', { phase: 'contents', ...describe(e) }))
         // Not for a book that has closed since.
-        .then(() => view !== opened || view.isFixedLayout ? null : sectionCharacters())
+        .then(() => view !== opened || view.isFixedLayout ? null : sectionCharacters(counted))
         .then(sections => { if (sections && view === opened) post('textMap', { sections, fractions: view.getSectionFractions() }) })
         .catch(e => post('error', { phase: 'textMap', ...describe(e) }))
     return result

@@ -93,7 +93,12 @@ final class ReaderModel {
         didSet {
             guard isInBackground != oldValue else { return }
             // Time away isn't reading (#124).
-            if isInBackground { paceClock.stop() } else { paceClock.restart(at: .now) }
+            if isInBackground {
+                paceClock.stop()
+                paceStore.save()
+            } else {
+                paceClock.restart(at: .now)
+            }
             guard !isInBackground else { return }
             if let lastGeometry { updateGeometry(lastGeometry) }
             relayout()
@@ -109,7 +114,13 @@ final class ReaderModel {
     private var layoutButtonsOnTop: Bool { buttonsOnTop && !isFixedLayout }
     /// The controls cover the page, so a tap anywhere hides them.
     var coversPage = false {
-        didSet { if coversPage != oldValue { sendTapMode() } }
+        didSet {
+            guard coversPage != oldValue else { return }
+            sendTapMode()
+            // Time with a panel, the bar or a note up isn't reading the
+            // page (#124).
+            paceClock.restart(at: .now)
+        }
     }
     /// The Text and theme choices, as the bridge applies them (decision 13).
     var appearance = ReaderAppearance().script(darkMode: false) {
@@ -263,7 +274,7 @@ final class ReaderModel {
         bookmarks: ReaderBookmarks? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
         pushDelay: Duration = .seconds(2),
-        paceStore: ReadingPaceStore = .shared
+        paceStore: ReadingPaceStore = ReadingPaceStore(fileURL: nil)
     ) {
         self.book = book
         self.store = store
@@ -612,6 +623,7 @@ final class ReaderModel {
         await jumpsLanded()
         phase = .closed
         paceClock.stop()
+        paceStore.save()
         followTurnFrames(false)
         foldTask?.cancel()
         foldBatch = nil

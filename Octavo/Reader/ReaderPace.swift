@@ -6,24 +6,28 @@ import OctavoKit
 /// `docs/notes/time-left.md`), in one small file. Never synced.
 @Observable
 final class ReadingPaceStore {
-    static let shared = ReadingPaceStore()
+    static let shared = ReadingPaceStore(fileURL: URL.applicationSupportDirectory.appending(path: "ReadingPace.json", directoryHint: .notDirectory))
 
     private(set) var pace: ReadingPace
-    @ObservationIgnored let fileURL: URL
+    /// `nil` keeps it in memory only (tests).
+    @ObservationIgnored let fileURL: URL?
+    /// Pages counted since the last save.
+    @ObservationIgnored private var isDirty = false
 
-    init(fileURL: URL = URL.applicationSupportDirectory.appending(path: "ReadingPace.json", directoryHint: .notDirectory)) {
+    init(fileURL: URL?) {
         self.fileURL = fileURL
-        pace = (try? Data(contentsOf: fileURL)).flatMap { try? JSONDecoder().decode(ReadingPace.self, from: $0) } ?? ReadingPace()
+        pace = fileURL.flatMap { try? Data(contentsOf: $0) }.flatMap { try? JSONDecoder().decode(ReadingPace.self, from: $0) } ?? ReadingPace()
     }
 
-    /// Adds `span` if it was reading, and saves.
+    /// Adds `span` if it was reading. Saved by `save()`, as the reader
+    /// closes or the app leaves, not on every turn.
     @discardableResult
     func record(_ span: ReadingSpan, book: String) -> ReadingPace.Verdict {
         var pace = pace
         let verdict = pace.record(span, book: book)
         if verdict == .counted {
             self.pace = pace
-            save()
+            isDirty = true
         }
         return verdict
     }
@@ -32,6 +36,7 @@ final class ReadingPaceStore {
     func removeAll(of library: LibrarySourceID) {
         let prefix = StoredBookKeys.prefix(of: library)
         pace.removeBooks { $0.hasPrefix(prefix) }
+        isDirty = true
         save()
     }
 
@@ -46,16 +51,15 @@ final class ReadingPaceStore {
         }
         pace.removeBooks { $0.hasPrefix(from) }
         self.pace = pace
+        isDirty = true
         save()
     }
 
-    /// Starts again from nothing (tests and the debug switches).
-    func reset() {
-        pace = ReadingPace()
-        try? FileManager.default.removeItem(at: fileURL)
-    }
-
-    private func save() {
+    /// Writes what's changed since the last save.
+    func save() {
+        guard isDirty else { return }
+        isDirty = false
+        guard let fileURL else { return }
         try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? JSONEncoder().encode(pace).write(to: fileURL, options: .atomic)
     }

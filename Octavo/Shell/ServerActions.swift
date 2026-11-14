@@ -15,11 +15,15 @@ final class ServerActions {
     private let opener: BookOpener
     private let reader: ReaderPresenter
     private let koreader: KOReaderConnection
+    /// Reading speeds per book (#124).
+    private let paces: ReadingPaceStore
 
     init(
         library: LibraryModel, servers: ServerStore, removedServers: RemovedServerStore, bookmarks: BookmarkStore,
-        places: BookPlaces, opener: BookOpener, reader: ReaderPresenter, koreader: KOReaderConnection
+        places: BookPlaces, opener: BookOpener, reader: ReaderPresenter, koreader: KOReaderConnection,
+        paces: ReadingPaceStore = .shared
     ) {
+        self.paces = paces
         self.library = library
         self.servers = servers
         self.removedServers = removedServers
@@ -160,7 +164,7 @@ final class ServerActions {
             // read these.
             places.store.removeAll(of: id)
             bookmarks.removeAll(of: id)
-            ReadingPaceStore.shared.removeAll(of: id)
+            paces.removeAll(of: id)
         }
         try? servers.remove(id)
         library.remove(id)
@@ -227,7 +231,7 @@ final class ServerActions {
         opener.moveAll(of: removed.id, to: server.id)
         places.store.moveAll(of: removed.id, to: server.id)
         bookmarks.moveAll(of: removed.id, to: server.id)
-        ReadingPaceStore.shared.moveAll(of: removed.id, to: server.id)
+        paces.moveAll(of: removed.id, to: server.id)
         try? library.onIPhone.moveAll(of: removed.id, to: server.id)
         try? removedServers.remove(removed)
     }

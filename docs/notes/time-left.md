@@ -7,7 +7,7 @@ Built 2026-11-14 from Adam's design of 2026-11-09. The footer's numbers show tim
 A page holds a different amount of text folded, unfolded, half open and at each text size, so speed is measured in characters:
 
 - **Each page:** `bridge.js` sends `characters` with every `relocate`: the visible range's text (both pages of a spread), with each run of white space counted once (`countCharacters`). It's `null` on fixed layout, which never shows time left.
-- **Each section:** after the contents are placed, the bridge reads every section once (`sectionCharacters`, a pause between sections) and sends `textMap`: each section's characters and foliate's section fractions. A non-linear or empty section counts none, as it takes no share of foliate's fractions. Nothing is sent for a book closed in the meantime.
+- **Each section:** the contents pass (`refineContents`) counts the sections it reads, then `sectionCharacters` reads the rest (a pause between sections), and the bridge sends `textMap`: each section's characters and foliate's section fractions. A non-linear or empty section counts none, as it takes no share of foliate's fractions. Nothing is sent for a book closed in the meantime.
 - **Turning a place into characters** (`BookTextMap`, OctavoKit): foliate's fractions count bytes, markup and all, so a section's share of the book isn't its share of the words. Within a section, a place goes straight across (`characters(before:)`). A section that couldn't be read leaves everything after it unknown, so no time shows rather than a wrong one.
 - **Time left** (`ReaderTimeLeft`) runs from the start of the page on screen, so the page you haven't read yet counts. In the chapter it ends at the next contents entry, the same chapter the bar names. Divided by the book's speed, it's rounded by `ReadingTimeLeft`: to the minute under an hour, to ten minutes under ten hours, then to the hour. "Under 1 min" below a minute.
 
@@ -15,7 +15,7 @@ Measuring in foliate's locations would have needed no pass over the book, but lo
 
 ## What counts as reading
 
-`ReaderPaceClock` times the page on screen. A page turn forward by one page hands back the page left, as a `ReadingSpan` (start, end, characters). Anything else starts the clock again without counting: a jump of any kind (decision 33), Back, a fold's re-layout, opening, a turn back, leaving the app (`ReaderModel.isInBackground`) and closing.
+`ReaderPaceClock` times the page on screen. A page turn forward by one page hands back the page left, as a `ReadingSpan` (start, end, characters). Anything else starts the clock again without counting: a jump of any kind (decision 33), Back, a fold's re-layout, opening, a turn back, leaving the app (`ReaderModel.isInBackground`) and closing. So does a panel, the progress bar or a note card coming up or going (`ReaderModel.coversPage`): the time they're up isn't reading the page.
 
 `ReadingPace` (OctavoKit) judges each span by `ReadingPaceRules`. **These are starting values, to be set on a real Duo:**
 
@@ -29,7 +29,7 @@ Measuring in foliate's locations would have needed no pass over the book, but lo
 | A new book | starts as 20 pages at the overall speed, then moves to its own |
 | Memory | about the last 200 pages; older ones fade |
 
-Speeds live in `Application Support/ReadingPace.json` (`ReadingPaceStore`), overall and per book by the book's storage key, never synced. Remove server forgets that server's books, and a removed server coming back takes them back, as with places.
+Speeds live in `Application Support/ReadingPace.json` (`ReadingPaceStore.shared`), overall and per book by the book's storage key, never synced. The file is written when the reader closes and when the app leaves, not on every page. A reader model made without a store (the tests) keeps its pace in memory. Remove server forgets that server's books, and a removed server coming back takes them back, as with places.
 
 ## For BookOrbit reading sessions later (#121)
 

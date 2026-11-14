@@ -68,3 +68,28 @@ struct ReaderFooterReadoutTests {
         #expect(ReaderTimeLeftText.spoken(.hours(3, minutes: 40), .book) == "3 hours, 40 minutes left in book")
     }
 }
+
+@MainActor
+struct ReadingPaceStoreTests {
+    @Test func savesWhenAskedNotOnEveryPage() throws {
+        let url = URL.temporaryDirectory.appending(path: "pace-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = ReadingPaceStore(fileURL: url)
+        let start = Date.now
+        #expect(store.record(ReadingSpan(start: start, end: start + 40, characters: 1000), book: "a") == .counted)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        store.save()
+        #expect(ReadingPaceStore(fileURL: url).pace == store.pace)
+    }
+
+    @Test func aRemovedServerTakesItsBooksBack() {
+        let store = ReadingPaceStore(fileURL: nil)
+        let start = Date.now
+        let old = LibrarySourceID(rawValue: "old"), new = LibrarySourceID(rawValue: "new")
+        store.record(ReadingSpan(start: start, end: start + 40, characters: 1000), book: StoredBookKeys.prefix(of: old) + "7")
+        store.moveAll(of: old, to: new)
+        #expect(Array(store.pace.books.keys) == [StoredBookKeys.prefix(of: new) + "7"])
+        store.removeAll(of: new)
+        #expect(store.pace.books.isEmpty)
+    }
+}
