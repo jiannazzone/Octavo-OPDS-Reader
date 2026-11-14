@@ -32,6 +32,8 @@ struct ReaderWebView: View {
             .webViewBackForwardNavigationGestures(.disabled)
             .webViewMagnificationGestures(.disabled)
             .webViewLinkPreviews(.disabled)
+            // VoiceOver reads the page as one item (`ReaderVoiceOverPage`).
+            .accessibilityHidden(true)
             .onHingeChange { old, new in
                 // Repeats while the hinge settles; the model compares too.
                 guard new != old else { return }

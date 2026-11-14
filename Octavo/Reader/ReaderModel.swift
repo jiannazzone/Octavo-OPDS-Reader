@@ -37,6 +37,9 @@ final class ReaderModel {
     private(set) var tocLabel: String?
     var chapter: String? { tocLabel }
     private(set) var location: ReaderMessage.Relocation.Location?
+    /// The words on the page, which VoiceOver reads as one item
+    /// (`ReaderVoiceOverPage`).
+    private(set) var pageWords: String?
     /// The footnote open over the page, if any (`ReaderModel+Notes`).
     var note: ReaderNote?
     @ObservationIgnored var noteOpenedAt: ContinuousClock.Instant?
@@ -87,6 +90,8 @@ final class ReaderModel {
     }
     /// Pre-paginated: pages drawn by the book, with no text to give margins.
     private(set) var isFixedLayout = false
+    /// The book reads right to left: forward is the left page.
+    @ObservationIgnored private(set) var readsRightToLeft = false
     /// The narrower margins reach the page under the side column, which only
     /// suits margins that aren't drawn.
     private var layoutMargins: ReaderMargins { isFixedLayout ? .standard : margins }
@@ -123,6 +128,9 @@ final class ReaderModel {
     @ObservationIgnored var turnCount = 0
     /// Turns asked for while one was still being drawn, played after it.
     @ObservationIgnored var queuedTurns: [ReaderTurnSide] = []
+    /// When VoiceOver last turned the page, to say where it landed
+    /// (`ReaderModel+VoiceOver`).
+    @ObservationIgnored var voiceOverTurnedAt: ContinuousClock.Instant?
     /// How long the last turn's new page took to draw, in ms, for debugging.
     @ObservationIgnored var lastTurnDrawnAfter: Int?
     @ObservationIgnored private var sentTurnMode: Bool?
@@ -629,6 +637,7 @@ final class ReaderModel {
             }
             didOpen()
             isFixedLayout = opened.isFixedLayout
+            readsRightToLeft = opened.rightToLeft == true
             relayout()
             sendLayout()
             sendTapMode()
@@ -647,11 +656,15 @@ final class ReaderModel {
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
             location = relocation.location
+            pageWords = relocation.words
             // A repeat isn't a move (a fixed-layout page re-laid out reports
             // itself for the footer): saving it would mark it unsent, with a
             // new time that could beat another reader's newer place.
             let isMove = relocation.position(cfiShape) != previous?.position(cfiShape)
-            if isMove { moveCount += 1 }
+            if isMove {
+                moveCount += 1
+                announceVoiceOverTurn(relocation)
+            }
             if !isRestoring, isMove {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.

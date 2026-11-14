@@ -108,6 +108,45 @@ const isBlankPage = range => {
     return Boolean(container && container === container.ownerDocument?.body)
 }
 
+// The words on the page, for VoiceOver, which reads the page as one item
+// (#74, `docs/notes/accessibility.md`): the book's own text runs on past the
+// page, and VoiceOver's page turns never reach the page. A new block starts a
+// new line, so paragraphs aren't run together. Hidden text is left out. `null`
+// for a page with no words (a picture, a blank page).
+const WORD_BLOCKS = 'p,div,h1,h2,h3,h4,h5,h6,li,dt,dd,blockquote,pre,figcaption,caption,td,th,tr,section,article,aside,header,footer'
+const UNREAD = 'script,style,noscript,template,rt,rp,[hidden],[aria-hidden="true"]'
+const pageWordsOf = range => {
+    if (!range || range.collapsed) return null
+    const root = range.commonAncestorContainer
+    const doc = root.ownerDocument ?? root
+    const walker = doc.createTreeWalker(root.nodeType === Node.TEXT_NODE ? root.parentNode : root, NodeFilter.SHOW_TEXT)
+    // From the page's start, not the chapter's.
+    const start = range.startContainer
+    walker.currentNode = start
+    const lines = []
+    let line = ''
+    let block = null
+    for (let node = start.nodeType === Node.TEXT_NODE ? start : walker.nextNode(); node; node = walker.nextNode()) {
+        if (range.comparePoint(node, 0) > 0) break
+        if (!range.intersectsNode(node)) continue
+        const parent = node.parentElement
+        if (!parent || parent.closest(UNREAD)) continue
+        const from = node === range.startContainer ? range.startOffset : 0
+        const to = node === range.endContainer ? range.endOffset : node.data.length
+        const text = node.data.slice(from, to).replace(/\s+/g, ' ')
+        if (!text.trim()) continue
+        const nodeBlock = parent.closest(WORD_BLOCKS)
+        if (nodeBlock !== block && line.trim()) {
+            lines.push(line.trim())
+            line = ''
+        }
+        block = nodeBlock
+        line += text
+    }
+    if (line.trim()) lines.push(line.trim())
+    return lines.length ? lines.join('\n') : null
+}
+
 // Where a fixed-layout page sits in the book, to save and sync. foliate
 // reports the section's end, which is the next section's start: going back by
 // it lands a page late, and BookOrbit's web reader only goes by this number on
@@ -216,6 +255,7 @@ const onRelocate = ({ detail }) => {
         ...(view.isFixedLayout ? fixedPlace(detail) : {}),
         ...turnsFrom(view.renderer),
     }
+    message.words = pageWordsOf(detail.range)
     message.startCFI = startOf(message.cfi)
     message.xpointer = writesXPointers && !view.isFixedLayout ? xpointerOf(detail.section?.current, startNodeOf(detail.range)) : null
     for (const watch of relocationWatchers) watch(detail, message)
@@ -1833,6 +1873,7 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
         title: plainText(view.book.metadata?.title),
         sectionCount: view.book.sections?.length ?? 0,
         isFixedLayout: view.isFixedLayout,
+        rightToLeft: view.book.dir === 'rtl',
         toc: tocFractions(),
     }
     post('opened', result)

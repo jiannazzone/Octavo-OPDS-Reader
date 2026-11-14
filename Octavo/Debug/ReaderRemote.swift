@@ -49,6 +49,12 @@ import WebKit
 ///   offers, in the ack's message, then Go or ✕.
 /// - `closeAfter` (ms, with any command): closes the reader that long after
 ///   the command, without waiting for what it started.
+/// - `voiceOver`: what VoiceOver would read on the current screen, in order,
+///   to `voiceover.txt` (`VoiceOverWalk`). `name` `tree` adds the containers.
+/// - `voiceOverScroll` (`side`: left, right, up, down, next or previous):
+///   what VoiceOver sends the page's item for a three-finger swipe (left
+///   sends right) or, with next, at the end of a page in Read All.
+/// - `voiceOverActivate`: a double tap on the page's item.
 /// - `liveReaders`: of the readers opened since launch, how many models, web
 ///   pages and web views are still alive, and their content processes, in
 ///   the ack's message (`docs/notes/reader-release.md`).
@@ -135,6 +141,7 @@ enum ReaderRemote {
     static let commandURL = URL.documentsDirectory.appending(path: "spike-command.json")
     static let ackURL = URL.documentsDirectory.appending(path: "spike-ack.json")
     static let scriptResultURL = URL.documentsDirectory.appending(path: "spike-js.json")
+    static let voiceOverURL = URL.documentsDirectory.appending(path: "voiceover.txt")
     static let keyboardNotification = Notification.Name("ReaderRemote.keyboard")
     static let backNotification = Notification.Name("ReaderRemote.back")
 
@@ -161,6 +168,23 @@ enum ReaderRemote {
         switch command.cmd {
         case "liveReaders":
             return liveReaders
+        case "voiceOver":
+            var walk = VoiceOverWalk.read(tree: command.name == "tree")
+            if let words = reader?.pageWords { walk += "\n# the page's words: " + words.prefix(80) }
+            try? walk.write(to: voiceOverURL, atomically: true, encoding: .utf8)
+            return nil
+        case "voiceOverScroll":
+            let direction: UIAccessibilityScrollDirection = switch command.side {
+            case "left": .left
+            case "next": .next
+            case "previous": .previous
+            case "up": .up
+            case "down": .down
+            default: .right
+            }
+            return VoiceOverWalk.scrollPage(direction)
+        case "voiceOverActivate":
+            return VoiceOverWalk.activatePage()
         case "back":
             NotificationCenter.default.post(name: backNotification, object: nil)
             return nil

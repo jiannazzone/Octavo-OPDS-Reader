@@ -151,7 +151,7 @@ struct OnIPhoneShelf: View {
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("On \(ThisDevice.name), \(books.count) books")
+                .accessibilityLabel("On \(ThisDevice.name), \(books.count == 1 ? "1 book" : "\(books.count) books")")
                 .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, SpreadMetrics.margin)
                 .onLeftPage()

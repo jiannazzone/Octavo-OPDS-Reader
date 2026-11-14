@@ -544,7 +544,10 @@ struct BookDetails: View {
                 .multilineTextAlignment(.trailing)
         }
         .padding(.vertical, 11)
-        .accessibilityElement(children: .combine)
+        // "Series, None": combined, it says the value twice, and "em dash".
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(value ?? String(localized: "None"))
     }
 }
 

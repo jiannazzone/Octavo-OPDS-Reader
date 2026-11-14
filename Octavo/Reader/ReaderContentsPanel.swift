@@ -60,6 +60,8 @@ struct ReaderContentsPanel: View {
                                 Text(page, format: .number)
                                     .monospacedDigit()
                                     .foregroundStyle(isCurrent ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondaryOnGlass))
+                                    // "I, Page 3", not "I, 3".
+                                    .accessibilityLabel(Text("Page \(page)"))
                             }
                         }
                         .padding(.leading, CGFloat(min(row.depth, 4)) * 16)

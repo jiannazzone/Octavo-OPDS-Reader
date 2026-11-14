@@ -75,9 +75,12 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
             // One stack in both postures, so a page shown either way keeps
             // its place in it.
             HStack(alignment: alignment, spacing: 0) {
+                // VoiceOver reads each page through before the next, not
+                // across both by height.
                 if pages != nil || foldedPage == .left {
                     left(pages?.leftWidth ?? measuredWidth)
                         .frame(width: pages?.leftWidth)
+                        .accessibilityElement(children: .contain)
                 }
                 if let pages {
                     Color.clear
@@ -86,6 +89,7 @@ struct SpreadPages<Left: View, Right: View, Folded: View>: View {
                 if pages != nil || foldedPage == .right {
                     right(pages?.rightWidth ?? measuredWidth)
                         .frame(width: pages?.rightWidth)
+                        .accessibilityElement(children: .contain)
                 }
             }
         }

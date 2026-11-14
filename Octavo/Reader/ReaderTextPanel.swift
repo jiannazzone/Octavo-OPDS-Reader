@@ -155,6 +155,7 @@ struct ReaderTextPanel: View {
                     }
                 } else {
                     Text("Text and Theme")
+                        .accessibilityAddTraits(.isHeader)
                 }
             }
             .font(.subheadline.weight(.semibold))
@@ -223,6 +224,16 @@ struct ReaderTextPanel: View {
             Text(appearance.textScale.formatted(.percent.precision(.fractionLength(0))))
                 .monospacedDigit()
                 .foregroundStyle(.secondaryOnGlass)
+                // Swiping up or down steps it, as the buttons do.
+                .accessibilityLabel("Text Size")
+                .accessibilityValue(appearance.textScale.formatted(.percent.precision(.fractionLength(0))))
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: if appearance.canGrowText { appearance.stepText(by: 1) }
+                    case .decrement: if appearance.canShrinkText { appearance.stepText(by: -1) }
+                    @unknown default: break
+                    }
+                }
             Spacer()
             Button { appearance.stepText(by: 1) } label: {
                 textSizeLabel("Larger Text", systemImage: "textformat.size.larger")
@@ -247,10 +258,14 @@ struct ReaderTextPanel: View {
         selection: Binding<Value>,
         @ViewBuilder choices: () -> some View
     ) -> some View {
-        LabeledContent(title) {
+        LabeledContent {
             Picker(title, selection: selection) { choices() }
                 .pickerStyle(.menu)
                 .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
+        } label: {
+            // The menu says it, with its choice.
+            Text(title)
+                .accessibilityHidden(true)
         }
     }
 

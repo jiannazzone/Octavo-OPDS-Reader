@@ -10,6 +10,7 @@ What Apple asks for, the common tasks that have to work, and what's been checked
 - **Differentiate Without Color (#78):** nothing checked relies on color alone, judged from grey versions of the screenshots.
 - **Larger Text (#76):** the app's own words wrap or stack at the accessibility text sizes, and book text stays on its own A− A+ control, up to 200%. The rows below say what's been seen, and nothing has run on a real Duo.
 - **Labels are per device.** The app builds for iPhone and iPad (`TARGETED_DEVICE_FAMILY = 1,2`), so iPad needs its own pass or its own "no".
+- **VoiceOver (#74):** VoiceOver reads the reader's page as one item, the words on it (Adam, 2026-11-14). Every common task was walked on the simulator, folded and unfolded, with the walker and Apple's audit below (2026-11-14). That shows names, order and actions, not speech: nobody has heard it on a device. Adam took the walk as enough, without a listen on his Duo (2026-11-14).
 - **Captions and Audio Descriptions stay unclaimed.** The app has no video or audio, and Apple's pages offer no "not applicable".
 
 ## What Apple asks
@@ -49,6 +50,41 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 | **Settings:** a server's page, Books on iPhone | ✓ | ✓ | ✓ folded | A server's page, unfolded | A server's page, unfolded | | |
 
 "✓ Duo" means only on Adam's Duo. The shell moved to the system's navigation on 2026-11-08 (`split-shell.md`), after these checks: the navigation rows need checking again. He ran these with Dark Mode and Reduce Motion on, and all passed: a book's screen and Back, a swipe back, a Settings page, opening a book, turning pages, the panels, a bookmark and a search result unfolded; folding while reading, half open and folding on Home; the book sheet, opening a book, turning pages and the panels folded; Show the tour and Skip.
+
+## VoiceOver
+
+**The page is one item** (`ReaderVoiceOverPage`, Adam 2026-11-14). It holds the words on the page, a line to a paragraph, which `bridge.js` sends with every relocation (`pageWordsOf`, leaving out hidden text), and the book's own text is hidden from VoiceOver. On a page with no words it says the place instead. Why:
+
+- **VoiceOver's page turns never reach the app through WebKit.** A three-finger swipe on the book's text goes to WebKit's views and every view above them, and none of them takes it (measured with `voiceOverScroll` before the change). An app can't hear it there without swapping the web view's class.
+- **WebKit exposes the whole chapter,** including the pages before and after, so VoiceOver would read past the page.
+- **SwiftUI's scroll action can't tell Read All's "next" from a swipe toward the left page:** it hands both over as `.leading`. So the item is a UIKit view, which gets VoiceOver's own direction.
+
+What it does:
+
+| Gesture | What happens |
+|---|---|
+| Three-finger swipe left or right | Turns to the right or left page, with the same motion as a tap, then says "Page 12 of 547 · 2%" |
+| Three-finger swipe up or down | Forward or back in the book's own direction |
+| Read All (two-finger swipe down) | Reads the page, turns it, and reads on through chapters (`causesPageTurn`) |
+| Double tap | Shows or hides the controls, as "…" does, never a turn |
+| At the book's first or last page | VoiceOver's "can't" sound |
+
+The cost: inside a page, VoiceOver can't jump by heading or link, and a footnote's mark is read as its number but can't be opened. Reading by word or character still works with the rotor.
+
+**Names fixed in the shell:** On iPhone's count ("1 book"), Text and Theme's menus said their name twice ("Font, Font, Book's Font"), the text size reads "Text Size, 100%" and steps with a swipe up or down, "Text and Theme" is a heading, Home's progress bars are hidden (the line above says the percentage), and Hide Controls is only on the progress bar, not on every item in the reader. Then, from the walk of every task:
+
+- **A spread's pages are read one at a time** (`SpreadPages`). SwiftUI ordered both pages' items by height, so setup went left, right, left.
+- **A book's details read "Series, None",** not "Series, None, em dash" (the value twice).
+- **Home's cover isn't a second button** to the book's screen; the strip's title says the same, with "Downloaded".
+- **Text fields say their name** once something's typed, and where the placeholder is something else: "Address, books.example.com", "Search, Title, author, series". SwiftUI leaves a field unnamed outside a Form, so it read only the placeholder, then only what's typed. An empty Username says "Username" twice.
+- **Page numbers say "Page 3"** in Contents and in search results, not "I, 3". The current match is selected, as the current chapter is.
+- **The reader's spinner says "Loading",** not "1". The search icon in a book is hidden, and the page line under the scrubber is too (the scrubber says it).
+
+**Seen with the walker** (`voiceOver`, below), folded and unfolded: the tour's first two cards and its reader step, Home, the Library, Search and its results, a book's screen and Back, Add a server and BookOrbit's sign-in, Settings and KOReader sync, the reader with and without its controls, Contents, Bookmarks and the Bookmark button, Search in Book, stepping through matches and the way back, and Text and Theme. Every button has a name, the selected tab, theme, chapter and match say so, section titles are headings, switches read on or off, the scrubber reads "Page 3 of 547 · 0%" and steps, and what's behind the tour, the reader or a sheet is hidden. The system's Back has no label, but it carries UIKit's back-button trait (`0x8000000`), which VoiceOver reads as "Back". All six scroll directions turned the right way, and a double tap showed and hid the controls, sent to the item as VoiceOver sends them.
+
+**Apple's audit,** folded, on Home, the Library, Search, a book's screen, BookOrbit's sign-in, Settings and the reader: nothing for VoiceOver. It flags contrast on `.secondary` and glass (Sufficient Contrast, above), Sign in while it's disabled, "may be clipped" on text fields (they grow, seen at the largest size) and a plain system switch.
+
+**What the walker can't show:** what VoiceOver says aloud, including the page it announces after a turn (`.pageScrolled`), and VoiceOver's own order where SwiftUI leaves it to geometry. Those need VoiceOver on a device.
 
 ## Reduced Motion
 
@@ -169,6 +205,13 @@ xcrun simctl io <udid> recordVideo --display=3 --force flow.mov
 ffmpeg -i flow.mov -vf "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=yavg.txt" -f null -
 ```
 
+**What VoiceOver reads, in order** (DEBUG builds, through `ReaderRemote`): `{"cmd": "voiceOver"}` writes the current screen's items to `Documents/voiceover.txt` (`VoiceOverWalk`), skipping what the app hides, which XCUITest's tree doesn't. `"name": "tree"` adds the containers. `{"cmd": "voiceOverScroll", "side": "next"}` sends the reader's page item a scroll as VoiceOver does (left, right, up, down, next or previous), and `{"cmd": "voiceOverActivate"}` a double tap. SwiftUI builds no items until accessibility is on, and stopping an XCUITest run turns it off again:
+
+```bash
+xcrun simctl spawn <udid> defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool true
+# then relaunch the app
+```
+
 `tools/probe.sh` runs a UI test in its own project, headless, that reads the running app's accessibility tree and runs Apple's audit:
 
 ```bash
@@ -184,7 +227,7 @@ Where it misleads:
 - **The audit's contrast part returns nothing unfolded.** Run it folded.
 - **On glass it fails text that's fine,** down to 20:1 black on white. Read those from the pixels with `tools/contrast.py`, and take the screenshot first, because the audit can move a list.
 - **A tap can wait a minute.** After a fold, XCUITest often logs "App animations complete notification not received" and goes on after 60 s. The app sits at about 0% CPU meanwhile.
-- **VoiceOver starts on the simulator, but scripted gestures don't move its cursor.** It needs a person on a device.
+- **VoiceOver starts on the simulator, but scripted gestures don't move its cursor.** It needs a person on a device. The walker shows the order and names, not what VoiceOver says aloud.
 
 ## Not checked
 
@@ -197,3 +240,4 @@ Where it misleads:
 - Unfolded: Reduce Transparency, Bold Text, grey versions of most screens.
 - Larger Text: half open, folding with a book open, the trust prompt, footnote cards, Import from Files, Books on iPhone, an empty screen, the connection banner, Dark Mode at these sizes.
 - Nothing from Color and Contrast or Larger Text has run on a real Duo.
+- VoiceOver: the note card, the server's place capsule, an OPDS catalog's lists and Books on iPhone weren't walked. Nothing has run with VoiceOver on a device.

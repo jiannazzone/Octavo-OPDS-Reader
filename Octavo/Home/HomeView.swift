@@ -188,6 +188,8 @@ struct CurrentBook: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     ProgressView(value: progress ?? 0)
+                        // The line above says the percentage.
+                        .accessibilityHidden(true)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -250,8 +252,8 @@ struct CurrentBookPage: View {
                     Color.clear.contentShape(.rect)
                 }
                 .frame(maxHeight: .infinity)
-                .accessibilityLabel(book.book.title.isEmpty ? "Cover" : "Cover of \(book.book.title)")
-                .accessibilityValue(shell.marks(of: book).accessibilityValue)
+                // The strip's title opens the same screen.
+                .accessibilityHidden(true)
                 CurrentBookStrip(book: book)
             } else {
                 Spacer()
@@ -295,12 +297,15 @@ private struct CurrentBookStrip: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .combine)
                 }
+                .accessibilityValue(shell.marks(of: book).accessibilityValue)
                 if let source = library.source(for: book.source) {
                     BookOpenButton(page: page, source: source, sourceID: book.source, fillsWidth: size.isAccessibilitySize)
                         .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
                 }
             }
             ProgressView(value: place.progress ?? 0)
+                // The line above says the percentage.
+                .accessibilityHidden(true)
         }
         // At the largest text sizes, the cover gives way.
         .fixedSize(horizontal: false, vertical: true)
@@ -519,6 +524,8 @@ struct ContinueReadingRow: View {
                         .padding(.top, isTall ? 6 : 0)
                     ProgressView(value: progress ?? 0)
                         .padding(.top, 2)
+                        // The line above says the percentage.
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 6)
