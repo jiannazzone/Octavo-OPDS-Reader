@@ -160,6 +160,7 @@ final class ServerActions {
             // read these.
             places.store.removeAll(of: id)
             bookmarks.removeAll(of: id)
+            ReadingPaceStore.shared.removeAll(of: id)
         }
         try? servers.remove(id)
         library.remove(id)
@@ -226,6 +227,7 @@ final class ServerActions {
         opener.moveAll(of: removed.id, to: server.id)
         places.store.moveAll(of: removed.id, to: server.id)
         bookmarks.moveAll(of: removed.id, to: server.id)
+        ReadingPaceStore.shared.moveAll(of: removed.id, to: server.id)
         try? library.onIPhone.moveAll(of: removed.id, to: server.id)
         try? removedServers.remove(removed)
     }

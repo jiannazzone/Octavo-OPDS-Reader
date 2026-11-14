@@ -91,7 +91,10 @@ final class ReaderModel {
     /// (`docs/notes/reader-background.md`).
     var isInBackground = false {
         didSet {
-            guard isInBackground != oldValue, !isInBackground else { return }
+            guard isInBackground != oldValue else { return }
+            // Time away isn't reading (#124).
+            if isInBackground { paceClock.stop() } else { paceClock.restart(at: .now) }
+            guard !isInBackground else { return }
             if let lastGeometry { updateGeometry(lastGeometry) }
             relayout()
         }
@@ -187,6 +190,11 @@ final class ReaderModel {
     let search = ReaderSearch()
 
     @ObservationIgnored private let store: ReadingPositionStore
+    // Reading time left (#124, `docs/notes/time-left.md`).
+    @ObservationIgnored let paceStore: ReadingPaceStore
+    @ObservationIgnored private var paceClock = ReaderPaceClock()
+    /// Each section's characters, once the bridge has counted them.
+    private(set) var textMap: BookTextMap?
     @ObservationIgnored private let sync: (any ProgressSync)?
     /// The backend's position as the library list gave it (a percentage),
     /// for when there's no pull: the book's screen showed it, so the book
@@ -254,10 +262,12 @@ final class ReaderModel {
         fallback: SyncedPosition? = nil,
         bookmarks: ReaderBookmarks? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
-        pushDelay: Duration = .seconds(2)
+        pushDelay: Duration = .seconds(2),
+        paceStore: ReadingPaceStore = .shared
     ) {
         self.book = book
         self.store = store
+        self.paceStore = paceStore
         self.sync = sync
         self.fallback = fallback
         self.bookmarks = bookmarks ?? ReaderBookmarks(bookID: book.id)
@@ -601,6 +611,7 @@ final class ReaderModel {
     func close() async {
         await jumpsLanded()
         phase = .closed
+        paceClock.stop()
         followTurnFrames(false)
         foldTask?.cancel()
         foldBatch = nil
@@ -669,6 +680,8 @@ final class ReaderModel {
             contentsPlaced(entries)
         case .searchResults(let batch):
             search.receive(batch)
+        case .textMap(let map):
+            textMap = BookTextMap(sections: map.sections, starts: map.fractions)
         case .relocate(let relocation):
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             let previous = self.relocation
@@ -681,7 +694,10 @@ final class ReaderModel {
             // itself for the footer): saving it would mark it unsent, with a
             // new time that could beat another reader's newer place.
             let isMove = relocation.position(cfiShape) != previous?.position(cfiShape)
-            if isMove { moveCount += 1 }
+            if isMove {
+                moveCount += 1
+                timePage(relocation)
+            }
             if !isRestoring, isMove {
                 // With None the page turns itself: its relocation is all
                 // there is to go by.
@@ -868,6 +884,25 @@ final class ReaderModel {
             hasMoved = true
         }
         saveAndSend(position)
+    }
+
+    /// Times each page for reading speed (#124): a page turn forward counts
+    /// the page left, and anything else (a jump, a fold, going back,
+    /// opening) starts the clock again.
+    private func timePage(_ relocation: ReaderMessage.Relocation) {
+        let turned = !isRestoring && relocation.isPageTurn && foldBatch == nil && jumpsUnderWay == 0 && !isGoingBack && !isInBackground
+        guard let span = paceClock.arrived(
+            fraction: relocation.shownFraction, characters: isFixedLayout ? nil : relocation.characters, turnedForward: turned, at: .now
+        ) else { return }
+        let verdict = paceStore.record(span, book: book.id)
+        log.debug("page read: \(span.characters) characters in \(span.seconds, format: .fixed(precision: 1)) s, \(String(describing: verdict), privacy: .public)")
+    }
+
+    /// Time left to read, once the book's characters are counted and
+    /// there's a pace (#124). Never on fixed layout.
+    var timeLeft: ReaderTimeLeft? {
+        guard !isFixedLayout, let textMap, let speed = paceStore.pace.speed(forBook: book.id) else { return nil }
+        return ReaderTimeLeft(map: textMap, toc: toc, speed: speed)
     }
 
     private func saveAndSend(_ position: ReadingPosition) {

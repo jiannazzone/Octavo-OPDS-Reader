@@ -71,13 +71,13 @@ struct ReaderControlsTests {
         let place = ReaderPlace(chapter: "CHAPTER 36. The Quarter-Deck.", location: Self.location, fraction: 0.3005)
         #expect(place.first == 291)
         #expect(place.last == 292)
-        #expect(place.footer(spread: false) == "291 of 974 · 30%")
+        #expect(place.pages(spread: false) == "291 of 974")
         #expect(place.barLine(spread: false) == "Page 291 of 974 · 30%")
     }
 
     @Test func aSpreadShowsTheLocationsItCovers() {
         let place = ReaderPlace(chapter: nil, location: Self.location, fraction: 0.3)
-        #expect(place.footer(spread: true) == "291–292 of 974 · 30%")
+        #expect(place.pages(spread: true) == "291–292 of 974")
         #expect(place.barLine(spread: true) == "Pages 291–292 of 974 · 30%")
         let one = ReaderPlace(chapter: nil, location: .init(current: 290, next: 290, total: 974), fraction: 0.3)
         #expect(one.barLine(spread: true) == "Page 291 of 974 · 30%")
@@ -92,7 +92,7 @@ struct ReaderControlsTests {
 
     @Test func withoutLocationsOnlyThePercentage() {
         let place = ReaderPlace(chapter: nil, location: .init(current: nil, total: nil), fraction: 0.42)
-        #expect(place.footer(spread: false) == "42%")
+        #expect(place.pages(spread: false) == nil)
         #expect(place.barLine(spread: true) == "42%")
     }
 

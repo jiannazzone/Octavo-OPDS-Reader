@@ -57,18 +57,17 @@ nonisolated struct ReaderPlace: Equatable, Sendable {
         return String(localized: "\(first) of \(total)", comment: "The page's location, out of the book's total")
     }
 
-    /// The footer's numbers: "291 of 974 · 30%".
-    func footer(spread: Bool) -> String {
-        pages(spread: spread).map { "\($0) · \(percent)" } ?? percent
+    /// "Page 291 of 974", or "Pages 291–292 of 974" on a spread.
+    func pageLine(spread: Bool) -> String? {
+        guard let pages = pages(spread: spread), let first, let last else { return nil }
+        return spread && last > first
+            ? String(localized: "Pages \(pages)", comment: "Progress bar: the spread's locations, e.g. Pages 291–292 of 974")
+            : String(localized: "Page \(pages)", comment: "Progress bar: the page's location, e.g. Page 291 of 974")
     }
 
     /// The progress bar's numbers: "Page 291 of 974 · 30%".
     func barLine(spread: Bool) -> String {
-        guard let pages = pages(spread: spread), let first, let last else { return percent }
-        let line = spread && last > first
-            ? String(localized: "Pages \(pages)", comment: "Progress bar: the spread's locations, e.g. Pages 291–292 of 974")
-            : String(localized: "Page \(pages)", comment: "Progress bar: the page's location, e.g. Page 291 of 974")
-        return "\(line) · \(percent)"
+        pageLine(spread: spread).map { "\($0) · \(percent)" } ?? percent
     }
 }
 

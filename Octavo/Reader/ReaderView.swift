@@ -782,46 +782,96 @@ private struct ReaderProgressBar: View {
 
 /// The chapter and page in each page's bottom margin, outside the text
 /// (decision 7). Under the fold's cross-fade; hidden while a page turns,
-/// whose pictures carry each page's own (`ReaderTurn`).
+/// whose pictures carry each page's own (`ReaderTurn`). Its numbers take a
+/// tap, for the next readout (#124).
 struct ReaderFooter: View {
     let model: ReaderModel
     var hidesChapter = false
+    @AppStorage(ReaderFooterReadout.key) private var readout = ReaderFooterReadout.standard
 
     var body: some View {
         if model.phase == .open, let geometry = model.geometry {
-            ReaderFooterLines(
-                place: ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction),
-                layout: model.layout, geometry: geometry, hidesChapter: hidesChapter
-            )
+            let place = ReaderPlace(chapter: model.chapter, location: model.location, fraction: model.shownFraction)
+            ReaderFooterLines(place: place, layout: model.layout, geometry: geometry, hidesChapter: hidesChapter) {
+                let numbers = ReaderFooterNumbers(readout: readout, timeLeft: model.timeLeft)
+                readout = numbers.shown(at: place).next(hasTime: numbers.hasTime(at: place), hasPages: place.total != nil)
+            }
         }
     }
 }
 
+/// What the footer's numbers show, for every footer line (the page's and
+/// the turns' pictures of it), from `ReaderWebView`.
+struct ReaderFooterNumbers: Equatable {
+    var readout = ReaderFooterReadout.standard
+    var timeLeft: ReaderTimeLeft?
+
+    func hasTime(at place: ReaderPlace) -> Bool {
+        timeLeft?.chapter(from: place.fraction) != nil && timeLeft?.book(from: place.fraction) != nil
+    }
+
+    /// The readout showing at `place`.
+    func shown(at place: ReaderPlace) -> ReaderFooterReadout {
+        readout.shown(hasTime: hasTime(at: place), hasPages: place.total != nil)
+    }
+
+    /// The numbers, and the same for VoiceOver.
+    func text(at place: ReaderPlace, spread: Bool) -> (shown: String, spoken: String) {
+        switch shown(at: place) {
+        case .chapterTime:
+            if let seconds = timeLeft?.chapter(from: place.fraction) {
+                let time = ReadingTimeLeft(seconds: seconds)
+                return (ReaderTimeLeftText.short(time, .chapter), ReaderTimeLeftText.spoken(time, .chapter))
+            }
+        case .bookTime:
+            if let seconds = timeLeft?.book(from: place.fraction) {
+                let time = ReadingTimeLeft(seconds: seconds)
+                return (ReaderTimeLeftText.short(time, .book), ReaderTimeLeftText.spoken(time, .book))
+            }
+        case .page:
+            if let pages = place.pages(spread: spread) {
+                return (pages, place.pageLine(spread: spread) ?? pages)
+            }
+        case .percent:
+            break
+        }
+        return (place.percent, place.percent)
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var readerFooterNumbers = ReaderFooterNumbers()
+}
+
 /// Each page's footer line for `place`: one line per page, the chapter on
 /// the first and the numbers on the last, so a spread splits at the gutter.
-/// Ignores touches.
+/// Ignores touches, but for the numbers when `onTapNumbers` is given.
 struct ReaderFooterLines: View {
     let place: ReaderPlace
     let layout: ReaderLayout
     let geometry: ReaderGeometry
     /// The way back sits in the chapter's place (decision 33).
     var hidesChapter = false
+    /// The numbers' tap: the page's own footer, not a turn's picture of it.
+    var onTapNumbers: (() -> Void)?
     @Environment(\.dynamicTypeSize) private var size
+    @Environment(\.readerFooterNumbers) private var numbers
 
     var body: some View {
         if let columns = layout.textColumns(inReaderWidth: Double(geometry.size.width), height: Double(geometry.size.height)),
            let first = columns.first, let last = columns.last {
             let spread = columns.count > 1
             let centre = ReaderChromeLayout.footerLineCentre(in: geometry, layout: layout)
+            let text = numbers.text(at: place, spread: spread)
             Group {
                 if spread {
                     line(chapter: hidesChapter ? nil : place.chapter, numbers: nil, in: first, centre: centre)
-                    line(chapter: nil, numbers: place.footer(spread: true), in: last, centre: centre)
+                    line(chapter: nil, numbers: text, in: last, centre: centre)
                 } else {
                     // At these sizes the chapter would be a letter or two, and
                     // the way back reaches the numbers.
                     let large = size.isAccessibilitySize
-                    line(chapter: hidesChapter || large ? nil : place.chapter, numbers: hidesChapter && large ? nil : place.footer(spread: false), in: first, centre: centre)
+                    line(chapter: hidesChapter || large ? nil : place.chapter, numbers: hidesChapter && large ? nil : text, in: first, centre: centre)
                 }
             }
             .font(.caption2)
@@ -829,22 +879,44 @@ struct ReaderFooterLines: View {
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .monospacedDigit()
             .foregroundStyle(.secondary)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            .accessibilityHidden(onTapNumbers == nil)
         }
     }
 
-    private func line(chapter: String?, numbers: String?, in column: ClosedRange<Double>, centre: Double) -> some View {
+    /// The numbers' touch area reaches this far past them, 44 pt tall.
+    private static let touchMargin = (horizontal: 10.0, vertical: (44 - ReaderChromeLayout.footerLineHeight) / 2)
+
+    private func line(chapter: String?, numbers: (shown: String, spoken: String)?, in column: ClosedRange<Double>, centre: Double) -> some View {
         HStack(spacing: 12) {
             if let chapter {
                 Text(chapter)
                     .lineLimit(1)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             Spacer(minLength: 0)
             if let numbers {
-                Text(numbers)
-                    .lineLimit(1)
+                if let onTapNumbers {
+                    Button(action: onTapNumbers) {
+                        Text(numbers.shown)
+                            .lineLimit(1)
+                            .padding(.horizontal, Self.touchMargin.horizontal)
+                            .padding(.vertical, Self.touchMargin.vertical)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, -Self.touchMargin.horizontal)
+                    .padding(.vertical, -Self.touchMargin.vertical)
                     .layoutPriority(1)
+                    .accessibilityLabel(Text("Reading Progress", comment: "VoiceOver: the reader footer's numbers, a button that cycles them"))
+                    .accessibilityValue(numbers.spoken)
+                    .accessibilityHint(Text("Shows the next readout.", comment: "VoiceOver hint: the reader footer's numbers"))
+                } else {
+                    Text(numbers.shown)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                        .allowsHitTesting(false)
+                }
             }
         }
         .frame(width: column.upperBound - column.lowerBound, height: ReaderChromeLayout.footerLineHeight)
