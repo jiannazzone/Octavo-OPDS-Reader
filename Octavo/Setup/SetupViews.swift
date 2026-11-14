@@ -547,6 +547,8 @@ private struct SetupField: View {
             Text(label)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                // The field says it.
+                .accessibilityHidden(true)
             Group {
                 if secure {
                     SecureField(label, text: $text, prompt: prompt.map(Text.init))
@@ -554,6 +556,8 @@ private struct SetupField: View {
                     TextField(label, text: $text, prompt: prompt.map(Text.init))
                 }
             }
+            // Its placeholder goes once you type, and a prompt replaces it.
+            .accessibilityLabel(label)
             .textInputAutocapitalization(isName ? .words : .never)
             .autocorrectionDisabled(!isName)
             .padding(.horizontal, 12)

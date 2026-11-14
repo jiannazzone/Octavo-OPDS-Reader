@@ -77,6 +77,8 @@ private struct SearchField: View {
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
             TextField("Search", text: $search.query, prompt: Text("Title, author, series"))
+                // With a prompt, the field has no name of its own.
+                .accessibilityLabel("Search")
                 .focused($focused)
                 .submitLabel(.search)
                 .onSubmit { search.submit() }

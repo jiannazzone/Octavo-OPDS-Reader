@@ -53,7 +53,7 @@ extension ReaderModel {
         guard phase == .open, !isFolding else { return }
         if pageTurn.curls(reduceMotion: reduceMotion) { return curlRequested(side) }
         guard let run = turnRun else { return startTurn(side, interactive: false) }
-        if queuedTurns.count < 3 { queuedTurns.append(side) }
+        if queuedTurns.count < Self.mostQueuedTurns { queuedTurns.append(side) }
         if run.canEndEarly { endTurn() }
     }
 
@@ -141,6 +141,8 @@ extension ReaderModel {
 
     /// How long a tap's turn waits for the new page before it moves.
     static let longestWaitForPage = Duration.milliseconds(100)
+    /// Turns asked for while one plays wait, up to this many; more are dropped.
+    static let mostQueuedTurns = 3
 
     /// No pictures to draw (no web view to snapshot): foliate turns at once.
     func turnWithoutPictures(_ side: ReaderTurnSide) {

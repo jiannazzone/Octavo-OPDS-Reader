@@ -20,7 +20,10 @@ struct ReaderSearchPanel: View {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     TextField("Search in Book", text: $search.query)
+                        // Its words are the placeholder, gone once you type.
+                        .accessibilityLabel("Search in Book")
                         .focused($focused)
                         .submitLabel(.search)
                         .autocorrectionDisabled()
@@ -129,11 +132,14 @@ struct ReaderSearchPanel: View {
                         .font(.footnote)
                         .monospacedDigit()
                         .foregroundStyle(.secondaryOnGlass)
+                        // "…, Page 3", not "…, 3".
+                        .accessibilityLabel(Text("Page \(page)"))
                 }
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(item.index == search.current ? .isSelected : [])
         .listRowBackground(Rectangle().fill(item.index == search.current ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.clear)))
         .listRowInsets(EdgeInsets(top: 8, leading: 18, bottom: 8, trailing: 18))
     }

@@ -53,6 +53,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var title: String?
         var sectionCount: Int
         var isFixedLayout: Bool
+        /// The book reads right to left, so it goes forward by the left page.
+        /// `nil` from an older bridge.
+        var rightToLeft: Bool?
         /// The table of contents, flattened in reading order, each entry with
         /// where its section starts in the book. `nil` from an older bridge.
         var toc: [TOCEntry]?
@@ -131,6 +134,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
         var sectionIndex: Int?
         var sectionCount: Int?
         var location: Location?
+        /// The words on the page, a line to a paragraph, for VoiceOver
+        /// (`bridge.js` `pageWordsOf`). `nil` for a page without words.
+        var words: String?
         /// KOReader's place for the page's start, when the open options asked
         /// for it (`bridge.js` `xpointerOf`).
         var xpointer: String?

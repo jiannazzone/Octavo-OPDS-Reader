@@ -141,10 +141,22 @@ private struct ReaderScreen: View {
             // bar while stepping through search matches, or the server's place.
             ReaderWebView(model: model, theme: appearance.theme(darkMode: darkMode), showsFooter: chrome.showsFooter, hidesFooterChapter: chrome.hidesFooterChapter)
                 .overlay { status }
+                .overlay {
+                    if model.phase == .open {
+                        ReaderVoiceOverPage(model: model) {
+                            withAnimation(.easeOut(duration: 0.2)) { controls.toggle() }
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
                 .overlay(alignment: .topLeading) {
                     if controls.showsBar, model.phase == .open {
                         ReaderProgressBar(model: model, height: $barHeight)
                             .transition(.opacity)
+                            // "…" in the column shows them.
+                            .accessibilityAction(named: Text("Hide Controls")) {
+                                withAnimation { controls.toggle() }
+                            }
                     }
                 }
                 .overlay(alignment: .topLeading) {
@@ -232,9 +244,6 @@ private struct ReaderScreen: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: shell.tour.playing?.step)
                 .ignoresSafeArea()
-                .accessibilityAction(named: Text(controls.showsBar ? "Hide Controls" : "Show Controls")) {
-                    withAnimation { controls.toggle() }
-                }
                 .toolbar { buttons }
                 // Inside the stack, the safe area's top includes the bar
                 // holding the column's buttons.
@@ -420,6 +429,8 @@ private struct ReaderScreen: View {
         switch model.phase {
         case .loading:
             ProgressView()
+                // VoiceOver says "1" without it.
+                .accessibilityLabel("Loading")
         case .open, .closed:
             EmptyView()
         case .failed(let message):
@@ -760,6 +771,8 @@ private struct ReaderProgressBar: View {
             .monospacedDigit()
             .foregroundStyle(.secondaryOnGlass)
             .lineLimit(untilLargerText: 1)
+            // The scrubber says it.
+            .accessibilityHidden(true)
     }
 
     private var fraction: Binding<Double> {
@@ -847,6 +860,20 @@ extension EnvironmentValues {
     @Entry var readerFooterNumbers = ReaderFooterNumbers()
 }
 
+/// Hides a view from VoiceOver, or leaves it as it is: a false
+/// `accessibilityHidden` shows what's hidden inside.
+private struct HiddenFromVoiceOver: ViewModifier {
+    let isHidden: Bool
+
+    func body(content: Content) -> some View {
+        if isHidden {
+            content.accessibilityHidden(true)
+        } else {
+            content
+        }
+    }
+}
+
 /// Each page's footer line for `place`: one line per page, the chapter on
 /// the first and the numbers on the last, so a spread splits at the gutter.
 /// Ignores touches, but for the numbers when `onTapNumbers` is given.
@@ -883,7 +910,10 @@ struct ReaderFooterLines: View {
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .monospacedDigit()
             .foregroundStyle(.secondary)
-            .accessibilityHidden(onTapNumbers == nil)
+            // A turn's picture of the footer says nothing. Not
+            // `accessibilityHidden(false)` for the page's own: that shows the
+            // words hidden inside it, which the button says.
+            .modifier(HiddenFromVoiceOver(isHidden: onTapNumbers == nil))
         }
     }
 
