@@ -883,8 +883,11 @@ struct ReaderFooterLines: View {
         }
     }
 
-    /// The numbers' touch area reaches this far past them, 44 pt tall.
-    private static let touchMargin = (horizontal: 10.0, vertical: (44 - ReaderChromeLayout.footerLineHeight) / 2)
+    /// The numbers' touch area: 44 pt tall, and at least this wide, so a
+    /// short readout ("30%") is as easy to hit as a long one (Adam).
+    private static let touchSize = CGSize(width: 120, height: 44)
+    /// How far it reaches past the numbers' ends.
+    private static let touchMargin = 10.0
 
     private func line(chapter: String?, numbers: (shown: String, spoken: String)?, in column: ClosedRange<Double>, centre: Double) -> some View {
         HStack(spacing: 12) {
@@ -897,20 +900,25 @@ struct ReaderFooterLines: View {
             Spacer(minLength: 0)
             if let numbers {
                 if let onTapNumbers {
-                    Button(action: onTapNumbers) {
-                        Text(numbers.shown)
-                            .lineLimit(1)
-                            .padding(.horizontal, Self.touchMargin.horizontal)
-                            .padding(.vertical, Self.touchMargin.vertical)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, -Self.touchMargin.horizontal)
-                    .padding(.vertical, -Self.touchMargin.vertical)
-                    .layoutPriority(1)
-                    .accessibilityLabel(Text("Reading Progress", comment: "VoiceOver: the reader footer's numbers, a button that cycles them"))
-                    .accessibilityValue(numbers.spoken)
-                    .accessibilityHint(Text("Shows the next readout.", comment: "VoiceOver hint: the reader footer's numbers"))
+                    Text(numbers.shown)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                        .accessibilityHidden(true)
+                        // The touch area, over the numbers and reaching left
+                        // from them, without moving them.
+                        .overlay(alignment: .trailing) {
+                            Button(action: onTapNumbers) {
+                                Color.clear
+                                    .frame(minWidth: Self.touchSize.width, maxWidth: .infinity)
+                                    .frame(height: Self.touchSize.height)
+                                    .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, -Self.touchMargin)
+                            .accessibilityLabel(Text("Reading Progress", comment: "VoiceOver: the reader footer's numbers, a button that cycles them"))
+                            .accessibilityValue(numbers.spoken)
+                            .accessibilityHint(Text("Shows the next readout.", comment: "VoiceOver hint: the reader footer's numbers"))
+                        }
                 } else {
                     Text(numbers.shown)
                         .lineLimit(1)
