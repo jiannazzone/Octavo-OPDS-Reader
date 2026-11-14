@@ -98,6 +98,7 @@ Apple's criteria (#75, read 2026-11-14 through a summary of the page, so not wor
 
 - **A row says its book or list alone,** so it can be said: "Pride and Prejudice", not "Pride and Prejudice, Jane Austen, 29%". `OpenButton` names every book row, cover, series, author and collection from its route, and a Library shelf's heading is its name without the count. The same book twice gets numbers to pick between.
 - **A name that differs from the words on screen** gets those words: Mark finished (VoiceOver: "Finished, Off"), Go on the server's place (VoiceOver: "Go to BookOrbit: 62%"), Clear under Recent, a server's row in setup, Books on iPhone's sort menu.
+- **Contents says the chapter alone,** without its page, and Text and Theme's menus say their name ("Font"), not their choice as well.
 - **The reader's page is "Page",** not its words.
 
 **Turning pages:** Voice Control's "Swipe left" and "Swipe right" are a finger's swipe, which turns the page (`ReaderSwipeRecognizer`). "Tap Page" taps its middle, which shows the controls. The grid ("Show grid", "Tap 3") taps a side to turn, or a footnote's mark: the book's own text is hidden from accessibility, so its links and marks get no names or numbers.
