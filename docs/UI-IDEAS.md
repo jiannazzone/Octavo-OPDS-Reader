@@ -71,7 +71,7 @@ From decisions 34 and 35. Seen as pictures, none chosen:
 
 Half open, the bar's right-hand piece shows the chapter's progress: pages left in the chapter over a line through it, and the book's page numbers (`ReaderBarReadout.chapter`). Adam wants it customizable later:
 
-- **Time left** in the chapter and the book. Octavo doesn't measure reading speed yet; it would need to time page turns over a few sessions first.
+- **Time left** in the chapter and the book: Octavo measures reading speed since #124 (`docs/notes/time-left.md`), and the footer cycles time left. Book mode's bar could offer it too.
 - **Choosing the readout**: chapter pages, time left, or the book's page numbers (`ReaderBarReadout.pages`), probably in Text and theme or a long press on the piece itself.
 
 ## Page-turn animations, with opening and closing a book (Adam, 2026-11-02)
