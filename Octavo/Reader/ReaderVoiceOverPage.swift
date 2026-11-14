@@ -56,6 +56,8 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
             isUserInteractionEnabled = false
             isAccessibilityElement = true
             accessibilityTraits = .causesPageTurn
+            // Voice Control's name for it: its label is the whole page.
+            accessibilityUserInputLabels = [String(localized: "Page")]
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }

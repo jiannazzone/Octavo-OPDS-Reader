@@ -23,6 +23,40 @@ struct ReaderVoiceOverTests {
         #expect(ReaderVoiceOverPage.side(for: .up, forward: forward) == forward.opposite)
     }
 
+    // Two quick turns: each landing is said, so the last place heard is
+    // where the second landed.
+    @Test func eachQueuedTurnIsSaidWhereItLands() {
+        let start = ContinuousClock.now
+        var turns = ReaderVoiceOverTurns()
+        turns.asked(at: start)
+        turns.asked(at: start + .milliseconds(200))
+        let said = [300, 600, 900].map { turns.landed(at: start + .milliseconds($0), byJump: false) }
+        #expect(said == [true, true, false])
+    }
+
+    // A turn that never landed (a jump took over, or it timed out) leaves
+    // nothing for a later move to be taken for.
+    @Test func aJumpOrALateMoveIsNotSaid() {
+        let start = ContinuousClock.now
+        var turns = ReaderVoiceOverTurns()
+        turns.asked(at: start)
+        var said = [turns.landed(at: start + .milliseconds(100), byJump: true)]
+        said.append(turns.landed(at: start + .milliseconds(200), byJump: false))
+        turns.asked(at: start + .seconds(1))
+        said.append(turns.landed(at: start + .seconds(5), byJump: false))
+        said.append(turns.landed(at: start + .seconds(5) + .milliseconds(1), byJump: false))
+        #expect(said == [false, false, false, false])
+    }
+
+    // A turn asked for long after one that never landed counts once.
+    @Test func aStaleTurnIsForgottenByTheNext() {
+        let start = ContinuousClock.now
+        var turns = ReaderVoiceOverTurns()
+        turns.asked(at: start)
+        turns.asked(at: start + .seconds(10))
+        let said = [300, 600].map { turns.landed(at: start + .seconds(10) + .milliseconds($0), byJump: false) }
+        #expect(said == [true, false])
+    }
 }
 
 /// The words `bridge.js` sends for the page VoiceOver reads (#74).
@@ -59,6 +93,7 @@ struct ReaderVoiceOverBridgeTests {
     acknowledged.</p>
     <p>A second <span>paragraph</span>.<span hidden="hidden">Hidden words.</span><span aria-hidden="true">Unread words.</span></p>
     <div><p>Inside a box.</p></div>
+    <p>Line one<br/>line two</p>
     </body></html>
     """#
 
@@ -82,6 +117,8 @@ struct ReaderVoiceOverBridgeTests {
         It is a truth universally acknowledged.
         A second paragraph.
         Inside a box.
+        Line one
+        line two
         """)
         #expect(model.forwardSide == .right)
     }

@@ -156,9 +156,9 @@ final class ReaderModel {
     @ObservationIgnored var turnCount = 0
     /// Turns asked for while one was still being drawn, played after it.
     @ObservationIgnored var queuedTurns: [ReaderTurnSide] = []
-    /// When VoiceOver last turned the page, to say where it landed
+    /// VoiceOver's turns on their way, to say where each landed
     /// (`ReaderModel+VoiceOver`).
-    @ObservationIgnored var voiceOverTurnedAt: ContinuousClock.Instant?
+    @ObservationIgnored var voiceOverTurns = ReaderVoiceOverTurns()
     /// How long the last turn's new page took to draw, in ms, for debugging.
     @ObservationIgnored var lastTurnDrawnAfter: Int?
     @ObservationIgnored private var sentTurnMode: Bool?

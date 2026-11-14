@@ -53,7 +53,7 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 
 ## VoiceOver
 
-**The page is one item** (`ReaderVoiceOverPage`, Adam 2026-11-14). It holds the words on the page, a line to a paragraph, which `bridge.js` sends with every relocation (`pageWordsOf`, leaving out hidden text), and the book's own text is hidden from VoiceOver. On a page with no words it says the place instead. Why:
+**The page is one item** (`ReaderVoiceOverPage`, Adam 2026-11-14). It holds the words on the page, a line to a paragraph or a line break, which `bridge.js` sends with every relocation (`pageWordsOf`, leaving out hidden text; a page it can't read sends none, and the relocation still goes), and the book's own text is hidden from VoiceOver. On a page with no words it says the place instead. Voice Control calls it "Page" (`accessibilityUserInputLabels`), since its label is the whole page. Why:
 
 - **VoiceOver's page turns never reach the app through WebKit.** A three-finger swipe on the book's text goes to WebKit's views and every view above them, and none of them takes it (measured with `voiceOverScroll` before the change). An app can't hear it there without swapping the web view's class.
 - **WebKit exposes the whole chapter,** including the pages before and after, so VoiceOver would read past the page.
@@ -68,6 +68,9 @@ What it does:
 | Read All (two-finger swipe down) | Reads the page, turns it, and reads on through chapters (`causesPageTurn`) |
 | Double tap | Shows or hides the controls, as "…" does, never a turn |
 | At the book's first or last page | VoiceOver's "can't" sound |
+| With a note's card open, or three turns already waiting | VoiceOver's "can't" sound: the turn would be dropped |
+
+Each turn's landing is said, so after quick swipes the last place heard is the last landed. A jump or Back meanwhile is never said for a turn (`ReaderVoiceOverTurns`).
 
 The cost: inside a page, VoiceOver can't jump by heading or link, and a footnote's mark is read as its number but can't be opened. Reading by word or character still works with the rotor.
 

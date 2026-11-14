@@ -25,7 +25,7 @@ extension ReaderModel {
     func curlRequested(_ side: ReaderTurnSide) {
         if isCurling {
             if case .finger = curl.turning { return }
-            if queuedTurns.count < 3 { queuedTurns.append(side) }
+            if queuedTurns.count < Self.mostQueuedTurns { queuedTurns.append(side) }
             return
         }
         guard let turn = startCurl(side, finger: false) else { return turnWithoutPictures(side) }

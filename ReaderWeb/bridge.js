@@ -110,41 +110,52 @@ const isBlankPage = range => {
 
 // The words on the page, for VoiceOver, which reads the page as one item
 // (#74, `docs/notes/accessibility.md`): the book's own text runs on past the
-// page, and VoiceOver's page turns never reach the page. A new block starts a
-// new line, so paragraphs aren't run together. Hidden text is left out. `null`
-// for a page with no words (a picture, a blank page).
+// page, and VoiceOver's page turns never reach the page. A new block or a
+// line break starts a new line, so paragraphs and verse aren't run together.
+// Hidden text is left out. `null` for a page with no words (a picture, a
+// blank page), or if the page can't be read: the relocation goes without.
 const WORD_BLOCKS = 'p,div,h1,h2,h3,h4,h5,h6,li,dt,dd,blockquote,pre,figcaption,caption,td,th,tr,section,article,aside,header,footer'
 const UNREAD = 'script,style,noscript,template,rt,rp,[hidden],[aria-hidden="true"]'
 const pageWordsOf = range => {
     if (!range || range.collapsed) return null
-    const root = range.commonAncestorContainer
-    const doc = root.ownerDocument ?? root
-    const walker = doc.createTreeWalker(root.nodeType === Node.TEXT_NODE ? root.parentNode : root, NodeFilter.SHOW_TEXT)
-    // From the page's start, not the chapter's.
-    const start = range.startContainer
-    walker.currentNode = start
-    const lines = []
-    let line = ''
-    let block = null
-    for (let node = start.nodeType === Node.TEXT_NODE ? start : walker.nextNode(); node; node = walker.nextNode()) {
-        if (range.comparePoint(node, 0) > 0) break
-        if (!range.intersectsNode(node)) continue
-        const parent = node.parentElement
-        if (!parent || parent.closest(UNREAD)) continue
-        const from = node === range.startContainer ? range.startOffset : 0
-        const to = node === range.endContainer ? range.endOffset : node.data.length
-        const text = node.data.slice(from, to).replace(/\s+/g, ' ')
-        if (!text.trim()) continue
-        const nodeBlock = parent.closest(WORD_BLOCKS)
-        if (nodeBlock !== block && line.trim()) {
-            lines.push(line.trim())
+    try {
+        const root = range.commonAncestorContainer
+        const doc = root.ownerDocument ?? root
+        const walker = doc.createTreeWalker(root.nodeType === Node.TEXT_NODE ? root.parentNode : root,
+            NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT)
+        // From the page's start, not the chapter's.
+        const start = range.startContainer
+        walker.currentNode = start
+        const lines = []
+        let line = ''
+        let block = null
+        const endLine = () => {
+            if (line.trim()) lines.push(line.trim())
             line = ''
         }
-        block = nodeBlock
-        line += text
+        for (let node = start.nodeType === Node.TEXT_NODE ? start : walker.nextNode(); node; node = walker.nextNode()) {
+            if (range.comparePoint(node, 0) > 0) break
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.localName === 'br' && range.intersectsNode(node) && !node.closest(UNREAD)) endLine()
+                continue
+            }
+            if (!range.intersectsNode(node)) continue
+            const parent = node.parentElement
+            if (!parent || parent.closest(UNREAD)) continue
+            const from = node === range.startContainer ? range.startOffset : 0
+            const to = node === range.endContainer ? range.endOffset : node.data.length
+            const text = node.data.slice(from, to).replace(/\s+/g, ' ')
+            if (!text.trim()) continue
+            const nodeBlock = parent.closest(WORD_BLOCKS)
+            if (nodeBlock !== block) endLine()
+            block = nodeBlock
+            line += text
+        }
+        endLine()
+        return lines.length ? lines.join('\n') : null
+    } catch {
+        return null
     }
-    if (line.trim()) lines.push(line.trim())
-    return lines.length ? lines.join('\n') : null
 }
 
 // Characters of text, with each run of white space counted as one, the same
