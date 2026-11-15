@@ -9,6 +9,10 @@ import UIKit
 /// A double tap shows or hides the controls, as "…" does. Nothing to see or
 /// touch: taps reach the page under it.
 ///
+/// Without VoiceOver, Next Page and Previous Page sit over the page's sides
+/// (#75, Adam 2026-11-14): Voice Control's "Swipe left" never turned it, and
+/// Switch Control has no page turn of its own.
+///
 /// UIKit, because SwiftUI's scroll action hands Read All's "next" over as
 /// the same edge as a swipe toward the left page, so it would read backwards.
 struct ReaderVoiceOverPage: UIViewRepresentable {
@@ -20,11 +24,9 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
     }
 
     func updateUIView(_ view: PageView, context: Context) {
-        view.accessibilityLabel = model.pageWords ?? place
-        view.turn = { [model] direction in
-            guard let side = Self.side(for: direction, forward: model.forwardSide) else { return false }
-            return model.voiceOverTurn(side)
-        }
+        view.page.accessibilityLabel = model.pageWords ?? place
+        view.turn = { [model] side in model.accessibilityTurn(side) }
+        view.forward = model.forwardSide
         view.activate = toggleControls
     }
 
@@ -47,28 +49,81 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         }
     }
 
+    /// Holds the page's item and, without VoiceOver, the two turn buttons.
     final class PageView: UIView {
-        var turn: (UIAccessibilityScrollDirection) -> Bool = { _ in false }
+        /// Turns to that side; whether it could.
+        var turn: (ReaderTurnSide) -> Bool = { _ in false }
         var activate: () -> Void = {}
+        /// The side forward is on, where Next Page sits.
+        var forward: ReaderTurnSide = .right {
+            didSet { if forward != oldValue { nameButtons() } }
+        }
+        /// The share of the page's width each button covers, at its side.
+        static let buttonShare: CGFloat = 0.25
+
+        private(set) var page: Element!
+        private var buttons: [ReaderTurnSide: Element] = [:]
 
         override init(frame: CGRect) {
             super.init(frame: frame)
             isUserInteractionEnabled = false
-            isAccessibilityElement = true
-            accessibilityTraits = .causesPageTurn
+            page = Element(accessibilityContainer: self)
+            page.accessibilityTraits = .causesPageTurn
             // Voice Control's name for it: its label is the whole page.
-            accessibilityUserInputLabels = [String(localized: "Page")]
+            page.accessibilityUserInputLabels = [String(localized: "Page")]
+            page.scrolled = { [unowned self] direction in
+                guard let side = ReaderVoiceOverPage.side(for: direction, forward: forward) else { return false }
+                return turn(side)
+            }
+            page.activated = { [unowned self] in
+                activate()
+                return true
+            }
+            for side in [ReaderTurnSide.left, .right] {
+                let button = Element(accessibilityContainer: self)
+                button.accessibilityTraits = .button
+                button.activated = { [unowned self] in turn(side) }
+                buttons[side] = button
+            }
+            nameButtons()
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+        /// VoiceOver turns with three fingers, so it gets the page alone.
+        override var accessibilityElements: [Any]? {
+            get {
+                guard !UIAccessibility.isVoiceOverRunning, let left = buttons[.left], let right = buttons[.right] else { return [page!] }
+                return [left, page!, right]
+            }
+            set {}
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            page.accessibilityFrameInContainerSpace = bounds
+            let width = (bounds.width * Self.buttonShare).rounded()
+            buttons[.left]?.accessibilityFrameInContainerSpace = CGRect(x: 0, y: 0, width: width, height: bounds.height)
+            buttons[.right]?.accessibilityFrameInContainerSpace = CGRect(x: bounds.width - width, y: 0, width: width, height: bounds.height)
+        }
+
+        private func nameButtons() {
+            buttons[forward]?.accessibilityLabel = String(localized: "Next Page")
+            buttons[forward.opposite]?.accessibilityLabel = String(localized: "Previous Page")
+        }
+    }
+
+    /// One of the page's items: what it does when scrolled or activated.
+    final class Element: UIAccessibilityElement {
+        var scrolled: (UIAccessibilityScrollDirection) -> Bool = { _ in false }
+        var activated: () -> Bool = { false }
+
         override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
-            turn(direction)
+            scrolled(direction)
         }
 
         override func accessibilityActivate() -> Bool {
-            activate()
-            return true
+            activated()
         }
     }
 }

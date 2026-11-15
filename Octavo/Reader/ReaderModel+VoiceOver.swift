@@ -1,17 +1,18 @@
 import UIKit
 
-/// VoiceOver (#74, `docs/notes/accessibility.md`). VoiceOver reads the page
-/// as one item (`ReaderVoiceOverPage`). A three-finger swipe sideways turns
-/// the page as a tap on that side does, with the same motion, and so does
-/// Read All at the end of a page; VoiceOver then says where it landed,
-/// "Page 12 of 547 · 2%", and reads on.
+/// VoiceOver (#74) and Voice Control (#75), `docs/notes/accessibility.md`.
+/// VoiceOver reads the page as one item (`ReaderVoiceOverPage`). A
+/// three-finger swipe sideways turns the page as a tap on that side does,
+/// with the same motion, and so does Read All at the end of a page;
+/// VoiceOver then says where it landed, "Page 12 of 547 · 2%", and reads on.
+/// Without VoiceOver, Next Page and Previous Page turn it.
 extension ReaderModel {
     /// Returns whether a turn was asked for; VoiceOver plays its "can't"
     /// sound when not. Not with a note open (its card is over the page, and
     /// the turn would only close it) or with turns already queued to the
     /// limit, which would drop it.
     @discardableResult
-    func voiceOverTurn(_ side: ReaderTurnSide) -> Bool {
+    func accessibilityTurn(_ side: ReaderTurnSide) -> Bool {
         guard phase == .open, !isFolding, note == nil, queuedTurns.count < Self.mostQueuedTurns,
               relocation?.turns(side) != false else { return false }
         voiceOverTurns.asked(at: .now)

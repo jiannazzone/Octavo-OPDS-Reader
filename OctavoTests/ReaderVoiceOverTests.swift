@@ -23,6 +23,31 @@ struct ReaderVoiceOverTests {
         #expect(ReaderVoiceOverPage.side(for: .up, forward: forward) == forward.opposite)
     }
 
+    // Without VoiceOver (as in tests), Voice Control and Switch Control get
+    // Next Page and Previous Page over the page's sides, Next forward (#75).
+    @MainActor @Test func withoutVoiceOverTheSidesAreTurnButtons() {
+        let view = ReaderVoiceOverPage.PageView(frame: CGRect(x: 0, y: 0, width: 400, height: 600))
+        view.layoutIfNeeded()
+        var turned: [ReaderTurnSide] = []
+        view.turn = { side in
+            turned.append(side)
+            return true
+        }
+        let elements = view.accessibilityElements?.compactMap { $0 as? UIAccessibilityElement } ?? []
+        #expect(elements.count == 3)
+        #expect(elements.first?.accessibilityLabel == "Previous Page")
+        #expect(elements.last?.accessibilityLabel == "Next Page")
+        #expect(elements.last?.accessibilityFrameInContainerSpace == CGRect(x: 300, y: 0, width: 100, height: 600))
+        #expect(elements[1].accessibilityTraits.contains(.causesPageTurn))
+        #expect(elements.first?.accessibilityActivate() == true)
+        #expect(elements.last?.accessibilityActivate() == true)
+        #expect(turned == [.left, .right])
+
+        view.forward = .left
+        #expect(elements.first?.accessibilityLabel == "Next Page")
+        #expect(elements.last?.accessibilityLabel == "Previous Page")
+    }
+
     // Two quick turns: each landing is said, so the last place heard is
     // where the second landed.
     @Test func eachQueuedTurnIsSaidWhereItLands() {
