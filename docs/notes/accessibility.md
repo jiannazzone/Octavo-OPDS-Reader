@@ -90,6 +90,21 @@ The cost: inside a page, VoiceOver can't jump by heading or link, and a footnote
 
 **What the walker can't show:** what VoiceOver says aloud, including the page it announces after a turn (`.pageScrolled`), and VoiceOver's own order where SwiftUI leaves it to geometry. Those need VoiceOver on a device.
 
+## Voice Control
+
+Apple's criteria (#75, read 2026-11-14 through a summary of the page, so not word for word): every common task by voice alone. Every control can be tapped by its name or number ("Show names", "Show numbers"), and the name matches the words on it. Swipes, long presses and anything hidden behind a gesture have a spoken way, such as "Swipe left" or a custom action ("Show actions for 4"). Typing is "Type …", "Select …", "Delete that", which the system's fields do. No timer hides or moves anything, so there's nothing to extend.
+
+**Names** (`accessibilityInputLabels`, which Voice Control uses in place of the VoiceOver label):
+
+- **A row says its book or list alone,** so it can be said: "Pride and Prejudice", not "Pride and Prejudice, Jane Austen, 29%". `OpenButton` names every book row, cover, series, author and collection from its route, and a Library shelf's heading is its name without the count. The same book twice gets numbers to pick between.
+- **A name that differs from the words on screen** gets those words: Mark finished (VoiceOver: "Finished, Off"), Go on the server's place (VoiceOver: "Go to BookOrbit: 62%"), Clear under Recent, a server's row in setup, Books on iPhone's sort menu.
+- **Contents says the chapter alone,** without its page, Text and Theme's menus say their name ("Font"), not their choice as well, and setup's choices say their name ("BookOrbit").
+- **The reader's page is "Page",** not its words.
+
+**Turning pages: the grid** ("Show grid", then the number over a side of the page), as a tap there turns it. Not yet tried on a device, so the Voice Control label waits for it. On Adam's Duo, Voice Control's "Swipe left" did nothing: no turn of any kind, and the swipe never reached the reader's own recognizers, though a finger's swipe from the same middle turns it in the simulator. Next Page and Previous Page buttons over the page's sides were tried and dropped (Adam, 2026-11-14): Previous Page turned, but Next Page never showed among Voice Control's names, even kept clear of the side column. "Tap Page" taps the page's middle, which shows the controls. The grid also reaches a footnote's mark: the book's own text is hidden from accessibility, so its links and marks get no names or numbers.
+
+**Seen with the walker,** folded: the names on Home, the Library, Search and its results, a book's screen and the reader with its controls. Nobody has spoken to it: Voice Control needs a person on a device.
+
 ## Reduced Motion
 
 What each motion does with the setting on:

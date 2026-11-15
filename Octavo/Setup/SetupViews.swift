@@ -176,6 +176,7 @@ private struct SuggestionRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityInputLabels([name])
         .accessibilityHint("Opens \(site.host() ?? "its site") in Safari")
     }
 }
@@ -496,6 +497,8 @@ private struct SetupChoice: View {
         .buttonStyle(.plain)
         .disabled(working)
         .accessibilityAddTraits(selected == true ? .isSelected : [])
+        // Voice Control: "BookOrbit", not "BookOrbit, Your Reading Space".
+        .accessibilityInputLabels([title])
     }
 }
 

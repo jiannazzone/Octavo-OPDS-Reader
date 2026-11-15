@@ -72,6 +72,8 @@ struct ReaderContentsPanel: View {
                     .listRowBackground(Rectangle().fill(isCurrent ? AnyShapeStyle(.tint.opacity(0.14)) : AnyShapeStyle(.clear)))
                     .listRowInsets(Self.rowInsets)
                     .accessibilityAddTraits(isCurrent ? .isSelected : [])
+                    // Voice Control: the chapter, without its page.
+                    .accessibilityInputLabels([row.label])
                     .id(row.id)
                 }
                 .listStyle(.plain)

@@ -265,6 +265,8 @@ struct ReaderTextPanel: View {
             Picker(title, selection: selection) { choices() }
                 .pickerStyle(.menu)
                 .fixedSize(horizontal: !size.isAccessibilitySize, vertical: !size.isAccessibilitySize)
+                // Voice Control: "Font", not "Font, Book's Font".
+                .accessibilityInputLabels([Text(title)])
         } label: {
             // The menu says it, with its choice.
             Text(title)

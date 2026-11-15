@@ -13,6 +13,9 @@ struct OpenButton<Label: View>: View {
     let route: ShellRoute
     /// A row in a list, which takes a tap anywhere across its width.
     var fillsRow = false
+    /// What Voice Control calls it, where the route's name isn't what the
+    /// row shows.
+    var name: String?
     @ViewBuilder let label: () -> Label
     @Environment(ShellModel.self) private var shell
 
@@ -25,6 +28,18 @@ struct OpenButton<Label: View>: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        // Voice Control's name for it is the book or the list alone, not
+        // every line the row shows ("Pride and Prejudice", not "Pride and
+        // Prejudice, Jane Austen, 29%"), so it can be said (#75).
+        .accessibilityInputLabels(voiceControlNames)
+    }
+
+    private var voiceControlNames: [String] {
+        if let name { return [name] }
+        return switch route {
+        case .cover(let book): [book.book.title.isEmpty ? String(localized: "Untitled") : book.book.title]
+        default: route.title.map { [$0] } ?? []
+        }
     }
 }
 

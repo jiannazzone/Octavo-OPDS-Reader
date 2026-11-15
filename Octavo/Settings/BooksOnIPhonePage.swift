@@ -62,6 +62,7 @@ struct BooksOnIPhonePage: View {
                         }
                     }
                     .accessibilityLabel("Sort by \(order.title)")
+                    .accessibilityInputLabels([Text(order.title), Text("Sort by")])
                 }
                 .textCase(nil)
             } footer: {
