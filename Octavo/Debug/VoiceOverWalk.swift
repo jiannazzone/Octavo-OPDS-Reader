@@ -42,17 +42,14 @@ enum VoiceOverWalk {
         return page.accessibilityScroll(direction) ? "taken" : "refused"
     }
 
-    /// A double tap on the item called `name`, or on the page's item, as
-    /// VoiceOver sends it (and Voice Control's "Tap …").
-    static func activate(named name: String?) -> String {
+    /// A double tap on the page's item, as VoiceOver sends it.
+    static func activatePage() -> String {
         var found: [NSObject] = []
         for window in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows) {
-            collect(window, depth: 0, where: {
-                if let name { $0.accessibilityLabel == name } else { $0.accessibilityTraits.contains(.causesPageTurn) }
-            }, into: &found)
+            collect(window, depth: 0, where: { $0.accessibilityTraits.contains(.causesPageTurn) }, into: &found)
         }
-        guard let item = found.first else { return "no item \(name ?? "for the page")" }
-        return item.accessibilityActivate() ? "taken" : "refused"
+        guard let page = found.first else { return "no page item" }
+        return page.accessibilityActivate() ? "taken" : "refused"
     }
 
     private static func collect(_ object: NSObject, depth: Int, where matches: (NSObject) -> Bool, into found: inout [NSObject]) {

@@ -54,8 +54,7 @@ import WebKit
 /// - `voiceOverScroll` (`side`: left, right, up, down, next or previous):
 ///   what VoiceOver sends the page's item for a three-finger swipe (left
 ///   sends right) or, with next, at the end of a page in Read All.
-/// - `voiceOverActivate`: a double tap on the page's item, or on the item
-///   called `name` ("Next Page").
+/// - `voiceOverActivate`: a double tap on the page's item.
 /// - `liveReaders`: of the readers opened since launch, how many models, web
 ///   pages and web views are still alive, and their content processes, in
 ///   the ack's message (`docs/notes/reader-release.md`).
@@ -188,7 +187,7 @@ enum ReaderRemote {
             }
             return VoiceOverWalk.scrollPage(direction)
         case "voiceOverActivate":
-            return VoiceOverWalk.activate(named: command.name)
+            return VoiceOverWalk.activatePage()
         case "back":
             NotificationCenter.default.post(name: backNotification, object: nil)
             return nil
