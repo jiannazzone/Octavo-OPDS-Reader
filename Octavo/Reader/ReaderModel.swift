@@ -744,6 +744,8 @@ final class ReaderModel {
             turnRequested(side)
         case .selection(let active):
             swipes.pageHasSelection = active
+            // SPIKE (#125): the reader whose selection the edit menu acts on.
+            if active { ReaderEditMenu.reader = self }
         case .viewport(let width, let height):
             log.debug("viewport \(width)×\(height)")
             viewport = CGSize(width: width, height: height)

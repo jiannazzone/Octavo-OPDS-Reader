@@ -2061,15 +2061,37 @@ const runSearch = async (query, token) => {
 let shownMatch = null
 const HIGHLIGHT = 'rgb(255, 204, 0)'
 const onDrawAnnotation = ({ detail: { draw, annotation } }) => {
-    if (annotation?.value === shownMatch) draw(Overlayer.highlight, { color: HIGHLIGHT })
+    if (annotation?.value === shownMatch) return draw(Overlayer.highlight, { color: HIGHLIGHT })
+    const color = highlights.get(annotation?.value)
+    if (color) draw(Overlayer.highlight, { color })
 }
 const onCreateOverlay = ({ detail: { index } }) => {
-    if (!shownMatch) return
-    try {
-        if (view.resolveCFI(shownMatch).index === index) view.addAnnotation({ value: shownMatch })
-    } catch {
-        // Not a CFI this book has.
+    for (const cfi of [shownMatch, ...highlights.keys()]) {
+        if (!cfi) continue
+        try {
+            if (view.resolveCFI(cfi).index === index) view.addAnnotation({ value: cfi })
+        } catch {
+            // Not a CFI this book has.
+        }
     }
+}
+
+// SPIKE (#125): highlights, by their range's CFI, with their colour.
+const highlights = new Map()
+const highlightSelection = async color => {
+    const v = requireView()
+    for (const { doc, index } of v.renderer.getContents()) {
+        const selection = doc?.getSelection?.()
+        if (!selection || selection.isCollapsed || !selection.rangeCount) continue
+        const range = selection.getRangeAt(0)
+        const cfi = v.getCFI(index, range)
+        const text = range.toString().replace(/\s+/g, ' ').trim()
+        highlights.set(cfi, String(color))
+        selection.removeAllRanges()
+        await v.addAnnotation({ value: cfi })
+        return { cfi, text }
+    }
+    return null
 }
 const showMatch = async cfi => {
     const v = requireView()
@@ -2246,6 +2268,9 @@ window.octavo = Object.freeze({
     }),
     showMatch: reported(async function showMatch_(cfi) {
         return showMatch(cfi)
+    }),
+    highlightSelection: reported(async function highlightSelection_(color) {
+        return highlightSelection(color)
     }),
     onPage: reported(async function onPage_(cfis) {
         return onPage(cfis)
