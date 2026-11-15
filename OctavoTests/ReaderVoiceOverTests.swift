@@ -46,6 +46,13 @@ struct ReaderVoiceOverTests {
         view.forward = .left
         #expect(elements.first?.accessibilityLabel == "Next Page")
         #expect(elements.last?.accessibilityLabel == "Previous Page")
+
+        // Folded, the side column covers the page's right edge: the button
+        // stays clear of it, or Voice Control leaves it out.
+        view.safeArea = UIEdgeInsets(top: 0, left: 0, bottom: 34, right: 84)
+        view.layoutIfNeeded()
+        #expect(elements.last?.accessibilityFrameInContainerSpace == CGRect(x: 237, y: 0, width: 79, height: 566))
+        #expect(elements.first?.accessibilityFrameInContainerSpace == CGRect(x: 0, y: 0, width: 79, height: 566))
     }
 
     // Two quick turns: each landing is said, so the last place heard is

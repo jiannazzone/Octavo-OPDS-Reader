@@ -27,6 +27,9 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         view.page.accessibilityLabel = model.pageWords ?? place
         view.turn = { [model] side in model.accessibilityTurn(side) }
         view.forward = model.forwardSide
+        if let inset = model.geometry?.safeArea {
+            view.safeArea = UIEdgeInsets(top: inset.top, left: inset.left, bottom: inset.bottom, right: inset.right)
+        }
         view.activate = toggleControls
     }
 
@@ -58,7 +61,14 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         var forward: ReaderTurnSide = .right {
             didSet { if forward != oldValue { nameButtons() } }
         }
-        /// The share of the page's width each button covers, at its side.
+        /// The page runs under the side column (decision 8). The buttons
+        /// stay out of it: Voice Control leaves out a button whose middle is
+        /// under something else, as Next Page's was folded.
+        var safeArea = UIEdgeInsets.zero {
+            didSet { if safeArea != oldValue { setNeedsLayout() } }
+        }
+        /// The share of the visible page's width each button covers, at its
+        /// side.
         static let buttonShare: CGFloat = 0.25
 
         private(set) var page: Element!
@@ -102,9 +112,10 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         override func layoutSubviews() {
             super.layoutSubviews()
             page.accessibilityFrameInContainerSpace = bounds
-            let width = (bounds.width * Self.buttonShare).rounded()
-            buttons[.left]?.accessibilityFrameInContainerSpace = CGRect(x: 0, y: 0, width: width, height: bounds.height)
-            buttons[.right]?.accessibilityFrameInContainerSpace = CGRect(x: bounds.width - width, y: 0, width: width, height: bounds.height)
+            let visible = bounds.inset(by: safeArea)
+            let width = (visible.width * Self.buttonShare).rounded()
+            buttons[.left]?.accessibilityFrameInContainerSpace = CGRect(x: visible.minX, y: visible.minY, width: width, height: visible.height)
+            buttons[.right]?.accessibilityFrameInContainerSpace = CGRect(x: visible.maxX - width, y: visible.minY, width: width, height: visible.height)
         }
 
         private func nameButtons() {
