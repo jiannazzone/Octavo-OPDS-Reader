@@ -1,13 +1,24 @@
 import OctavoKit
 import SwiftUI
 
-/// Contents and bookmarks (decision 17): one panel, a Contents | Bookmarks
-/// switch. Contents opens on the chapter the page is in; bookmarks list in
-/// the book's order with their chapter, page and first words, and swipe to
-/// delete. Choosing either goes there.
+/// Contents, bookmarks and highlights (decision 17, #125): one panel, a
+/// Contents | Bookmarks | Highlights switch. Contents opens on the chapter
+/// the page is in; bookmarks and highlights list in the book's order, and
+/// swipe to delete. Choosing any of them goes there.
 struct ReaderContentsPanel: View {
     enum Tab: Hashable {
-        case contents, bookmarks
+        case contents, bookmarks, highlights
+    }
+
+    /// The Highlights tab's list (#125). Fixed-layout books have none.
+    struct Highlights {
+        var list: [LocalHighlight]
+        /// BookOrbit's, which this file doesn't have.
+        var notFound: [LocalHighlight]
+        /// Share All Highlights.
+        var export: HighlightsExport?
+        var goTo: (LocalHighlight) -> Void
+        var remove: (LocalHighlight.ID) -> Void
     }
 
     let rows: [ReaderContentsRow]
@@ -18,6 +29,7 @@ struct ReaderContentsPanel: View {
     let goToRow: (ReaderContentsRow) -> Void
     let goToBookmark: (LocalBookmark) -> Void
     let remove: (LocalBookmark.ID) -> Void
+    var highlights: Highlights?
     let close: () -> Void
     @State private var tab = Tab.contents
 
@@ -30,6 +42,7 @@ struct ReaderContentsPanel: View {
                 Picker("Show", selection: $tab) {
                     Text("Contents").tag(Tab.contents)
                     Text("Bookmarks").tag(Tab.bookmarks)
+                    if highlights != nil { Text("Highlights").tag(Tab.highlights) }
                 }
                 .pickerStyle(.segmented)
                 ReaderPanelCloseButton(close: close)
@@ -38,6 +51,7 @@ struct ReaderContentsPanel: View {
             switch tab {
             case .contents: contents
             case .bookmarks: bookmarkList
+            case .highlights: highlightList
             }
         }
     }
@@ -118,6 +132,87 @@ struct ReaderContentsPanel: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
         }
+    }
+
+    @ViewBuilder private var highlightList: some View {
+        if let highlights {
+            if highlights.list.isEmpty && highlights.notFound.isEmpty {
+                ContentUnavailableView("No Highlights", systemImage: "highlighter", description: Text("Select text to highlight it."))
+            } else {
+                List {
+                    if let export = highlights.export {
+                        ShareLink(item: export, preview: SharePreview(export.fileName)) {
+                            Label("Share All Highlights", systemImage: "square.and.arrow.up")
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(Self.rowInsets)
+                    }
+                    ForEach(highlights.list) { highlight in
+                        highlightRow(highlight, heading: heading(for: highlight), goTo: highlights.goTo, remove: highlights.remove)
+                    }
+                    if !highlights.notFound.isEmpty {
+                        Section {
+                            ForEach(highlights.notFound) { highlight in
+                                highlightRow(highlight, heading: highlight.chapter, goTo: nil, remove: highlights.remove)
+                            }
+                        } header: {
+                            Text("Not Found in This File")
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    /// The chapter and page, the words with their colour beside them (three
+    /// lines at most), and the note in grey. A row with nowhere to go
+    /// (`goTo` nil) is plain text.
+    private func highlightRow(_ highlight: LocalHighlight, heading: String?, goTo: ((LocalHighlight) -> Void)?, remove: @escaping (LocalHighlight.ID) -> Void) -> some View {
+        let content = VStack(alignment: .leading, spacing: 4) {
+            if let heading, !heading.isEmpty {
+                Text(verbatim: heading)
+                    .font(.subheadline.weight(.medium))
+            }
+            HStack(alignment: .top, spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(hex: HighlightPalette.drawable(highlight.color)))
+                    .frame(width: 4)
+                    .accessibilityHidden(true)
+                Text(verbatim: highlight.text)
+                    .font(.footnote)
+                    .lineLimit(untilLargerText: 3)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            if let note = highlight.note {
+                Text(verbatim: note)
+                    .font(.footnote)
+                    .foregroundStyle(.secondaryOnGlass)
+                    .lineLimit(untilLargerText: 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(.rect)
+        return Group {
+            if let goTo {
+                Button { goTo(highlight) } label: { content }
+                    .buttonStyle(.plain)
+            } else {
+                content
+            }
+        }
+        .listRowBackground(Color.clear)
+        .listRowInsets(Self.rowInsets)
+        .swipeActions {
+            Button("Delete", systemImage: "trash", role: .destructive) { remove(highlight.id) }
+        }
+    }
+
+    /// "Chapter 13 · Page 64", or whichever there is.
+    private func heading(for highlight: LocalHighlight) -> String {
+        let page = highlight.fraction.flatMap(page).map { String(localized: "Page \($0)", comment: "A highlight's page in the Highlights list") }
+        return [highlight.chapter, page].compactMap(\.self).joined(separator: " · ")
     }
 
     /// "CHAPTER 2. The Carpet-Bag. · 34", or the page alone.

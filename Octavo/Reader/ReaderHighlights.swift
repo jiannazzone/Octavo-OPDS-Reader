@@ -30,10 +30,12 @@ final class ReaderHighlights {
         all = store.items(forBook: bookID)
     }
 
-    /// The list, in the book's order: the ones this file has.
+    /// The list, in the book's order (by their ranges, as pages can hold
+    /// several): the ones this file has.
     var list: [LocalHighlight] {
         all.filter { !$0.isRemoved && $0.cfi != nil }.sorted {
-            ($0.fraction ?? .infinity, $0.createdAt) < ($1.fraction ?? .infinity, $1.createdAt)
+            guard let a = $0.cfi, let b = $1.cfi, a != b else { return $0.createdAt < $1.createdAt }
+            return ReaderCFI.starts(a, before: b)
         }
     }
 

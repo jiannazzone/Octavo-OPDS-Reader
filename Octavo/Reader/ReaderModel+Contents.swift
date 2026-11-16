@@ -54,6 +54,12 @@ extension ReaderModel {
         jump(to: bookmark.cfi)
     }
 
+    /// To where a highlight starts: a trip compares places as points.
+    func jump(to highlight: LocalHighlight) {
+        guard let cfi = highlight.cfi else { return }
+        jump(to: ReaderCFI.start(of: cfi))
+    }
+
     // MARK: Chapter buttons
 
     var chapterSkip: ReaderChapterSkip {

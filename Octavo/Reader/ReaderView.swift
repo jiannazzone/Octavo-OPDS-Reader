@@ -562,6 +562,16 @@ private struct ReaderScreen: View {
                 backToReading()
             },
             remove: { model.bookmarks.remove($0) },
+            highlights: model.isFixedLayout ? nil : ReaderContentsPanel.Highlights(
+                list: model.highlights.list,
+                notFound: model.highlights.notFound,
+                export: shell.reader.reading.map { HighlightsExport(book: $0.book, highlights: model.highlights) },
+                goTo: { highlight in
+                    model.jump(to: highlight)
+                    backToReading()
+                },
+                remove: { model.highlights.remove($0) }
+            ),
             close: closePanel
         )
     }

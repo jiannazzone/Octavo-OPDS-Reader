@@ -97,6 +97,14 @@ struct ReaderHighlightsTests {
         #expect(highlights.notFound.map(\.text) == ["It is a truth"])
     }
 
+    // On one page, as the words come, not as they were highlighted.
+    @Test func highlightsOnOnePageFollowTheirWords() {
+        let highlights = ReaderHighlights(bookID: "pp", store: store)
+        highlights.add(cfi: cfiA, text: "Collins", color: "#FACC15", fraction: 0.03)
+        highlights.add(cfi: "epubcfi(/6/4!/4/38/2,/1:116,/1:125)", text: "ineffable", color: "#FACC15", fraction: 0.03)
+        #expect(highlights.list.map(\.text) == ["ineffable", "Collins"])
+    }
+
     @Test func aNewOneIsSentWithItsColour() async {
         let sync = MemoryHighlightSync()
         let highlights = ReaderHighlights(bookID: "pp", store: store, sync: sync)

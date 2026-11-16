@@ -251,3 +251,66 @@ public enum HighlightReconciliation {
         return merged
     }
 }
+
+/// EPUB CFIs as text (#125).
+public enum ReaderCFI {
+    /// Where a range starts, as a point: `epubcfi(P,S,E)` is `epubcfi(PS)`.
+    /// A point comes back as it is. A comma escaped with `^` isn't a
+    /// separator.
+    public static func start(of cfi: String) -> String {
+        guard cfi.hasPrefix("epubcfi("), cfi.hasSuffix(")") else { return cfi }
+        let body = cfi.dropFirst("epubcfi(".count).dropLast()
+        var parts: [String] = [""]
+        var escaped = false
+        for character in body {
+            if escaped {
+                parts[parts.count - 1].append(character)
+                escaped = false
+            } else if character == "^" {
+                parts[parts.count - 1].append(character)
+                escaped = true
+            } else if character == "," {
+                parts.append("")
+            } else {
+                parts[parts.count - 1].append(character)
+            }
+        }
+        guard parts.count == 3 else { return cfi }
+        return "epubcfi(\(parts[0])\(parts[1]))"
+    }
+
+    /// Whether `a` starts before `b` in the book: their steps and character
+    /// offsets compared in turn, ID assertions (`[…]`) and side biases left
+    /// out. A step that's an ancestor of the other comes first.
+    public static func starts(_ a: String, before b: String) -> Bool {
+        let left = steps(start(of: a)), right = steps(start(of: b))
+        for (x, y) in zip(left, right) where x != y { return x < y }
+        return left.count < right.count
+    }
+
+    /// `epubcfi(/6/4!/4/38/2/1:143)` as `[6, 4, 4, 38, 2, 1, 143]`.
+    static func steps(_ cfi: String) -> [Int] {
+        var numbers: [Int] = []
+        var current = ""
+        var inAssertion = false
+        for character in cfi {
+            if inAssertion {
+                if character == "]" { inAssertion = false }
+                continue
+            }
+            if character == "[" {
+                inAssertion = true
+            } else if character.isASCII, character.isNumber {
+                current.append(character)
+                continue
+            } else if character == "~" || character == "@" {
+                // Temporal and spatial offsets don't order text.
+                break
+            }
+            if let number = Int(current) { numbers.append(number) }
+            current = ""
+        }
+        if let number = Int(current) { numbers.append(number) }
+        return numbers
+    }
+}
