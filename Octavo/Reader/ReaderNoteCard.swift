@@ -17,16 +17,20 @@ struct ReaderNoteLayer: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ReaderNoteLayout(placement: placement) {
+        ReaderCardLayout(placement: placement, textInset: ReaderNoteCard.textInset) {
             ReaderNoteCard(note: note, theme: theme, goToNote: goToNote, close: close, swiped: swiped)
         }
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
     }
 }
 
-/// Asks the card how tall the note wants it, then places it.
-private struct ReaderNoteLayout: Layout {
+/// Asks a card over the page how tall it wants to be, then places it where
+/// `placement` says: a note's card, and a highlight's (#125).
+struct ReaderCardLayout: Layout {
     let placement: ReaderNotePlacement
+    /// How far below the card's top its text starts, to bring it level with
+    /// the mark.
+    let textInset: Double
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
@@ -36,7 +40,7 @@ private struct ReaderNoteLayout: Layout {
         guard let card = subviews.first else { return }
         let width = placement.span.upperBound - placement.span.lowerBound
         let wanted = card.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
-        let frame = placement.frame(height: Double(wanted), textInset: ReaderNoteCard.textInset)
+        let frame = placement.frame(height: Double(wanted), textInset: textInset)
         card.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), proposal: ProposedViewSize(frame.size))
     }
 }

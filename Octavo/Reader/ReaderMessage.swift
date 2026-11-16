@@ -44,8 +44,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The user tapped a note's mark: the note, read from the book, for a card
     /// over the page (decision 34).
     case note(ReaderNote)
-    /// The user tapped a highlight, by its CFI (#125).
-    case highlightTap(cfi: String)
+    /// The user tapped a highlight, by its CFI, and where it is on the page
+    /// (#125).
+    case highlightTap(cfi: String, box: CGRect? = nil)
     case error(ScriptError)
     /// A `console.error`/`console.warn` line from foliate-js.
     case log(level: String, message: String)
@@ -213,6 +214,14 @@ nonisolated extension ReaderMessage: Decodable {
         case type, zone, level, message, href, width, height, toc, side, active, cfi, x, y
     }
 
+    /// `x`, `y`, `width` and `height`, if they're all there.
+    private static func box(in container: KeyedDecodingContainer<CodingKeys>) throws -> CGRect? {
+        guard let x = try container.decodeIfPresent(Double.self, forKey: .x), let y = try container.decodeIfPresent(Double.self, forKey: .y),
+              let width = try container.decodeIfPresent(Double.self, forKey: .width), let height = try container.decodeIfPresent(Double.self, forKey: .height)
+        else { return nil }
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
+
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let type = try container.decode(String.self, forKey: .type)
@@ -234,13 +243,7 @@ nonisolated extension ReaderMessage: Decodable {
         case "turn":
             self = .turn(side: try container.decode(ReaderTurnSide.self, forKey: .side))
         case "selection":
-            let active = try container.decodeIfPresent(Bool.self, forKey: .active) ?? false
-            var box: CGRect?
-            if let x = try container.decodeIfPresent(Double.self, forKey: .x), let y = try container.decodeIfPresent(Double.self, forKey: .y),
-               let width = try container.decodeIfPresent(Double.self, forKey: .width), let height = try container.decodeIfPresent(Double.self, forKey: .height) {
-                box = CGRect(x: x, y: y, width: width, height: height)
-            }
-            self = .selection(active: active, box: box)
+            self = .selection(active: try container.decodeIfPresent(Bool.self, forKey: .active) ?? false, box: try Self.box(in: container))
         case "viewport":
             self = .viewport(
                 width: try container.decode(Double.self, forKey: .width),
@@ -251,7 +254,7 @@ nonisolated extension ReaderMessage: Decodable {
         case "link":
             self = .link(href: try container.decode(String.self, forKey: .href))
         case "highlightTap":
-            self = .highlightTap(cfi: try container.decode(String.self, forKey: .cfi))
+            self = .highlightTap(cfi: try container.decode(String.self, forKey: .cfi), box: try Self.box(in: container))
         case "note":
             self = .note(try ReaderNote(from: decoder))
         case "error":

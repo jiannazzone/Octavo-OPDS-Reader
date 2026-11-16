@@ -613,8 +613,12 @@ const onSectionLoad = ({ detail: { doc } }) => {
         // A tap on a highlight opens its card (#125). foliate's own
         // `show-annotation` listens for `click`, which iOS doesn't send here.
         if (!tapMode.dismisses) {
-            const cfi = highlightAt(doc, e.clientX, e.clientY)
-            if (cfi) return post('highlightTap', { cfi })
+            const hit = highlightAt(doc, e.clientX, e.clientY)
+            if (hit) {
+                // Where it is, for its card: its box in the top window.
+                const rect = hit.range.getBoundingClientRect()
+                return post('highlightTap', { cfi: hit.cfi, x: box.left + rect.left, y: box.top + rect.top, width: rect.width, height: rect.height })
+            }
         }
         // A near miss on a note's tiny mark doesn't turn the page.
         const mark = tapMode.dismisses ? null : nearNoteMark(doc, e.clientX, e.clientY)
@@ -2151,8 +2155,8 @@ const setHighlights = async list => {
 // match shares foliate's keys, so it never counts.
 const highlightAt = (doc, x, y) => {
     const overlayer = view?.renderer?.getContents?.().find(c => c.doc === doc)?.overlayer
-    const [cfi] = overlayer?.hitTest({ x, y }) ?? []
-    return cfi && highlights.has(cfi) ? cfi : null
+    const [cfi, range] = overlayer?.hitTest({ x, y }) ?? []
+    return cfi && range && highlights.has(cfi) ? { cfi, range } : null
 }
 // The selection, as a range to highlight: its CFI and its words. The
 // selection goes, as the highlight takes its place.

@@ -98,3 +98,32 @@ extension ReaderModel {
         highlightBar = nil
     }
 }
+
+// MARK: The card
+
+extension ReaderModel {
+    /// A highlight tapped: its card comes up, in the footnote card's place,
+    /// and anything else over the page goes.
+    func openHighlightCard(cfi: String, box: CGRect?) {
+        guard let highlight = highlights.highlight(cfi: cfi), let box else { return }
+        closeNote("a highlight")
+        highlightBar = nil
+        onControlsTap?("dismiss")
+        tappedHighlightMark = ReaderNote.Mark(x: box.minX, y: box.minY, width: box.width, height: box.height)
+        tappedHighlight = highlight.id
+    }
+
+    var cardHighlight: LocalHighlight? {
+        tappedHighlight.flatMap(highlights.highlight)
+    }
+
+    func closeHighlightCard() {
+        tappedHighlight = nil
+    }
+
+    func deleteCardHighlight() {
+        guard let highlight = cardHighlight else { return }
+        highlights.remove(highlight.id)
+        tappedHighlight = nil
+    }
+}

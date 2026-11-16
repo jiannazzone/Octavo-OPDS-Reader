@@ -273,3 +273,14 @@ struct HighlightsWaitingTests {
         #expect(waiting.waitingKeys.isEmpty)
     }
 }
+
+/// What a highlight's card shares (#125): the quote, then the title and
+/// author.
+struct ReaderHighlightCardTests {
+    @Test func shareSendsTheQuoteWithWhereItsFrom() {
+        let source = ReaderHighlightCard.source(title: "Pride and Prejudice", authors: ["Jane Austen"])
+        #expect(ReaderHighlightCard.shareText("It is a truth", source: source) == "“It is a truth”\n— Pride and Prejudice, Jane Austen")
+        #expect(ReaderHighlightCard.shareText("It is a truth", source: nil) == "“It is a truth”")
+        #expect(ReaderHighlightCard.source(title: "", authors: []) == nil)
+    }
+}

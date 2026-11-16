@@ -51,8 +51,9 @@ final class ReaderModel {
     var highlightBarX: Double?
     /// The highlight whose note is being written (#125).
     var noteSheet: LocalHighlight.ID?
-    /// The highlight tapped, for its card (#125).
+    /// The highlight tapped, for its card (#125), and where it is.
     var tappedHighlight: LocalHighlight.ID?
+    var tappedHighlightMark: ReaderNote.Mark?
     /// What the page was last given to draw, so a change that draws nothing
     /// new (a place worked out) sends nothing.
     @ObservationIgnored var sentHighlights: [[String: String]] = []
@@ -728,7 +729,10 @@ final class ReaderModel {
             let previous = self.relocation
             self.relocation = relocation
             // A page turn closes the highlight bar (#125).
-            if highlightBar != nil, relocation.isPageTurn { highlightBar = nil }
+            if relocation.isPageTurn {
+                highlightBar = nil
+                tappedHighlight = nil
+            }
             relocationCount += 1
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
@@ -760,7 +764,11 @@ final class ReaderModel {
             if serverPlace != nil, trip == nil, tripToBe == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
-            if zone == "dismiss" { closeNote("a tap elsewhere"); highlightBar = nil }
+            if zone == "dismiss" {
+                closeNote("a tap elsewhere")
+                highlightBar = nil
+                tappedHighlight = nil
+            }
             onControlsTap?(zone)
         case .turn(let side):
             turnRequested(side)
@@ -770,8 +778,8 @@ final class ReaderModel {
             if let box { highlightBarX = Double(box.midX) }
             // A new selection is a new highlight to make.
             if active { highlightBar = nil }
-        case .highlightTap(let cfi):
-            tappedHighlight = highlights.highlight(cfi: cfi)?.id
+        case .highlightTap(let cfi, let box):
+            openHighlightCard(cfi: cfi, box: box)
         case .viewport(let width, let height):
             log.debug("viewport \(width)×\(height)")
             viewport = CGSize(width: width, height: height)

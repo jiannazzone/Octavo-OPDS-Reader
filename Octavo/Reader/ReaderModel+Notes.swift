@@ -17,6 +17,8 @@ extension ReaderModel {
         }
         guard !isFolding, turnRun == nil else { return }
         onControlsTap?("dismiss")
+        // One card at a time.
+        tappedHighlight = nil
         note = tapped
         noteOpenedAt = .now
         #if DEBUG
