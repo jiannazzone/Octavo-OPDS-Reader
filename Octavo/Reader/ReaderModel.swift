@@ -42,6 +42,10 @@ final class ReaderModel {
     private(set) var pageWords: String?
     /// The footnote open over the page, if any (`ReaderModel+Notes`).
     var note: ReaderNote?
+    /// SPIKE (#125): the highlight just made, while its bar is up.
+    var highlightBar: String?
+    /// SPIKE (#125): the last highlight tapped.
+    var tappedHighlight: String?
     @ObservationIgnored var noteOpenedAt: ContinuousClock.Instant?
     /// The contents with where each entry starts, for naming the chapter at
     /// any point of the progress bar.
@@ -738,14 +742,14 @@ final class ReaderModel {
             if serverPlace != nil, trip == nil, tripToBe == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
         case .tap(let zone):
-            if zone == "dismiss" { closeNote("a tap elsewhere") }
+            if zone == "dismiss" { closeNote("a tap elsewhere"); highlightBar = nil }
             onControlsTap?(zone)
         case .turn(let side):
             turnRequested(side)
         case .selection(let active):
             swipes.pageHasSelection = active
-            // SPIKE (#125): the reader whose selection the edit menu acts on.
-            if active { ReaderEditMenu.reader = self }
+        case .highlightTap(let cfi):
+            tappedHighlight = cfi
         case .viewport(let width, let height):
             log.debug("viewport \(width)×\(height)")
             viewport = CGSize(width: width, height: height)

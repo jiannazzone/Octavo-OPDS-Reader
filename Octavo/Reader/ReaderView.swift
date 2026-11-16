@@ -286,7 +286,7 @@ private struct ReaderScreen: View {
         .onChange(of: scenePhase == .background, initial: true) { _, isInBackground in
             model.isInBackground = isInBackground
         }
-        .onChange(of: controls.coversPage || panel != nil || model.note != nil, initial: true) { _, covers in
+        .onChange(of: controls.coversPage || panel != nil || model.note != nil || model.highlightBar != nil, initial: true) { _, covers in
             model.coversPage = covers
         }
         .onChange(of: panel) { _, panel in

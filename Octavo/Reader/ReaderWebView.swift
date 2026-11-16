@@ -49,8 +49,6 @@ struct ReaderWebView: View {
             .background { [snapshots = model.snapshots, swipes = model.swipes] in
                 ReaderWebViewFinder { web in
                     snapshots.webView = web
-                    // SPIKE (#125): Highlight in the selection menu.
-                    if let web { ReaderMenuProbe.install(on: web) }
                     if let host = web?.superview { swipes.install(on: host) }
                 }
             }

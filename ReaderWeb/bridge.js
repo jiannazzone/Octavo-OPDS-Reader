@@ -596,6 +596,12 @@ const onSectionLoad = ({ detail: { doc } }) => {
         if (!frame) return
         const box = frame.getBoundingClientRect()
         const x = box.left + e.clientX * (view?.isFixedLayout && frame.offsetWidth ? box.width / frame.offsetWidth : 1)
+        // SPIKE (#125): a tap on a highlight opens its card. foliate's own
+        // `show-annotation` listens for `click`, which iOS doesn't send here.
+        if (!tapMode.dismisses) {
+            const cfi = highlightAt(doc, e.clientX, e.clientY)
+            if (cfi) return post('highlightTap', { cfi })
+        }
         // A near miss on a note's tiny mark doesn't turn the page.
         const mark = tapMode.dismisses ? null : nearNoteMark(doc, e.clientX, e.clientY)
         if (mark && await openNote(mark, resolvedHref(mark, doc))) return
@@ -1893,6 +1899,7 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
     view.addEventListener('create-overlay', onCreateOverlay)
     search = null
     shownMatch = null
+    highlights.clear()
     selecting = false
     turnHeld = null
     // foliate would `window.open` external links; hand them to Swift instead.
@@ -2078,6 +2085,13 @@ const onCreateOverlay = ({ detail: { index } }) => {
 
 // SPIKE (#125): highlights, by their range's CFI, with their colour.
 const highlights = new Map()
+// The highlight under a point of a section's document, by its CFI. Search's
+// match shares foliate's keys, so it never counts.
+const highlightAt = (doc, x, y) => {
+    const overlayer = view?.renderer?.getContents?.().find(c => c.doc === doc)?.overlayer
+    const [cfi] = overlayer?.hitTest({ x, y }) ?? []
+    return cfi && highlights.has(cfi) ? cfi : null
+}
 const highlightSelection = async color => {
     const v = requireView()
     for (const { doc, index } of v.renderer.getContents()) {
@@ -2096,8 +2110,11 @@ const highlightSelection = async color => {
 const showMatch = async cfi => {
     const v = requireView()
     if (shownMatch) {
-        await v.deleteAnnotation({ value: shownMatch }).catch(() => {})
+        const old = shownMatch
         shownMatch = null
+        await v.deleteAnnotation({ value: old }).catch(() => {})
+        // SPIKE (#125): a highlight under the match is drawn again.
+        if (highlights.has(old)) await v.addAnnotation({ value: old }).catch(() => {})
     }
     if (!cfi) return true
     shownMatch = String(cfi)

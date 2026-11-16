@@ -42,6 +42,8 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The user tapped a note's mark: the note, read from the book, for a card
     /// over the page (decision 34).
     case note(ReaderNote)
+    /// SPIKE (#125): the user tapped a highlight, by its CFI.
+    case highlightTap(cfi: String)
     case error(ScriptError)
     /// A `console.error`/`console.warn` line from foliate-js.
     case log(level: String, message: String)
@@ -206,7 +208,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href, width, height, toc, side, active
+        case type, zone, level, message, href, width, height, toc, side, active, cfi
     }
 
     init(from decoder: any Decoder) throws {
@@ -240,6 +242,8 @@ nonisolated extension ReaderMessage: Decodable {
             self = .externalLink(href: try container.decode(String.self, forKey: .href))
         case "link":
             self = .link(href: try container.decode(String.self, forKey: .href))
+        case "highlightTap":
+            self = .highlightTap(cfi: try container.decode(String.self, forKey: .cfi))
         case "note":
             self = .note(try ReaderNote(from: decoder))
         case "error":
