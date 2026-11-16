@@ -11,6 +11,8 @@ private actor MemoryHighlightSync: HighlightSync {
     private(set) var removed: [String] = []
     /// Fails every call, as offline.
     var offline = false
+    /// How long a fetch takes.
+    var fetchTime: Duration = .zero
     private var nextID = 100
     private var clock = Date(timeIntervalSince1970: 1_000)
 
@@ -20,11 +22,15 @@ private actor MemoryHighlightSync: HighlightSync {
 
     func setOffline(_ offline: Bool) { self.offline = offline }
 
+    func setFetchTime(_ time: Duration) { fetchTime = time }
+
     func deleteElsewhere(_ id: String) { remote.removeAll { $0.id == id } }
 
     func highlights() async throws -> [SyncedHighlight] {
         if offline { throw URLError(.notConnectedToInternet) }
-        return remote
+        let list = remote
+        if fetchTime > .zero { try await Task.sleep(for: fetchTime) }
+        return list
     }
 
     func add(_ highlight: NewHighlight) async throws -> SyncedHighlight {
@@ -64,9 +70,12 @@ struct ReaderHighlightsTests {
     private let cfiA = "epubcfi(/6/4!/4/38/2,/1:143,/1:150)"
     private let cfiB = "epubcfi(/6/8!/4/2,/1:0,/1:20)"
 
-    /// Lets the sends that edits start run.
-    private func settle() async {
-        for _ in 0..<20 { await Task.yield() }
+    /// Waits, up to two seconds, for the sends that edits start.
+    private func until(_ condition: () async -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !(await condition()), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     @Test func highlightsAreKeptOnTheIPhone() {
@@ -92,7 +101,7 @@ struct ReaderHighlightsTests {
         let sync = MemoryHighlightSync()
         let highlights = ReaderHighlights(bookID: "pp", store: store, sync: sync)
         highlights.add(cfi: cfiA, text: "Collins", color: "#F472B6")
-        await settle()
+        await until { highlights.list.first?.remoteID != nil }
         #expect(await sync.added == [NewHighlight(cfi: cfiA, text: "Collins", color: "#F472B6")])
         #expect(highlights.list.first?.remoteID == "101")
     }
@@ -101,9 +110,9 @@ struct ReaderHighlightsTests {
         let sync = MemoryHighlightSync()
         let highlights = ReaderHighlights(bookID: "pp", store: store, sync: sync)
         let highlight = highlights.add(cfi: cfiA, text: "Collins", color: "#FACC15")
-        await settle()
+        await until { highlights.list.first?.remoteID != nil }
         highlights.recolor(highlight.id, to: "#38BDF8")
-        await settle()
+        await until { await !sync.edits.isEmpty }
         #expect(await sync.edits == [HighlightEdit(color: "#38BDF8")])
         #expect(highlights.list.first?.unsent == [])
     }
@@ -112,11 +121,11 @@ struct ReaderHighlightsTests {
         let sync = MemoryHighlightSync()
         let highlights = ReaderHighlights(bookID: "pp", store: store, sync: sync)
         let highlight = highlights.add(cfi: cfiA, text: "Collins", color: "#FACC15")
-        await settle()
+        await until { highlights.list.first?.remoteID != nil }
         highlights.setNote(highlight.id, to: "  A fine fool.  ")
-        await settle()
+        await until { await sync.edits.count == 1 }
         highlights.setNote(highlight.id, to: "  ")
-        await settle()
+        await until { await sync.edits.count == 2 }
         #expect(await sync.edits == [HighlightEdit(note: .some("A fine fool.")), HighlightEdit(note: .some(nil))])
         #expect(highlights.list.first?.note == nil)
     }
@@ -128,7 +137,8 @@ struct ReaderHighlightsTests {
         let highlights = ReaderHighlights(bookID: "pp", store: store, sync: sync)
         let highlight = highlights.add(cfi: cfiA, text: "Collins", color: "#FACC15")
         highlights.setNote(highlight.id, to: "Ha")
-        await settle()
+        // Both sends have failed.
+        try? await Task.sleep(for: .milliseconds(50))
         #expect(highlights.list.first?.remoteID == nil)
 
         await sync.setOffline(false)
@@ -146,7 +156,7 @@ struct ReaderHighlightsTests {
 
         highlights.remove(synced.id)
         #expect(highlights.list.isEmpty)
-        await settle()
+        await until { highlights.all.isEmpty }
         #expect(await sync.removed == ["7"])
         #expect(highlights.all.isEmpty)
     }
@@ -158,8 +168,36 @@ struct ReaderHighlightsTests {
         await highlights.refresh()
         await sync.deleteElsewhere("7")
         highlights.recolor(try! #require(highlights.list.first).id, to: "#38BDF8")
-        await settle()
+        await until { highlights.all.isEmpty }
         #expect(highlights.all.isEmpty)
+    }
+
+    // Highlighted while the opening refresh is still fetching: its add is
+    // answered first, so the fetched list is stale and is fetched again
+    // rather than taken as the highlight deleted elsewhere.
+    @Test func oneMadeDuringARefreshStays() async {
+        let sync = MemoryHighlightSync()
+        await sync.setFetchTime(.milliseconds(150))
+        let highlights = ReaderHighlights(bookID: "pp", store: store, sync: sync)
+        let refresh = Task { await highlights.refresh() }
+        try? await Task.sleep(for: .milliseconds(20))
+        highlights.add(cfi: cfiA, text: "Collins", color: "#FACC15")
+        await until { highlights.list.first?.remoteID != nil }
+        await refresh.value
+        #expect(highlights.list.map(\.cfi) == [cfiA])
+    }
+
+    @Test func anEditMadeDuringARefreshStays() async {
+        let sync = MemoryHighlightSync([SyncedHighlight(id: "7", cfi: cfiA, text: "Collins", color: "#FACC15")])
+        let highlights = ReaderHighlights(bookID: "pp", store: store, sync: sync)
+        await highlights.refresh()
+        await sync.setFetchTime(.milliseconds(150))
+        let refresh = Task { await highlights.refresh() }
+        try? await Task.sleep(for: .milliseconds(20))
+        highlights.recolor(try! #require(highlights.list.first).id, to: "#38BDF8")
+        await until { await !sync.edits.isEmpty }
+        await refresh.value
+        #expect(highlights.list.first?.color == "#38BDF8")
     }
 
     @Test func aBookFromAnywhereElseKeepsItsHighlightsHere() async {

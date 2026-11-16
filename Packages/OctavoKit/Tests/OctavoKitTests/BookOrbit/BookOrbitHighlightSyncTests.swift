@@ -7,7 +7,7 @@ import Testing
 struct BookOrbitHighlightSyncTests {
     private let cfi = "epubcfi(/6/4!/4/38/2,/1:143,/1:150)"
 
-    private func sync(_ server: StubServer) -> BookOrbitHighlightSync {
+    func sync(_ server: StubServer) -> BookOrbitHighlightSync {
         let store = InMemoryBookOrbitTokenStore(BookOrbitCredentials(accessToken: "access-1", refreshToken: String(repeating: "a", count: 64)))
         let client = BookOrbitClient(baseURL: server.baseURL, tokenStore: store, configuration: server.configuration)
         return BookOrbitHighlightSync(client: client, bookID: 4, fileID: 7)
@@ -89,5 +89,15 @@ struct BookOrbitHighlightSyncTests {
     @Test func otherFailuresStillThrow() async {
         let server = StubServer { _ in .json(500, #"{"statusCode":500,"message":"boom"}"#) }
         await #expect(throws: BookOrbitError.self) { try await sync(server).remove(id: "3") }
+    }
+}
+
+extension BookOrbitHighlightSyncTests {
+    @Test func aPDFsHighlightsAreLeftOut() async throws {
+        let server = StubServer { _ in
+            .json(#"[{"id":1,"cfi":null,"pdf":{"page":3,"rects":[]},"text":"In the PDF"},{"id":2,"cfi":"epubcfi(/6/4!/4/2,/1:0,/1:5)","pdf":null,"text":"In the EPUB"}]"#)
+        }
+        let highlights = try await sync(server).highlights()
+        #expect(highlights.map(\.id) == ["2"])
     }
 }

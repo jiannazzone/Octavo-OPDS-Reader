@@ -448,6 +448,28 @@ public struct BookOrbitAnnotation: Decodable, Hashable, Sendable {
     public var positionStatus: String?
     public var createdAt: Date?
     public var updatedAt: Date?
+    /// A highlight in one of the book's PDFs, placed by `pdf` rather than a
+    /// CFI: never an EPUB's.
+    public var isPDF: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id, cfi, text, color, style, note, chapterTitle, positionStatus, createdAt, updatedAt, pdf
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        cfi = try container.decodeIfPresent(String.self, forKey: .cfi)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        color = try container.decodeIfPresent(String.self, forKey: .color)
+        style = try container.decodeIfPresent(String.self, forKey: .style)
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        chapterTitle = try container.decodeIfPresent(String.self, forKey: .chapterTitle)
+        positionStatus = try container.decodeIfPresent(String.self, forKey: .positionStatus)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        isPDF = try container.contains(.pdf) && !container.decodeNil(forKey: .pdf)
+    }
 }
 
 // MARK: - Wire types

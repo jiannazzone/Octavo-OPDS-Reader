@@ -16,6 +16,9 @@ final class ReaderHighlights {
     @ObservationIgnored private let sync: (any HighlightSync)?
     /// Highlights with a send on its way, so a refresh doesn't send twice.
     @ObservationIgnored private var sending: Set<LocalHighlight.ID> = []
+    /// Counts sends the server has answered, so a refresh can tell its list
+    /// went stale while it was fetched.
+    @ObservationIgnored private var answers = 0
     @ObservationIgnored private let log = Logger(subsystem: "com.ianazzone.ereader", category: "Highlights")
 
     init(bookID: String, store: HighlightStore = HighlightStore(), sync: (any HighlightSync)? = nil) {
@@ -102,12 +105,19 @@ final class ReaderHighlights {
     /// The server's highlights merged in and changes made offline sent.
     func refresh() async {
         guard let sync else { return }
-        let remote: [SyncedHighlight]
-        do {
-            remote = try await sync.highlights()
-        } catch {
-            log.error("Couldn't fetch highlights: \(error)")
-            return
+        var remote: [SyncedHighlight] = []
+        // A send answered while the list was on its way makes the list
+        // stale: merged, it would drop a new highlight or undo an edit.
+        for attempt in 1...3 {
+            let before = answers
+            do {
+                remote = try await sync.highlights()
+            } catch {
+                log.error("Couldn't fetch highlights: \(error)")
+                return
+            }
+            if answers == before { break }
+            if attempt == 3 { return }
         }
         let result = HighlightReconciliation.reconcile(local: all, remote: remote)
         // One whose add is still on its way stays, so its answer finds it.
@@ -143,6 +153,7 @@ final class ReaderHighlights {
                 if highlight.isRemoved {
                     if let remoteID = highlight.remoteID { try await sync.remove(id: remoteID) }
                     all.removeAll { $0.id == id }
+                    answers += 1
                 } else if highlight.remoteID == nil, let new = highlight.new {
                     let synced = try await sync.add(new)
                     answered(id, sent: highlight, with: synced, fields: [.color, .note])
@@ -153,6 +164,7 @@ final class ReaderHighlights {
                     } catch HighlightSyncError.gone {
                         // Deleted elsewhere: that wins.
                         all.removeAll { $0.id == id }
+                        answers += 1
                     }
                 } else {
                     return
@@ -168,6 +180,7 @@ final class ReaderHighlights {
     /// The server's answer taken in. A field changed again since `sent` was
     /// sent stays unsent.
     private func answered(_ id: LocalHighlight.ID, sent: LocalHighlight, with synced: SyncedHighlight, fields: Set<LocalHighlight.Field>) {
+        answers += 1
         guard let index = all.firstIndex(where: { $0.id == id }) else { return }
         all[index].remoteID = synced.id
         all[index].syncedUpdatedAt = synced.updatedAt

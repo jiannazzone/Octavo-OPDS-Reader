@@ -16,7 +16,8 @@ public struct BookOrbitHighlightSync: HighlightSync {
     }
 
     public func highlights() async throws -> [SyncedHighlight] {
-        try await client.annotations(bookID: bookID, fileID: fileID).map(Self.synced)
+        // A PDF's highlights belong to that file alone.
+        try await client.annotations(bookID: bookID, fileID: fileID).filter { !$0.isPDF }.map(Self.synced)
     }
 
     public func add(_ highlight: NewHighlight) async throws -> SyncedHighlight {

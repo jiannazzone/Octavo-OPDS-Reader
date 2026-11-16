@@ -134,10 +134,23 @@ struct HighlightReconciliationTests {
     }
 
     @Test func aRangeThatMovedIsPlacedAgain() {
-        let placed = LocalHighlight(cfi: cfiA, text: "Collins", remoteID: "7", syncedUpdatedAt: earlier, fraction: 0.3)
-        let result = HighlightReconciliation.reconcile(local: [placed], remote: [SyncedHighlight(id: "7", cfi: nil, text: "Collins", updatedAt: earlier)])
+        let placed = LocalHighlight(cfi: cfiA, text: "Collins", remoteID: "7", syncedUpdatedAt: earlier, chapter: "Introduction", fraction: 0.3)
+        let result = HighlightReconciliation.reconcile(local: [placed], remote: [
+            SyncedHighlight(id: "7", cfi: nil, text: "Collins", chapter: "Chapter 13", updatedAt: earlier),
+        ])
         #expect(result.highlights.first?.cfi == nil)
         #expect(result.highlights.first?.fraction == nil)
+        // Named by the server until placed again, not by where it was.
+        #expect(result.highlights.first?.chapter == "Chapter 13")
+    }
+
+    @Test func aPlacedOneKeepsTheReadersChapter() {
+        let placed = LocalHighlight(cfi: cfiA, text: "Collins", remoteID: "7", syncedUpdatedAt: earlier, chapter: "Introduction", fraction: 0.3)
+        let result = HighlightReconciliation.reconcile(local: [placed], remote: [
+            SyncedHighlight(id: "7", cfi: cfiA, text: "Collins", chapter: "INTRO", updatedAt: earlier),
+        ])
+        #expect(result.highlights.first?.chapter == "Introduction")
+        #expect(result.highlights.first?.fraction == 0.3)
     }
 
     @Test func theUnsentEditIsWhatChanged() {

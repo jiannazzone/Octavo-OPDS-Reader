@@ -217,10 +217,14 @@ public enum HighlightReconciliation {
         var merged = highlight
         merged.cfi = synced.cfi
         merged.text = synced.text
-        merged.chapter = merged.chapter ?? synced.chapter
         // A range that changed, or that this file no longer has, is placed
-        // again.
-        if synced.cfi != highlight.cfi { merged.fraction = nil }
+        // again, and named by the backend until then.
+        if synced.cfi != highlight.cfi {
+            merged.fraction = nil
+            merged.chapter = synced.chapter
+        } else {
+            merged.chapter = merged.chapter ?? synced.chapter
+        }
 
         let changedElsewhere = synced.updatedAt != highlight.syncedUpdatedAt
         let localWins: Bool = {
