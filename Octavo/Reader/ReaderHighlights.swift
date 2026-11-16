@@ -33,10 +33,13 @@ final class ReaderHighlights {
     /// The list, in the book's order (by their ranges, as pages can hold
     /// several): the ones this file has.
     var list: [LocalHighlight] {
-        all.filter { !$0.isRemoved && $0.cfi != nil }.sorted {
-            guard let a = $0.cfi, let b = $1.cfi, a != b else { return $0.createdAt < $1.createdAt }
-            return ReaderCFI.starts(a, before: b)
+        all.compactMap { highlight in
+            highlight.isRemoved ? nil : highlight.cfi.map { (highlight, ReaderCFI.orderKey($0)) }
         }
+        .sorted { a, b in
+            a.1 == b.1 ? a.0.createdAt < b.0.createdAt : a.1.lexicographicallyPrecedes(b.1)
+        }
+        .map(\.0)
     }
 
     /// The server's highlights this file doesn't have ("Not Found in This

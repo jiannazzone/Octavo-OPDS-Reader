@@ -64,6 +64,16 @@ struct HighlightExportTests {
         #expect(markdown.contains(#"\- dash"#))
     }
 
+    // One with no chapter doesn't land under the chapter before it.
+    @Test func aChapterlessHighlightLeavesTheChapterBefore() {
+        let markdown = HighlightExport.markdown(
+            title: "T", authors: [],
+            highlights: [LocalHighlight(cfi: "a", text: "In it", chapter: "Chapter 61"), LocalHighlight(cfi: "b", text: "Afterword")],
+            notFound: [], notFoundHeading: ""
+        )
+        #expect(markdown.contains("> In it\n\n---\n\n> Afterword"))
+    }
+
     @Test func theFileNameHoldsOnlyWhatAFileNameCan() {
         #expect(HighlightExport.fileName(title: "Pride and Prejudice", suffix: "Highlights") == "Pride and Prejudice – Highlights.md")
         #expect(HighlightExport.fileName(title: "AC/DC: Live?", suffix: "Highlights") == "AC-DC- Live- – Highlights.md")

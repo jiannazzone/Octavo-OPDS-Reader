@@ -283,9 +283,13 @@ public enum ReaderCFI {
     /// offsets compared in turn, ID assertions (`[…]`) and side biases left
     /// out. A step that's an ancestor of the other comes first.
     public static func starts(_ a: String, before b: String) -> Bool {
-        let left = steps(start(of: a)), right = steps(start(of: b))
-        for (x, y) in zip(left, right) where x != y { return x < y }
-        return left.count < right.count
+        orderKey(a).lexicographicallyPrecedes(orderKey(b))
+    }
+
+    /// A key that sorts ranges as `starts(_:before:)` does, worked out once
+    /// per range for a long list.
+    public static func orderKey(_ cfi: String) -> [Int] {
+        steps(start(of: cfi))
     }
 
     /// `epubcfi(/6/4!/4/38/2/1:143)` as `[6, 4, 4, 38, 2, 1, 143]`.

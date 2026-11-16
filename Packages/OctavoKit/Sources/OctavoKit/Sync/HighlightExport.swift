@@ -15,10 +15,16 @@ public enum HighlightExport {
         var chapter: String?? = .none
         for highlight in highlights {
             if chapter != .some(highlight.chapter) {
+                let after = chapter
                 chapter = .some(highlight.chapter)
                 if let heading = highlight.chapter, !heading.isEmpty {
                     lines.append("")
                     lines.append("## " + escaped(heading))
+                } else if case .some(.some) = after {
+                    // Out of the chapter before: a rule, as there's no
+                    // heading to give.
+                    lines.append("")
+                    lines.append("---")
                 }
             }
             lines.append(contentsOf: entry(highlight))
