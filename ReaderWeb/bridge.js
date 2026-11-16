@@ -453,9 +453,18 @@ const muteTouches = target => {
 }
 let selecting = false
 // Where the selection is, for the highlight bar (#125): its box in the top
-// window's coordinates, sent with every change while text is selected.
+// window's coordinates. A selection starting or ending goes at once; while a
+// handle is dragged, the box goes once it settles.
 let selectionBox = null
+let selectionSettle = null
+const SELECTION_SETTLE_MS = 150
 const onSelectionChange = doc => () => {
+    const now = hasSelection(doc)
+    clearTimeout(selectionSettle)
+    if (now !== selecting) return sendSelection(doc)
+    if (now) selectionSettle = setTimeout(() => sendSelection(doc), SELECTION_SETTLE_MS)
+}
+const sendSelection = doc => {
     const now = hasSelection(doc)
     const box = now ? selectionBoxIn(doc) : null
     const key = box ? [box.x, box.y, box.width, box.height].map(Math.round).join() : null
@@ -1925,6 +1934,7 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
     // Drawn as each section's overlay is made (`onCreateOverlay`).
     takeHighlights(initialHighlights)
     selecting = false
+    clearTimeout(selectionSettle)
     turnHeld = null
     // foliate would `window.open` external links; hand them to Swift instead.
     view.addEventListener('external-link', e => {

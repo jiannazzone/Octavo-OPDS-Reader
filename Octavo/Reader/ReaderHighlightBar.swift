@@ -31,6 +31,8 @@ struct ReaderHighlightBar: View {
             .frame(width: 36, height: 36)
         }
         .font(.title3)
+        // As BookOrbit's capsule: on one line, so it fits the page.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         .padding(.leading, 6)
         .padding(.trailing, 8)
         .padding(.vertical, 4)

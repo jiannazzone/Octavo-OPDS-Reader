@@ -275,6 +275,7 @@ private struct ReaderScreen: View {
                 .toolbar { buttons }
                 // A highlight's note (#125).
                 .sheet(isPresented: Binding(get: { model.noteSheet != nil }, set: { if !$0 { model.noteSheet = nil } })) {
+                    // One deleted elsewhere meanwhile takes its sheet with it.
                     if let id = model.noteSheet, let highlight = model.highlights.highlight(id) {
                         ReaderHighlightNoteSheet(highlight: highlight) { note in
                             model.highlights.setNote(id, to: note)
@@ -327,7 +328,7 @@ private struct ReaderScreen: View {
         .onChange(of: scenePhase == .background, initial: true) { _, isInBackground in
             model.isInBackground = isInBackground
         }
-        .onChange(of: controls.coversPage || panel != nil || model.note != nil || model.highlightBar != nil || model.tappedHighlight != nil, initial: true) { _, covers in
+        .onChange(of: controls.coversPage || panel != nil || model.note != nil || model.barHighlight != nil || model.cardHighlight != nil, initial: true) { _, covers in
             model.coversPage = covers
         }
         .onChange(of: panel) { _, panel in

@@ -18,6 +18,7 @@ extension ReaderModel {
     }
 
     func sendHighlights() {
+        dropGoneHighlights()
         let list = highlightsForPage
         guard phase == .open, !isFixedLayout, list != sentHighlights else { return }
         sentHighlights = list
@@ -115,6 +116,14 @@ extension ReaderModel {
 
     var cardHighlight: LocalHighlight? {
         tappedHighlight.flatMap(highlights.highlight)
+    }
+
+    /// A highlight deleted elsewhere (a sync) takes its bar, card and note
+    /// sheet with it.
+    func dropGoneHighlights() {
+        if highlightBar != nil, barHighlight == nil { highlightBar = nil }
+        if tappedHighlight != nil, cardHighlight == nil { tappedHighlight = nil }
+        if let id = noteSheet, highlights.highlight(id) == nil { noteSheet = nil }
     }
 
     func closeHighlightCard() {
