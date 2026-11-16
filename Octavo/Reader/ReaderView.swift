@@ -66,7 +66,8 @@ struct ReaderView: View {
             // (decision 30).
             let replay = shell.tour.replayPlace
             let bookmarks = ReaderBookmarks(bookID: book.reader.id, store: replay?.bookmarks ?? BookmarkStore(), sync: bookmarkSync)
-            let highlights = ReaderHighlights(bookID: book.reader.id, store: replay?.highlights ?? HighlightStore(), sync: replay == nil ? highlightSync : nil)
+            let highlights = replay.map { ReaderHighlights(bookID: book.reader.id, store: $0.highlights) }
+                ?? shell.highlightsWaiting.highlights(forBook: book.reader.id, sync: highlightSync)
             #if DEBUG
             let cfiShape = ReaderRemote.cfiShape
             #else

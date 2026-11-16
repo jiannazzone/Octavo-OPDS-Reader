@@ -86,11 +86,17 @@ final class ReaderHighlights {
         Task { await send(id) }
     }
 
-    func describe(_ id: LocalHighlight.ID, chapter: String?, fraction: Double?) {
-        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
-        all[index].fraction = fraction
-        all[index].chapter = chapter ?? all[index].chapter
-        save()
+    /// Where highlights fall and their chapters, worked out by the reader:
+    /// saved once for the lot.
+    func describe(_ places: [LocalHighlight.ID: (chapter: String?, fraction: Double?)]) {
+        var changed = false
+        for (id, place) in places {
+            guard let index = all.firstIndex(where: { $0.id == id }) else { continue }
+            all[index].fraction = place.fraction
+            all[index].chapter = place.chapter ?? all[index].chapter
+            changed = true
+        }
+        if changed { save() }
     }
 
     /// Highlights placed again in the current layout.

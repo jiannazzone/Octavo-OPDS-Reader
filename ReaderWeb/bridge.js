@@ -1917,6 +1917,7 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
     view.addEventListener('create-overlay', onCreateOverlay)
     search = null
     shownMatch = null
+    sections.clear()
     // Drawn as each section's overlay is made (`onCreateOverlay`).
     takeHighlights(initialHighlights)
     selecting = false
@@ -2093,13 +2094,22 @@ const onDrawAnnotation = ({ detail: { draw, annotation } }) => {
 }
 const onCreateOverlay = ({ detail: { index } }) => {
     for (const cfi of [shownMatch, ...highlights.keys()]) {
-        if (!cfi) continue
+        if (cfi && sectionOf(cfi) === index) view.addAnnotation({ value: cfi })
+    }
+}
+// Each range's section, resolved once per book: a section's overlay is made
+// on every turn into it, and the book may have hundreds of highlights.
+const sections = new Map()
+const sectionOf = cfi => {
+    if (!sections.has(cfi)) {
         try {
-            if (view.resolveCFI(cfi).index === index) view.addAnnotation({ value: cfi })
+            sections.set(cfi, view.resolveCFI(cfi).index)
         } catch {
             // Not a CFI this book has.
+            sections.set(cfi, null)
         }
     }
+    return sections.get(cfi)
 }
 
 // Highlights (#125): the book's ranges by CFI, with the colour each is drawn

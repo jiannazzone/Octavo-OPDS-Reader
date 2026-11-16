@@ -51,10 +51,12 @@ extension ReaderModel {
             guard let places = try? await page.callJavaScript("return await window.octavo.describeAll(cfis)", arguments: ["cfis": batch.map(\.1)]) as? [Any],
                   places.count == batch.count
             else { return }
+            var described: [LocalHighlight.ID: (chapter: String?, fraction: Double?)] = [:]
             for ((id, _), place) in zip(batch, places) {
                 guard let place = place as? [String: Any] else { continue }
-                highlights.describe(id, chapter: place["chapter"] as? String, fraction: place["fraction"] as? Double)
+                described[id] = (place["chapter"] as? String, place["fraction"] as? Double)
             }
+            highlights.describe(described)
         }
     }
 }

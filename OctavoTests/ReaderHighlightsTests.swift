@@ -248,6 +248,23 @@ struct HighlightsWaitingTests {
         #expect(relaunched.waitingKeys == ["key"])
     }
 
+    // A reader opening the book while a retry runs shares the retry's list,
+    // so neither saves over the other's changes.
+    @Test func aRetryAndAReaderShareOneList() async throws {
+        let sync = MemoryHighlightSync()
+        await sync.setFetchTime(.milliseconds(100))
+        try store.save([LocalHighlight(cfi: cfi, text: "Collins")], forBook: "key")
+        let waiting = HighlightsWaiting(store: store) { _ in sync }
+        waiting.record(book, key: "key")
+        let retry = Task { await waiting.retry() }
+        try await Task.sleep(for: .milliseconds(20))
+        let reader = waiting.highlights(forBook: "key", sync: sync)
+        reader.add(cfi: "epubcfi(/6/8!/4/2,/1:0,/1:20)", text: "Chapter", color: "#4ADE80")
+        await retry.value
+        #expect(waiting.highlights(forBook: "key", sync: sync) === reader)
+        #expect(Set(store.items(forBook: "key").map(\.text)) == ["Collins", "Chapter"])
+    }
+
     @Test func aBookWithNothingToSendIsForgotten() async throws {
         try store.save([LocalHighlight(cfi: cfi, text: "Collins", remoteID: "7")], forBook: "key")
         let waiting = HighlightsWaiting(store: store) { _ in nil }

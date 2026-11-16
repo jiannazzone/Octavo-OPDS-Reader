@@ -5,6 +5,10 @@ import OctavoKit
 /// they're retried with the reader closed: at launch, when the app comes
 /// back and when the connection does, as places are
 /// (`BookPlaces.retryUnsent`). The open book's go through its reader.
+///
+/// It also hands out each book's `ReaderHighlights`, one at a time per book,
+/// so a retry and a reader opening the same book share one list rather than
+/// saving over each other.
 @MainActor
 final class HighlightsWaiting {
     /// Where a book's highlights sync.
@@ -19,6 +23,11 @@ final class HighlightsWaiting {
     private let sync: (Book) -> (any HighlightSync)?
     private var books: [String: Book]
     private var isRetrying = false
+    private var live: [String: Weak] = [:]
+
+    private struct Weak {
+        weak var highlights: ReaderHighlights?
+    }
 
     init(store: HighlightStore = HighlightStore(), sync: @escaping (Book) -> (any HighlightSync)?) {
         self.store = store
@@ -36,6 +45,16 @@ final class HighlightsWaiting {
         save()
     }
 
+    /// `key`'s highlights: the list already in use, if there is one, else a
+    /// new one syncing with `sync`.
+    func highlights(forBook key: String, sync: (any HighlightSync)?) -> ReaderHighlights {
+        if let inUse = live[key]?.highlights { return inUse }
+        let highlights = ReaderHighlights(bookID: key, store: store, sync: sync)
+        live = live.filter { $0.value.highlights != nil }
+        live[key] = Weak(highlights: highlights)
+        return highlights
+    }
+
     func retry(except open: String? = nil) async {
         guard !isRetrying else { return }
         isRetrying = true
@@ -47,7 +66,7 @@ final class HighlightsWaiting {
             }
             // Its server isn't connected (or was removed): kept for later.
             guard let backend = sync(book) else { continue }
-            await ReaderHighlights(bookID: key, store: store, sync: backend).refresh()
+            await highlights(forBook: key, sync: backend).refresh()
             if !hasWaiting(key) { books[key] = nil }
         }
         save()
