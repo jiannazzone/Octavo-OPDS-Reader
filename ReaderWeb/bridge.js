@@ -452,11 +452,34 @@ const muteTouches = target => {
     for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) target.addEventListener(type, muteTouch, options)
 }
 let selecting = false
+// Where the selection is, for the highlight bar (#125): its box in the top
+// window's coordinates. A selection starting or ending goes at once; while a
+// handle is dragged, the box goes once it settles.
+let selectionBox = null
+let selectionSettle = null
+const SELECTION_SETTLE_MS = 150
 const onSelectionChange = doc => () => {
     const now = hasSelection(doc)
-    if (now === selecting) return
+    clearTimeout(selectionSettle)
+    if (now !== selecting) return sendSelection(doc)
+    if (now) selectionSettle = setTimeout(() => sendSelection(doc), SELECTION_SETTLE_MS)
+}
+const sendSelection = doc => {
+    const now = hasSelection(doc)
+    const box = now ? selectionBoxIn(doc) : null
+    const key = box ? [box.x, box.y, box.width, box.height].map(Math.round).join() : null
+    if (now === selecting && key === selectionBox) return
     selecting = now
-    post('selection', { active: now })
+    selectionBox = key
+    post('selection', box ? { active: now, ...box } : { active: now })
+}
+const selectionBoxIn = doc => {
+    const selection = doc.getSelection()
+    const frame = doc.defaultView?.frameElement
+    if (!selection?.rangeCount || !frame) return null
+    const rect = selection.getRangeAt(0).getBoundingClientRect()
+    const box = frame.getBoundingClientRect()
+    return { x: box.left + rect.left, y: box.top + rect.top, width: rect.width, height: rect.height }
 }
 const hasSelection = doc => !(doc?.getSelection?.()?.isCollapsed ?? true)
 
@@ -596,6 +619,16 @@ const onSectionLoad = ({ detail: { doc } }) => {
         if (!frame) return
         const box = frame.getBoundingClientRect()
         const x = box.left + e.clientX * (view?.isFixedLayout && frame.offsetWidth ? box.width / frame.offsetWidth : 1)
+        // A tap on a highlight opens its card (#125). foliate's own
+        // `show-annotation` listens for `click`, which iOS doesn't send here.
+        if (!tapMode.dismisses) {
+            const hit = highlightAt(doc, e.clientX, e.clientY)
+            if (hit) {
+                // Where it is, for its card: its box in the top window.
+                const rect = hit.range.getBoundingClientRect()
+                return post('highlightTap', { cfi: hit.cfi, x: box.left + rect.left, y: box.top + rect.top, width: rect.width, height: rect.height })
+            }
+        }
         // A near miss on a note's tiny mark doesn't turn the page.
         const mark = tapMode.dismisses ? null : nearNoteMark(doc, e.clientX, e.clientY)
         if (mark && await openNote(mark, resolvedHref(mark, doc))) return
@@ -1136,11 +1169,15 @@ const onPage = cfis => {
 // (0...1, placed like the contents), its chapter, and the words it starts
 // at. A section that isn't on screen is read on its own (scripts never run
 // in a parsed document), so this works for any page.
-const describePlace = async cfi => {
+const describePlace = async (cfi, parsed = new Map()) => {
     const v = requireView()
     const { index, anchor } = v.resolveCFI(String(cfi))
     const loaded = loadedDoc(index)
-    const doc = loaded ?? await v.book.sections[index].createDocument()
+    let doc = loaded ?? parsed.get(index)
+    if (!doc) {
+        doc = await v.book.sections[index].createDocument()
+        parsed.set(index, doc)
+    }
     // A fixed-layout page's CFI names only its section: the whole page.
     const range = toRange(doc, v.isFixedLayout ? doc.body ?? doc.documentElement : anchor(doc))
     const within = (loaded ? layoutFraction(range) : null) ?? characterFraction(doc, range)
@@ -1881,7 +1918,7 @@ const restore = async (cfi, fraction) => {
 // `xpointer`: a KOReader place to open at when there's no `cfi`, else the
 // fraction. `koreaderPlaces`: relocations carry KOReader's place (an EPUB
 // that syncs with KOReader).
-const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, koreaderPlaces = false, layout: initialLayout = undefined, appearance: initialAppearance = undefined, harden = true }) => {
+const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, koreaderPlaces = false, layout: initialLayout = undefined, appearance: initialAppearance = undefined, harden = true, highlights: initialHighlights = [] }) => {
     if (view) {
         view.close()
         view.remove()
@@ -1893,7 +1930,11 @@ const open = async ({ url, name, cfi = null, fraction = null, xpointer = null, k
     view.addEventListener('create-overlay', onCreateOverlay)
     search = null
     shownMatch = null
+    sections.clear()
+    // Drawn as each section's overlay is made (`onCreateOverlay`).
+    takeHighlights(initialHighlights)
     selecting = false
+    clearTimeout(selectionSettle)
     turnHeld = null
     // foliate would `window.open` external links; hand them to Swift instead.
     view.addEventListener('external-link', e => {
@@ -2061,21 +2102,98 @@ const runSearch = async (query, token) => {
 let shownMatch = null
 const HIGHLIGHT = 'rgb(255, 204, 0)'
 const onDrawAnnotation = ({ detail: { draw, annotation } }) => {
-    if (annotation?.value === shownMatch) draw(Overlayer.highlight, { color: HIGHLIGHT })
+    if (annotation?.value === shownMatch) return draw(Overlayer.highlight, { color: HIGHLIGHT })
+    const color = highlights.get(annotation?.value)
+    if (color) draw(Overlayer.highlight, { color })
 }
 const onCreateOverlay = ({ detail: { index } }) => {
-    if (!shownMatch) return
-    try {
-        if (view.resolveCFI(shownMatch).index === index) view.addAnnotation({ value: shownMatch })
-    } catch {
-        // Not a CFI this book has.
+    for (const cfi of [shownMatch, ...highlights.keys()]) {
+        if (cfi && sectionOf(cfi) === index) view.addAnnotation({ value: cfi })
     }
+}
+// Each range's section, resolved once per book: a section's overlay is made
+// on every turn into it, and the book may have hundreds of highlights.
+const sections = new Map()
+const sectionOf = cfi => {
+    if (!sections.has(cfi)) {
+        try {
+            sections.set(cfi, view.resolveCFI(cfi).index)
+        } catch {
+            // Not a CFI this book has.
+            sections.set(cfi, null)
+        }
+    }
+    return sections.get(cfi)
+}
+
+// Highlights (#125): the book's ranges by CFI, with the colour each is drawn
+// in. Swift checks every colour (`HighlightPalette.drawable`) and so does
+// this, so only a hex reaches the overlay's markup. Fixed-layout books have
+// no overlay and leave highlights out.
+const highlights = new Map()
+const HIGHLIGHT_COLOR = /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/
+const highlightList = list => {
+    const next = new Map()
+    for (const item of Array.isArray(list) ? list : []) {
+        const cfi = String(item?.cfi ?? '')
+        const color = String(item?.color ?? '')
+        if (cfi.startsWith('epubcfi(') && HIGHLIGHT_COLOR.test(color)) next.set(cfi, color)
+    }
+    return next
+}
+const takeHighlights = list => {
+    highlights.clear()
+    for (const [cfi, color] of highlightList(list)) highlights.set(cfi, color)
+}
+// The list as it is now: what's gone is taken off the page, and what's new
+// or recoloured drawn.
+const setHighlights = async list => {
+    const v = requireView()
+    const next = highlightList(list)
+    const gone = [...highlights.keys()].filter(cfi => !next.has(cfi))
+    const drawn = [...next].filter(([cfi, color]) => highlights.get(cfi) !== color).map(([cfi]) => cfi)
+    takeHighlights(list)
+    if (v.isFixedLayout) return true
+    for (const cfi of gone) {
+        // Search's match stays until the search moves on.
+        if (cfi !== shownMatch) await v.deleteAnnotation({ value: cfi }).catch(() => {})
+    }
+    for (const cfi of drawn) await v.addAnnotation({ value: cfi }).catch(() => {})
+    return true
+}
+// The highlight under a point of a section's document, by its CFI. Search's
+// match shares foliate's keys, so it never counts.
+const highlightAt = (doc, x, y) => {
+    const overlayer = view?.renderer?.getContents?.().find(c => c.doc === doc)?.overlayer
+    const [cfi, range] = overlayer?.hitTest({ x, y }) ?? []
+    return cfi && range && highlights.has(cfi) ? { cfi, range } : null
+}
+// The selection, as a range to highlight: its CFI and its words. The
+// selection goes, as the highlight takes its place.
+const MAX_HIGHLIGHT_TEXT = 20000
+const takeSelection = () => {
+    const v = requireView()
+    if (v.isFixedLayout) return null
+    for (const { doc, index } of v.renderer.getContents()) {
+        const selection = doc?.getSelection?.()
+        if (!selection || selection.isCollapsed || !selection.rangeCount) continue
+        const range = selection.getRangeAt(0)
+        const text = range.toString().replace(/\s+/g, ' ').trim().slice(0, MAX_HIGHLIGHT_TEXT)
+        if (!text) return null
+        const cfi = v.getCFI(index, range)
+        selection.removeAllRanges()
+        return { cfi, text }
+    }
+    return null
 }
 const showMatch = async cfi => {
     const v = requireView()
     if (shownMatch) {
-        await v.deleteAnnotation({ value: shownMatch }).catch(() => {})
+        const old = shownMatch
         shownMatch = null
+        await v.deleteAnnotation({ value: old }).catch(() => {})
+        // A highlight under the match is drawn again (#125).
+        if (highlights.has(old)) await v.addAnnotation({ value: old }).catch(() => {})
     }
     if (!cfi) return true
     shownMatch = String(cfi)
@@ -2247,8 +2365,60 @@ window.octavo = Object.freeze({
     showMatch: reported(async function showMatch_(cfi) {
         return showMatch(cfi)
     }),
+    setHighlights: reported(async function setHighlights_(list) {
+        return setHighlights(list)
+    }),
+    // Selects a range on the page as a finger would, for checks that can't
+    // drag (the debug remote's `select`, #125). Only the book's own text.
+    selectRange: reported(async function selectRange(cfi) {
+        const { index, anchor } = requireView().resolveCFI(String(cfi))
+        const doc = loadedDoc(index)
+        if (!doc) return false
+        const selection = doc.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(toRange(doc, anchor(doc)))
+        return true
+    }),
+    takeSelection: reported(async function takeSelection_() {
+        return takeSelection()
+    }),
     onPage: reported(async function onPage_(cfis) {
         return onPage(cfis)
+    }),
+    // The highlights that start on the visible page, each with its first
+    // line's box in the top window (#125), for VoiceOver's actions; `null`
+    // for the rest.
+    highlightBoxes: reported(async function highlightBoxes(cfis) {
+        const list = Array.isArray(cfis) ? cfis : []
+        // By where it is on screen: foliate's location can lag the turn
+        // that's just been reported.
+        const page = view?.getBoundingClientRect()
+        return list.map(cfi => {
+            try {
+                const { index, anchor } = requireView().resolveCFI(String(cfi))
+                const doc = loadedDoc(index)
+                const frame = doc?.defaultView?.frameElement
+                if (!frame) return null
+                const rect = toRange(doc, anchor(doc)).getClientRects()[0]
+                if (!rect || !page) return null
+                const box = frame.getBoundingClientRect()
+                const x = box.left + rect.left
+                if (x < page.left || x >= page.right) return null
+                return { x, y: box.top + rect.top, width: rect.width, height: rect.height }
+            } catch {
+                return null
+            }
+        })
+    }),
+    // Several places at once (#125), each section parsed once. `null` for
+    // one that can't be placed.
+    describeAll: reported(async function describeAll(cfis) {
+        const parsed = new Map()
+        const places = []
+        for (const cfi of Array.isArray(cfis) ? cfis : []) {
+            places.push(await describePlace(cfi, parsed).catch(() => null))
+        }
+        return places
     }),
     describe: reported(async function describe_(cfi) {
         return describePlace(cfi)

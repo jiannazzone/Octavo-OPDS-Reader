@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import OctavoKit
 
@@ -28,8 +29,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// (any Page Turn but None; `ReaderPageTurn`).
     case turn(side: ReaderTurnSide)
     /// Text is selected in the page, or no longer is: a finger moving a
-    /// selection's handle mustn't turn the page.
-    case selection(active: Bool)
+    /// selection's handle mustn't turn the page. `box` is where the
+    /// selection is, in the page's points, for the highlight bar (#125).
+    case selection(active: Bool, box: CGRect? = nil)
     /// The page's size in CSS px (= points), sent on load and whenever it
     /// changes.
     case viewport(width: Double, height: Double)
@@ -42,6 +44,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The user tapped a note's mark: the note, read from the book, for a card
     /// over the page (decision 34).
     case note(ReaderNote)
+    /// The user tapped a highlight, by its CFI, and where it is on the page
+    /// (#125).
+    case highlightTap(cfi: String, box: CGRect? = nil)
     case error(ScriptError)
     /// A `console.error`/`console.warn` line from foliate-js.
     case log(level: String, message: String)
@@ -206,7 +211,15 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href, width, height, toc, side, active
+        case type, zone, level, message, href, width, height, toc, side, active, cfi, x, y
+    }
+
+    /// `x`, `y`, `width` and `height`, if they're all there.
+    private static func box(in container: KeyedDecodingContainer<CodingKeys>) throws -> CGRect? {
+        guard let x = try container.decodeIfPresent(Double.self, forKey: .x), let y = try container.decodeIfPresent(Double.self, forKey: .y),
+              let width = try container.decodeIfPresent(Double.self, forKey: .width), let height = try container.decodeIfPresent(Double.self, forKey: .height)
+        else { return nil }
+        return CGRect(x: x, y: y, width: width, height: height)
     }
 
     init(from decoder: any Decoder) throws {
@@ -230,7 +243,7 @@ nonisolated extension ReaderMessage: Decodable {
         case "turn":
             self = .turn(side: try container.decode(ReaderTurnSide.self, forKey: .side))
         case "selection":
-            self = .selection(active: try container.decodeIfPresent(Bool.self, forKey: .active) ?? false)
+            self = .selection(active: try container.decodeIfPresent(Bool.self, forKey: .active) ?? false, box: try Self.box(in: container))
         case "viewport":
             self = .viewport(
                 width: try container.decode(Double.self, forKey: .width),
@@ -240,6 +253,8 @@ nonisolated extension ReaderMessage: Decodable {
             self = .externalLink(href: try container.decode(String.self, forKey: .href))
         case "link":
             self = .link(href: try container.decode(String.self, forKey: .href))
+        case "highlightTap":
+            self = .highlightTap(cfi: try container.decode(String.self, forKey: .cfi), box: try Self.box(in: container))
         case "note":
             self = .note(try ReaderNote(from: decoder))
         case "error":

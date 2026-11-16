@@ -270,6 +270,7 @@ func makeShell(
         servers: ServerStore(fileURL: folder.appending(path: "Servers.json")),
         positions: ReadingPositionStore(directory: folder.appending(path: "ReadingPositions")),
         bookmarks: BookmarkStore(directory: folder.appending(path: "Bookmarks")),
+        highlights: HighlightStore(directory: folder.appending(path: "Highlights")),
         removedServers: RemovedServerStore(fileURL: folder.appending(path: "RemovedServers.json")),
         importer: importer?(imported),
         tourRecord: tourRecord,

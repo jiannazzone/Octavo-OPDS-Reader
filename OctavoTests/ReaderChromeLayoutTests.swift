@@ -122,6 +122,24 @@ struct ReaderChromeLayoutTests {
         #expect(right.width == 951 - 84 - 495.5)
     }
 
+    // The highlight bar goes under its selection's page (#125).
+    @Test func theHighlightBarFollowsItsSelection() {
+        let spread = ReaderLayout(columns: 2, fold: 455.5...495.5)
+        let wide = ReaderGeometry(size: CGSize(width: 951, height: 669), safeArea: ReaderInsets(right: 84))
+        let left = ReaderChromeLayout.footerBarSpan(in: wide, layout: spread, under: 200)
+        #expect(left.left == 0)
+        #expect(left.width == 455.5)
+        #expect(ReaderChromeLayout.footerBarSpan(in: wide, layout: spread, under: 700).left == 495.5)
+    }
+
+    // While text is selected, the bar has the footer's place, Search's
+    // and BookOrbit's too, and stacks over the way back on one page.
+    @Test func theHighlightBarComesFirst() {
+        #expect(chrome { $0.highlighting = true; $0.searchStepping = true; $0.serverPlace = Self.place }.footerBar == .highlight)
+        #expect(chrome { $0.highlighting = true; $0.hasTrip = true }.stacksOverBackBar)
+        #expect(chrome { $0.highlighting = true; $0.panelOpen = true }.footerBar == nil)
+    }
+
     @Test func theTourCardIsAboveASheetOrClearOfTheBar() {
         let bottom = ReaderLayout.barBottom(in: Self.geometry)
         #expect(ReaderChromeLayout.tourCardBottom(in: Self.geometry, sheetHeight: 300, barClearance: 96) == bottom - 300 - 8)

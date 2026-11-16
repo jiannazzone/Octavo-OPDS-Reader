@@ -201,6 +201,7 @@ struct ServerStorageMigrationTests {
             books: StoredBookFiles(directory: root.appending(path: "Books", directoryHint: .isDirectory), imported: imported),
             positions: ReadingPositionStore(directory: root.appending(path: "ReadingPositions", directoryHint: .isDirectory)),
             bookmarks: BookmarkStore(directory: root.appending(path: "Bookmarks", directoryHint: .isDirectory)),
+            highlights: HighlightStore(directory: root.appending(path: "Highlights", directoryHint: .isDirectory)),
             onIPhone: BooksOnIPhone(fileURL: root.appending(path: "BooksOnIPhone.json"))
         )
         let incoming = root.appending(path: "incoming.epub")
@@ -222,6 +223,7 @@ struct ServerStorageMigrationTests {
         migration.positions.saveTrip(ReaderTrip(place: place), forBook: plain)
         try migration.bookmarks.save([], forBook: plain)
         try migration.bookmarks.save([], forBook: importedKey)
+        try migration.highlights.save([], forBook: plain)
         UnsentPlaces(directory: migration.positions.directory).save([plain: SourcedBook(source: one, book: book())])
         try migration.onIPhone.record(SourcedBook(source: LibrarySourceID(rawValue: "an-older-id"), book: book()))
         try migration.onIPhone.record(SourcedBook(source: .files, book: LibraryBook(id: LibraryBookID(rawValue: "imported"), title: "Imported", files: [file("imported")])))
@@ -235,6 +237,8 @@ struct ServerStorageMigrationTests {
         #expect(FileManager.default.fileExists(atPath: migration.bookmarks.fileURL(forBook: key).path))
         #expect(migration.positions.progress(forBook: plain) == nil)
         #expect(!FileManager.default.fileExists(atPath: migration.bookmarks.fileURL(forBook: plain).path))
+        #expect(FileManager.default.fileExists(atPath: migration.highlights.fileURL(forBook: key).path))
+        #expect(!FileManager.default.fileExists(atPath: migration.highlights.fileURL(forBook: plain).path))
         // Imported books belong to no server.
         #expect(migration.positions.progress(forBook: importedKey) != nil)
         #expect(FileManager.default.fileExists(atPath: migration.bookmarks.fileURL(forBook: importedKey).path))

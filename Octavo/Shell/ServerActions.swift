@@ -11,6 +11,7 @@ final class ServerActions {
     private let servers: ServerStore
     private let removedServers: RemovedServerStore
     private let bookmarks: BookmarkStore
+    private let highlights: HighlightStore
     private let places: BookPlaces
     private let opener: BookOpener
     private let reader: ReaderPresenter
@@ -20,7 +21,7 @@ final class ServerActions {
 
     init(
         library: LibraryModel, servers: ServerStore, removedServers: RemovedServerStore, bookmarks: BookmarkStore,
-        places: BookPlaces, opener: BookOpener, reader: ReaderPresenter, koreader: KOReaderConnection,
+        highlights: HighlightStore = HighlightStore(), places: BookPlaces, opener: BookOpener, reader: ReaderPresenter, koreader: KOReaderConnection,
         paces: ReadingPaceStore = .shared
     ) {
         self.paces = paces
@@ -28,6 +29,7 @@ final class ServerActions {
         self.servers = servers
         self.removedServers = removedServers
         self.bookmarks = bookmarks
+        self.highlights = highlights
         self.places = places
         self.opener = opener
         self.reader = reader
@@ -164,6 +166,7 @@ final class ServerActions {
             // read these.
             places.store.removeAll(of: id)
             bookmarks.removeAll(of: id)
+            highlights.removeAll(of: id)
             paces.removeAll(of: id)
         }
         try? servers.remove(id)
@@ -231,6 +234,7 @@ final class ServerActions {
         opener.moveAll(of: removed.id, to: server.id)
         places.store.moveAll(of: removed.id, to: server.id)
         bookmarks.moveAll(of: removed.id, to: server.id)
+        highlights.moveAll(of: removed.id, to: server.id)
         paces.moveAll(of: removed.id, to: server.id)
         try? library.onIPhone.moveAll(of: removed.id, to: server.id)
         try? removedServers.remove(removed)

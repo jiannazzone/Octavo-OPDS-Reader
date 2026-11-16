@@ -69,6 +69,9 @@ final class ReaderPresenter {
     private let library: LibraryModel
     private let opener: BookOpener
     private let places: BookPlaces
+    /// Where the open book's unsent highlights are recorded, to be retried
+    /// once it's closed.
+    var highlightsWaiting: HighlightsWaiting?
     /// Where the reading settings the motion goes by are kept.
     private let defaults: UserDefaults
 
@@ -260,6 +263,17 @@ final class ReaderPresenter {
               let bookID = Int(book.book.id.rawValue)
         else { return nil }
         return BookOrbitBookmarkSync(client: source.client, bookID: bookID, fileID: Int(book.file.id.rawValue))
+    }
+
+    /// Where the open book's highlights sync (#125): BookOrbit's own, for
+    /// its books, always for the file read. Anything else keeps them on the
+    /// iPhone.
+    var highlightSync: (any HighlightSync)? {
+        guard let book = reading, let readingSource, let source = library.source(for: readingSource) as? BookOrbitSource,
+              let bookID = Int(book.book.id.rawValue), let fileID = Int(book.file.id.rawValue)
+        else { return nil }
+        highlightsWaiting?.record(HighlightsWaiting.Book(source: readingSource, bookID: bookID, fileID: fileID), key: book.reader.id)
+        return BookOrbitHighlightSync(client: source.client, bookID: bookID, fileID: fileID)
     }
 
     /// Where the open book's place syncs (decision 6), through `places`, so

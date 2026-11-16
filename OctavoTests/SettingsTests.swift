@@ -128,6 +128,7 @@ struct RemoveServerTests {
             let key = try #require(book.storageKey)
             try model.places.store.save(ReadingPosition(cfi: "epubcfi(/6/4!/4/2)", fraction: 0.3), forBook: key, needsPush: true)
             try model.bookmarks.save([], forBook: key)
+            try model.highlights.save([], forBook: key)
         }
     }
 
@@ -146,8 +147,19 @@ struct RemoveServerTests {
         model.places.store.progress(forBook: key(book)) != nil
     }
 
-    private func hasBookmarks(_ book: SourcedBook) -> Bool {
-        FileManager.default.fileExists(atPath: model.bookmarks.fileURL(forBook: key(book)).path)
+    /// Its bookmarks and highlights are both kept.
+    private func hasMarks(_ book: SourcedBook) -> Bool {
+        marks(book) == [true, true]
+    }
+
+    /// Neither its bookmarks nor its highlights are kept.
+    private func hasNoMarks(_ book: SourcedBook) -> Bool {
+        marks(book) == [false, false]
+    }
+
+    private func marks(_ book: SourcedBook) -> [Bool] {
+        [model.bookmarks.fileURL(forBook: key(book)), model.highlights.fileURL(forBook: key(book))]
+            .map { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     @Test func countsTheServersDownloadsNotImportedOnes() {
@@ -178,16 +190,16 @@ struct RemoveServerTests {
     @Test func removingBooksLeavesNothingOfTheServer() async {
         await model.serverActions.remove(Self.server, removingBooks: true)
         #expect(!hasPlace(downloaded))
-        #expect(!hasBookmarks(downloaded))
+        #expect(hasNoMarks(downloaded))
         #expect(model.removedServers.load().isEmpty)
         #expect(hasPlace(imported), "imported books stay")
-        #expect(hasBookmarks(imported))
+        #expect(hasMarks(imported))
     }
 
     @Test func keepingBooksKeepsItsPlacesToo() async {
         await model.serverActions.remove(Self.server, removingBooks: false)
         #expect(hasPlace(downloaded))
-        #expect(hasBookmarks(downloaded))
+        #expect(hasMarks(downloaded))
         #expect(model.removedServers.load().map(\.id) == [Self.server])
     }
 
@@ -209,11 +221,11 @@ struct RemoveServerTests {
         let sameNumber = SourcedBook(source: other, book: downloaded.book)
         #expect(model.opener.localFile(for: sameNumber) == nil)
         #expect(!hasPlace(sameNumber))
-        #expect(!hasBookmarks(sameNumber))
+        #expect(hasNoMarks(sameNumber))
         #expect(model.opener.localFile(for: downloaded) != nil, "the kept book is still its own")
         #expect(model.opener.localFile(for: imported) != nil, "imported books stay")
         #expect(hasPlace(imported))
-        #expect(hasBookmarks(imported))
+        #expect(hasMarks(imported))
     }
 
     // Which server a removed one was: its kind, full address (two behind
@@ -246,7 +258,7 @@ struct RemoveServerTests {
         let same = SourcedBook(source: back.id, book: downloaded.book)
         #expect(model.opener.localFile(for: same) != nil)
         #expect(hasPlace(same))
-        #expect(hasBookmarks(same))
+        #expect(hasMarks(same))
         #expect(model.library.onIPhone.books().contains(same))
         #expect(model.removedServers.load().isEmpty)
     }

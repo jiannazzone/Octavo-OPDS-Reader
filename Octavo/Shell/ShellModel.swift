@@ -48,6 +48,9 @@ final class ShellModel {
     let removedServers: RemovedServerStore
     /// Bookmarks, for a removed server's (`RemovedServer`).
     let bookmarks: BookmarkStore
+    let highlights: HighlightStore
+    /// Books whose highlights have changes still to send (#125).
+    let highlightsWaiting: HighlightsWaiting
     /// Copies books in from Files.
     let importer: BookImporter
     /// Where the reading settings the shell acts on are kept.
@@ -99,6 +102,7 @@ final class ShellModel {
     init(
         library: LibraryModel = LibraryModel(), opener: BookOpener = BookOpener(), servers: ServerStore = ServerStore(),
         positions: ReadingPositionStore = ReadingPositionStore(), bookmarks: BookmarkStore = BookmarkStore(),
+        highlights: HighlightStore = HighlightStore(),
         removedServers: RemovedServerStore = RemovedServerStore(), importer: BookImporter? = nil,
         tourRecord: TourRecord = TourRecord(), defaults: UserDefaults = .standard
     ) {
@@ -108,6 +112,7 @@ final class ShellModel {
         self.opener = opener
         self.servers = servers
         self.bookmarks = bookmarks
+        self.highlights = highlights
         self.removedServers = removedServers
         places = BookPlaces(store: positions) { [library, opener, koreader] book in
             let server = library.server(book.source)
@@ -116,10 +121,15 @@ final class ShellModel {
         }
         search = SearchModel(library: library) { [opener] in opener.status(of: $0) == .downloaded }
         reader = ReaderPresenter(library: library, opener: opener, places: places, defaults: defaults)
+        highlightsWaiting = HighlightsWaiting(store: highlights) { [library] book in
+            guard let source = library.source(for: book.source) as? BookOrbitSource else { return nil }
+            return BookOrbitHighlightSync(client: source.client, bookID: book.bookID, fileID: book.fileID)
+        }
+        reader.highlightsWaiting = highlightsWaiting
         tour = TourController(record: tourRecord, reader: reader)
         serverActions = ServerActions(
             library: library, servers: servers, removedServers: removedServers, bookmarks: bookmarks,
-            places: places, opener: opener, reader: reader, koreader: koreader
+            highlights: highlights, places: places, opener: opener, reader: reader, koreader: koreader
         )
         reader.underneath = { [weak self] in
             guard let self else { return ReaderPresenter.Underneath() }
@@ -201,6 +211,7 @@ final class ShellModel {
             || !library.onIPhone.books().isEmpty
             || manager.fileExists(atPath: places.store.directory.path)
             || manager.fileExists(atPath: bookmarks.directory.path)
+            || manager.fileExists(atPath: highlights.directory.path)
     }
 
     subscript(path tab: ShellTab) -> ShellPath {
@@ -504,6 +515,7 @@ final class ShellModel {
     /// the connection does. The open book's goes through its reader.
     func retryUnsentPlaces() {
         Task { await places.retryUnsent(except: reader.reading?.reader.id) }
+        Task { await highlightsWaiting.retry(except: reader.reading?.reader.id) }
     }
 
     /// Where `book`'s place syncs: its BookOrbit server, if setup chose to

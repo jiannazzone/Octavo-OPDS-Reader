@@ -2,7 +2,8 @@ import Foundation
 
 /// Who has the strip along the bottom of the page, and where what's in it
 /// goes: the page's footer line, the way back after a jump (decision 33),
-/// Search's step bar or BookOrbit's newer place in the footer's place, the
+/// the highlight bar, Search's step bar or BookOrbit's newer place in the
+/// footer's place, the
 /// way back above the progress bar, and the line a note card or the tour's
 /// card stops at. One place for the rules, so a new occupant changes them
 /// here rather than adding an exception to each view
@@ -24,10 +25,13 @@ nonisolated struct ReaderChromeLayout: Equatable, Sendable {
         var showsBar = false
         /// Two pages side by side.
         var twoPages = false
+        /// Text is selected, or a highlight was just made (#125).
+        var highlighting = false
     }
 
     /// What takes the footer's place while no panel or progress bar is up.
     nonisolated enum FooterBar: Equatable, Sendable {
+        case highlight
         case search
         case serverPlace(ReaderServerPlace)
     }
@@ -44,6 +48,7 @@ nonisolated struct ReaderChromeLayout: Equatable, Sendable {
 
     var footerBar: FooterBar? {
         guard !state.panelOpen, !state.showsBar, !state.noteOpen, state.isOpen else { return nil }
+        if state.highlighting { return .highlight }
         if state.searchStepping { return .search }
         return state.serverPlace.map(FooterBar.serverPlace)
     }
@@ -51,8 +56,11 @@ nonisolated struct ReaderChromeLayout: Equatable, Sendable {
     /// On one page, BookOrbit's capsule stacks above the way back (decision
     /// 33). On two, they sit one under each page.
     var stacksOverBackBar: Bool {
-        guard showsBackBar, !state.twoPages, case .serverPlace = footerBar else { return false }
-        return true
+        guard showsBackBar, !state.twoPages else { return false }
+        switch footerBar {
+        case .serverPlace, .highlight: return true
+        case .search, nil: return false
+        }
     }
 
     /// The bars take the footer's place, except that on one page the way back
@@ -97,9 +105,15 @@ nonisolated struct ReaderChromeLayout: Equatable, Sendable {
 
     /// Where the footer bar runs: under the page, or under the right page of
     /// a spread, as nothing spans the hinge (decision 9).
-    static func footerBarSpan(in geometry: ReaderGeometry, layout: ReaderLayout) -> (left: Double, width: Double) {
-        let right = Double(geometry.size.width) - geometry.safeArea.right
-        let left = layout.columns == 2 ? (layout.fold?.upperBound ?? geometry.safeArea.left) : geometry.safeArea.left
+    /// On a spread, the right-hand page's, or the left-hand page's for
+    /// something at `x` there (the highlight bar under its selection).
+    static func footerBarSpan(in geometry: ReaderGeometry, layout: ReaderLayout, under x: Double? = nil) -> (left: Double, width: Double) {
+        var right = Double(geometry.size.width) - geometry.safeArea.right
+        var left = layout.columns == 2 ? (layout.fold?.upperBound ?? geometry.safeArea.left) : geometry.safeArea.left
+        if layout.columns == 2, let fold = layout.fold, let x, x < (fold.lowerBound + fold.upperBound) / 2 {
+            left = geometry.safeArea.left
+            right = fold.lowerBound
+        }
         return (left, max(0, right - left))
     }
 

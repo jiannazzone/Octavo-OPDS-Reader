@@ -23,6 +23,7 @@ nonisolated struct ServerStorageMigration: Sendable {
     var books = StoredBookFiles()
     var positions = ReadingPositionStore()
     var bookmarks = BookmarkStore()
+    var highlights = HighlightStore()
     var onIPhone = BooksOnIPhone()
 
     func run() throws {
@@ -59,7 +60,7 @@ nonisolated struct ServerStorageMigration: Sendable {
     private func move(to id: LibrarySourceID) throws {
         let imported = importedKeys()
         var failure: (any Error)?
-        for directory in [books.directory, positions.directory, positions.tripsDirectory, bookmarks.directory] {
+        for directory in [books.directory, positions.directory, positions.tripsDirectory, bookmarks.directory, highlights.directory] {
             do {
                 try Self.moveFiles(in: directory, keeping: imported, to: id)
             } catch {

@@ -42,6 +42,25 @@ final class ReaderModel {
     private(set) var pageWords: String?
     /// The footnote open over the page, if any (`ReaderModel+Notes`).
     var note: ReaderNote?
+    /// Where the selection is, while there is one: for the highlight bar
+    /// (#125).
+    var selectionBox: CGRect?
+    /// The highlight just made, while its bar is up (#125).
+    var highlightBar: LocalHighlight.ID?
+    /// Where the bar goes on a spread: under the last selection's middle.
+    var highlightBarX: Double?
+    /// The highlight whose note is being written (#125).
+    var noteSheet: LocalHighlight.ID?
+    /// The highlight tapped, for its card (#125), and where it is.
+    var tappedHighlight: LocalHighlight.ID?
+    var tappedHighlightMark: ReaderNote.Mark?
+    /// The highlights starting on the visible page, with where they are, for
+    /// VoiceOver's actions (#125).
+    var highlightsOnPage: [(id: LocalHighlight.ID, mark: ReaderNote.Mark)] = []
+    @ObservationIgnored var highlightsOnPageCheck: Task<Void, Never>?
+    /// What the page was last given to draw, so a change that draws nothing
+    /// new (a place worked out) sends nothing.
+    @ObservationIgnored var sentHighlights: [[String: String]] = []
     @ObservationIgnored var noteOpenedAt: ContinuousClock.Instant?
     /// The contents with where each entry starts, for naming the chapter at
     /// any point of the progress bar.
@@ -205,6 +224,8 @@ final class ReaderModel {
 
     /// The book's bookmarks (decisions 17–18).
     let bookmarks: ReaderBookmarks
+    /// The book's highlights (#125).
+    let highlights: ReaderHighlights
     /// Search in book (decision 19).
     let search = ReaderSearch()
 
@@ -280,6 +301,7 @@ final class ReaderModel {
         sync: (any ProgressSync)? = nil,
         fallback: SyncedPosition? = nil,
         bookmarks: ReaderBookmarks? = nil,
+        highlights: ReaderHighlights? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
         pushDelay: Duration = .seconds(2),
         paceStore: ReadingPaceStore = ReadingPaceStore(fileURL: nil)
@@ -290,6 +312,7 @@ final class ReaderModel {
         self.sync = sync
         self.fallback = fallback
         self.bookmarks = bookmarks ?? ReaderBookmarks(bookID: book.id)
+        self.highlights = highlights ?? ReaderHighlights(bookID: book.id)
         self.cfiShape = cfiShape
 
         var configuration = WebPage.Configuration()
@@ -634,6 +657,7 @@ final class ReaderModel {
         paceStore.save()
         followTurnFrames(false)
         foldTask?.cancel()
+        highlightsOnPageCheck?.cancel()
         foldBatch = nil
         await pusher?.flush()
     }
@@ -697,6 +721,8 @@ final class ReaderModel {
             sendTurnMode()
             sendAppearance()
             Task { await refreshBookmarks() }
+            highlights.changed = { [weak self] in self?.sendHighlights() }
+            Task { await refreshHighlights() }
         case .contents(let entries):
             contentsPlaced(entries)
         case .searchResults(let batch):
@@ -707,6 +733,11 @@ final class ReaderModel {
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             let previous = self.relocation
             self.relocation = relocation
+            // A page turn closes the highlight bar (#125).
+            if relocation.isPageTurn {
+                highlightBar = nil
+                tappedHighlight = nil
+            }
             relocationCount += 1
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
@@ -737,13 +768,24 @@ final class ReaderModel {
             // Away, your place hasn't been left.
             if serverPlace != nil, trip == nil, tripToBe == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
+            highlightsOnPageSoon()
         case .tap(let zone):
-            if zone == "dismiss" { closeNote("a tap elsewhere") }
+            if zone == "dismiss" {
+                closeNote("a tap elsewhere")
+                highlightBar = nil
+                tappedHighlight = nil
+            }
             onControlsTap?(zone)
         case .turn(let side):
             turnRequested(side)
-        case .selection(let active):
+        case .selection(let active, let box):
             swipes.pageHasSelection = active
+            selectionBox = active ? box : nil
+            if let box { highlightBarX = Double(box.midX) }
+            // A new selection is a new highlight to make.
+            if active { highlightBar = nil }
+        case .highlightTap(let cfi, let box):
+            openHighlightCard(cfi: cfi, box: box)
         case .viewport(let width, let height):
             log.debug("viewport \(width)×\(height)")
             viewport = CGSize(width: width, height: height)
@@ -804,7 +846,9 @@ final class ReaderModel {
                 "koreaderPlaces": writesXPointers,
                 "layout": layout.scriptArguments,
                 "appearance": appearance.scriptArguments,
+                "highlights": highlightsForPage,
             ]
+            sentHighlights = highlightsForPage
             #if DEBUG
             // The formats check's controls: the bridge's second layer off
             // (`docs/notes/formats-check.md`).
@@ -1100,6 +1144,7 @@ final class ReaderModel {
         guard !isCatchingUp else { return }
         isCatchingUp = true
         defer { isCatchingUp = false }
+        Task { await refreshHighlights() }
         await checkServerPlace()
         if serverPlace == nil { await pusher?.flush() }
     }

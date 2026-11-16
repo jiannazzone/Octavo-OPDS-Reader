@@ -44,6 +44,7 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 | **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | ✓ folded | ✓ | ✓ | | |
 | **In the book:** search, a result | ✓ | ✓ | ✓ folded | The field only | ✓ folded | | |
 | **Read:** half open | ✓ Duo | ✓ Duo | | | | | |
+| **In the book:** highlights, a note, the Highlights tab (#125) | | | | | | | |
 | **In the book:** footnotes, going back | ✓ | ✓ | ✓ folded | | Going back, folded | | |
 | **Other ways in:** Import from Files, Open in Octavo | ✓ folded | ✓ folded | ✓ folded | | | | |
 | **Settings:** the list | ✓ | ✓ | ✓ folded | ✓ folded | ✓ | | |
@@ -224,7 +225,7 @@ xcrun simctl io <udid> recordVideo --display=3 --force flow.mov
 ffmpeg -i flow.mov -vf "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=yavg.txt" -f null -
 ```
 
-**What VoiceOver reads, in order** (DEBUG builds, through `ReaderRemote`): `{"cmd": "voiceOver"}` writes the current screen's items to `Documents/voiceover.txt` (`VoiceOverWalk`), skipping what the app hides, which XCUITest's tree doesn't. `"name": "tree"` adds the containers. `{"cmd": "voiceOverScroll", "side": "next"}` sends the reader's page item a scroll as VoiceOver does (left, right, up, down, next or previous), and `{"cmd": "voiceOverActivate"}` a double tap. SwiftUI builds no items until accessibility is on, and stopping an XCUITest run turns it off again:
+**What VoiceOver reads, in order** (DEBUG builds, through `ReaderRemote`): `{"cmd": "voiceOver"}` writes the current screen's items to `Documents/voiceover.txt` (`VoiceOverWalk`), skipping what the app hides, which XCUITest's tree doesn't. `"name": "tree"` adds the containers. `{"cmd": "voiceOverScroll", "side": "next"}` sends the reader's page item a scroll as VoiceOver does (left, right, up, down, next or previous), and `{"cmd": "voiceOverActivate"}` a double tap; with `"name"`, a double tap on the element VoiceOver reads as that, falling back to a control's action as VoiceOver's own tap does. `{"cmd": "voiceOverAction", "name": "Share", "label": "…"}` runs an action from the Actions rotor, on the element labelled `label` if given (#125). Together they script a VoiceOver user's task headless: `highlights/tools/voiceover_check.py` does the highlight tasks start to end (`highlights.md`). SwiftUI builds no items until accessibility is on, and stopping an XCUITest run turns it off again:
 
 ```bash
 xcrun simctl spawn <udid> defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool true
@@ -246,7 +247,7 @@ Where it misleads:
 - **The audit's contrast part returns nothing unfolded.** Run it folded.
 - **On glass it fails text that's fine,** down to 20:1 black on white. Read those from the pixels with `tools/contrast.py`, and take the screenshot first, because the audit can move a list.
 - **A tap can wait a minute.** After a fold, XCUITest often logs "App animations complete notification not received" and goes on after 60 s. The app sits at about 0% CPU meanwhile.
-- **VoiceOver starts on the simulator, but scripted gestures don't move its cursor.** It needs a person on a device. The walker shows the order and names, not what VoiceOver says aloud.
+- **VoiceOver starts on the simulator, but scripted gestures don't move its cursor** (rechecked 2026-11-16: `defaults write com.apple.Accessibility VoiceOverTouchEnabled` plus `launchctl start com.apple.VoiceOverTouch` starts it, and two quick scripted taps aren't a double tap). So tasks are scripted through the remote's VoiceOver commands instead, which reach the same elements and actions VoiceOver does. What VoiceOver says aloud still needs a person on a device. Starting it leaves a "VoiceOver Gestures" alert up after it's stopped; tap OK.
 
 ## Not checked
 

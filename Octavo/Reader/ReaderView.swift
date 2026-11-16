@@ -12,6 +12,8 @@ struct ReaderView: View {
     let book: OpenedBook
     /// Where the book's bookmarks sync, if anywhere.
     var bookmarkSync: (any BookmarkSync)?
+    /// Where its highlights sync, if anywhere.
+    var highlightSync: (any HighlightSync)?
     /// Where the book's place syncs, if anywhere, and the server's place
     /// from the library list for when it can't pull (`ReaderModel.fallback`).
     var progressSync: (any ProgressSync)?
@@ -64,6 +66,8 @@ struct ReaderView: View {
             // (decision 30).
             let replay = shell.tour.replayPlace
             let bookmarks = ReaderBookmarks(bookID: book.reader.id, store: replay?.bookmarks ?? BookmarkStore(), sync: bookmarkSync)
+            let highlights = replay.map { ReaderHighlights(bookID: book.reader.id, store: $0.highlights) }
+                ?? shell.highlightsWaiting.highlights(forBook: book.reader.id, sync: highlightSync)
             #if DEBUG
             let cfiShape = ReaderRemote.cfiShape
             #else
@@ -71,7 +75,7 @@ struct ReaderView: View {
             #endif
             model = ReaderModel(
                 book: book.reader, store: replay?.positions ?? ReadingPositionStore(), sync: progressSync, fallback: listedPlace,
-                bookmarks: bookmarks, cfiShape: cfiShape, paceStore: .shared
+                bookmarks: bookmarks, highlights: highlights, cfiShape: cfiShape, paceStore: .shared
             )
         }
         .onDisappear {
@@ -180,9 +184,13 @@ private struct ReaderScreen: View {
                 .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
                 .overlay(alignment: .bottomLeading) {
                     if let footerBar = chrome.footerBar, let geometry = model.geometry {
-                        let span = ReaderChromeLayout.footerBarSpan(in: geometry, layout: model.layout)
+                        let span = ReaderChromeLayout.footerBarSpan(
+                            in: geometry, layout: model.layout, under: footerBar == .highlight ? model.highlightBarX : nil
+                        )
                         Group {
                             switch footerBar {
+                            case .highlight:
+                                ReaderHighlightBar(model: model, writeNote: { model.noteSheet = $0 })
                             case .search:
                                 searchBar
                             case .serverPlace(let place):
@@ -236,6 +244,26 @@ private struct ReaderScreen: View {
                 }
                 .animation(.easeOut(duration: 0.2), value: model.note)
                 .overlay(alignment: .topLeading) {
+                    if let highlight = model.cardHighlight, let mark = model.tappedHighlightMark, model.phase == .open, let geometry = model.geometry {
+                        ReaderCardLayout(
+                            placement: ReaderNotePlacement(mark: mark, layout: model.layout, geometry: geometry, barBottom: shell.hasHinge ? 0 : model.barBottom),
+                            textInset: 0
+                        ) {
+                            ReaderHighlightCard(
+                                highlight: highlight,
+                                source: shell.reader.reading.flatMap { ReaderHighlightCard.source(title: $0.book.title, authors: $0.book.authors) },
+                                theme: appearance.theme(darkMode: darkMode),
+                                recolor: { model.highlights.recolor(highlight.id, to: $0) },
+                                writeNote: { model.noteSheet = highlight.id },
+                                delete: model.deleteCardHighlight,
+                                close: model.closeHighlightCard
+                            )
+                        }
+                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.96)))
+                    }
+                }
+                .animation(.easeOut(duration: 0.2), value: model.tappedHighlight)
+                .overlay(alignment: .topLeading) {
                     if let step = shell.tour.playing?.step, model.phase == .open, shell.reader.coverMotion == nil, let geometry = model.geometry {
                         let onOnePage = panel != nil && !(model.layout.columns == 2 && model.layout.fold != nil)
                         TourCardSlot(step: step, geometry: geometry, layout: model.layout, sheetHeight: onOnePage ? sheetHeight : nil)
@@ -245,6 +273,20 @@ private struct ReaderScreen: View {
                 .animation(.easeOut(duration: 0.2), value: shell.tour.playing?.step)
                 .ignoresSafeArea()
                 .toolbar { buttons }
+                // A highlight's note (#125).
+                .sheet(isPresented: Binding(get: { model.noteSheet != nil }, set: { if !$0 { model.noteSheet = nil } })) {
+                    // One deleted elsewhere meanwhile takes its sheet with it.
+                    if let id = model.noteSheet, let highlight = model.highlights.highlight(id) {
+                        ReaderHighlightNoteSheet(highlight: highlight) { note in
+                            model.highlights.setNote(id, to: note)
+                            model.noteSheet = nil
+                            model.highlightBar = nil
+                        } cancel: {
+                            model.noteSheet = nil
+                            model.highlightBar = nil
+                        }
+                    }
+                }
                 // Inside the stack, the safe area's top includes the bar
                 // holding the column's buttons.
                 .onGeometryChange(for: Double.self) { Double($0.safeAreaInsets.top) } action: { model.barBottomChanged($0) }
@@ -286,7 +328,7 @@ private struct ReaderScreen: View {
         .onChange(of: scenePhase == .background, initial: true) { _, isInBackground in
             model.isInBackground = isInBackground
         }
-        .onChange(of: controls.coversPage || panel != nil || model.note != nil, initial: true) { _, covers in
+        .onChange(of: controls.coversPage || panel != nil || model.note != nil || model.barHighlight != nil || model.cardHighlight != nil, initial: true) { _, covers in
             model.coversPage = covers
         }
         .onChange(of: panel) { _, panel in
@@ -383,7 +425,8 @@ private struct ReaderScreen: View {
         ReaderChromeLayout(state: ReaderChromeLayout.State(
             isOpen: model.phase == .open, hasTrip: model.trip != nil, panelOpen: panel != nil, noteOpen: model.note != nil,
             inTour: shell.tour.playing != nil, searchStepping: model.search.isStepping, serverPlace: model.serverPlace,
-            showsBar: controls.showsBar, twoPages: model.layout.columns == 2
+            showsBar: controls.showsBar, twoPages: model.layout.columns == 2,
+            highlighting: model.showsHighlightBar
         ))
     }
 
@@ -519,6 +562,20 @@ private struct ReaderScreen: View {
                 backToReading()
             },
             remove: { model.bookmarks.remove($0) },
+            highlights: model.isFixedLayout ? nil : ReaderContentsPanel.Highlights(
+                list: model.highlights.list,
+                notFound: model.highlights.notFound,
+                export: shell.reader.reading.map { HighlightsExport(book: $0.book, highlights: model.highlights) },
+                goTo: { highlight in
+                    model.jump(to: highlight)
+                    backToReading()
+                },
+                remove: { model.highlights.remove($0) },
+                editNote: { model.noteSheet = $0 },
+                share: { [source = shell.reader.reading.flatMap { ReaderHighlightCard.source(title: $0.book.title, authors: $0.book.authors) }] highlight in
+                    ShareSheet.present(ReaderHighlightCard.shareText(highlight.text, source: source))
+                }
+            ),
             close: closePanel
         )
     }

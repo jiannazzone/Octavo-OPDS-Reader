@@ -54,6 +54,12 @@ extension ReaderModel {
         jump(to: bookmark.cfi)
     }
 
+    /// To where a highlight starts: a trip compares places as points.
+    func jump(to highlight: LocalHighlight) {
+        guard let cfi = highlight.cfi else { return }
+        jump(to: ReaderCFI.start(of: cfi))
+    }
+
     // MARK: Chapter buttons
 
     var chapterSkip: ReaderChapterSkip {
@@ -108,15 +114,22 @@ extension ReaderModel {
             contentsPlaced(refined)
         }
         let list = bookmarks.list
-        guard !list.isEmpty,
-              let fractions = try? await page.callJavaScript("return await window.octavo.bookmarksOnScreen(cfis)", arguments: ["cfis": list.map(\.cfi)]) as? [Any],
-              fractions.count == list.count
-        else { return }
-        var placed: [LocalBookmark.ID: Double] = [:]
-        for (bookmark, fraction) in zip(list, fractions) {
-            if let fraction = fraction as? Double { placed[bookmark.id] = fraction }
+        if !list.isEmpty, let fractions = await onScreen(list.map(\.cfi)) {
+            bookmarks.place(Dictionary(uniqueKeysWithValues: zip(list.map(\.id), fractions).compactMap { id, fraction in fraction.map { (id, $0) } }))
         }
-        bookmarks.place(placed)
+        let marked = highlights.list.compactMap { highlight in highlight.cfi.map { (highlight.id, $0) } }
+        if !marked.isEmpty, phase == .open, let fractions = await onScreen(marked.map(\.1)) {
+            highlights.place(Dictionary(uniqueKeysWithValues: zip(marked.map(\.0), fractions).compactMap { id, fraction in fraction.map { (id, $0) } }))
+        }
+    }
+
+    /// Where each place in the section on screen falls, by its layout;
+    /// `nil` for the rest.
+    private func onScreen(_ cfis: [String]) async -> [Double?]? {
+        guard let fractions = try? await page.callJavaScript("return await window.octavo.bookmarksOnScreen(cfis)", arguments: ["cfis": cfis]) as? [Any],
+              fractions.count == cfis.count
+        else { return nil }
+        return fractions.map { $0 as? Double }
     }
 
     // MARK: Search
