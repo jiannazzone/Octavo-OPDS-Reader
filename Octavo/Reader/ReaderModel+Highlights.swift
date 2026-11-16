@@ -164,12 +164,15 @@ extension ReaderModel {
         guard let boxes = try? await page.callJavaScript("return await window.octavo.highlightBoxes(cfis)", arguments: ["cfis": list.map(\.1)]) as? [Any],
               asked == relocationCount, boxes.count == list.count
         else { return }
-        highlightsOnPage = zip(list, boxes).compactMap { item, box in
+        let found: [(id: LocalHighlight.ID, mark: ReaderNote.Mark)] = zip(list, boxes).compactMap { item, box in
             guard let box = box as? [String: Any], let x = box["x"] as? Double, let y = box["y"] as? Double,
                   let width = box["width"] as? Double, let height = box["height"] as? Double
             else { return nil }
             return (item.0, ReaderNote.Mark(x: x, y: y, width: width, height: height))
         }
+        // Unchanged, the page item keeps its actions.
+        guard found.map(\.id) != highlightsOnPage.map(\.id) || found.map(\.mark) != highlightsOnPage.map(\.mark) else { return }
+        highlightsOnPage = found
     }
 
     /// VoiceOver's action for a highlight on the page: its card.
