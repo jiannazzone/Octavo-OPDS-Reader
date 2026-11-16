@@ -2374,6 +2374,31 @@ window.octavo = Object.freeze({
     onPage: reported(async function onPage_(cfis) {
         return onPage(cfis)
     }),
+    // The highlights that start on the visible page, each with its first
+    // line's box in the top window (#125), for VoiceOver's actions; `null`
+    // for the rest.
+    highlightBoxes: reported(async function highlightBoxes(cfis) {
+        const list = Array.isArray(cfis) ? cfis : []
+        // By where it is on screen: foliate's location can lag the turn
+        // that's just been reported.
+        const page = view?.getBoundingClientRect()
+        return list.map(cfi => {
+            try {
+                const { index, anchor } = requireView().resolveCFI(String(cfi))
+                const doc = loadedDoc(index)
+                const frame = doc?.defaultView?.frameElement
+                if (!frame) return null
+                const rect = toRange(doc, anchor(doc)).getClientRects()[0]
+                if (!rect || !page) return null
+                const box = frame.getBoundingClientRect()
+                const x = box.left + rect.left
+                if (x < page.left || x >= page.right) return null
+                return { x, y: box.top + rect.top, width: rect.width, height: rect.height }
+            } catch {
+                return null
+            }
+        })
+    }),
     // Several places at once (#125), each section parsed once. `null` for
     // one that can't be placed.
     describeAll: reported(async function describeAll(cfis) {

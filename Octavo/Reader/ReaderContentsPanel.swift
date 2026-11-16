@@ -19,6 +19,9 @@ struct ReaderContentsPanel: View {
         var export: HighlightsExport?
         var goTo: (LocalHighlight) -> Void
         var remove: (LocalHighlight.ID) -> Void
+        /// VoiceOver's actions on a row, beside the swipe's Delete.
+        var editNote: (LocalHighlight.ID) -> Void
+        var share: (LocalHighlight) -> Void
     }
 
     let rows: [ReaderContentsRow]
@@ -148,12 +151,12 @@ struct ReaderContentsPanel: View {
                         .listRowInsets(Self.rowInsets)
                     }
                     ForEach(highlights.list) { highlight in
-                        highlightRow(highlight, heading: heading(for: highlight), goTo: highlights.goTo, remove: highlights.remove)
+                        highlightRow(highlight, heading: heading(for: highlight), goTo: highlights.goTo, in: highlights)
                     }
                     if !highlights.notFound.isEmpty {
                         Section {
                             ForEach(highlights.notFound) { highlight in
-                                highlightRow(highlight, heading: highlight.chapter, goTo: nil, remove: highlights.remove)
+                                highlightRow(highlight, heading: highlight.chapter, goTo: nil, in: highlights)
                             }
                         } header: {
                             Text("Not Found in This File")
@@ -169,7 +172,7 @@ struct ReaderContentsPanel: View {
     /// The chapter and page, the words with their colour beside them (three
     /// lines at most), and the note in grey. A row with nowhere to go
     /// (`goTo` nil) is plain text.
-    private func highlightRow(_ highlight: LocalHighlight, heading: String?, goTo: ((LocalHighlight) -> Void)?, remove: @escaping (LocalHighlight.ID) -> Void) -> some View {
+    private func highlightRow(_ highlight: LocalHighlight, heading: String?, goTo: ((LocalHighlight) -> Void)?, in highlights: Highlights) -> some View {
         let content = VStack(alignment: .leading, spacing: 4) {
             if let heading, !heading.isEmpty {
                 Text(verbatim: heading)
@@ -205,8 +208,10 @@ struct ReaderContentsPanel: View {
         .listRowBackground(Color.clear)
         .listRowInsets(Self.rowInsets)
         .swipeActions {
-            Button("Delete", systemImage: "trash", role: .destructive) { remove(highlight.id) }
+            Button("Delete", systemImage: "trash", role: .destructive) { highlights.remove(highlight.id) }
         }
+        .accessibilityAction(named: Text(highlight.note == nil ? "Add Note" : "Edit Note")) { highlights.editNote(highlight.id) }
+        .accessibilityAction(named: Text("Share")) { highlights.share(highlight) }
     }
 
     /// "Chapter 13 · Page 64", or whichever there is.

@@ -570,7 +570,11 @@ private struct ReaderScreen: View {
                     model.jump(to: highlight)
                     backToReading()
                 },
-                remove: { model.highlights.remove($0) }
+                remove: { model.highlights.remove($0) },
+                editNote: { model.noteSheet = $0 },
+                share: { [source = shell.reader.reading.flatMap { ReaderHighlightCard.source(title: $0.book.title, authors: $0.book.authors) }] highlight in
+                    ShareSheet.present(ReaderHighlightCard.shareText(highlight.text, source: source))
+                }
             ),
             close: closePanel
         )

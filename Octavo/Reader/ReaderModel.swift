@@ -54,6 +54,10 @@ final class ReaderModel {
     /// The highlight tapped, for its card (#125), and where it is.
     var tappedHighlight: LocalHighlight.ID?
     var tappedHighlightMark: ReaderNote.Mark?
+    /// The highlights starting on the visible page, with where they are, for
+    /// VoiceOver's actions (#125).
+    var highlightsOnPage: [(id: LocalHighlight.ID, mark: ReaderNote.Mark)] = []
+    @ObservationIgnored var highlightsOnPageCheck: Task<Void, Never>?
     /// What the page was last given to draw, so a change that draws nothing
     /// new (a place worked out) sends nothing.
     @ObservationIgnored var sentHighlights: [[String: String]] = []
@@ -653,6 +657,7 @@ final class ReaderModel {
         paceStore.save()
         followTurnFrames(false)
         foldTask?.cancel()
+        highlightsOnPageCheck?.cancel()
         foldBatch = nil
         await pusher?.flush()
     }
@@ -763,6 +768,7 @@ final class ReaderModel {
             // Away, your place hasn't been left.
             if serverPlace != nil, trip == nil, tripToBe == nil { Task { await serverPlaceMayBeLeft() } }
             Task { await updateBookmarkedPage() }
+            highlightsOnPageSoon()
         case .tap(let zone):
             if zone == "dismiss" {
                 closeNote("a tap elsewhere")

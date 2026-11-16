@@ -22,6 +22,7 @@ extension ReaderModel {
         let list = highlightsForPage
         guard phase == .open, !isFixedLayout, list != sentHighlights else { return }
         sentHighlights = list
+        highlightsOnPageSoon()
         call("return await window.octavo.setHighlights(list)", arguments: ["list": highlightsForPage])
     }
 
@@ -134,5 +135,47 @@ extension ReaderModel {
         guard let highlight = cardHighlight else { return }
         highlights.remove(highlight.id)
         tappedHighlight = nil
+    }
+}
+
+// MARK: VoiceOver
+
+extension ReaderModel {
+    /// Asks once the page has settled: a jump reports its place before its
+    /// page is laid out where it lands.
+    func highlightsOnPageSoon() {
+        highlightsOnPageCheck?.cancel()
+        highlightsOnPageCheck = Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            await updateHighlightsOnPage()
+        }
+    }
+
+    /// Which highlights start on the visible page. A page turned since the
+    /// question was asked gets its own answer.
+    func updateHighlightsOnPage() async {
+        let list = highlights.list.compactMap { highlight in highlight.cfi.map { (highlight.id, $0) } }
+        guard !list.isEmpty, phase == .open, !isFixedLayout else {
+            if !highlightsOnPage.isEmpty { highlightsOnPage = [] }
+            return
+        }
+        let asked = relocationCount
+        guard let boxes = try? await page.callJavaScript("return await window.octavo.highlightBoxes(cfis)", arguments: ["cfis": list.map(\.1)]) as? [Any],
+              asked == relocationCount, boxes.count == list.count
+        else { return }
+        highlightsOnPage = zip(list, boxes).compactMap { item, box in
+            guard let box = box as? [String: Any], let x = box["x"] as? Double, let y = box["y"] as? Double,
+                  let width = box["width"] as? Double, let height = box["height"] as? Double
+            else { return nil }
+            return (item.0, ReaderNote.Mark(x: x, y: y, width: width, height: height))
+        }
+    }
+
+    /// VoiceOver's action for a highlight on the page: its card.
+    func openHighlightCard(_ id: LocalHighlight.ID) {
+        guard let onPage = highlightsOnPage.first(where: { $0.id == id }), let cfi = highlights.highlight(id)?.cfi else { return }
+        let mark = onPage.mark
+        openHighlightCard(cfi: cfi, box: CGRect(x: mark.x, y: mark.y, width: mark.width, height: mark.height))
     }
 }

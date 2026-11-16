@@ -1,3 +1,4 @@
+import OctavoKit
 import SwiftUI
 import UIKit
 
@@ -26,6 +27,22 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
             return model.voiceOverTurn(side)
         }
         view.activate = toggleControls
+        // Each highlight on the page opens its card (#125), as a tap does.
+        view.accessibilityCustomActions = model.highlightsOnPage.compactMap { onPage in
+            guard let highlight = model.highlights.highlight(onPage.id) else { return nil }
+            return UIAccessibilityCustomAction(name: Self.actionName(for: highlight.text)) { [model] _ in
+                model.openHighlightCard(onPage.id)
+                return true
+            }
+        }
+    }
+
+    /// "Highlight: “It is a truth universally…”", its first words.
+    nonisolated static func actionName(for text: String) -> String {
+        let words = text.split(separator: " ")
+        let start = words.prefix(6).joined(separator: " ")
+        let quote = words.count > 6 ? start + "…" : start
+        return String(localized: "Highlight: “\(quote)”", comment: "VoiceOver: an action that opens a highlight on the page")
     }
 
     /// A page with no words (a picture) says where it is.
