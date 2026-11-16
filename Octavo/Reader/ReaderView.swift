@@ -12,6 +12,8 @@ struct ReaderView: View {
     let book: OpenedBook
     /// Where the book's bookmarks sync, if anywhere.
     var bookmarkSync: (any BookmarkSync)?
+    /// Where its highlights sync, if anywhere.
+    var highlightSync: (any HighlightSync)?
     /// Where the book's place syncs, if anywhere, and the server's place
     /// from the library list for when it can't pull (`ReaderModel.fallback`).
     var progressSync: (any ProgressSync)?
@@ -64,6 +66,7 @@ struct ReaderView: View {
             // (decision 30).
             let replay = shell.tour.replayPlace
             let bookmarks = ReaderBookmarks(bookID: book.reader.id, store: replay?.bookmarks ?? BookmarkStore(), sync: bookmarkSync)
+            let highlights = ReaderHighlights(bookID: book.reader.id, store: replay?.highlights ?? HighlightStore(), sync: replay == nil ? highlightSync : nil)
             #if DEBUG
             let cfiShape = ReaderRemote.cfiShape
             #else
@@ -71,7 +74,7 @@ struct ReaderView: View {
             #endif
             model = ReaderModel(
                 book: book.reader, store: replay?.positions ?? ReadingPositionStore(), sync: progressSync, fallback: listedPlace,
-                bookmarks: bookmarks, cfiShape: cfiShape, paceStore: .shared
+                bookmarks: bookmarks, highlights: highlights, cfiShape: cfiShape, paceStore: .shared
             )
         }
         .onDisappear {

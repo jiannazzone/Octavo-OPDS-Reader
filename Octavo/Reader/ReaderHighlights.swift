@@ -20,6 +20,8 @@ final class ReaderHighlights {
     /// went stale while it was fetched.
     @ObservationIgnored private var answers = 0
     @ObservationIgnored private let log = Logger(subsystem: "com.ianazzone.ereader", category: "Highlights")
+    /// Called after every change, for the page to draw it.
+    @ObservationIgnored var changed: (() -> Void)?
 
     init(bookID: String, store: HighlightStore = HighlightStore(), sync: (any HighlightSync)? = nil) {
         self.bookID = bookID
@@ -198,6 +200,7 @@ final class ReaderHighlights {
     }
 
     private func save() {
+        changed?()
         do {
             try store.save(all, forBook: bookID)
         } catch {

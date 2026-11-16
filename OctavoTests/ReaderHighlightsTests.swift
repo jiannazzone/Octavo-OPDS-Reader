@@ -208,3 +208,51 @@ struct ReaderHighlightsTests {
         #expect(highlights.list.first?.note == "Mine")
     }
 }
+
+/// Highlights' changes retried with the reader closed (#125), as places are.
+@MainActor
+@Suite(.temporaryFiles)
+struct HighlightsWaitingTests {
+    private let store = HighlightStore(directory: URL.testDirectory.appending(path: "Highlights-\(UUID().uuidString)"))
+    private let book = HighlightsWaiting.Book(source: LibrarySourceID(rawValue: "server"), bookID: 4, fileID: 4)
+    private let cfi = "epubcfi(/6/4!/4/38/2,/1:143,/1:150)"
+
+    @Test func whatTheReaderLeftUnsentGoesLater() async throws {
+        try store.save([LocalHighlight(cfi: cfi, text: "Collins")], forBook: "key")
+        let sync = MemoryHighlightSync()
+        let waiting = HighlightsWaiting(store: store) { _ in sync }
+        waiting.record(book, key: "key")
+        await waiting.retry()
+        #expect(await sync.added.map(\.text) == ["Collins"])
+        #expect(store.items(forBook: "key").first?.remoteID != nil)
+        #expect(waiting.waitingKeys.isEmpty, "nothing's left to send")
+    }
+
+    @Test func theOpenBookIsLeftToItsReader() async throws {
+        try store.save([LocalHighlight(cfi: cfi, text: "Collins")], forBook: "key")
+        let sync = MemoryHighlightSync()
+        let waiting = HighlightsWaiting(store: store) { _ in sync }
+        waiting.record(book, key: "key")
+        await waiting.retry(except: "key")
+        #expect(await sync.added.isEmpty)
+        #expect(waiting.waitingKeys == ["key"])
+    }
+
+    // Its server isn't connected: kept for when it is, across launches.
+    @Test func aBookWhoseServerIsntThereWaits() async throws {
+        try store.save([LocalHighlight(cfi: cfi, text: "Collins")], forBook: "key")
+        let waiting = HighlightsWaiting(store: store) { _ in nil }
+        waiting.record(book, key: "key")
+        await waiting.retry()
+        let relaunched = HighlightsWaiting(store: store) { _ in nil }
+        #expect(relaunched.waitingKeys == ["key"])
+    }
+
+    @Test func aBookWithNothingToSendIsForgotten() async throws {
+        try store.save([LocalHighlight(cfi: cfi, text: "Collins", remoteID: "7")], forBook: "key")
+        let waiting = HighlightsWaiting(store: store) { _ in nil }
+        waiting.record(book, key: "key")
+        await waiting.retry()
+        #expect(waiting.waitingKeys.isEmpty)
+    }
+}

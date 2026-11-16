@@ -390,7 +390,9 @@ enum ReaderRemote {
             Task { await reader.highlightSelection(color: command.name ?? "#FACC15") }
             return nil
         case "highlightState":
-            return "bar \(reader.highlightBar ?? "none"), tapped \(reader.tappedHighlight ?? "none"), covers \(reader.coversPage)"
+            let name = { (id: LocalHighlight.ID?) in id.flatMap { reader.highlights.highlight($0)?.cfi } ?? "none" }
+            let box = reader.selectionBox.map { "\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))×\(Int($0.height))" } ?? "none"
+            return "bar \(name(reader.highlightBar)), tapped \(name(reader.tappedHighlight)), covers \(reader.coversPage), \(reader.highlights.list.count) placed \(reader.highlights.list.filter(\.isDescribed).count), \(reader.highlights.notFound.count) not found, selection \(box)"
         case "noteState":
             return reader.note.map { "open \($0.href), mark at \($0.mark.y), size \($0.font.size), line \($0.font.lineHeight ?? -1), \($0.font.family ?? "no family"), \($0.blocks.count) blocks" } ?? "no note; last error \(reader.lastError ?? "none")"
         case "next": reader.next()

@@ -42,10 +42,16 @@ final class ReaderModel {
     private(set) var pageWords: String?
     /// The footnote open over the page, if any (`ReaderModel+Notes`).
     var note: ReaderNote?
-    /// SPIKE (#125): the highlight just made, while its bar is up.
-    var highlightBar: String?
-    /// SPIKE (#125): the last highlight tapped.
-    var tappedHighlight: String?
+    /// Where the selection is, while there is one: for the highlight bar
+    /// (#125).
+    var selectionBox: CGRect?
+    /// The highlight just made, while its bar is up (#125).
+    var highlightBar: LocalHighlight.ID?
+    /// The highlight tapped, for its card (#125).
+    var tappedHighlight: LocalHighlight.ID?
+    /// What the page was last given to draw, so a change that draws nothing
+    /// new (a place worked out) sends nothing.
+    @ObservationIgnored var sentHighlights: [[String: String]] = []
     @ObservationIgnored var noteOpenedAt: ContinuousClock.Instant?
     /// The contents with where each entry starts, for naming the chapter at
     /// any point of the progress bar.
@@ -209,6 +215,8 @@ final class ReaderModel {
 
     /// The book's bookmarks (decisions 17–18).
     let bookmarks: ReaderBookmarks
+    /// The book's highlights (#125).
+    let highlights: ReaderHighlights
     /// Search in book (decision 19).
     let search = ReaderSearch()
 
@@ -284,6 +292,7 @@ final class ReaderModel {
         sync: (any ProgressSync)? = nil,
         fallback: SyncedPosition? = nil,
         bookmarks: ReaderBookmarks? = nil,
+        highlights: ReaderHighlights? = nil,
         cfiShape: ReaderMessage.CFIShape = .point,
         pushDelay: Duration = .seconds(2),
         paceStore: ReadingPaceStore = ReadingPaceStore(fileURL: nil)
@@ -294,6 +303,7 @@ final class ReaderModel {
         self.sync = sync
         self.fallback = fallback
         self.bookmarks = bookmarks ?? ReaderBookmarks(bookID: book.id)
+        self.highlights = highlights ?? ReaderHighlights(bookID: book.id)
         self.cfiShape = cfiShape
 
         var configuration = WebPage.Configuration()
@@ -701,6 +711,8 @@ final class ReaderModel {
             sendTurnMode()
             sendAppearance()
             Task { await refreshBookmarks() }
+            highlights.changed = { [weak self] in self?.sendHighlights() }
+            Task { await refreshHighlights() }
         case .contents(let entries):
             contentsPlaced(entries)
         case .searchResults(let batch):
@@ -746,10 +758,11 @@ final class ReaderModel {
             onControlsTap?(zone)
         case .turn(let side):
             turnRequested(side)
-        case .selection(let active):
+        case .selection(let active, let box):
             swipes.pageHasSelection = active
+            selectionBox = active ? box : nil
         case .highlightTap(let cfi):
-            tappedHighlight = cfi
+            tappedHighlight = highlights.highlight(cfi: cfi)?.id
         case .viewport(let width, let height):
             log.debug("viewport \(width)×\(height)")
             viewport = CGSize(width: width, height: height)
@@ -810,7 +823,9 @@ final class ReaderModel {
                 "koreaderPlaces": writesXPointers,
                 "layout": layout.scriptArguments,
                 "appearance": appearance.scriptArguments,
+                "highlights": highlightsForPage,
             ]
+            sentHighlights = highlightsForPage
             #if DEBUG
             // The formats check's controls: the bridge's second layer off
             // (`docs/notes/formats-check.md`).
@@ -1106,6 +1121,7 @@ final class ReaderModel {
         guard !isCatchingUp else { return }
         isCatchingUp = true
         defer { isCatchingUp = false }
+        Task { await refreshHighlights() }
         await checkServerPlace()
         if serverPlace == nil { await pusher?.flush() }
     }

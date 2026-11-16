@@ -136,6 +136,11 @@ public struct LocalHighlight: Codable, Hashable, Sendable, Identifiable {
     /// Placed, so the list can show its page.
     public var isDescribed: Bool { fraction != nil }
 
+    /// Has something still to send: its add, a change or its removal.
+    public var isWaiting: Bool {
+        isRemoved || !unsent.isEmpty || (remoteID == nil && cfi != nil)
+    }
+
     /// The unsent changes, as the backend takes them.
     public var edit: HighlightEdit {
         HighlightEdit(

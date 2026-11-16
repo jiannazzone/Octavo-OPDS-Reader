@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import OctavoKit
 
@@ -28,8 +29,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// (any Page Turn but None; `ReaderPageTurn`).
     case turn(side: ReaderTurnSide)
     /// Text is selected in the page, or no longer is: a finger moving a
-    /// selection's handle mustn't turn the page.
-    case selection(active: Bool)
+    /// selection's handle mustn't turn the page. `box` is where the
+    /// selection is, in the page's points, for the highlight bar (#125).
+    case selection(active: Bool, box: CGRect? = nil)
     /// The page's size in CSS px (= points), sent on load and whenever it
     /// changes.
     case viewport(width: Double, height: Double)
@@ -42,7 +44,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// The user tapped a note's mark: the note, read from the book, for a card
     /// over the page (decision 34).
     case note(ReaderNote)
-    /// SPIKE (#125): the user tapped a highlight, by its CFI.
+    /// The user tapped a highlight, by its CFI (#125).
     case highlightTap(cfi: String)
     case error(ScriptError)
     /// A `console.error`/`console.warn` line from foliate-js.
@@ -208,7 +210,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href, width, height, toc, side, active, cfi
+        case type, zone, level, message, href, width, height, toc, side, active, cfi, x, y
     }
 
     init(from decoder: any Decoder) throws {
@@ -232,7 +234,13 @@ nonisolated extension ReaderMessage: Decodable {
         case "turn":
             self = .turn(side: try container.decode(ReaderTurnSide.self, forKey: .side))
         case "selection":
-            self = .selection(active: try container.decodeIfPresent(Bool.self, forKey: .active) ?? false)
+            let active = try container.decodeIfPresent(Bool.self, forKey: .active) ?? false
+            var box: CGRect?
+            if let x = try container.decodeIfPresent(Double.self, forKey: .x), let y = try container.decodeIfPresent(Double.self, forKey: .y),
+               let width = try container.decodeIfPresent(Double.self, forKey: .width), let height = try container.decodeIfPresent(Double.self, forKey: .height) {
+                box = CGRect(x: x, y: y, width: width, height: height)
+            }
+            self = .selection(active: active, box: box)
         case "viewport":
             self = .viewport(
                 width: try container.decode(Double.self, forKey: .width),

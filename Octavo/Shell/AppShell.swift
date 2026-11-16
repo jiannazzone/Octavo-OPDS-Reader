@@ -38,7 +38,7 @@ struct AppShell: View {
             }
             if let book = model.reader.reading {
                 ReaderView(
-                    book: book, bookmarkSync: model.reader.bookmarkSync,
+                    book: book, bookmarkSync: model.reader.bookmarkSync, highlightSync: model.reader.highlightSync,
                     progressSync: model.reader.progressSync, listedPlace: model.reader.listedPlace,
                     connectionReturns: model.connection.returns,
                     opened: { [motion = model.reader.coverMotion] pages in motion?.readerOpened(pages) },
