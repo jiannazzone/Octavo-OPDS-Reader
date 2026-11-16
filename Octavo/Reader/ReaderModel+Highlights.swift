@@ -175,6 +175,17 @@ extension ReaderModel {
         highlightsOnPage = found
     }
 
+    /// VoiceOver's Text Selection rotor picked `range` (UTF-16, as `NSRange`
+    /// is) in the page's words: the same words are selected in the book, and
+    /// the bar comes up as for a finger's selection (`bridge.js`
+    /// `selectPageWords`). An empty range clears the selection. Words from a
+    /// page since turned are left alone.
+    func selectPageWords(_ range: NSRange, in words: String) {
+        guard !isFixedLayout, words == pageWords, range.location != NSNotFound else { return }
+        call("return await window.octavo.selectPageWords(start, end, text)",
+             arguments: ["start": range.location, "end": range.location + range.length, "text": words])
+    }
+
     /// VoiceOver's action for a highlight on the page: its card.
     func openHighlightCard(_ id: LocalHighlight.ID) {
         guard let onPage = highlightsOnPage.first(where: { $0.id == id }), let cfi = highlights.highlight(id)?.cfi else { return }

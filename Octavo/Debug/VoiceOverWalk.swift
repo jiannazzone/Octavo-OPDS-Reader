@@ -34,22 +34,48 @@ enum VoiceOverWalk {
     /// Sends the page's item (the one that turns pages) a scroll, as
     /// VoiceOver does, and says whether it took it.
     static func scrollPage(_ direction: UIAccessibilityScrollDirection) -> String {
-        var found: [NSObject] = []
-        for window in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows) {
-            collect(window, depth: 0, where: { $0.accessibilityTraits.contains(.causesPageTurn) }, into: &found)
-        }
-        guard let page = found.first else { return "no page item" }
+        guard let page = pageItem() else { return "no page item" }
         return page.accessibilityScroll(direction) ? "taken" : "refused"
     }
 
     /// A double tap on the page's item, as VoiceOver sends it.
     static func activatePage() -> String {
+        guard let page = pageItem() else { return "no page item" }
+        return page.accessibilityActivate() ? "taken" : "refused"
+    }
+
+    /// Selects `text`, where it first comes in the page item's words, through
+    /// the item's `accessibilityTextInputResponder`, as VoiceOver's Text
+    /// Selection rotor does (#125); `nil` leaves just the cursor, as moving
+    /// it with the rotor does. Says what's selected after.
+    static func selectInPage(_ text: String?) -> String {
+        guard let page = pageItem() else { return "no page item" }
+        guard let input = page.accessibilityTextInputResponder else { return "the page item has no text input" }
+        let begin = input.beginningOfDocument
+        guard let all = input.textRange(from: begin, to: input.endOfDocument), let words = input.text(in: all) else { return "no words" }
+        let range: NSRange
+        if let text {
+            range = (words as NSString).range(of: text)
+            guard range.location != NSNotFound else { return "'\(text)' isn't in the page's words" }
+        } else {
+            let at = input.selectedTextRange.map { input.offset(from: begin, to: $0.start) } ?? 0
+            range = NSRange(location: at, length: 0)
+        }
+        guard let start = input.position(from: begin, offset: range.location),
+              let end = input.position(from: start, offset: range.length)
+        else { return "no such place in the words" }
+        input.selectedTextRange = input.textRange(from: start, to: end)
+        let selected = input.selectedTextRange.flatMap(input.text(in:)) ?? ""
+        return "selected '\(selected)'"
+    }
+
+    /// The page's item: the one that turns pages.
+    private static func pageItem() -> NSObject? {
         var found: [NSObject] = []
         for window in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows) {
             collect(window, depth: 0, where: { $0.accessibilityTraits.contains(.causesPageTurn) }, into: &found)
         }
-        guard let page = found.first else { return "no page item" }
-        return page.accessibilityActivate() ? "taken" : "refused"
+        return found.first
     }
 
     /// A double tap on the element VoiceOver reads as `label` (exactly, else
@@ -170,6 +196,8 @@ enum VoiceOverWalk {
         if let hint = object.accessibilityHint, !hint.isEmpty { parts.append("hint '\(hint)'") }
         let actions = object.accessibilityCustomActions?.map(\.name) ?? []
         if !actions.isEmpty { parts.append("actions [\(actions.joined(separator: ", "))]") }
+        // Text VoiceOver can select in (#125).
+        if object.accessibilityTextInputResponder != nil { parts.append("textInput") }
         if let inputLabels = object.accessibilityUserInputLabels, !inputLabels.isEmpty {
             parts.append("input [\(inputLabels.joined(separator: ", "))]")
         }

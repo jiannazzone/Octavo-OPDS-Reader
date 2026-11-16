@@ -4,12 +4,16 @@
 Drives the running DEBUG app through the debug remote (`ReaderRemote`) as
 VoiceOver would: it reads each screen's elements as VoiceOver walks them
 (`voiceOver`), double-taps elements by their label (`voiceOverActivate`),
-runs actions from the Actions rotor (`voiceOverAction`) and turns pages
-(`voiceOverScroll`). Nothing is spoken and no window opens. What it can't
-show is how VoiceOver says it; that still needs a person on a device.
+runs actions from the Actions rotor (`voiceOverAction`), selects words in
+the page's item as the Text Selection rotor does (`voiceOverSelect`) and
+turns pages (`voiceOverScroll`). Nothing is spoken and no window opens. What
+it can't show is how VoiceOver says it, and whether VoiceOver itself offers
+the rotor and still turns pages and reads on; that still needs a person on a
+device (docs/notes/highlights.md, "With VoiceOver").
 
-It makes its own highlight by selecting a range as a finger would
-(`select`) and deletes it again at the end, so the book is left as it was.
+It makes its own highlight by selecting the range's words in the page's
+item and double-tapping Green in the bar, and deletes it again at the end,
+so the book is left as it was.
 
 Usage (the app built for DEBUG, installed on a booted simulator, signed in
 to the local BookOrbit; docs/notes/highlights.md):
@@ -105,7 +109,7 @@ def main():
     parser.add_argument("udid")
     parser.add_argument("--file", type=int, default=4, help="a BookOrbit EPUB's file ID")
     parser.add_argument("--cfi", default="epubcfi(/6/4!/4/38/2,/1:0,/1:4)", help="a range on one page to highlight")
-    parser.add_argument("--words", default="This", help="the range's first words")
+    parser.add_argument("--words", default="This", help="the range's words, as the page's item has them")
     args = parser.parse_args()
 
     remote = Remote(args.udid)
@@ -123,22 +127,43 @@ def main():
     # A way back left by an earlier jump would bring the book back to it.
     if "Stay Here" in labels(remote.walk()):
         remote.send("voiceOverActivate", name="Stay Here")
-    check.ok(remote.send("unhighlight", cfi=args.cfi), "cleared any highlight left on the range")
+    check.ok(remote.send("unhighlight", cfi=args.cfi, name=args.words), "cleared any highlight left on the range")
     check.ok(remote.send("goto", cfi=args.cfi), "went to the range")
     time.sleep(2.5)
-    check.expect(args.words in remote.walk().split("# the page's words:")[0], "the page shows the range's words")
-    check.expect(action not in remote.walk(), "no highlight there yet")
+    walk = remote.walk()
+    check.expect(args.words in walk.split("# the page's words:")[0], "the page shows the range's words")
+    check.expect(action not in walk, "no highlight there yet")
+    page = next((line for line in walk.splitlines() if line.endswith("PageView")), "")
+    check.expect("textInput" in page and "pageTurn" in page, "the page's item is text to select in, and turns pages")
 
-    # Made with a finger; then VoiceOver's part.
-    check.ok(remote.send("select", cfi=args.cfi), "selected the range")
+    # Made with VoiceOver: the words selected in the page's item, as the
+    # Text Selection rotor does, select the same words in the book.
+    check.ok(remote.send("voiceOverSelect", name=args.words), f"selected “{args.words}” in the page's item")
     time.sleep(1)
-    check.ok(remote.send("highlight", name="#4ADE80"), "highlighted it green")
+    check.expect("selection none" not in remote.state(), "the same words are selected in the book")
+    check.expect("Green" in labels(remote.walk()), "the bar's colours are in reach")
+    check.ok(remote.send("voiceOverSelect"), "unselected them in the page's item")
+    time.sleep(1)
+    check.expect("selection none" in remote.state(), "the book's selection went too")
+    check.ok(remote.send("voiceOverSelect", name=args.words), "selected them again")
+    time.sleep(1)
+    check.ok(remote.send("voiceOverActivate", name="Green"), "double-tapped Green in the bar")
     time.sleep(2)
+    check.expect(f"bar {args.cfi}," in remote.state(), f"the highlight is the range itself ({args.cfi})")
+    words = remote.walk().split("# the page's words:")[-1]
     check.ok(remote.send("voiceOverScroll", side="next"), "turned the page with three fingers")
     time.sleep(1.5)
+    check.expect(remote.walk().split("# the page's words:")[-1] != words, "the next page's words took its place")
     check.ok(remote.send("voiceOverScroll", side="previous"), "turned back")
     time.sleep(1.5)
     check.expect("bar none" in remote.state(), "the turn closed the bar")
+    # The item lets a selection go once it's highlighted.
+    check.ok(remote.send("voiceOverSelect", name=args.words), "selected the words again")
+    time.sleep(1)
+    check.expect("selection none" not in remote.state(), "they're selected in the book again")
+    check.ok(remote.send("voiceOverSelect"), "unselected them")
+    time.sleep(1)
+    check.expect("selection none" in remote.state(), "and the book's selection went")
 
     walk = remote.walk()
     check.expect(action in walk, f"the page offers “{action}…” in the Actions rotor")

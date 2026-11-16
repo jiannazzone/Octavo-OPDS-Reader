@@ -58,6 +58,10 @@ import WebKit
 ///   on the element VoiceOver reads as that.
 /// - `voiceOverAction` (`name`, `label`): a custom action from VoiceOver's
 ///   Actions rotor, on the element labelled `label` if given (#125).
+/// - `voiceOverSelect` (`name`): selects those words in the page item's
+///   text, as VoiceOver's Text Selection rotor does; without `name`, leaves
+///   the cursor alone, unselecting (#125). Fails, saying what's selected,
+///   unless just those words are.
 /// - `liveReaders`: of the readers opened since launch, how many models, web
 ///   pages and web views are still alive, and their content processes, in
 ///   the ack's message (`docs/notes/reader-release.md`).
@@ -202,6 +206,10 @@ enum ReaderRemote {
             guard let reader else { return "no open reader" }
             let selected = try? await reader.page.callJavaScript("return await window.octavo.selectRange(cfi)", arguments: ["cfi": cfi]) as? Bool
             return selected == true ? nil : "couldn't select \(cfi)"
+        case "voiceOverSelect":
+            // It fails unless just those words end up selected.
+            let result = VoiceOverWalk.selectInPage(command.name)
+            return result == "selected '\(command.name ?? "")'" ? nil : result
         case "voiceOverAction":
             guard let name = command.name else { return "voiceOverAction needs name" }
             let result = VoiceOverWalk.perform(action: name, on: command.label)
@@ -411,9 +419,12 @@ enum ReaderRemote {
             Task { await reader.updateHighlightsOnPage() }
             return nil
         case "unhighlight":
-            // Every highlight on `cfi` deleted, so a check starts clean.
-            guard let cfi = command.cfi else { return "unhighlight needs cfi" }
-            for highlight in reader.highlights.all where highlight.cfi == cfi { reader.highlights.remove(highlight.id) }
+            // Every highlight on `cfi`, or of the words `name`, deleted, so
+            // a check starts clean.
+            guard command.cfi != nil || command.name != nil else { return "unhighlight needs cfi or name" }
+            for highlight in reader.highlights.all where (command.cfi != nil && highlight.cfi == command.cfi) || (command.name != nil && highlight.text == command.name) {
+                reader.highlights.remove(highlight.id)
+            }
             return nil
         case "pageState":
             return "\(reader.phase == .open ? "open" : "not open") at \(reader.relocation?.cfi ?? "nowhere")"

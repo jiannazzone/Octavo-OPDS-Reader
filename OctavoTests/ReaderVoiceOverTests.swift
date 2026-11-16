@@ -123,6 +123,38 @@ struct ReaderVoiceOverBridgeTests {
         #expect(model.forwardSide == .right)
     }
 
+    // VoiceOver's Text Selection rotor picks words in the page's item: the
+    // same words are selected in the book (#125), across markup, a run of
+    // spaces made one, and a paragraph's end.
+    @Test(arguments: [
+        ("truth universally", "truth universally"),
+        ("acknowledged.\nA second", "acknowledged. A second"),
+        ("Line one\nline", "Line oneline"),
+    ])
+    func wordsSelectedInThePageSelectTheBook(picked: String, selected: String) async throws {
+        let model = try await opened(Self.book(chapter: Self.chapter))
+        let words = try #require(model.pageWords)
+        let range = (words as NSString).range(of: picked)
+        try #require(range.location != NSNotFound)
+        model.selectPageWords(range, in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox != nil })
+        let taken = try await model.page.callJavaScript("return await window.octavo.takeSelection()") as? [String: Any]
+        #expect(taken?["text"] as? String == selected)
+    }
+
+    // Words from a page since turned select nothing; an empty range clears
+    // the selection.
+    @Test func staleWordsSelectNothingAndAnEmptyRangeClears() async throws {
+        let model = try await opened(Self.book(chapter: Self.chapter))
+        let words = try #require(model.pageWords)
+        let stale = try await model.page.callJavaScript("return await window.octavo.selectPageWords(0, 5, text)", arguments: ["text": words + " "]) as? Bool
+        #expect(stale == false)
+        model.selectPageWords(NSRange(location: 0, length: 7), in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox != nil })
+        model.selectPageWords(NSRange(location: 3, length: 0), in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox == nil })
+    }
+
     @Test func aRightToLeftBookGoesForwardByTheLeftPage() async throws {
         let model = try await opened(Self.book(chapter: Self.chapter, rightToLeft: true))
         #expect(model.forwardSide == .left)
