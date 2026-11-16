@@ -8,13 +8,21 @@ private actor MemoryBookmarkSync: BookmarkSync {
     var remote: [SyncedBookmark]
     private(set) var added: [String] = []
     private(set) var removed: [String] = []
+    /// How long a fetch takes.
+    var fetchTime: Duration = .zero
     private var nextID = 100
 
     init(_ remote: [SyncedBookmark] = []) {
         self.remote = remote
     }
 
-    func bookmarks() async throws -> [SyncedBookmark] { remote }
+    func setFetchTime(_ time: Duration) { fetchTime = time }
+
+    func bookmarks() async throws -> [SyncedBookmark] {
+        let list = remote
+        if fetchTime > .zero { try await Task.sleep(for: fetchTime) }
+        return list
+    }
 
     func add(cfi: String, title: String) async throws -> SyncedBookmark {
         nextID += 1
@@ -38,6 +46,14 @@ struct ReaderBookmarksTests {
     private let store = BookmarkStore(directory: URL.testDirectory.appending(path: "Bookmarks-\(UUID().uuidString)"))
     private let cfiA = "epubcfi(/6/4!/4/44/1:54)"
     private let cfiB = "epubcfi(/6/4!/4/58/1:52)"
+
+    /// Waits, up to two seconds, for the sends that edits start.
+    private func until(_ condition: () async -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !(await condition()), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
 
     @Test func theButtonMarksThePageThenUnmarksIt() {
         let bookmarks = ReaderBookmarks(bookID: "moby", store: store)
@@ -94,6 +110,22 @@ struct ReaderBookmarksTests {
         await bookmarks.refresh()
         #expect(await sync.removed == ["7"])
         #expect(bookmarks.all.isEmpty)
+    }
+
+    // Bookmarked while the opening refresh is still fetching: its add is
+    // answered first, so the fetched list is stale and is fetched again
+    // rather than taken as the bookmark removed elsewhere.
+    @Test func oneMadeDuringARefreshStays() async {
+        let sync = MemoryBookmarkSync()
+        await sync.setFetchTime(.milliseconds(150))
+        let bookmarks = ReaderBookmarks(bookID: "moby", store: store, sync: sync)
+        let refresh = Task { await bookmarks.refresh() }
+        try? await Task.sleep(for: .milliseconds(20))
+        bookmarks.add(cfi: cfiA, place: BookmarkPlace(fraction: 0.03))
+        await until { bookmarks.list.first?.remoteID != nil }
+        await refresh.value
+        #expect(bookmarks.list.map(\.cfi) == [cfiA])
+        #expect(bookmarks.pageIsBookmarked)
     }
 
     @Test func placingAgainKeepsTheRest() {

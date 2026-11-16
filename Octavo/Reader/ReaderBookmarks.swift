@@ -60,6 +60,9 @@ final class ReaderBookmarks {
     @ObservationIgnored private let sync: (any BookmarkSync)?
     /// Adds and removals on their way, so a refresh doesn't send them twice.
     @ObservationIgnored private var sending: Set<LocalBookmark.ID> = []
+    /// Counts sends the server has answered, so a refresh can tell its list
+    /// went stale while it was fetched.
+    @ObservationIgnored private var answers = 0
     @ObservationIgnored private let log = Logger(subsystem: "com.ianazzone.ereader", category: "Bookmarks")
 
     init(bookID: String, store: BookmarkStore = BookmarkStore(), sync: (any BookmarkSync)? = nil) {
@@ -141,12 +144,19 @@ final class ReaderBookmarks {
     /// The server's bookmarks merged in and changes made offline sent.
     func refresh() async {
         guard let sync else { return }
-        let remote: [SyncedBookmark]
-        do {
-            remote = try await sync.bookmarks()
-        } catch {
-            log.error("Couldn't fetch bookmarks: \(error)")
-            return
+        var remote: [SyncedBookmark] = []
+        // A send answered while the list was on its way makes the list
+        // stale: merged, it would drop a new bookmark as removed elsewhere.
+        for attempt in 1...3 {
+            let before = answers
+            do {
+                remote = try await sync.bookmarks()
+            } catch {
+                log.error("Couldn't fetch bookmarks: \(error)")
+                return
+            }
+            if answers == before { break }
+            if attempt == 3 { return }
         }
         let result = BookmarkReconciliation.reconcile(local: all, remote: remote)
         // One whose add is still on its way stays, so its answer finds it
@@ -168,8 +178,10 @@ final class ReaderBookmarks {
             if bookmark.isRemoved, let remoteID = bookmark.remoteID {
                 try await sync.remove(id: remoteID)
                 all.removeAll { $0.id == id }
+                answers += 1
             } else if !bookmark.isRemoved, bookmark.remoteID == nil {
                 let synced = try await sync.add(cfi: bookmark.cfi, title: Self.title(for: bookmark))
+                answers += 1
                 guard let index = all.firstIndex(where: { $0.id == id }) else { return }
                 all[index].remoteID = synced.id
                 // Kept before anything else can fail, so a removal that
