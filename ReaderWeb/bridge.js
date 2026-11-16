@@ -2368,6 +2368,17 @@ window.octavo = Object.freeze({
     setHighlights: reported(async function setHighlights_(list) {
         return setHighlights(list)
     }),
+    // Selects a range on the page as a finger would, for checks that can't
+    // drag (the debug remote's `select`, #125). Only the book's own text.
+    selectRange: reported(async function selectRange(cfi) {
+        const { index, anchor } = requireView().resolveCFI(String(cfi))
+        const doc = loadedDoc(index)
+        if (!doc) return false
+        const selection = doc.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(toRange(doc, anchor(doc)))
+        return true
+    }),
     takeSelection: reported(async function takeSelection_() {
         return takeSelection()
     }),

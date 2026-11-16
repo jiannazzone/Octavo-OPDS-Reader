@@ -52,13 +52,64 @@ enum VoiceOverWalk {
         return page.accessibilityActivate() ? "taken" : "refused"
     }
 
+    /// A double tap on the element VoiceOver reads as `label` (exactly, else
+    /// the first that starts with it), as VoiceOver sends it.
+    static func activate(label: String) -> String {
+        guard let element = element(labelled: label) else { return "no element '\(label)'" }
+        if element.accessibilityActivate() { return "taken" }
+        // Refused, VoiceOver taps the element's middle; a control's tap is
+        // its actions.
+        if let control = element as? UIControl {
+            // Once: some controls answer to both.
+            control.sendActions(for: control.allControlEvents.contains(.primaryActionTriggered) ? .primaryActionTriggered : .touchUpInside)
+            return "taken"
+        }
+        return "refused"
+    }
+
+    /// The custom action `name` (exactly, else the first that starts with
+    /// it), from VoiceOver's Actions rotor, on the element labelled `label`
+    /// if given, else on any element that has it.
+    static func perform(action name: String, on label: String? = nil) -> String {
+        let elements = label.map { element(labelled: $0).map { [$0] } ?? [] } ?? readable()
+        let actions = elements.flatMap { $0.accessibilityCustomActions ?? [] }
+        guard let action = actions.first(where: { $0.name == name }) ?? actions.first(where: { $0.name.hasPrefix(name) }) else {
+            return "no action '\(name)'" + (label.map { " on '\($0)'" } ?? "")
+        }
+        if let handler = action.actionHandler { return handler(action) ? "taken" : "refused" }
+        if let target = action.target as? NSObject, target.responds(to: action.selector) {
+            target.perform(action.selector, with: action)
+            return "taken"
+        }
+        return "refused"
+    }
+
+    /// Every element VoiceOver can reach on screen, modal views' alone.
+    private static func readable() -> [NSObject] {
+        var found: [NSObject] = []
+        for window in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).flatMap(\.windows) where !window.isHidden {
+            collect(window, depth: 0, where: { _ in true }, into: &found)
+        }
+        return found
+    }
+
+    private static func element(labelled label: String) -> NSObject? {
+        let elements = readable()
+        return elements.first { $0.accessibilityLabel == label } ?? elements.first { $0.accessibilityLabel?.hasPrefix(label) == true }
+    }
+
     private static func collect(_ object: NSObject, depth: Int, where matches: (NSObject) -> Bool, into found: inout [NSObject]) {
         guard depth < 80, !object.accessibilityElementsHidden else { return }
+        if let view = object as? UIView, view.isHidden || view.alpha < 0.01 { return }
         if object.isAccessibilityElement {
             if matches(object) { found.append(object) }
             return
         }
-        for child in children(of: object) {
+        let children = children(of: object)
+        let modals = children.filter {
+            $0.accessibilityViewIsModal && !String(describing: type(of: $0)).contains("DimmingView")
+        }
+        for child in modals.isEmpty ? children : modals {
             collect(child, depth: depth + 1, where: matches, into: &found)
         }
     }

@@ -54,7 +54,10 @@ import WebKit
 /// - `voiceOverScroll` (`side`: left, right, up, down, next or previous):
 ///   what VoiceOver sends the page's item for a three-finger swipe (left
 ///   sends right) or, with next, at the end of a page in Read All.
-/// - `voiceOverActivate`: a double tap on the page's item.
+/// - `voiceOverActivate`: a double tap on the page's item, or with `name`
+///   on the element VoiceOver reads as that.
+/// - `voiceOverAction` (`name`, `label`): a custom action from VoiceOver's
+///   Actions rotor, on the element labelled `label` if given (#125).
 /// - `liveReaders`: of the readers opened since launch, how many models, web
 ///   pages and web views are still alive, and their content processes, in
 ///   the ack's message (`docs/notes/reader-release.md`).
@@ -75,6 +78,8 @@ enum ReaderRemote {
         var name: String?
         var layout: ReaderLayout?
         var script: String?
+        /// `voiceOverAction`: the element whose action it is.
+        var label: String?
         var on: Bool?
         var phase: String?
         var side: String?
@@ -185,9 +190,22 @@ enum ReaderRemote {
             case "down": .down
             default: .right
             }
-            return VoiceOverWalk.scrollPage(direction)
+            let result = VoiceOverWalk.scrollPage(direction)
+            return result == "taken" ? nil : result
         case "voiceOverActivate":
-            return VoiceOverWalk.activatePage()
+            // The page's item, or the element labelled `name`.
+            let result = command.name.map(VoiceOverWalk.activate(label:)) ?? VoiceOverWalk.activatePage()
+            return result == "taken" ? nil : result
+        case "select":
+            // A range selected as a finger would (#125).
+            guard let cfi = command.cfi else { return "select needs cfi" }
+            guard let reader else { return "no open reader" }
+            let selected = try? await reader.page.callJavaScript("return await window.octavo.selectRange(cfi)", arguments: ["cfi": cfi]) as? Bool
+            return selected == true ? nil : "couldn't select \(cfi)"
+        case "voiceOverAction":
+            guard let name = command.name else { return "voiceOverAction needs name" }
+            let result = VoiceOverWalk.perform(action: name, on: command.label)
+            return result == "taken" ? nil : result
         case "back":
             NotificationCenter.default.post(name: backNotification, object: nil)
             return nil
@@ -392,6 +410,13 @@ enum ReaderRemote {
         case "highlightsOnPage":
             Task { await reader.updateHighlightsOnPage() }
             return nil
+        case "unhighlight":
+            // Every highlight on `cfi` deleted, so a check starts clean.
+            guard let cfi = command.cfi else { return "unhighlight needs cfi" }
+            for highlight in reader.highlights.all where highlight.cfi == cfi { reader.highlights.remove(highlight.id) }
+            return nil
+        case "pageState":
+            return "\(reader.phase == .open ? "open" : "not open") at \(reader.relocation?.cfi ?? "nowhere")"
         case "highlightState":
             let name = { (id: LocalHighlight.ID?) in id.flatMap { reader.highlights.highlight($0)?.cfi } ?? "none" }
             let box = reader.selectionBox.map { "\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))×\(Int($0.height))" } ?? "none"

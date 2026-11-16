@@ -42,10 +42,14 @@ Quotes and notes are plain text everywhere (`Text(verbatim:)`), never logged, an
 
 ## Accessibility
 
-- **VoiceOver:** the page item (`ReaderVoiceOverPage`) has an action per highlight starting on the page, "Highlight: “its first words…”", which opens its card. The bridge finds them by where their first line is on screen (`highlightBoxes`), a quarter of a second after the page settles: a jump reports its place before its page is laid out. A row in the tab has Add Note or Edit Note and Share beside the swipe's Delete. The colours are named ("Yellow", "Green"…). Checked with the walker: the page's four actions.
+- **VoiceOver:** the page item (`ReaderVoiceOverPage`) has an action per highlight starting on the page, "Highlight: “its first words…”", which opens its card. The bridge finds them by where their first line is on screen (`highlightBoxes`), a quarter of a second after the page settles: a jump reports its place before its page is laid out. A row in the tab has Add Note or Edit Note and Share beside the swipe's Delete. The colours are named ("Yellow", "Green"…). Checked headless by `highlights/tools/voiceover_check.py` (below).
 - **Not built:** making a highlight with VoiceOver. The plan is to make the page item selectable text, so the Text Selection rotor selects and the bar comes up, with a "Highlight…" action listing the page's sentences if that breaks the page's turns or Read All. It needs VoiceOver on a real Duo to try.
 - **Reduce Motion:** the card and the bar fade rather than move.
 - **Larger text:** the bar stops growing at the second accessibility size, as BookOrbit's capsule does. Rows wrap with `lineLimit(untilLargerText:)`.
+
+## The VoiceOver check
+
+`docs/notes/highlights/tools/voiceover_check.py <udid>` scripts a VoiceOver user's highlight tasks through the debug remote, headless, and stops at the first that fails, printing what VoiceOver could reach. It selects a range as a finger would (`select`, `bridge.js` `selectRange`) and highlights it, turns away and back with three-finger scrolls, finds "Highlight: “This…”" in the page's Actions rotor and runs it, reads the card (Share, Copy, Delete, Close, the colours with its own selected, Add Note) with the page hidden behind it, opens the note's sheet and cancels it, opens Contents and the Highlights tab with double taps and reads the row's actions, then deletes the highlight from its card. It clears the range first (`unhighlight`), so a failed run doesn't leave it stuck. 36 steps, all passing on 2026-11-16 on 'Octavo Highlights Duo', unfolded. It needs the local BookOrbit and *Pride and Prejudice* (file 4) by default; `--file`, `--cfi` and `--words` point it elsewhere.
 
 ## Checked on the simulator
 
