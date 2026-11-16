@@ -433,6 +433,23 @@ public struct BookOrbitBookmark: Decodable, Hashable, Sendable {
     public var createdAt: Date?
 }
 
+/// One of BookOrbit's annotations (`books/{bookId}/annotations`, #125),
+/// measured against v3.6.0. A PDF's (`pdf` in place of `cfi`) reads as one
+/// with no CFI.
+public struct BookOrbitAnnotation: Decodable, Hashable, Sendable {
+    public var id: Int
+    public var cfi: String?
+    public var text: String?
+    public var color: String?
+    public var style: String?
+    public var note: String?
+    public var chapterTitle: String?
+    /// "exact" when placed in the file asked for, "failed" when it can't be.
+    public var positionStatus: String?
+    public var createdAt: Date?
+    public var updatedAt: Date?
+}
+
 // MARK: - Wire types
 
 struct LoginResponse: Decodable {
@@ -532,6 +549,37 @@ extension KeyedDecodingContainer {
 }
 
 /// `POST books/{bookId}/bookmarks`. v3.6.0 rejects any other field.
+struct AddAnnotationRequest: Encodable {
+    var cfi: String
+    var bookFileId: Int
+    var text: String
+    var color: String
+    var style: String
+    var note: String?
+    var chapterTitle: String?
+}
+
+/// Only the fields that changed; a note of `.some(nil)` is sent as `null`.
+struct UpdateAnnotationRequest: Encodable {
+    var edit: HighlightEdit
+
+    init(_ edit: HighlightEdit) {
+        self.edit = edit
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case color, note
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(edit.color, forKey: .color)
+        if let note = edit.note {
+            if let note { try container.encode(note, forKey: .note) } else { try container.encodeNil(forKey: .note) }
+        }
+    }
+}
+
 struct AddBookmarkRequest: Encodable {
     var cfi: String
     var title: String

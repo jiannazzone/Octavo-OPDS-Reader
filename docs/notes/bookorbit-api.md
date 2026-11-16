@@ -33,6 +33,15 @@ Spike 1b (`BookOrbitClient` in OctavoKit) and 2a (sync), measured against the lo
 - `POST books/{bookId}/bookmarks` takes only `{cfi, title, bookFileId}`: `cfi` and `title` are required (up to 2,000 and 500 characters), and `note`, `color`, `clientId`, `origin` and anything else are rejected (400). So there's no idempotency key: a retry after a lost answer adds a second bookmark, which `BookmarkReconciliation` matches by CFI instead.
 - `PATCH books/{bookId}/bookmarks/{id} {title}` renames; `DELETE books/{bookId}/bookmarks/{id}` answers 204, and 404 once it's gone (`DELETE bookmarks/{id}` doesn't exist).
 
+## Highlights (#125, measured 2026-11-15)
+
+BookOrbit calls them annotations (`BookOrbitHighlightSync`).
+
+- `GET books/{bookId}/annotations?readerFileId={fileId}` lists `{id, bookId, cfi, jumpFileId, pageno, text, color, style, note, chapterTitle, origin, pdf, positionStatus, chapterIndex, highlightedAt, createdAt, updatedAt, starredAt}` with each range projected into that file. `positionStatus` is "exact" when it's placed there and "failed" with `cfi: null` when it can't be (made on another file, or a KOReader or Kobo place the server couldn't convert). Octavo always asks for one file.
+- `POST books/{bookId}/annotations` takes `{cfi, pdf, bookFileId, text, color, style, note, chapterTitle}`: exactly one of `cfi` (up to 2,000 characters) or `pdf`, and `text` is required. `color` is up to 20 characters and `style` is one of highlight, underline, strikethrough, squiggly or invert. `chapterTitle` is up to 500. `text` and `note` took 200,000 characters without complaint. Anything else is rejected (400), and there's no client ID, so `HighlightReconciliation` matches a lost add by its CFI and words: the server returns a posted CFI byte for byte, with or without `readerFileId`.
+- `PATCH books/{bookId}/annotations/{id}` takes `{note, color, style, starred}`; a `null` note clears it. `DELETE` is a soft delete: 204, then 404.
+- Colours: the web reader's ten are yellow #FACC15 (its default), green #4ADE80, blue #38BDF8, pink #F472B6, orange #FB923C, red #F87171, olive #84CC16, cyan #22D3EE, purple #C084FC and gray #9CA3AF. Other clients may store a name ("yellow") or KOReader's own hex. `user-preferences/annotation-colors` holds the names a reader gave them (`{"settings":{"names":{}}}` until then).
+
 ## Library and files
 
 - `GET collections/{id}/books?page=0&size=50[&q=…]` returns `{items, total, page, size}`. Items carry `authors`, `files: [{id, format, role, sizeBytes, mediaOverlay}]`, `readingProgress` (0–100) and a `readStatus` object.

@@ -505,14 +505,65 @@ public actor BookOrbitClient {
 
     /// `title` cut to the limit, whole characters only.
     static func bookmarkTitle(_ title: String) -> String {
+        cut(title, toUTF16: bookmarkTitleLimit)
+    }
+
+    /// `text` cut to `limit` UTF-16 units (the server's validators count a
+    /// JavaScript string's length), whole characters only.
+    static func cut(_ text: String, toUTF16 limit: Int) -> String {
         var units = 0
-        var end = title.startIndex
-        for index in title.indices {
-            units += title[index].utf16.count
-            if units > bookmarkTitleLimit { break }
-            end = title.index(after: index)
+        var end = text.startIndex
+        for index in text.indices {
+            units += text[index].utf16.count
+            if units > limit { break }
+            end = text.index(after: index)
         }
-        return String(title[..<end])
+        return String(text[..<end])
+    }
+
+    // MARK: - Annotations (highlights, #125)
+
+    /// `GET books/{bookId}/annotations?readerFileId=`: the book's highlights
+    /// with their ranges projected into that file. One it can't place there
+    /// comes back with no CFI (`positionStatus` "failed").
+    public func annotations(bookID: Int, fileID: Int) async throws -> [BookOrbitAnnotation] {
+        try await get("books/\(bookID)/annotations", query: [URLQueryItem(name: "readerFileId", value: String(fileID))], as: [BookOrbitAnnotation].self)
+    }
+
+    /// `POST books/{bookId}/annotations {cfi, bookFileId, text, color, style,
+    /// note, chapterTitle}`. Like bookmarks, it takes no client ID.
+    public func addAnnotation(_ highlight: NewHighlight, bookID: Int, fileID: Int) async throws -> BookOrbitAnnotation {
+        let body = AddAnnotationRequest(
+            cfi: highlight.cfi, bookFileId: fileID, text: highlight.text, color: highlight.color, style: "highlight",
+            note: highlight.note, chapterTitle: highlight.chapter.map(Self.chapterTitle)
+        )
+        return try decode(BookOrbitAnnotation.self, from: try await send(jsonRequest("books/\(bookID)/annotations", method: "POST", body: body)))
+    }
+
+    /// `PATCH books/{bookId}/annotations/{id}` with only what changed; a
+    /// `null` note clears it.
+    public func updateAnnotation(id: Int, bookID: Int, _ edit: HighlightEdit) async throws -> BookOrbitAnnotation {
+        let request = try jsonRequest("books/\(bookID)/annotations/\(id)", method: "PATCH", body: UpdateAnnotationRequest(edit))
+        return try decode(BookOrbitAnnotation.self, from: try await send(request))
+    }
+
+    /// `DELETE books/{bookId}/annotations/{id}`, a soft delete. One that's
+    /// already gone (404) counts as removed.
+    public func deleteAnnotation(id: Int, bookID: Int) async throws {
+        var request = URLRequest(url: apiURL("books/\(bookID)/annotations/\(id)"))
+        request.httpMethod = "DELETE"
+        do {
+            _ = try await send(request)
+        } catch BookOrbitError.http(status: 404, _) {
+            return
+        }
+    }
+
+    /// The server's limit on an annotation's chapter title (v3.6.0).
+    static let chapterTitleLimit = 500
+
+    static func chapterTitle(_ title: String) -> String {
+        cut(title, toUTF16: chapterTitleLimit)
     }
 
     // MARK: - Read status

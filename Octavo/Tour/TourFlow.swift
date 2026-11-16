@@ -222,6 +222,10 @@ nonisolated struct TourReplayPlace: Sendable {
         BookmarkStore(directory: directory.appending(path: "Bookmarks", directoryHint: .isDirectory))
     }
 
+    var highlights: HighlightStore {
+        HighlightStore(directory: directory.appending(path: "Highlights", directoryHint: .isDirectory))
+    }
+
     func clear() {
         try? FileManager.default.removeItem(at: directory)
     }

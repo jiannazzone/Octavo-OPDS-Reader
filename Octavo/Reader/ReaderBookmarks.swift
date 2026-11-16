@@ -2,38 +2,57 @@ import Foundation
 import OctavoKit
 import os
 
-/// Keeps each book's bookmarks on disk, one small JSON file per book, like
-/// `ReadingPositionStore`. Synced bookmarks are kept too, so the list works
-/// offline.
-nonisolated struct BookmarkStore: Sendable {
+/// Keeps a list per book on disk, one small JSON file per book, like
+/// `ReadingPositionStore`: each book's bookmarks, and its highlights. Synced
+/// ones are kept too, so the lists work offline.
+nonisolated struct PerBookStore<Item: Codable & Sendable>: Sendable {
     let directory: URL
 
-    init(directory: URL = URL.applicationSupportDirectory.appending(path: "Bookmarks", directoryHint: .isDirectory)) {
+    init(directory: URL) {
         self.directory = directory
     }
 
-    func bookmarks(forBook bookID: String) -> [LocalBookmark] {
+    func items(forBook bookID: String) -> [Item] {
         guard let data = try? Data(contentsOf: fileURL(forBook: bookID)) else { return [] }
-        return (try? JSONDecoder().decode([LocalBookmark].self, from: data)) ?? []
+        return (try? JSONDecoder().decode([Item].self, from: data)) ?? []
     }
 
-    func save(_ bookmarks: [LocalBookmark], forBook bookID: String) throws {
+    func save(_ items: [Item], forBook bookID: String) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try JSONEncoder().encode(bookmarks).write(to: fileURL(forBook: bookID), options: .atomic)
+        try JSONEncoder().encode(items).write(to: fileURL(forBook: bookID), options: .atomic)
     }
 
-    /// Every bookmark on `library`'s books.
+    /// Everything kept for `library`'s books.
     func removeAll(of library: LibrarySourceID) {
         StoredBookKeys.removeFiles(of: library, in: directory)
     }
 
-    /// Gives `library`'s bookmarks to `other` (`RemovedServer`).
+    /// Gives what `library`'s books have to `other` (`RemovedServer`).
     func moveAll(of library: LibrarySourceID, to other: LibrarySourceID) {
         StoredBookKeys.moveFiles(of: library, to: other, in: directory)
     }
 
     func fileURL(forBook bookID: String) -> URL {
         ReadingPositionStore.fileURL(forBook: bookID, in: directory)
+    }
+}
+
+typealias BookmarkStore = PerBookStore<LocalBookmark>
+typealias HighlightStore = PerBookStore<LocalHighlight>
+
+nonisolated extension PerBookStore where Item == LocalBookmark {
+    init() {
+        self.init(directory: URL.applicationSupportDirectory.appending(path: "Bookmarks", directoryHint: .isDirectory))
+    }
+
+    func bookmarks(forBook bookID: String) -> [LocalBookmark] {
+        items(forBook: bookID)
+    }
+}
+
+nonisolated extension PerBookStore where Item == LocalHighlight {
+    init() {
+        self.init(directory: URL.applicationSupportDirectory.appending(path: "Highlights", directoryHint: .isDirectory))
     }
 }
 
