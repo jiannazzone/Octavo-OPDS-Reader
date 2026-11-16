@@ -44,6 +44,7 @@ From Apple's App Store Connect pages on the labels, read 2026-11-05:
 | **In the book:** controls, Contents, Text and Theme, bookmark | ✓ | ✓ | ✓ folded | ✓ | ✓ | | |
 | **In the book:** search, a result | ✓ | ✓ | ✓ folded | The field only | ✓ folded | | |
 | **Read:** half open | ✓ Duo | ✓ Duo | | | | | |
+| **In the book:** highlights, a note, the Highlights tab (#125) | | | | | The bar | | |
 | **In the book:** footnotes, going back | ✓ | ✓ | ✓ folded | | Going back, folded | | |
 | **Other ways in:** Import from Files, Open in Octavo | ✓ folded | ✓ folded | ✓ folded | | | | |
 | **Settings:** the list | ✓ | ✓ | ✓ folded | ✓ folded | ✓ | | |
