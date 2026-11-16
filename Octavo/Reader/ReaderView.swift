@@ -184,9 +184,13 @@ private struct ReaderScreen: View {
                 .animation(.easeOut(duration: 0.2), value: model.bookmarks.pageIsBookmarked)
                 .overlay(alignment: .bottomLeading) {
                     if let footerBar = chrome.footerBar, let geometry = model.geometry {
-                        let span = ReaderChromeLayout.footerBarSpan(in: geometry, layout: model.layout)
+                        let span = ReaderChromeLayout.footerBarSpan(
+                            in: geometry, layout: model.layout, under: footerBar == .highlight ? model.highlightBarX : nil
+                        )
                         Group {
                             switch footerBar {
+                            case .highlight:
+                                ReaderHighlightBar(model: model, writeNote: { model.noteSheet = $0 })
                             case .search:
                                 searchBar
                             case .serverPlace(let place):
@@ -387,7 +391,8 @@ private struct ReaderScreen: View {
         ReaderChromeLayout(state: ReaderChromeLayout.State(
             isOpen: model.phase == .open, hasTrip: model.trip != nil, panelOpen: panel != nil, noteOpen: model.note != nil,
             inTour: shell.tour.playing != nil, searchStepping: model.search.isStepping, serverPlace: model.serverPlace,
-            showsBar: controls.showsBar, twoPages: model.layout.columns == 2
+            showsBar: controls.showsBar, twoPages: model.layout.columns == 2,
+            highlighting: model.showsHighlightBar
         ))
     }
 

@@ -60,3 +60,41 @@ extension ReaderModel {
         }
     }
 }
+
+// MARK: The bar
+
+extension ReaderModel {
+    /// Text is selected, or a highlight was just made: the bar is up.
+    var showsHighlightBar: Bool {
+        phase == .open && !isFixedLayout && (selectionBox != nil || highlightBar.flatMap(highlights.highlight) != nil)
+    }
+
+    /// The highlight the bar acts on, once made.
+    var barHighlight: LocalHighlight? {
+        highlightBar.flatMap(highlights.highlight)
+    }
+
+    /// A colour in the bar: highlights the selection, or recolours what it
+    /// just highlighted.
+    func pickHighlightColor(_ hex: String) async {
+        if let highlight = barHighlight {
+            highlights.recolor(highlight.id, to: hex)
+        } else {
+            await highlightSelection(color: hex)
+        }
+    }
+
+    /// Note in the bar: the selection highlighted in yellow first, if it
+    /// isn't yet. The highlight, for its note's sheet.
+    func highlightForNote() async -> LocalHighlight.ID? {
+        if barHighlight == nil { await highlightSelection(color: LocalHighlight.defaultColor) }
+        return barHighlight?.id
+    }
+
+    /// Trash in the bar: the highlight goes, and the bar with it.
+    func removeBarHighlight() {
+        guard let highlight = barHighlight else { return }
+        highlights.remove(highlight.id)
+        highlightBar = nil
+    }
+}

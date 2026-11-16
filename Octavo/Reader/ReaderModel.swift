@@ -47,6 +47,10 @@ final class ReaderModel {
     var selectionBox: CGRect?
     /// The highlight just made, while its bar is up (#125).
     var highlightBar: LocalHighlight.ID?
+    /// Where the bar goes on a spread: under the last selection's middle.
+    var highlightBarX: Double?
+    /// The highlight whose note is being written (#125).
+    var noteSheet: LocalHighlight.ID?
     /// The highlight tapped, for its card (#125).
     var tappedHighlight: LocalHighlight.ID?
     /// What the page was last given to draw, so a change that draws nothing
@@ -723,6 +727,8 @@ final class ReaderModel {
             log.debug("relocate \(relocation.fraction ?? -1) \(relocation.cfi ?? "nil", privacy: .public)")
             let previous = self.relocation
             self.relocation = relocation
+            // A page turn closes the highlight bar (#125).
+            if highlightBar != nil, relocation.isPageTurn { highlightBar = nil }
             relocationCount += 1
             position = relocation.position(cfiShape)
             tocLabel = relocation.tocLabel
@@ -761,6 +767,9 @@ final class ReaderModel {
         case .selection(let active, let box):
             swipes.pageHasSelection = active
             selectionBox = active ? box : nil
+            if let box { highlightBarX = Double(box.midX) }
+            // A new selection is a new highlight to make.
+            if active { highlightBar = nil }
         case .highlightTap(let cfi):
             tappedHighlight = highlights.highlight(cfi: cfi)?.id
         case .viewport(let width, let height):
