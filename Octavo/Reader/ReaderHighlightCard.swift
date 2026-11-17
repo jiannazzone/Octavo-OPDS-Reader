@@ -3,8 +3,9 @@ import SwiftUI
 import UIKit
 
 /// A highlight's card (#125): tapped on the page, it comes up where a
-/// footnote's card would, in its style. Share, Copy, Delete and ✕; the
-/// colours, as in the bar; and the note, with Edit Note or Add Note.
+/// footnote's card would, in its style. One grid of five columns: Share,
+/// Copy, Note, Delete and ✕ over the ten colors in two rows; then the note,
+/// if there is one.
 struct ReaderHighlightCard: View {
     let highlight: LocalHighlight
     /// What Share adds after the quote: the title and author.
@@ -17,21 +18,33 @@ struct ReaderHighlightCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 4) {
-                ShareLink(item: ReaderHighlightCard.shareText(highlight.text, source: source)) {
-                    Label("Share", systemImage: "square.and.arrow.up")
+            // One grid of five columns: the buttons over the colours, each
+            // in a colour's column, ✕ in the last.
+            Grid(horizontalSpacing: 0, verticalSpacing: 8) {
+                GridRow {
+                    ShareLink(item: ReaderHighlightCard.shareText(highlight.text, source: source)) {
+                        Self.cell(Label("Share", systemImage: "square.and.arrow.up"))
+                    }
+                    Button { UIPasteboard.general.string = highlight.text } label: {
+                        Self.cell(Label("Copy", systemImage: "doc.on.doc"))
+                    }
+                    Button(action: writeNote) {
+                        Self.cell(Label(HighlightNoteName.of(highlight), systemImage: "square.and.pencil"))
+                    }
+                    Button(role: .destructive, action: delete) {
+                        Self.cell(Label("Delete", systemImage: "trash"))
+                    }
+                    ReaderPanelCloseButton(close: close)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                Button("Copy", systemImage: "doc.on.doc") {
-                    UIPasteboard.general.string = highlight.text
-                }
-                Button("Delete", systemImage: "trash", role: .destructive, action: delete)
-                Spacer()
-                ReaderPanelCloseButton(close: close)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .font(.title3)
+                HighlightColorGrid.rows(selected: highlight.color, pick: recolor)
             }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
-            .font(.title3)
-            HighlightColorRow(selected: highlight.color, pick: recolor)
+            // As the bar: on five columns, it stops growing where they'd
+            // crowd a folded page.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             if let note = highlight.note {
                 Text(verbatim: note)
                     .font(.body)
@@ -39,13 +52,18 @@ struct ReaderHighlightCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Button(highlight.note == nil ? "Add Note" : "Edit Note", action: writeNote)
-                .font(.subheadline.weight(.semibold))
         }
         .padding(16)
         .glassEffect(.regular.tint(Color(hex: theme.background).opacity(0.72)), in: .rect(cornerRadius: 26))
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
+    }
+
+    /// A button's icon filling its column, all of it the button's to tap.
+    private static func cell(_ label: some View) -> some View {
+        label
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(.rect)
     }
 
     /// The quote, then where it's from: "“…” — Pride and Prejudice, Jane

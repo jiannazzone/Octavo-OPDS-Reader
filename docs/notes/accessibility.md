@@ -73,7 +73,7 @@ What it does:
 
 Each turn's landing is said, so after quick swipes the last place heard is the last landed. A jump or Back meanwhile is never said for a turn (`ReaderVoiceOverTurns`).
 
-**Its words can be selected** (#125, `highlights.md`): the Text Selection rotor selects words, lines or sentences in the item, the same words are selected in the book, and the highlight bar comes up. For that the item has a text input (`accessibilityTextInputResponder`), and UIKit then gives it its private text-entry traits, so VoiceOver may call the page a text field. Turns and the double tap stay the item's own, checked headless; VoiceOver itself on a device is still to try.
+**Its words can be selected** (#125, `highlights.md`): the Text Selection rotor selects words, lines or sentences in the item, the same words are selected in the book, the highlight bar comes up, and VoiceOver says "Highlight colors available". For that the item has a text input (`accessibilityTextInputResponder`), and UIKit then gives it its private text-entry traits, so VoiceOver may call the page a text field. Turns and the double tap stay the item's own, checked headless; VoiceOver itself on a device is still to try.
 
 The cost: inside a page, VoiceOver can't jump by heading or link, and a footnote's mark is read as its number but can't be opened. Reading by word or character still works with the rotor.
 

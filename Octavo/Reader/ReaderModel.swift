@@ -49,6 +49,13 @@ final class ReaderModel {
     /// changing only when that does: for the page's VoiceOver item, which a
     /// moving selection box would update again and again (#125).
     private(set) var pageWordsSelected = false
+    /// VoiceOver was told the bar came up for the selection it made, once
+    /// per selection (#125).
+    @ObservationIgnored private var pageWordsBarAnnounced = false
+    #if DEBUG
+    /// How many times, for the debug remote.
+    @ObservationIgnored var barAnnouncements = 0
+    #endif
     /// The highlight just made, while its bar is up (#125).
     var highlightBar: LocalHighlight.ID?
     /// Where the bar goes on a spread: under the last selection's middle.
@@ -784,6 +791,13 @@ final class ReaderModel {
             turnRequested(side)
         case .selection(let active, let box, let byPageWords):
             swipes.pageHasSelection = active
+            // VoiceOver's selection brought the bar up (a box to put it by):
+            // said once, not again as the selection grows.
+            if !byPageWords { pageWordsBarAnnounced = false }
+            if byPageWords, box != nil, !pageWordsBarAnnounced {
+                pageWordsBarAnnounced = true
+                announceHighlightBar()
+            }
             if pageWordsSelected != byPageWords { pageWordsSelected = byPageWords }
             selectionBox = active ? box : nil
             if let box { highlightBarX = Double(box.midX) }
