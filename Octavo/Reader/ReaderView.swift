@@ -285,6 +285,10 @@ private struct ReaderScreen: View {
                             model.noteSheet = nil
                             model.highlightBar = nil
                         }
+                        // A system sheet, drawn in the system's scheme, not
+                        // the page's: Sepia in dark mode drew dark words on
+                        // the dark sheet.
+                        .environment(\.colorScheme, systemColorScheme)
                     }
                 }
                 // Inside the stack, the safe area's top includes the bar
