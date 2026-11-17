@@ -62,6 +62,8 @@ import WebKit
 ///   text, as VoiceOver's Text Selection rotor does; without `name`, leaves
 ///   the cursor alone, unselecting (#125). Fails, saying what's selected,
 ///   unless just those words are.
+/// - `voiceOverLeave`: VoiceOver's focus leaves the page's item, its text
+///   input's selection collapsing as UIKit may make it (#125).
 /// - `liveReaders`: of the readers opened since launch, how many models, web
 ///   pages and web views are still alive, and their content processes, in
 ///   the ack's message (`docs/notes/reader-release.md`).
@@ -177,6 +179,9 @@ enum ReaderRemote {
     /// Returns an error message, or `nil` on success.
     private static func handle(_ command: Command, shell: ShellModel) async -> String? {
         if ["signin", "open", "openLocal", "importLocal", "detail", "home"].contains(command.cmd) { shell.tour.debugEnd() }
+        // `unhighlight` by words: the page's highlights asked for now, not
+        // 250 ms after the page settled.
+        if command.cmd == "unhighlight", command.name != nil { await reader?.updateHighlightsOnPage() }
         switch command.cmd {
         case "liveReaders":
             return liveReaders
@@ -210,6 +215,9 @@ enum ReaderRemote {
             // It fails unless just those words end up selected.
             let result = VoiceOverWalk.selectInPage(command.name)
             return result == "selected '\(command.name ?? "")'" ? nil : result
+        case "voiceOverLeave":
+            _ = VoiceOverWalk.leavePage()
+            return nil
         case "voiceOverAction":
             guard let name = command.name else { return "voiceOverAction needs name" }
             let result = VoiceOverWalk.perform(action: name, on: command.label)

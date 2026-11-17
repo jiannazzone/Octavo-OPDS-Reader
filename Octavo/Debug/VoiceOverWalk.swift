@@ -47,9 +47,11 @@ enum VoiceOverWalk {
     /// Selects `text`, where it first comes in the page item's words, through
     /// the item's `accessibilityTextInputResponder`, as VoiceOver's Text
     /// Selection rotor does (#125); `nil` leaves just the cursor, as moving
-    /// it with the rotor does. Says what's selected after.
+    /// it with the rotor does. VoiceOver is on the item for it. Says what's
+    /// selected after.
     static func selectInPage(_ text: String?) -> String {
         guard let page = pageItem() else { return "no page item" }
+        page.accessibilityElementDidBecomeFocused()
         guard let input = page.accessibilityTextInputResponder else { return "the page item has no text input" }
         let begin = input.beginningOfDocument
         guard let all = input.textRange(from: begin, to: input.endOfDocument), let words = input.text(in: all) else { return "no words" }
@@ -69,6 +71,16 @@ enum VoiceOverWalk {
         return "selected '\(selected)'"
     }
 
+    /// VoiceOver's focus leaves the page's item, and its text input's
+    /// selection collapses, as UIKit may do when a text view resigns (#125).
+    static func leavePage() -> String {
+        guard let page = pageItem() else { return "no page item" }
+        page.accessibilityElementDidLoseFocus()
+        guard let input = page.accessibilityTextInputResponder, let selected = input.selectedTextRange else { return "left" }
+        input.selectedTextRange = input.textRange(from: selected.start, to: selected.start)
+        return "left"
+    }
+
     /// The page's item: the one that turns pages.
     private static func pageItem() -> NSObject? {
         var found: [NSObject] = []
@@ -82,6 +94,8 @@ enum VoiceOverWalk {
     /// the first that starts with it), as VoiceOver sends it.
     static func activate(label: String) -> String {
         guard let element = element(labelled: label) else { return "no element '\(label)'" }
+        // VoiceOver's focus moves there, off the page's item.
+        if let page = pageItem(), page !== element { page.accessibilityElementDidLoseFocus() }
         if element.accessibilityActivate() { return "taken" }
         // Refused, VoiceOver taps the element's middle; a control's tap is
         // its actions.

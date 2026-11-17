@@ -33,9 +33,10 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         // nothing to select.
         view.setWords(model.isFixedLayout ? nil : model.pageWords)
         view.select = { [model] range, words in model.selectPageWords(range, in: words) }
-        // The selection taken for a highlight, or gone with a tap: the words
-        // let it go too.
-        let selecting = model.selectionBox != nil
+        // The selection taken for a highlight, gone with a tap, or replaced
+        // by a finger's: the words let it go too, so the same words can be
+        // selected again. A Bool, so a handle moving doesn't update the item.
+        let selecting = model.pageWordsSelected
         if view.wasSelecting, !selecting { view.clearSelection() }
         view.wasSelecting = selecting
         // Each highlight on the page opens its card (#125), as a tap does.
@@ -86,12 +87,18 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         /// read as an item of its own. Its rects are its own layout over the
         /// page, in the body font, not where the book's words are.
         private let words = UITextView()
-        /// The page's words, put in `words` only once VoiceOver asks for
-        /// them, so a turn lays out nothing for anyone else.
+        /// The page's words, put in `words` at once while VoiceOver runs
+        /// (it may keep the text input it was given before a turn), else
+        /// only once something asks for them, so a turn lays out nothing for
+        /// anyone else.
         private var pageWords: String?
         /// A selection the words made themselves, not VoiceOver.
         private var isQuiet = false
         private var lastSelection = NSRange(location: 0, length: 0)
+        /// VoiceOver is on the item. A selection that changes while it isn't
+        /// is UIKit's own (a text view resigning as focus moves to the bar)
+        /// and leaves the book's alone.
+        private(set) var hasVoiceOverFocus = false
 
         override init(frame: CGRect) {
             super.init(frame: frame)
@@ -115,8 +122,19 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
         /// `nil`: nothing to select.
-        func setWords(_ text: String?) {
+        func setWords(_ text: String?, voiceOverRunning: Bool = UIAccessibility.isVoiceOverRunning) {
             pageWords = text
+            if voiceOverRunning, let text, words.text != text { quietly { words.text = text } }
+        }
+
+        override func accessibilityElementDidBecomeFocused() {
+            super.accessibilityElementDidBecomeFocused()
+            hasVoiceOverFocus = true
+        }
+
+        override func accessibilityElementDidLoseFocus() {
+            super.accessibilityElementDidLoseFocus()
+            hasVoiceOverFocus = false
         }
 
         override var accessibilityTextInputResponder: (any UITextInput)? {
@@ -141,12 +159,14 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !isQuiet else { return }
             let range = textView.selectedRange
-            guard !isQuiet, range != lastSelection else { return }
             // A cursor moved with nothing selected before selects nothing.
             let wasEmpty = lastSelection.length == 0
             lastSelection = range
-            if range.length == 0, wasEmpty { return }
+            guard hasVoiceOverFocus, range.length > 0 || !wasEmpty else { return }
+            // Sent even if unchanged: a finger may have selected other words
+            // in the book since.
             select(range, textView.text)
         }
 

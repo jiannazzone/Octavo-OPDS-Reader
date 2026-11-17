@@ -31,7 +31,9 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
     /// Text is selected in the page, or no longer is: a finger moving a
     /// selection's handle mustn't turn the page. `box` is where the
     /// selection is, in the page's points, for the highlight bar (#125).
-    case selection(active: Bool, box: CGRect? = nil)
+    /// `byPageWords`: it's still the one VoiceOver made in the page's words
+    /// (`bridge.js` `selectPageWords`).
+    case selection(active: Bool, box: CGRect? = nil, byPageWords: Bool = false)
     /// The page's size in CSS px (= points), sent on load and whenever it
     /// changes.
     case viewport(width: Double, height: Double)
@@ -211,7 +213,7 @@ nonisolated enum ReaderMessage: Equatable, Sendable {
 
 nonisolated extension ReaderMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case type, zone, level, message, href, width, height, toc, side, active, cfi, x, y
+        case type, zone, level, message, href, width, height, toc, side, active, cfi, x, y, byPageWords
     }
 
     /// `x`, `y`, `width` and `height`, if they're all there.
@@ -243,7 +245,10 @@ nonisolated extension ReaderMessage: Decodable {
         case "turn":
             self = .turn(side: try container.decode(ReaderTurnSide.self, forKey: .side))
         case "selection":
-            self = .selection(active: try container.decodeIfPresent(Bool.self, forKey: .active) ?? false, box: try Self.box(in: container))
+            self = .selection(
+                active: try container.decodeIfPresent(Bool.self, forKey: .active) ?? false, box: try Self.box(in: container),
+                byPageWords: try container.decodeIfPresent(Bool.self, forKey: .byPageWords) ?? false
+            )
         case "viewport":
             self = .viewport(
                 width: try container.decode(Double.self, forKey: .width),

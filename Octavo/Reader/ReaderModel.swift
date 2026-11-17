@@ -45,6 +45,10 @@ final class ReaderModel {
     /// Where the selection is, while there is one: for the highlight bar
     /// (#125).
     var selectionBox: CGRect?
+    /// The book's selection is the one VoiceOver made in the page's words,
+    /// changing only when that does: for the page's VoiceOver item, which a
+    /// moving selection box would update again and again (#125).
+    private(set) var pageWordsSelected = false
     /// The highlight just made, while its bar is up (#125).
     var highlightBar: LocalHighlight.ID?
     /// Where the bar goes on a spread: under the last selection's middle.
@@ -778,8 +782,9 @@ final class ReaderModel {
             onControlsTap?(zone)
         case .turn(let side):
             turnRequested(side)
-        case .selection(let active, let box):
+        case .selection(let active, let box, let byPageWords):
             swipes.pageHasSelection = active
+            if pageWordsSelected != byPageWords { pageWordsSelected = byPageWords }
             selectionBox = active ? box : nil
             if let box { highlightBarX = Double(box.midX) }
             // A new selection is a new highlight to make.

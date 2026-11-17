@@ -188,17 +188,36 @@ const pageWordsOf = (range, withPoints = false) => {
 // The words the page's item has now, and the page's range, from the last
 // relocation.
 let shownWords = null
+// The range `selectPageWords` last selected, so clearing it leaves a
+// finger's selection made since alone.
+let pageWordsSelection = null
+const isPageWordsSelection = doc => {
+    const ours = pageWordsSelection
+    const selection = doc?.getSelection?.()
+    if (!ours || ours.doc !== doc || !selection?.rangeCount) return false
+    const range = selection.getRangeAt(0)
+    try {
+        return range.compareBoundaryPoints(Range.START_TO_START, ours.range) === 0
+            && range.compareBoundaryPoints(Range.END_TO_END, ours.range) === 0
+    } catch {
+        return false
+    }
+}
 
 // Selects the page's words from `start` to `end` (UTF-16 offsets in `text`,
 // as Swift's ranges are) in the book itself, and the highlight bar comes up
 // as for a finger's selection (#125). `text` must be the words last sent:
-// the page may have moved since. An empty range clears the selection.
+// the page may have moved since. An empty range clears the selection it
+// made, if it's still the book's.
 const selectPageWords = (start, end, text) => {
     const v = requireView()
     if (v.isFixedLayout || !shownWords || shownWords.text !== text) return false
     if (!(start >= 0 && end <= text.length && start <= end)) return false
     if (start === end) {
-        for (const { doc } of v.renderer.getContents()) doc?.getSelection?.()?.removeAllRanges()
+        for (const { doc } of v.renderer.getContents()) {
+            if (isPageWordsSelection(doc)) doc.getSelection().removeAllRanges()
+        }
+        pageWordsSelection = null
         return true
     }
     // The same words, still: the page's nodes may have changed since.
@@ -221,6 +240,7 @@ const selectPageWords = (start, end, text) => {
     const selection = doc.getSelection()
     selection.removeAllRanges()
     selection.addRange(range)
+    pageWordsSelection = { doc, range: range.cloneRange() }
     return true
 }
 
@@ -535,11 +555,13 @@ const onSelectionChange = doc => () => {
 const sendSelection = doc => {
     const now = hasSelection(doc)
     const box = now ? selectionBoxIn(doc) : null
-    const key = box ? [box.x, box.y, box.width, box.height].map(Math.round).join() : null
+    // Still the one VoiceOver made in the page's words, or a finger's since.
+    const byPageWords = now && isPageWordsSelection(doc)
+    const key = box ? [box.x, box.y, box.width, box.height].map(Math.round).join() + (byPageWords ? ' page' : '') : null
     if (now === selecting && key === selectionBox) return
     selecting = now
     selectionBox = key
-    post('selection', box ? { active: now, ...box } : { active: now })
+    post('selection', box ? { active: now, byPageWords, ...box } : { active: now, byPageWords })
 }
 const selectionBoxIn = doc => {
     const selection = doc.getSelection()
