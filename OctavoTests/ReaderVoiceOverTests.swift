@@ -256,6 +256,22 @@ struct ReaderVoiceOverBridgeTests {
         #expect(model.barAnnouncements == 2)
     }
 
+    // Said once the bar has a box to go by, even if the selection's first
+    // message had none, and once per selection.
+    @Test func theBarIsAnnouncedOncePerSelectionOnceItHasABox() async throws {
+        let model = try await opened(Self.book(chapter: Self.chapter))
+        let before = model.barAnnouncements
+        let box = CGRect(x: 20, y: 40, width: 30, height: 19)
+        model.handle(.selection(active: true, box: nil, byPageWords: true))
+        #expect(model.barAnnouncements == before)
+        model.handle(.selection(active: true, box: box, byPageWords: true))
+        model.handle(.selection(active: true, box: box.insetBy(dx: -10, dy: 0), byPageWords: true))
+        #expect(model.barAnnouncements == before + 1)
+        model.handle(.selection(active: true, box: box, byPageWords: false))
+        model.handle(.selection(active: true, box: box, byPageWords: true))
+        #expect(model.barAnnouncements == before + 2)
+    }
+
     @Test func aRightToLeftBookGoesForwardByTheLeftPage() async throws {
         let model = try await opened(Self.book(chapter: Self.chapter, rightToLeft: true))
         #expect(model.forwardSide == .left)

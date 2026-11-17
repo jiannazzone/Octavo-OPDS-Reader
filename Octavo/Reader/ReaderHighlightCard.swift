@@ -23,21 +23,28 @@ struct ReaderHighlightCard: View {
             Grid(horizontalSpacing: 0, verticalSpacing: 8) {
                 GridRow {
                     ShareLink(item: ReaderHighlightCard.shareText(highlight.text, source: source)) {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                        Self.cell(Label("Share", systemImage: "square.and.arrow.up"))
                     }
-                    Button("Copy", systemImage: "doc.on.doc") {
-                        UIPasteboard.general.string = highlight.text
+                    Button { UIPasteboard.general.string = highlight.text } label: {
+                        Self.cell(Label("Copy", systemImage: "doc.on.doc"))
                     }
-                    Button(highlight.note == nil ? "Add Note" : "Edit Note", systemImage: "square.and.pencil", action: writeNote)
-                    Button("Delete", systemImage: "trash", role: .destructive, action: delete)
+                    Button(action: writeNote) {
+                        Self.cell(Label(HighlightNoteName.of(highlight), systemImage: "square.and.pencil"))
+                    }
+                    Button(role: .destructive, action: delete) {
+                        Self.cell(Label("Delete", systemImage: "trash"))
+                    }
                     ReaderPanelCloseButton(close: close)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
                 .font(.title3)
-                .frame(maxWidth: .infinity, minHeight: 44)
                 HighlightColorGrid.rows(selected: highlight.color, pick: recolor)
             }
+            // As the bar: on five columns, it stops growing where they'd
+            // crowd a folded page.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             if let note = highlight.note {
                 Text(verbatim: note)
                     .font(.body)
@@ -50,6 +57,13 @@ struct ReaderHighlightCard: View {
         .glassEffect(.regular.tint(Color(hex: theme.background).opacity(0.72)), in: .rect(cornerRadius: 26))
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
+    }
+
+    /// A button's icon filling its column, all of it the button's to tap.
+    private static func cell(_ label: some View) -> some View {
+        label
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(.rect)
     }
 
     /// The quote, then where it's from: "“…” — Pride and Prejudice, Jane

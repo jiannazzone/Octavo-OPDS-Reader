@@ -22,7 +22,9 @@ extension ReaderModel {
     /// Words selected in the page's item brought the highlight bar up (#125):
     /// said after VoiceOver has read the selection, not over it.
     func announceHighlightBar() {
+        #if DEBUG
         barAnnouncements += 1
+        #endif
         let line = String(localized: "Highlight colors available", comment: "VoiceOver: said when selecting words on the page brings up the highlight bar")
         UIAccessibility.post(notification: .announcement, argument: NSAttributedString(string: line, attributes: [.accessibilitySpeechQueueAnnouncement: true]))
     }

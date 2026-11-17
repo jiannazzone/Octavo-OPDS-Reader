@@ -23,7 +23,7 @@ struct ReaderHighlightBar: View {
                     .frame(width: 36, height: 36)
                     .transition(.opacity)
             }
-            Button("Note", systemImage: "square.and.pencil") {
+            Button(HighlightNoteName.of(highlight), systemImage: "square.and.pencil") {
                 Task { if let id = await model.highlightForNote() { writeNote(id) } }
             }
             .labelStyle(.iconOnly)
@@ -135,5 +135,13 @@ struct HighlightColorDot: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(HighlightColorRow.name(of: color)))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// The pencil's name in the bar and the card (#125): Add Note, or Edit Note
+/// once there is one.
+enum HighlightNoteName {
+    static func of(_ highlight: LocalHighlight?) -> LocalizedStringKey {
+        highlight?.note == nil ? "Add Note" : "Edit Note"
     }
 }

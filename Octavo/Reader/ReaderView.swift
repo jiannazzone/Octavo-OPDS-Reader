@@ -274,7 +274,7 @@ private struct ReaderScreen: View {
                 .ignoresSafeArea()
                 .toolbar { buttons }
                 // A highlight's note (#125).
-                .sheet(isPresented: Binding(get: { model.noteSheet != nil }, set: { if !$0 { model.noteSheet = nil } })) {
+                .systemSheet(isPresented: Binding(get: { model.noteSheet != nil }, set: { if !$0 { model.noteSheet = nil } }), colorScheme: systemColorScheme) {
                     // One deleted elsewhere meanwhile takes its sheet with it.
                     if let id = model.noteSheet, let highlight = model.highlights.highlight(id) {
                         ReaderHighlightNoteSheet(highlight: highlight) { note in
@@ -285,10 +285,6 @@ private struct ReaderScreen: View {
                             model.noteSheet = nil
                             model.highlightBar = nil
                         }
-                        // A system sheet, drawn in the system's scheme, not
-                        // the page's: Sepia in dark mode drew dark words on
-                        // the dark sheet.
-                        .environment(\.colorScheme, systemColorScheme)
                     }
                 }
                 // Inside the stack, the safe area's top includes the bar
@@ -1024,5 +1020,17 @@ struct ReaderFooterLines: View {
         }
         .frame(width: column.upperBound - column.lowerBound, height: ReaderChromeLayout.footerLineHeight)
         .offset(x: column.lowerBound, y: centre - ReaderChromeLayout.footerLineHeight / 2)
+    }
+}
+
+extension View {
+    /// A system sheet over the reader, drawn in the system's light or dark,
+    /// not the page's (#125): the reader sets its theme's scheme on all it
+    /// holds, and Sepia in dark mode drew dark words on the dark sheet. Every
+    /// sheet from the reader goes through this.
+    func systemSheet<Content: View>(isPresented: Binding<Bool>, colorScheme: ColorScheme, @ViewBuilder content: @escaping () -> Content) -> some View {
+        sheet(isPresented: isPresented) {
+            content().environment(\.colorScheme, colorScheme)
+        }
     }
 }
