@@ -419,10 +419,12 @@ enum ReaderRemote {
             Task { await reader.updateHighlightsOnPage() }
             return nil
         case "unhighlight":
-            // Every highlight on `cfi`, or of the words `name`, deleted, so
-            // a check starts clean.
+            // Every highlight on `cfi`, or of the words `name` starting on
+            // the page, deleted, so a check starts clean.
             guard command.cfi != nil || command.name != nil else { return "unhighlight needs cfi or name" }
-            for highlight in reader.highlights.all where (command.cfi != nil && highlight.cfi == command.cfi) || (command.name != nil && highlight.text == command.name) {
+            let onPage = Set(reader.highlightsOnPage.map(\.id))
+            for highlight in reader.highlights.all
+            where (command.cfi != nil && highlight.cfi == command.cfi) || (command.name != nil && highlight.text == command.name && onPage.contains(highlight.id)) {
                 reader.highlights.remove(highlight.id)
             }
             return nil

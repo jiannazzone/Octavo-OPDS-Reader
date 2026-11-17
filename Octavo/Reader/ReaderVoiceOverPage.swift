@@ -83,9 +83,12 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
         var wasSelecting = false
         /// The words as text VoiceOver can select in, through
         /// `accessibilityTextInputResponder`: hidden, so it's never drawn or
-        /// read as an item of its own, and laid out over the page, so its
-        /// rects are roughly where the words are.
+        /// read as an item of its own. Its rects are its own layout over the
+        /// page, in the body font, not where the book's words are.
         private let words = UITextView()
+        /// The page's words, put in `words` only once VoiceOver asks for
+        /// them, so a turn lays out nothing for anyone else.
+        private var pageWords: String?
         /// A selection the words made themselves, not VoiceOver.
         private var isQuiet = false
         private var lastSelection = NSRange(location: 0, length: 0)
@@ -113,9 +116,16 @@ struct ReaderVoiceOverPage: UIViewRepresentable {
 
         /// `nil`: nothing to select.
         func setWords(_ text: String?) {
-            accessibilityTextInputResponder = text == nil ? nil : words
-            guard words.text != (text ?? "") else { return }
-            quietly { words.text = text ?? "" }
+            pageWords = text
+        }
+
+        override var accessibilityTextInputResponder: (any UITextInput)? {
+            get {
+                guard let pageWords else { return nil }
+                if words.text != pageWords { quietly { words.text = pageWords } }
+                return words
+            }
+            set {}
         }
 
         func clearSelection() {

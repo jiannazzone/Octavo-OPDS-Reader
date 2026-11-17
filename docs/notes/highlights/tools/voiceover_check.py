@@ -127,9 +127,12 @@ def main():
     # A way back left by an earlier jump would bring the book back to it.
     if "Stay Here" in labels(remote.walk()):
         remote.send("voiceOverActivate", name="Stay Here")
-    check.ok(remote.send("unhighlight", cfi=args.cfi, name=args.words), "cleared any highlight left on the range")
     check.ok(remote.send("goto", cfi=args.cfi), "went to the range")
     time.sleep(2.5)
+    # By its words too, on this page only: one made here before may have
+    # a CFI of another form.
+    check.ok(remote.send("unhighlight", cfi=args.cfi, name=args.words), "cleared any highlight left on the range")
+    time.sleep(1)
     walk = remote.walk()
     check.expect(args.words in walk.split("# the page's words:")[0], "the page shows the range's words")
     check.expect(action not in walk, "no highlight there yet")

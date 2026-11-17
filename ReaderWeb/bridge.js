@@ -116,11 +116,12 @@ const isBlankPage = range => {
 // blank page), or if the page can't be read: the relocation goes without.
 const WORD_BLOCKS = 'p,div,h1,h2,h3,h4,h5,h6,li,dt,dd,blockquote,pre,figcaption,caption,td,th,tr,section,article,aside,header,footer'
 const UNREAD = 'script,style,noscript,template,rt,rp,[hidden],[aria-hidden="true"]'
-// With the words, where each of their characters came from in the book
-// (`points`, one per character, `null` for a line's break), so a selection
-// in them selects the same words on the page (#125): VoiceOver's Text
-// Selection rotor picks words in the page's item, not in the book.
-const pageWordsOf = range => {
+// With `withPoints`, also where each of their characters came from in the
+// book (`points`, one per character, `null` for a line's break), so a
+// selection in them selects the same words on the page (#125): VoiceOver's
+// Text Selection rotor picks words in the page's item, not in the book. Only
+// worked out for a selection, so a turn builds no map.
+const pageWordsOf = (range, withPoints = false) => {
     if (!range || range.collapsed) return null
     try {
         const root = range.commonAncestorContainer
@@ -131,15 +132,16 @@ const pageWordsOf = range => {
         const start = range.startContainer
         walker.currentNode = start
         const lines = []
-        // Each character: { ch, node, from, to }, a run of white space
-        // within a node made one space.
+        // Each character, a run of white space within a node made one
+        // space: with points, { ch, node, from, to }.
         let line = []
+        const chOf = c => withPoints ? c.ch : c
         let block = null
         const endLine = () => {
             let first = 0
             let end = line.length
-            while (first < end && line[first].ch === ' ') first++
-            while (end > first && line[end - 1].ch === ' ') end--
+            while (first < end && chOf(line[first]) === ' ') first++
+            while (end > first && chOf(line[end - 1]) === ' ') end--
             if (end > first) lines.push(line.slice(first, end))
             line = []
         }
@@ -161,27 +163,30 @@ const pageWordsOf = range => {
             let space = null
             for (let i = from; i < to; i++) {
                 if (/\s/.test(node.data[i])) {
-                    if (space) space.to = i + 1
-                    else line.push(space = { ch: ' ', node, from: i, to: i + 1 })
+                    if (!space) line.push(space = withPoints ? { ch: ' ', node, from: i, to: i + 1 } : ' ')
+                    else if (withPoints) space.to = i + 1
                 } else {
                     space = null
-                    line.push({ ch: node.data[i], node, from: i, to: i + 1 })
+                    line.push(withPoints ? { ch: node.data[i], node, from: i, to: i + 1 } : node.data[i])
                 }
             }
         }
         endLine()
         if (!lines.length) return null
+        const text = lines.map(chars => chars.map(chOf).join('')).join('\n')
+        if (!withPoints) return { text }
         const points = []
         lines.forEach((chars, index) => {
             if (index) points.push(null)
-            points.push(...chars)
+            for (const c of chars) points.push(c)
         })
-        return { text: lines.map(chars => chars.map(c => c.ch).join('')).join('\n'), points }
+        return { text, points }
     } catch {
         return null
     }
 }
-// The words the page's item has now, from the last relocation.
+// The words the page's item has now, and the page's range, from the last
+// relocation.
 let shownWords = null
 
 // Selects the page's words from `start` to `end` (UTF-16 offsets in `text`,
@@ -191,16 +196,21 @@ let shownWords = null
 const selectPageWords = (start, end, text) => {
     const v = requireView()
     if (v.isFixedLayout || !shownWords || shownWords.text !== text) return false
-    const { points } = shownWords
-    if (!(start >= 0 && end <= points.length && start <= end)) return false
+    if (!(start >= 0 && end <= text.length && start <= end)) return false
+    if (start === end) {
+        for (const { doc } of v.renderer.getContents()) doc?.getSelection?.()?.removeAllRanges()
+        return true
+    }
+    // The same words, still: the page's nodes may have changed since.
+    const mapped = pageWordsOf(shownWords.range, true)
+    if (mapped?.text !== text) return false
+    const { points } = mapped
     let first = start
     let last = end
     while (first < last && !points[first]) first++
     while (last > first && !points[last - 1]) last--
-    if (last === first) {
-        for (const { doc } of v.renderer.getContents()) doc?.getSelection?.()?.removeAllRanges()
-        return start === end
-    }
+    // Only a line's break: nothing in the book to select.
+    if (last === first) return false
     const from = points[first]
     const to = points[last - 1]
     if (!from.node.isConnected || !to.node.isConnected) return false
@@ -369,7 +379,8 @@ const onRelocate = ({ detail }) => {
         ...turnsFrom(view.renderer),
         characters: pageCharacters(detail.range),
     }
-    shownWords = pageWordsOf(detail.range)
+    const words = pageWordsOf(detail.range)
+    shownWords = words ? { text: words.text, range: detail.range } : null
     message.words = shownWords?.text ?? null
     message.startCFI = startOf(message.cfi)
     message.xpointer = writesXPointers && !view.isFixedLayout ? xpointerOf(detail.section?.current, startNodeOf(detail.range)) : null
