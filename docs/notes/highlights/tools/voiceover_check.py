@@ -141,13 +141,17 @@ def main():
 
     # Made with VoiceOver: the words selected in the page's item, as the
     # Text Selection rotor does, select the same words in the book.
+    announced = lambda: int(remote.state().rsplit("announced ", 1)[1])
+    before = announced()
     check.ok(remote.send("voiceOverSelect", name=args.words), f"selected “{args.words}” in the page's item")
     time.sleep(1)
     check.expect("selection none" not in remote.state(), "the same words are selected in the book")
+    check.expect(announced() == before + 1, "VoiceOver was told “Highlight colors available”, once")
     check.expect("Green" in labels(remote.walk()), "the bar's colours are in reach")
     check.ok(remote.send("voiceOverSelect"), "unselected them in the page's item")
     time.sleep(1)
     check.expect("selection none" in remote.state(), "the book's selection went too")
+    check.expect(announced() == before + 1, "unselecting said nothing")
     check.ok(remote.send("voiceOverSelect", name=args.words), "selected them again")
     time.sleep(1)
     check.ok(remote.send("voiceOverLeave"), "left the page's item, its text's selection collapsing")

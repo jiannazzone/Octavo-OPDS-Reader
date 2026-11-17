@@ -141,7 +141,7 @@ struct SettingsList: View {
                 LabeledContent("Version", value: AboutOctavo.version)
                 link("Source code", to: AboutOctavo.sourceCode)
                 link("Privacy Policy", to: AboutOctavo.privacyPolicy)
-                row(.licences) { Text("Licences") }
+                row(.licences) { Text("Licenses") }
             } header: {
                 Text("About")
             } footer: {

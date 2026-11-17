@@ -1,15 +1,15 @@
 import Foundation
 import SwiftUI
 
-/// About's Licences (Adam, 2026-11-02): Octavo's own, then each component
+/// About's Licenses (Adam, 2026-11-02): Octavo's own, then each component
 /// with its full text, from the `THIRD-PARTY-NOTICES.md` the app bundles.
 struct LicencesPage: View {
     private let notices = ThirdPartyNotice.bundled()
 
     var body: some View {
-        SettingsPageList(title: "Licences") {
+        SettingsPageList(title: "Licenses") {
             Section {
-                Text("Octavo: Mozilla Public License 2.0, with the components below under their own licences.")
+                Text("Octavo: Mozilla Public License 2.0, with the components below under their own licenses.")
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
             }

@@ -251,6 +251,9 @@ struct ReaderVoiceOverBridgeTests {
         try await Task.sleep(for: .milliseconds(500))
         let left = try await model.page.callJavaScript("return await window.octavo.takeSelection()") as? [String: Any]
         #expect(left?["text"] as? String == "A second")
+        // Each of VoiceOver's two selections said the bar came up; the
+        // finger's didn't.
+        #expect(model.barAnnouncements == 2)
     }
 
     @Test func aRightToLeftBookGoesForwardByTheLeftPage() async throws {
