@@ -73,6 +73,8 @@ What it does:
 
 Each turn's landing is said, so after quick swipes the last place heard is the last landed. A jump or Back meanwhile is never said for a turn (`ReaderVoiceOverTurns`).
 
+**Its words can be selected** (#125, `highlights.md`): the Text Selection rotor selects words, lines or sentences in the item, the same words are selected in the book, and the highlight bar comes up. For that the item has a text input (`accessibilityTextInputResponder`), and UIKit then gives it its private text-entry traits, so VoiceOver may call the page a text field. Turns and the double tap stay the item's own, checked headless; VoiceOver itself on a device is still to try.
+
 The cost: inside a page, VoiceOver can't jump by heading or link, and a footnote's mark is read as its number but can't be opened. Reading by word or character still works with the rotor.
 
 **Names fixed in the shell:** On iPhone's count ("1 book"), Text and Theme's menus said their name twice ("Font, Font, Book's Font"), the text size reads "Text Size, 100%" and steps with a swipe up or down, "Text and Theme" is a heading, Home's progress bars are hidden (the line above says the percentage), and Hide Controls is only on the progress bar, not on every item in the reader. Then, from the walk of every task:
@@ -225,7 +227,7 @@ xcrun simctl io <udid> recordVideo --display=3 --force flow.mov
 ffmpeg -i flow.mov -vf "signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=yavg.txt" -f null -
 ```
 
-**What VoiceOver reads, in order** (DEBUG builds, through `ReaderRemote`): `{"cmd": "voiceOver"}` writes the current screen's items to `Documents/voiceover.txt` (`VoiceOverWalk`), skipping what the app hides, which XCUITest's tree doesn't. `"name": "tree"` adds the containers. `{"cmd": "voiceOverScroll", "side": "next"}` sends the reader's page item a scroll as VoiceOver does (left, right, up, down, next or previous), and `{"cmd": "voiceOverActivate"}` a double tap; with `"name"`, a double tap on the element VoiceOver reads as that, falling back to a control's action as VoiceOver's own tap does. `{"cmd": "voiceOverAction", "name": "Share", "label": "…"}` runs an action from the Actions rotor, on the element labelled `label` if given (#125). Together they script a VoiceOver user's task headless: `highlights/tools/voiceover_check.py` does the highlight tasks start to end (`highlights.md`). SwiftUI builds no items until accessibility is on, and stopping an XCUITest run turns it off again:
+**What VoiceOver reads, in order** (DEBUG builds, through `ReaderRemote`): `{"cmd": "voiceOver"}` writes the current screen's items to `Documents/voiceover.txt` (`VoiceOverWalk`), skipping what the app hides, which XCUITest's tree doesn't. `"name": "tree"` adds the containers. `{"cmd": "voiceOverScroll", "side": "next"}` sends the reader's page item a scroll as VoiceOver does (left, right, up, down, next or previous), and `{"cmd": "voiceOverActivate"}` a double tap; with `"name"`, a double tap on the element VoiceOver reads as that, falling back to a control's action as VoiceOver's own tap does. `{"cmd": "voiceOverAction", "name": "Share", "label": "…"}` runs an action from the Actions rotor, on the element labelled `label` if given (#125). `{"cmd": "voiceOverSelect", "name": "This"}` selects those words in the page item's text input as the Text Selection rotor does, and without `name` unselects; `{"cmd": "voiceOverLeave"}` moves VoiceOver's focus off the item; the walk marks an item with a text input `textInput`. Together they script a VoiceOver user's task headless: `highlights/tools/voiceover_check.py` does the highlight tasks start to end (`highlights.md`). SwiftUI builds no items until accessibility is on, and stopping an XCUITest run turns it off again:
 
 ```bash
 xcrun simctl spawn <udid> defaults write com.apple.Accessibility ApplicationAccessibilityEnabled -bool true
@@ -260,4 +262,4 @@ Where it misleads:
 - Unfolded: Reduce Transparency, Bold Text, grey versions of most screens.
 - Larger Text: half open, folding with a book open, the trust prompt, footnote cards, Import from Files, Books on iPhone, an empty screen, the connection banner, Dark Mode at these sizes.
 - Nothing from Color and Contrast or Larger Text has run on a real Duo.
-- VoiceOver: the note card, the server's place capsule, an OPDS catalog's lists and Books on iPhone weren't walked. Nothing has run with VoiceOver on a device.
+- VoiceOver: the note card, the server's place capsule, an OPDS catalog's lists and Books on iPhone weren't walked. Nothing has run with VoiceOver on a device, so making a highlight with the Text Selection rotor, what the page says now it has a text input, and Read All with it are unconfirmed.

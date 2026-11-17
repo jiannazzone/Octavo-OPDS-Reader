@@ -214,6 +214,7 @@ struct ReaderPageTurnTests {
         #expect(try ReaderMessage.decode(#"{"type":"selection","active":true}"#) == .selection(active: true))
         #expect(try ReaderMessage.decode(#"{"type":"selection","active":false}"#) == .selection(active: false))
         #expect(try ReaderMessage.decode(#"{"type":"selection"}"#) == .selection(active: false))
+        #expect(try ReaderMessage.decode(#"{"type":"selection","active":true,"byPageWords":true}"#) == .selection(active: true, byPageWords: true))
         // Where it is, for the highlight bar (#125).
         #expect(try ReaderMessage.decode(#"{"type":"selection","active":true,"x":308.5,"y":171,"width":47,"height":19}"#)
             == .selection(active: true, box: CGRect(x: 308.5, y: 171, width: 47, height: 19)))

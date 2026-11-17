@@ -59,6 +59,84 @@ struct ReaderVoiceOverTests {
     }
 }
 
+/// The page item's words, selected as VoiceOver's Text Selection rotor
+/// does, sent on to the book (#125).
+@MainActor
+struct ReaderVoiceOverSelectionTests {
+    private final class Sent {
+        var ranges: [NSRange] = []
+    }
+
+    private func page(_ words: String = "It is a truth universally acknowledged.") -> (ReaderVoiceOverPage.PageView, any UITextInput, Sent) {
+        let view = ReaderVoiceOverPage.PageView(frame: CGRect(x: 0, y: 0, width: 300, height: 500))
+        let sent = Sent()
+        view.select = { range, _ in sent.ranges.append(range) }
+        view.setWords(words, voiceOverRunning: false)
+        return (view, view.accessibilityTextInputResponder!, sent)
+    }
+
+    private func select(_ input: any UITextInput, _ location: Int, _ length: Int) {
+        let start = input.position(from: input.beginningOfDocument, offset: location)!
+        input.selectedTextRange = input.textRange(from: start, to: input.position(from: start, offset: length)!)
+    }
+
+    // Once the book's selection is no longer the item's (a finger selected
+    // other words), the item lets its own go, so the same words go again.
+    @Test func theSameWordsGoAgainOnceTheBooksSelectionMoved() {
+        let (view, input, sent) = page()
+        view.accessibilityElementDidBecomeFocused()
+        select(input, 8, 5)
+        view.clearSelection()
+        select(input, 8, 5)
+        #expect(sent.ranges == [NSRange(location: 8, length: 5), NSRange(location: 8, length: 5)])
+    }
+
+    // UIKit collapsing the text view's selection as focus moves to the bar
+    // leaves the book's selection, and the bar, where they are.
+    @Test func aChangeAfterFocusLeftIsNotSent() {
+        let (view, input, sent) = page()
+        view.accessibilityElementDidBecomeFocused()
+        select(input, 8, 5)
+        view.accessibilityElementDidLoseFocus()
+        select(input, 8, 0)
+        #expect(sent.ranges == [NSRange(location: 8, length: 5)])
+        // Back on the item, the same words are sent again.
+        view.accessibilityElementDidBecomeFocused()
+        select(input, 8, 5)
+        #expect(sent.ranges.count == 2)
+    }
+
+    @Test func unselectingIsSentButMovingTheCursorIsNot() {
+        let (view, input, sent) = page()
+        view.accessibilityElementDidBecomeFocused()
+        select(input, 3, 0)
+        select(input, 8, 5)
+        select(input, 10, 0)
+        select(input, 12, 0)
+        #expect(sent.ranges == [NSRange(location: 8, length: 5), NSRange(location: 10, length: 0)])
+    }
+
+    // The book's selection gone (taken for a highlight): the item's goes
+    // quietly, and new words replace the old quietly.
+    @Test func clearingAndNewWordsSendNothing() {
+        let (view, input, sent) = page()
+        view.accessibilityElementDidBecomeFocused()
+        select(input, 8, 5)
+        view.clearSelection()
+        view.setWords("A second page.", voiceOverRunning: true)
+        #expect(sent.ranges.count == 1)
+        #expect(input.selectedTextRange.flatMap(input.text(in:)) == "")
+        let all = input.textRange(from: input.beginningOfDocument, to: input.endOfDocument)!
+        #expect(input.text(in: all) == "A second page.")
+    }
+
+    @Test func aPageWithoutWordsHasNoTextInput() {
+        let (view, _, _) = page()
+        view.setWords(nil)
+        #expect(view.accessibilityTextInputResponder == nil)
+    }
+}
+
 /// The words `bridge.js` sends for the page VoiceOver reads (#74).
 @MainActor
 @Suite(.temporaryFiles, .serialized, .timeLimit(.minutes(1)))
@@ -121,6 +199,58 @@ struct ReaderVoiceOverBridgeTests {
         line two
         """)
         #expect(model.forwardSide == .right)
+    }
+
+    // VoiceOver's Text Selection rotor picks words in the page's item: the
+    // same words are selected in the book (#125), across markup, a run of
+    // spaces made one, and a paragraph's end.
+    @Test(arguments: [
+        ("truth universally", "truth universally"),
+        ("acknowledged.\nA second", "acknowledged. A second"),
+        ("Line one\nline", "Line oneline"),
+    ])
+    func wordsSelectedInThePageSelectTheBook(picked: String, selected: String) async throws {
+        let model = try await opened(Self.book(chapter: Self.chapter))
+        let words = try #require(model.pageWords)
+        let range = (words as NSString).range(of: picked)
+        try #require(range.location != NSNotFound)
+        model.selectPageWords(range, in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox != nil })
+        let taken = try await model.page.callJavaScript("return await window.octavo.takeSelection()") as? [String: Any]
+        #expect(taken?["text"] as? String == selected)
+    }
+
+    // Words from a page since turned select nothing; an empty range clears
+    // the selection.
+    @Test func staleWordsSelectNothingAndAnEmptyRangeClears() async throws {
+        let model = try await opened(Self.book(chapter: Self.chapter))
+        let words = try #require(model.pageWords)
+        let stale = try await model.page.callJavaScript("return await window.octavo.selectPageWords(0, 5, text)", arguments: ["text": words + " "]) as? Bool
+        #expect(stale == false)
+        model.selectPageWords(NSRange(location: 0, length: 7), in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox != nil })
+        model.selectPageWords(NSRange(location: 3, length: 0), in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox == nil })
+    }
+
+    // Unselecting in the page's item leaves a finger's selection made since.
+    @Test func unselectingLeavesAFingersSelection() async throws {
+        let model = try await opened(Self.book(chapter: Self.chapter))
+        let words = try #require(model.pageWords)
+        model.selectPageWords((words as NSString).range(of: "A second"), in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox != nil })
+        let taken = try await model.page.callJavaScript("return await window.octavo.takeSelection()") as? [String: Any]
+        let cfi = try #require(taken?["cfi"] as? String)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox == nil })
+        model.selectPageWords((words as NSString).range(of: "Inside"), in: words)
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox != nil && model.pageWordsSelected })
+        // A finger selects other words: no longer the item's.
+        _ = try await model.page.callJavaScript("return await window.octavo.selectRange(cfi)", arguments: ["cfi": cfi])
+        #expect(await eventually(timeout: .seconds(5)) { model.selectionBox != nil && !model.pageWordsSelected })
+        model.selectPageWords(NSRange(location: 0, length: 0), in: words)
+        try await Task.sleep(for: .milliseconds(500))
+        let left = try await model.page.callJavaScript("return await window.octavo.takeSelection()") as? [String: Any]
+        #expect(left?["text"] as? String == "A second")
     }
 
     @Test func aRightToLeftBookGoesForwardByTheLeftPage() async throws {

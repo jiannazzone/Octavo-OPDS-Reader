@@ -116,7 +116,12 @@ const isBlankPage = range => {
 // blank page), or if the page can't be read: the relocation goes without.
 const WORD_BLOCKS = 'p,div,h1,h2,h3,h4,h5,h6,li,dt,dd,blockquote,pre,figcaption,caption,td,th,tr,section,article,aside,header,footer'
 const UNREAD = 'script,style,noscript,template,rt,rp,[hidden],[aria-hidden="true"]'
-const pageWordsOf = range => {
+// With `withPoints`, also where each of their characters came from in the
+// book (`points`, one per character, `null` for a line's break), so a
+// selection in them selects the same words on the page (#125): VoiceOver's
+// Text Selection rotor picks words in the page's item, not in the book. Only
+// worked out for a selection, so a turn builds no map.
+const pageWordsOf = (range, withPoints = false) => {
     if (!range || range.collapsed) return null
     try {
         const root = range.commonAncestorContainer
@@ -127,11 +132,18 @@ const pageWordsOf = range => {
         const start = range.startContainer
         walker.currentNode = start
         const lines = []
-        let line = ''
+        // Each character, a run of white space within a node made one
+        // space: with points, { ch, node, from, to }.
+        let line = []
+        const chOf = c => withPoints ? c.ch : c
         let block = null
         const endLine = () => {
-            if (line.trim()) lines.push(line.trim())
-            line = ''
+            let first = 0
+            let end = line.length
+            while (first < end && chOf(line[first]) === ' ') first++
+            while (end > first && chOf(line[end - 1]) === ' ') end--
+            if (end > first) lines.push(line.slice(first, end))
+            line = []
         }
         for (let node = start.nodeType === Node.TEXT_NODE ? start : walker.nextNode(); node; node = walker.nextNode()) {
             if (range.comparePoint(node, 0) > 0) break
@@ -144,18 +156,92 @@ const pageWordsOf = range => {
             if (!parent || parent.closest(UNREAD)) continue
             const from = node === range.startContainer ? range.startOffset : 0
             const to = node === range.endContainer ? range.endOffset : node.data.length
-            const text = node.data.slice(from, to).replace(/\s+/g, ' ')
-            if (!text.trim()) continue
+            if (!/\S/.test(node.data.slice(from, to))) continue
             const nodeBlock = parent.closest(WORD_BLOCKS)
             if (nodeBlock !== block) endLine()
             block = nodeBlock
-            line += text
+            let space = null
+            for (let i = from; i < to; i++) {
+                if (/\s/.test(node.data[i])) {
+                    if (!space) line.push(space = withPoints ? { ch: ' ', node, from: i, to: i + 1 } : ' ')
+                    else if (withPoints) space.to = i + 1
+                } else {
+                    space = null
+                    line.push(withPoints ? { ch: node.data[i], node, from: i, to: i + 1 } : node.data[i])
+                }
+            }
         }
         endLine()
-        return lines.length ? lines.join('\n') : null
+        if (!lines.length) return null
+        const text = lines.map(chars => chars.map(chOf).join('')).join('\n')
+        if (!withPoints) return { text }
+        const points = []
+        lines.forEach((chars, index) => {
+            if (index) points.push(null)
+            for (const c of chars) points.push(c)
+        })
+        return { text, points }
     } catch {
         return null
     }
+}
+// The words the page's item has now, and the page's range, from the last
+// relocation.
+let shownWords = null
+// The range `selectPageWords` last selected, so clearing it leaves a
+// finger's selection made since alone.
+let pageWordsSelection = null
+const isPageWordsSelection = doc => {
+    const ours = pageWordsSelection
+    const selection = doc?.getSelection?.()
+    if (!ours || ours.doc !== doc || !selection?.rangeCount) return false
+    const range = selection.getRangeAt(0)
+    try {
+        return range.compareBoundaryPoints(Range.START_TO_START, ours.range) === 0
+            && range.compareBoundaryPoints(Range.END_TO_END, ours.range) === 0
+    } catch {
+        return false
+    }
+}
+
+// Selects the page's words from `start` to `end` (UTF-16 offsets in `text`,
+// as Swift's ranges are) in the book itself, and the highlight bar comes up
+// as for a finger's selection (#125). `text` must be the words last sent:
+// the page may have moved since. An empty range clears the selection it
+// made, if it's still the book's.
+const selectPageWords = (start, end, text) => {
+    const v = requireView()
+    if (v.isFixedLayout || !shownWords || shownWords.text !== text) return false
+    if (!(start >= 0 && end <= text.length && start <= end)) return false
+    if (start === end) {
+        for (const { doc } of v.renderer.getContents()) {
+            if (isPageWordsSelection(doc)) doc.getSelection().removeAllRanges()
+        }
+        pageWordsSelection = null
+        return true
+    }
+    // The same words, still: the page's nodes may have changed since.
+    const mapped = pageWordsOf(shownWords.range, true)
+    if (mapped?.text !== text) return false
+    const { points } = mapped
+    let first = start
+    let last = end
+    while (first < last && !points[first]) first++
+    while (last > first && !points[last - 1]) last--
+    // Only a line's break: nothing in the book to select.
+    if (last === first) return false
+    const from = points[first]
+    const to = points[last - 1]
+    if (!from.node.isConnected || !to.node.isConnected) return false
+    const doc = from.node.ownerDocument
+    const range = doc.createRange()
+    range.setStart(from.node, from.from)
+    range.setEnd(to.node, to.to)
+    const selection = doc.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    pageWordsSelection = { doc, range: range.cloneRange() }
+    return true
 }
 
 // Characters of text, with each run of white space counted as one, the same
@@ -313,7 +399,9 @@ const onRelocate = ({ detail }) => {
         ...turnsFrom(view.renderer),
         characters: pageCharacters(detail.range),
     }
-    message.words = pageWordsOf(detail.range)
+    const words = pageWordsOf(detail.range)
+    shownWords = words ? { text: words.text, range: detail.range } : null
+    message.words = shownWords?.text ?? null
     message.startCFI = startOf(message.cfi)
     message.xpointer = writesXPointers && !view.isFixedLayout ? xpointerOf(detail.section?.current, startNodeOf(detail.range)) : null
     for (const watch of relocationWatchers) watch(detail, message)
@@ -467,11 +555,13 @@ const onSelectionChange = doc => () => {
 const sendSelection = doc => {
     const now = hasSelection(doc)
     const box = now ? selectionBoxIn(doc) : null
-    const key = box ? [box.x, box.y, box.width, box.height].map(Math.round).join() : null
+    // Still the one VoiceOver made in the page's words, or a finger's since.
+    const byPageWords = now && isPageWordsSelection(doc)
+    const key = box ? [box.x, box.y, box.width, box.height].map(Math.round).join() + (byPageWords ? ' page' : '') : null
     if (now === selecting && key === selectionBox) return
     selecting = now
     selectionBox = key
-    post('selection', box ? { active: now, ...box } : { active: now })
+    post('selection', box ? { active: now, byPageWords, ...box } : { active: now, byPageWords })
 }
 const selectionBoxIn = doc => {
     const selection = doc.getSelection()
@@ -2378,6 +2468,9 @@ window.octavo = Object.freeze({
         selection.removeAllRanges()
         selection.addRange(toRange(doc, anchor(doc)))
         return true
+    }),
+    selectPageWords: reported(async function selectPageWords_(start, end, text) {
+        return selectPageWords(start, end, String(text))
     }),
     takeSelection: reported(async function takeSelection_() {
         return takeSelection()

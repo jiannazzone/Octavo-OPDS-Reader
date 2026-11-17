@@ -58,6 +58,12 @@ import WebKit
 ///   on the element VoiceOver reads as that.
 /// - `voiceOverAction` (`name`, `label`): a custom action from VoiceOver's
 ///   Actions rotor, on the element labelled `label` if given (#125).
+/// - `voiceOverSelect` (`name`): selects those words in the page item's
+///   text, as VoiceOver's Text Selection rotor does; without `name`, leaves
+///   the cursor alone, unselecting (#125). Fails, saying what's selected,
+///   unless just those words are.
+/// - `voiceOverLeave`: VoiceOver's focus leaves the page's item, its text
+///   input's selection collapsing as UIKit may make it (#125).
 /// - `liveReaders`: of the readers opened since launch, how many models, web
 ///   pages and web views are still alive, and their content processes, in
 ///   the ack's message (`docs/notes/reader-release.md`).
@@ -173,6 +179,9 @@ enum ReaderRemote {
     /// Returns an error message, or `nil` on success.
     private static func handle(_ command: Command, shell: ShellModel) async -> String? {
         if ["signin", "open", "openLocal", "importLocal", "detail", "home"].contains(command.cmd) { shell.tour.debugEnd() }
+        // `unhighlight` by words: the page's highlights asked for now, not
+        // 250 ms after the page settled.
+        if command.cmd == "unhighlight", command.name != nil { await reader?.updateHighlightsOnPage() }
         switch command.cmd {
         case "liveReaders":
             return liveReaders
@@ -202,6 +211,13 @@ enum ReaderRemote {
             guard let reader else { return "no open reader" }
             let selected = try? await reader.page.callJavaScript("return await window.octavo.selectRange(cfi)", arguments: ["cfi": cfi]) as? Bool
             return selected == true ? nil : "couldn't select \(cfi)"
+        case "voiceOverSelect":
+            // It fails unless just those words end up selected.
+            let result = VoiceOverWalk.selectInPage(command.name)
+            return result == "selected '\(command.name ?? "")'" ? nil : result
+        case "voiceOverLeave":
+            _ = VoiceOverWalk.leavePage()
+            return nil
         case "voiceOverAction":
             guard let name = command.name else { return "voiceOverAction needs name" }
             let result = VoiceOverWalk.perform(action: name, on: command.label)
@@ -411,9 +427,14 @@ enum ReaderRemote {
             Task { await reader.updateHighlightsOnPage() }
             return nil
         case "unhighlight":
-            // Every highlight on `cfi` deleted, so a check starts clean.
-            guard let cfi = command.cfi else { return "unhighlight needs cfi" }
-            for highlight in reader.highlights.all where highlight.cfi == cfi { reader.highlights.remove(highlight.id) }
+            // Every highlight on `cfi`, or of the words `name` starting on
+            // the page, deleted, so a check starts clean.
+            guard command.cfi != nil || command.name != nil else { return "unhighlight needs cfi or name" }
+            let onPage = Set(reader.highlightsOnPage.map(\.id))
+            for highlight in reader.highlights.all
+            where (command.cfi != nil && highlight.cfi == command.cfi) || (command.name != nil && highlight.text == command.name && onPage.contains(highlight.id)) {
+                reader.highlights.remove(highlight.id)
+            }
             return nil
         case "pageState":
             return "\(reader.phase == .open ? "open" : "not open") at \(reader.relocation?.cfi ?? "nowhere")"
