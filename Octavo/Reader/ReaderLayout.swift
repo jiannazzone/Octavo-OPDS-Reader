@@ -109,6 +109,10 @@ nonisolated enum ReaderMargins: String, CaseIterable, Sendable, Codable {
     /// The slider's step, 0 for Narrow to 4 for Wide.
     var step: Int { Self.allCases.firstIndex(of: self) ?? 0 }
 
+    /// How far along the slider the step is, 0 for Narrow to 1 for Wide: its
+    /// share of the margin a wide page adds (`ReaderLayout.single`).
+    var stretch: Double { Double(step) / Double(Self.allCases.count - 1) }
+
     init(step: Int) {
         self = Self.allCases[min(max(step, 0), Self.allCases.count - 1)]
     }
@@ -151,6 +155,11 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
     static let verticalMargin = 48.0
     /// A page narrower than this either side of the fold isn't worth a spread.
     static let minimumPageWidth = 200.0
+    /// How wide Wide lets one page's text run. On a page wider than the
+    /// Duo's (an iPad upright) the margins reach further, so Wide keeps a
+    /// book-like column there and Narrow runs nearly edge to edge (Adam,
+    /// 2026-11-18).
+    static let wideTextWidth = 720.0
 
     /// Whatever foliate does on its own.
     static let automatic = ReaderLayout()
@@ -209,7 +218,11 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
             if let spine = Self.spine(in: geometry, includeInactive: true) {
                 self = .spread(in: geometry, fold: spine, margins: margins)
             } else {
-                self = single
+                // Two pages side by side in a wide landscape reader, each
+                // under foliate's cap as before; otherwise one page, uncapped.
+                var pages = Self.single(in: geometry, margins: margins, capped: true)
+                pages.columns = nil
+                self = pages.foliateColumns(width: width, height: Double(size.height)) > 1 ? pages : single
                 columns = nil
             }
         }
@@ -246,8 +259,19 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
     /// (`underColumn`): with Narrow, all of it, so the text meets the
     /// inset's edge.
     ///
+    /// The text's width has no cap: foliate's own (`max-inline-size`, 720
+    /// px) held an upright iPad's text in the middle whatever the setting
+    /// said. Instead, where Wide's text would run wider than
+    /// `wideTextWidth`, each step's margin grows by its share (`stretch`) of
+    /// the difference: Wide's text is that wide, Narrow's as on any page,
+    /// and each step between stays halfway between its neighbours. On the
+    /// Duo and an iPhone, Wide's text is narrower, and nothing changes.
+    ///
+    /// `capped` keeps foliate's cap and the steps' own margins, for two of
+    /// foliate's pages side by side (`init`, no hinge).
+    ///
     /// The view and the margin are whole points (`wholePageGap`).
-    static func single(in geometry: ReaderGeometry, margins: ReaderMargins) -> ReaderLayout {
+    static func single(in geometry: ReaderGeometry, margins: ReaderMargins, capped: Bool = false) -> ReaderLayout {
         let safe = geometry.safeArea
         let width = Double(geometry.size.width)
         let content = max(0, width - safe.left - safe.right)
@@ -255,7 +279,11 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
         let reachLeft = safe.left > 0 ? margins.underColumn : 0
         let reachRight = safe.right > 0 ? margins.underColumn : 0
         let sides = reachLeft + reachRight
-        let margin = (share * content / (1 - sides * share)).rounded()
+        // Wide reaches nothing under an inset, so its text is the content
+        // less its two margins.
+        let wideText = content * (1 - 2 * ReaderMargins.wide.gapPercent / 100)
+        let stretch = capped ? 0 : max(0, wideText - Self.wideTextWidth) / 2 * margins.stretch
+        let margin = (share * content / (1 - sides * share) + stretch).rounded()
         let view = (content + sides * margin).rounded(.down)
         // Rounding the view down takes the fraction off the left, so the text
         // still ends where the setting puts it against the right-hand inset.
@@ -263,6 +291,9 @@ nonisolated struct ReaderLayout: Equatable, Sendable, Codable {
         let left = max(0, width - right - view)
         return ReaderLayout(
             columns: 1, gapPercent: Self.gapPercent(margin, of: view, else: margins.gapPercent),
+            // At the view's width foliate never caps the text; a view no
+            // wider than foliate's cap leaves it alone.
+            maxInlineSize: !capped && view > Self.defaultMaxInlineSize ? view : nil,
             leftInset: left, rightInset: right, topInset: safe.top, bottomInset: safe.bottom
         )
     }
