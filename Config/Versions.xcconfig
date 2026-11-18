@@ -3,4 +3,4 @@
 // the release commit's date in UTC, e.g. 2026.11.09, or the next day's when
 // that date already has an upload. Digits and up to two periods only (Adam).
 MARKETING_VERSION = 1.0
-CURRENT_PROJECT_VERSION = 2026.11.10
+CURRENT_PROJECT_VERSION = 2026.11.18
