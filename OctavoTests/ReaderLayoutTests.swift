@@ -237,13 +237,13 @@ struct ReaderLayoutTests {
     }
 
     // Each step between two of the first three sits halfway between them on
-    // the page, folded and unfolded, to within 2 pt a side.
+    // the page, folded, unfolded and on an upright iPad, to within 2 pt a
+    // side.
     @Test(arguments: [(ReaderMargins.mediumNarrow, ReaderMargins.narrow, ReaderMargins.medium), (.mediumWide, .medium, .wide)])
     func newStepsAreHalfway(step: ReaderMargins, below: ReaderMargins, above: ReaderMargins) throws {
-        for (geometry, posture, width) in [(Self.foldedScreen, ReaderPosture.closed, 466.0), (Self.unfoldedScreen(), .open, 951)] {
+        for (geometry, posture) in [(Self.foldedScreen, ReaderPosture.closed), (Self.unfoldedScreen(), .open), (Self.iPadUpright, .noHinge)] {
             func text(_ margins: ReaderMargins) throws -> ClosedRange<Double> {
-                let columns = try #require(ReaderLayout(posture: posture, geometry: geometry, margins: margins).textColumns(inReaderWidth: width))
-                return columns[0].lowerBound...columns[columns.count - 1].upperBound
+                try Self.textSpan(ReaderLayout(posture: posture, geometry: geometry, margins: margins), in: geometry)
             }
             let (middle, low, high) = (try text(step), try text(below), try text(above))
             #expect(Self.near(middle.lowerBound, (low.lowerBound + high.lowerBound) / 2, within: 2))
@@ -267,13 +267,96 @@ struct ReaderLayoutTests {
         #expect(layout.rightInset == 0)
     }
 
-    // foliate caps a column at max-inline-size (720 px) and centres it.
-    @Test func aWideSinglePageCentresItsCappedText() throws {
+    // A wide single page has no cap on its text, which stays centred: Narrow
+    // keeps its 4.6%, and Wide a 720 pt column.
+    @Test(arguments: ReaderMargins.allCases)
+    func aWideSinglePageCentresItsUncappedText(margins: ReaderMargins) throws {
         let geometry = ReaderGeometry(size: CGSize(width: 1200, height: 800))
-        let layout = ReaderLayout(posture: .closed, geometry: geometry)
+        let layout = ReaderLayout(posture: .closed, geometry: geometry, margins: margins)
+        #expect(layout.maxInlineSize == 1200)
         let text = try #require(layout.textColumns(inReaderWidth: 1200)?.first)
-        #expect(Self.near(text.upperBound - text.lowerBound, 720 * (1 - 0.07 / 0.93)))
         #expect(Self.near((text.lowerBound + text.upperBound) / 2, 600))
+        switch margins {
+        case .narrow: #expect(Self.near(text.lowerBound, 55))
+        case .wide: #expect(Self.near(text.upperBound - text.lowerBound, 720))
+        default: break
+        }
+    }
+
+    // MARK: An iPad, the margins setting deciding the width (2026-11-18)
+
+    /// iPad Pro 13" (M5), iOS 27.2 simulator: the reader's size and safe area.
+    static let iPadUpright = ReaderGeometry(
+        size: CGSize(width: 1032, height: 1376),
+        safeArea: ReaderInsets(top: 32, left: 0, bottom: 20, right: 0)
+    )
+    static let iPadSideways = ReaderGeometry(
+        size: CGSize(width: 1376, height: 1032),
+        safeArea: ReaderInsets(top: 32, left: 0, bottom: 20, right: 0)
+    )
+
+    /// Where the text runs, left edge to right, as foliate lays it out.
+    static func textSpan(_ layout: ReaderLayout, in geometry: ReaderGeometry) throws -> ClosedRange<Double> {
+        let size = geometry.size
+        let columns = try #require(layout.textColumns(inReaderWidth: Double(size.width), height: Double(size.height)))
+        return try #require(columns.first).lowerBound...(try #require(columns.last).upperBound)
+    }
+
+    // Upright, foliate's 720 px cap held the text at 174–860 pt whatever the
+    // setting. Now Narrow runs 47 pt from each edge and Wide keeps a 720 pt
+    // column, each step narrower than the one before.
+    @Test func anUprightIPadPageFollowsTheMargins() throws {
+        var widths: [Double] = []
+        for margins in ReaderMargins.allCases {
+            let layout = ReaderLayout(posture: .noHinge, geometry: Self.iPadUpright, margins: margins)
+            #expect(layout.columns == nil)
+            #expect(layout.maxInlineSize == 1032)
+            #expect(layout.foliateColumns(width: 1032, height: 1376) == 1)
+            let text = try Self.textSpan(layout, in: Self.iPadUpright)
+            #expect(Self.near((text.lowerBound + text.upperBound) / 2, 516))
+            widths.append(text.upperBound - text.lowerBound)
+        }
+        #expect(Self.near(widths[0], 1032 - 2 * 47))
+        #expect(Self.near(widths[4], 720))
+        #expect(widths == widths.sorted(by: >))
+    }
+
+    // Sideways, foliate lays out two pages, each under its own cap as
+    // before, with the setting's own margins.
+    @Test(arguments: ReaderMargins.allCases)
+    func aSidewaysIPadKeepsFoliatesTwoPages(margins: ReaderMargins) throws {
+        let layout = ReaderLayout(posture: .noHinge, geometry: Self.iPadSideways, margins: margins)
+        #expect(layout.columns == nil)
+        #expect(layout.maxInlineSize == nil)
+        #expect(layout.foliateColumns(width: 1376, height: 1032) == 2)
+        #expect(Self.near(try #require(layout.gapPercent), margins.gapPercent, within: 0.05))
+    }
+
+    // Where Wide's text is no wider than 720 pt there's no cap to lift and
+    // nothing added to the margins: the Duo folded and turned sideways, an
+    // iPhone upright.
+    @Test(arguments: ReaderMargins.allCases)
+    func smallPagesKeepTheirMargins(margins: ReaderMargins) {
+        let sideways = ReaderGeometry(
+            size: CGSize(width: 669, height: 951),
+            divisions: [.init(frame: CGRect(x: 0, y: 455.5, width: 669, height: 40), isActive: false)],
+            safeArea: ReaderInsets(top: 82, left: 0, bottom: 34, right: 0)
+        )
+        let iPhone = ReaderGeometry(size: CGSize(width: 402, height: 874), safeArea: ReaderInsets(top: 62, left: 0, bottom: 34, right: 0))
+        for (posture, geometry) in [(ReaderPosture.closed, Self.foldedScreen), (.open, sideways), (.noHinge, iPhone)] {
+            let layout = ReaderLayout(posture: posture, geometry: geometry, margins: margins)
+            let before = ReaderLayout.single(in: geometry, margins: margins, capped: true)
+            #expect(layout.maxInlineSize == nil)
+            #expect(layout.gapPercent == before.gapPercent)
+            #expect(layout.leftInset == before.leftInset)
+            #expect(layout.rightInset == before.rightInset)
+        }
+    }
+
+    @Test func anIPadPagesWidthReachesTheBridge() {
+        let arguments = ReaderLayout(posture: .noHinge, geometry: Self.iPadUpright).scriptArguments
+        #expect(arguments["maxInlineSize"] as? Double == 1032)
+        #expect(arguments["columns"] is NSNull)
     }
 
     @Test func insetsReachTheBridge() {
